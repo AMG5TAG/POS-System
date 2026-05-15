@@ -9,6 +9,8 @@ import {
   useListStaff,
   Appointment,
   AppointmentInputStatus,
+  Customer,
+  Staff,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -51,7 +53,7 @@ function addOneHour(dt: string): string {
   return toLocalDatetimeValue(d);
 }
 
-const defaultForm = (): FormState => {
+function makeDefaultForm(): FormState {
   const start = defaultStartTime();
   return {
     customerId: "",
@@ -61,31 +63,29 @@ const defaultForm = (): FormState => {
     status: "scheduled",
     notes: "",
   };
-};
+}
 
 const STATUS_COLORS: Record<string, string> = {
-  scheduled:  "bg-violet-100 text-violet-700 border-violet-200",
+  scheduled: "bg-violet-100 text-violet-700 border-violet-200",
   completed:  "bg-emerald-100 text-emerald-700 border-emerald-200",
   cancelled:  "bg-red-100 text-red-700 border-red-200",
   "no-show":  "bg-amber-100 text-amber-700 border-amber-200",
 };
 
-function BookingDialog({
-  open,
-  editing,
-  onClose,
-}: {
+interface BookingDialogProps {
   open: boolean;
   editing: Appointment | null;
   onClose: () => void;
-}) {
-  const [form, setForm] = useState<FormState>(defaultForm);
+  customers: Customer[];
+  staff: Staff[];
+}
+
+function BookingDialog({ open, editing, onClose, customers, staff }: BookingDialogProps) {
+  const [form, setForm] = useState<FormState>(makeDefaultForm);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: customers = [] } = useListCustomers();
-  const { data: staff = [] } = useListStaff();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
 
@@ -101,22 +101,29 @@ function BookingDialog({
           notes: editing.notes ?? "",
         });
       } else {
-        setForm(defaultForm());
+        setForm(makeDefaultForm());
       }
       setCustomerSearch("");
       setCustomerOpen(false);
     }
   }, [open, editing]);
 
-  const set = <K extends keyof FormState>(key: K, val: FormState[K]) =>
+  function setField(key: keyof FormState, val: string) {
     setForm((f) => ({ ...f, [key]: val }));
+  }
 
-  const filteredCustomers = customers.filter((c) => {
+  const safeCustomers = Array.isArray(customers) ? customers : [];
+  const safeStaff = Array.isArray(staff) ? staff : [];
+
+  const filteredCustomers = safeCustomers.filter((c) => {
     const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-    return name.includes(customerSearch.toLowerCase()) || (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase());
+    return (
+      name.includes(customerSearch.toLowerCase()) ||
+      (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase())
+    );
   });
 
-  const selectedCustomer = customers.find((c) => String(c.id) === form.customerId);
+  const selectedCustomer = safeCustomers.find((c) => String(c.id) === form.customerId);
 
   const handleSubmit = () => {
     if (!form.startTime || !form.endTime) {
@@ -202,7 +209,7 @@ function BookingDialog({
                   <div className="max-h-48 overflow-y-auto">
                     <button
                       type="button"
-                      onClick={() => { set("customerId", ""); setCustomerOpen(false); }}
+                      onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
                       className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40"
                     >
                       No customer
@@ -211,18 +218,28 @@ function BookingDialog({
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => { set("customerId", String(c.id)); setCustomerOpen(false); setCustomerSearch(""); }}
+                        onClick={() => {
+                          setField("customerId", String(c.id));
+                          setCustomerOpen(false);
+                          setCustomerSearch("");
+                        }}
                         className={cn(
                           "w-full text-left px-3 py-2 text-sm hover:bg-muted/40",
                           form.customerId === String(c.id) && "bg-primary/10 font-medium"
                         )}
                       >
-                        <span className="font-medium">{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</span>
-                        {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
+                        <span className="font-medium">
+                          {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}
+                        </span>
+                        {c.email && (
+                          <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>
+                        )}
                       </button>
                     ))}
                     {filteredCustomers.length === 0 && (
-                      <p className="px-3 py-4 text-sm text-muted-foreground text-center">No customers found</p>
+                      <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        No customers found
+                      </p>
                     )}
                   </div>
                 </div>
@@ -244,8 +261,8 @@ function BookingDialog({
                   type="datetime-local"
                   value={form.startTime}
                   onChange={(e) => {
-                    set("startTime", e.target.value);
-                    set("endTime", addOneHour(e.target.value));
+                    setField("startTime", e.target.value);
+                    setField("endTime", addOneHour(e.target.value));
                   }}
                   className="text-sm"
                 />
@@ -258,7 +275,7 @@ function BookingDialog({
                 <Input
                   type="datetime-local"
                   value={form.endTime}
-                  onChange={(e) => set("endTime", e.target.value)}
+                  onChange={(e) => setField("endTime", e.target.value)}
                   className="text-sm"
                 />
               </div>
@@ -269,7 +286,10 @@ function BookingDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v as AppointmentInputStatus)}>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setField("status", v)}
+              >
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -285,13 +305,16 @@ function BookingDialog({
               <Label className="flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-muted-foreground" /> Assigned Staff
               </Label>
-              <Select value={form.staffId || "__none__"} onValueChange={(v) => set("staffId", v === "__none__" ? "" : v)}>
+              <Select
+                value={form.staffId || "__none__"}
+                onValueChange={(v) => setField("staffId", v === "__none__" ? "" : v)}
+              >
                 <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Not assigned" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Not assigned</SelectItem>
-                  {staff.map((s) => (
+                  {safeStaff.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -305,7 +328,7 @@ function BookingDialog({
             <Textarea
               placeholder="Any additional details..."
               value={form.notes}
-              onChange={(e) => set("notes", e.target.value)}
+              onChange={(e) => setField("notes", e.target.value)}
               rows={3}
               className="text-sm resize-none"
             />
@@ -347,7 +370,12 @@ export default function AppointmentsPage() {
     {},
     { query: { queryKey: ["listAppointments"] } }
   );
+  const { data: customersData } = useListCustomers();
+  const { data: staffData } = useListStaff();
   const deleteMutation = useDeleteAppointment();
+
+  const customers = Array.isArray(customersData) ? customersData : [];
+  const staff = Array.isArray(staffData) ? staffData : [];
 
   const handleDelete = (id: number) => {
     if (!confirm("Delete this appointment?")) return;
@@ -368,7 +396,8 @@ export default function AppointmentsPage() {
 
   // Group appointments by date
   const grouped: Record<string, Appointment[]> = {};
-  for (const a of appointments) {
+  const apptList = Array.isArray(appointments) ? appointments : [];
+  for (const a of apptList) {
     const date = new Date(a.scheduledAt).toLocaleDateString("en-AU", {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
       timeZone: "Australia/Sydney",
@@ -384,7 +413,7 @@ export default function AppointmentsPage() {
           <div>
             <h1 className="text-2xl font-bold">Appointments</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
-              {appointments.length} total appointment{appointments.length !== 1 ? "s" : ""}
+              {apptList.length} total appointment{apptList.length !== 1 ? "s" : ""}
             </p>
           </div>
           <Button onClick={openNew} className="gap-2">
@@ -395,7 +424,7 @@ export default function AppointmentsPage() {
 
         {isLoading ? (
           <div className="py-20 text-center text-muted-foreground">Loading appointments...</div>
-        ) : appointments.length === 0 ? (
+        ) : apptList.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center">
               <CalendarClock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -407,7 +436,9 @@ export default function AppointmentsPage() {
           <div className="space-y-6">
             {Object.entries(grouped).map(([date, appts]) => (
               <div key={date}>
-                <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">{date}</h2>
+                <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                  {date}
+                </h2>
                 <div className="space-y-2">
                   {appts.map((a) => (
                     <Card key={a.id} className="hover:shadow-sm transition-shadow">
@@ -430,9 +461,7 @@ export default function AppointmentsPage() {
                                 {a.customerName}
                               </span>
                             )}
-                            {a.staffName && (
-                              <span>Staff: {a.staffName}</span>
-                            )}
+                            {a.staffName && <span>Staff: {a.staffName}</span>}
                           </div>
                           {a.notes && (
                             <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{a.notes}</p>
@@ -466,6 +495,8 @@ export default function AppointmentsPage() {
         open={dialogOpen}
         editing={editing}
         onClose={() => { setDialogOpen(false); setEditing(null); }}
+        customers={customers}
+        staff={staff}
       />
     </AppLayout>
   );
