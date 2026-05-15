@@ -19,6 +19,7 @@ import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
+import AppointmentsPage from "@/pages/app/appointments";
 
 import NotFound from "@/pages/not-found";
 
@@ -74,6 +75,9 @@ function Router() {
       </Route>
       <Route path="/inventory">
         <ProtectedRoute component={InventoryPage} />
+      </Route>
+      <Route path="/appointments">
+        <ProtectedRoute component={AppointmentsPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} />

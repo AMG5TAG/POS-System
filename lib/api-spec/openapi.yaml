@@ -837,6 +837,86 @@ paths:
                 items:
                   $ref: "#/components/schemas/TopProduct"
 
+  # ── Appointments ──────────────────────────────────────────────────────────
+  /appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      summary: List appointments
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      summary: Book a new appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /appointments/{id}:
+    delete:
+      operationId: deleteAppointment
+      tags: [appointments]
+      summary: Delete an appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+    patch:
+      operationId: updateAppointment
+      tags: [appointments]
+      summary: Update an appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
   /dashboard/calendar:
     get:
       operationId: getDashboardCalendar
@@ -1527,6 +1607,66 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CalendarDay"
+
+    # ── Appointments ────────────────────────────────────────────────────────
+    Appointment:
+      type: object
+      required: [id, merchantId, title, scheduledAt, durationMinutes, status, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        staffId:
+          type: ["integer", "null"]
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        scheduledAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no-show]
+        notes:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        staffName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    AppointmentInput:
+      type: object
+      required: [scheduledAt, endAt, status]
+      properties:
+        customerId:
+          type: ["integer", "null"]
+        staffId:
+          type: ["integer", "null"]
+        title:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled, no-show]
+        notes:
+          type: ["string", "null"]
 
     DashboardSummary:
       type: object

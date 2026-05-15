@@ -12,7 +12,8 @@ import {
   Settings, 
   Blocks,
   LogOut,
-  Menu
+  Menu,
+  CalendarClock,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarFooter } from "@/components/ui/sidebar";
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { name: "POS", href: "/pos", icon: ShoppingCart },
   { name: "Products", href: "/products", icon: Package },
   { name: "Customers", href: "/customers", icon: Users },
+  { name: "Appointments", href: "/appointments", icon: CalendarClock },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Inventory", href: "/inventory", icon: Boxes },
   { name: "Staff", href: "/staff", icon: UserSquare2 },

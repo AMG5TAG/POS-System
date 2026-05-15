@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './appointment';
+export * from './appointmentInput';
+export * from './appointmentInputStatus';
+export * from './appointmentStatus';
 export * from './calendarAppointment';
 export * from './calendarBirthday';
 export * from './calendarDay';
@@ -29,6 +33,7 @@ export * from './getTopProductsPeriod';
 export * from './healthStatus';
 export * from './inventoryItem';
 export * from './inventoryUpdate';
+export * from './listAppointmentsParams';
 export * from './listCustomersParams';
 export * from './listInventoryParams';
 export * from './listProductsParams';

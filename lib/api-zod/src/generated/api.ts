@@ -985,6 +985,90 @@ export const GetTopProductsResponse = zod.array(GetTopProductsResponseItem)
 
 
 /**
+ * @summary List appointments
+ */
+export const ListAppointmentsQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "month": zod.coerce.number().optional()
+})
+
+export const ListAppointmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date().optional(),
+  "durationMinutes": zod.number(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "staffName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem)
+
+
+/**
+ * @summary Book a new appointment
+ */
+export const CreateAppointmentBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "title": zod.string().optional(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Delete an appointment
+ */
+export const DeleteAppointmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Update an appointment
+ */
+export const UpdateAppointmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAppointmentBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "title": zod.string().optional(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateAppointmentResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date().optional(),
+  "durationMinutes": zod.number(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "staffName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get calendar events for a given month
  */
 export const getDashboardCalendarQueryMonthMax = 12;

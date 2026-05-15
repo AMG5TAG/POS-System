@@ -447,6 +447,62 @@ export interface CalendarMonth {
   days: CalendarDay[];
 }
 
+export type AppointmentStatus = typeof AppointmentStatus[keyof typeof AppointmentStatus];
+
+
+export const AppointmentStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  'no-show': 'no-show',
+} as const;
+
+export interface Appointment {
+  id: number;
+  merchantId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  staffId?: number | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  scheduledAt: string;
+  endAt?: string;
+  durationMinutes: number;
+  status: AppointmentStatus;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  staffName?: string | null;
+  createdAt: string;
+}
+
+export type AppointmentInputStatus = typeof AppointmentInputStatus[keyof typeof AppointmentInputStatus];
+
+
+export const AppointmentInputStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  'no-show': 'no-show',
+} as const;
+
+export interface AppointmentInput {
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  staffId?: number | null;
+  title?: string;
+  scheduledAt: string;
+  endAt: string;
+  status: AppointmentInputStatus;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface DashboardSummary {
   totalSales: number;
   transactionCount: number;
@@ -540,6 +596,11 @@ export const GetTopProductsPeriod = {
   month: 'month',
   year: 'year',
 } as const;
+
+export type ListAppointmentsParams = {
+year?: number;
+month?: number;
+};
 
 export type GetDashboardCalendarParams = {
 year: number;
