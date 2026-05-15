@@ -48,9 +48,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar className="border-r">
           <SidebarHeader className="h-16 flex items-center px-4 border-b">
             <Link href="/dashboard" className="flex items-center gap-2 w-full">
-              <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center shrink-0">
-                <span className="text-primary-foreground font-bold">K</span>
-              </div>
+              <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain shrink-0" />
               <span className="font-bold text-lg truncate">{user?.businessName || "KoaPOS"}</span>
             </Link>
           </SidebarHeader>

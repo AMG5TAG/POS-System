@@ -11,9 +11,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">K</span>
-              </div>
+              <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain" />
               <span className="font-bold text-xl tracking-tight hidden sm:inline-block">
                 KoaPOS
               </span>

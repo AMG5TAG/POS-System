@@ -24,9 +24,7 @@ export default function PricingPage() {
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">K</span>
-            </div>
+            <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain" />
             <span className="font-bold text-lg">KoaPOS</span>
           </Link>
           <div className="flex items-center gap-3">
