@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -303,68 +303,92 @@ export default function CustomersPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted/50 border-b">
                 <tr>
-                  <th className="text-left p-4 font-medium">Customer</th>
-                  <th className="text-left p-4 font-medium hidden md:table-cell">Contact</th>
-                  <th className="text-left p-4 font-medium hidden lg:table-cell">Group</th>
-                  <th className="text-right p-4 font-medium hidden sm:table-cell">Total Spent</th>
-                  <th className="text-right p-4 font-medium hidden lg:table-cell">Visits</th>
-                  <th className="text-right p-4 font-medium hidden lg:table-cell">Points</th>
-                  <th className="p-4" />
+                  <th className="p-3 w-10">
+                    <Checkbox />
+                  </th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap">
+                    <span className="flex items-center gap-1">Name <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                  </th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <span className="flex items-center gap-1">Email <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                  </th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Phone</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">
+                    <span className="flex items-center gap-1">Company <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                  </th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden xl:table-cell">Address</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">
+                    <span className="flex items-center gap-1">Loyalty <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                  </th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">
+                    <span className="flex items-center gap-1">Activity <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                  </th>
+                  <th className="p-3 w-20" />
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {customers.map((customer) => (
-                  <tr key={customer.id} className="bg-background hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <div>
+                {customers.map((customer) => {
+                  const address = [customer.billingStreet, customer.billingCity, customer.billingState]
+                    .filter(Boolean).join(", ") || customer.address || "—";
+                  return (
+                    <tr key={customer.id} className="bg-background hover:bg-muted/30 transition-colors">
+                      <td className="p-3">
+                        <Checkbox />
+                      </td>
+                      <td className="p-3">
                         <p className="font-medium">
                           {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
                         </p>
-                        <p className="text-xs text-muted-foreground">Since {formatDate(customer.createdAt)}</p>
-                      </div>
-                    </td>
-                    <td className="p-4 hidden md:table-cell">
-                      <div className="space-y-0.5">
-                        {customer.email && <p className="text-xs">{customer.email}</p>}
-                        {customer.phone && <p className="text-xs text-muted-foreground">{customer.phone}</p>}
-                      </div>
-                    </td>
-                    <td className="p-4 hidden lg:table-cell">
-                      {customer.customerGroup && (
-                        <Badge variant="outline" className="text-xs">{customer.customerGroup}</Badge>
-                      )}
-                    </td>
-                    <td className="p-4 text-right hidden sm:table-cell font-medium">
-                      {formatCurrency(customer.totalSpent ?? 0)}
-                    </td>
-                    <td className="p-4 text-right hidden lg:table-cell">{customer.visitCount}</td>
-                    <td className="p-4 text-right hidden lg:table-cell">
-                      <span className="flex items-center justify-end gap-1">
-                        <Star className="w-3 h-3 text-yellow-500" />
-                        {customer.loyaltyPoints}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(customer)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => { setDeletingCustomer(customer); setDeleteDialogOpen(true); }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 hidden sm:table-cell text-muted-foreground">
+                        {customer.email || "—"}
+                      </td>
+                      <td className="p-3 hidden md:table-cell text-muted-foreground">
+                        {customer.phone || "—"}
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-muted-foreground">
+                        {customer.company || "—"}
+                      </td>
+                      <td className="p-3 hidden xl:table-cell text-muted-foreground max-w-[180px] truncate">
+                        {address}
+                      </td>
+                      <td className="p-3 hidden lg:table-cell">
+                        {customer.customerGroup ? (
+                          <Badge variant="outline" className="text-xs">{customer.customerGroup}</Badge>
+                        ) : "—"}
+                      </td>
+                      <td className="p-3 hidden md:table-cell">
+                        <span className="flex items-center gap-1">
+                          <Star className="w-3 h-3 text-yellow-500 shrink-0" />
+                          {customer.loyaltyPoints ?? 0}
+                        </span>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-muted-foreground">
+                        {customer.visitCount ?? 0} visits
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(customer)}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => { setDeletingCustomer(customer); setDeleteDialogOpen(true); }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
