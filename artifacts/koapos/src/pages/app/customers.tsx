@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle, ChevronsUpDown } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -311,22 +311,22 @@ export default function CustomersPage() {
                     <Checkbox />
                   </th>
                   <th className="text-left p-3 font-medium whitespace-nowrap">
-                    <span className="flex items-center gap-1">Name <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                    <span className="flex items-center gap-1">Name <ArrowUpDown className="w-3 h-3 text-muted-foreground" /></span>
                   </th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <span className="flex items-center gap-1">Email <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                    <span className="flex items-center gap-1">Email <ArrowUpDown className="w-3 h-3 text-muted-foreground" /></span>
                   </th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Phone</th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">
-                    <span className="flex items-center gap-1">Company <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                    <span className="flex items-center gap-1">Company <ArrowUpDown className="w-3 h-3 text-muted-foreground" /></span>
                   </th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden xl:table-cell">Address</th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">
-                    <span className="flex items-center gap-1">Loyalty <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                    <span className="flex items-center gap-1">Loyalty <ArrowUpDown className="w-3 h-3 text-muted-foreground" /></span>
                   </th>
                   <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">
-                    <span className="flex items-center gap-1">Activity <ChevronsUpDown className="w-3 h-3 text-muted-foreground" /></span>
+                    <span className="flex items-center gap-1">Activity <ArrowUpDown className="w-3 h-3 text-muted-foreground" /></span>
                   </th>
                   <th className="p-3 w-20" />
                 </tr>
