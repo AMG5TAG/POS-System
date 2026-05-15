@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListTransactionsQueryParams,
@@ -85,7 +85,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     const customers = await db
       .select()
       .from(customersTable)
-      .where(sql`${customersTable.id} = ANY(${customerIds})`);
+      .where(inArray(customersTable.id, customerIds));
     customers.forEach((c) => customerMap.set(c.id, c));
   }
 
