@@ -13,6 +13,17 @@ import PricingPage from "@/pages/marketing/pricing";
 import DashboardPage from "@/pages/app/dashboard";
 import POSPage from "@/pages/app/pos";
 import ProductsPage from "@/pages/app/products";
+import ProductsOverviewPage from "@/pages/app/products-overview";
+import ProductsBundlesPage from "@/pages/app/products-bundles";
+import ProductsStocktakePage from "@/pages/app/products-stocktake";
+import ProductsPurchaseOrdersPage from "@/pages/app/products-purchase-orders";
+import ProductsPreOrdersPage from "@/pages/app/products-pre-orders";
+import ProductsReturnAuthPage from "@/pages/app/products-return-auth";
+import ProductsSuppliersPage from "@/pages/app/products-suppliers";
+import ProductsBrandsPage from "@/pages/app/products-brands";
+import ProductsCategoriesPage from "@/pages/app/products-categories";
+import ProductsTagsPage from "@/pages/app/products-tags";
+import ProductsRecallsPage from "@/pages/app/products-recalls";
 import CustomersPage from "@/pages/app/customers";
 import TransactionsPage from "@/pages/app/transactions";
 import InventoryPage from "@/pages/app/inventory";
@@ -66,9 +77,45 @@ function Router() {
       <Route path="/pos">
         <ProtectedRoute component={POSPage} />
       </Route>
+
+      {/* Products section */}
+      <Route path="/products/overview">
+        <ProtectedRoute component={ProductsOverviewPage} />
+      </Route>
+      <Route path="/products/bundles">
+        <ProtectedRoute component={ProductsBundlesPage} />
+      </Route>
+      <Route path="/products/stocktake">
+        <ProtectedRoute component={ProductsStocktakePage} />
+      </Route>
+      <Route path="/products/purchase-orders">
+        <ProtectedRoute component={ProductsPurchaseOrdersPage} />
+      </Route>
+      <Route path="/products/pre-orders">
+        <ProtectedRoute component={ProductsPreOrdersPage} />
+      </Route>
+      <Route path="/products/return-auth">
+        <ProtectedRoute component={ProductsReturnAuthPage} />
+      </Route>
+      <Route path="/products/suppliers">
+        <ProtectedRoute component={ProductsSuppliersPage} />
+      </Route>
+      <Route path="/products/brands">
+        <ProtectedRoute component={ProductsBrandsPage} />
+      </Route>
+      <Route path="/products/categories">
+        <ProtectedRoute component={ProductsCategoriesPage} />
+      </Route>
+      <Route path="/products/tags">
+        <ProtectedRoute component={ProductsTagsPage} />
+      </Route>
+      <Route path="/products/recalls">
+        <ProtectedRoute component={ProductsRecallsPage} />
+      </Route>
       <Route path="/products">
         <ProtectedRoute component={ProductsPage} />
       </Route>
+
       <Route path="/customers">
         <ProtectedRoute component={CustomersPage} />
       </Route>

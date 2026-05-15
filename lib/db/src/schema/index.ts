@@ -6,3 +6,6 @@ export * from "./staff";
 export * from "./appointments";
 export * from "./service-jobs";
 export * from "./invoices";
+export * from "./brands";
+export * from "./suppliers";
+export * from "./tags";

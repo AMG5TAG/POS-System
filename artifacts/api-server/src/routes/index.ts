@@ -11,6 +11,9 @@ import inventoryRouter from "./inventory";
 import dashboardRouter from "./dashboard";
 import appointmentsRouter from "./appointments";
 import serviceJobsRouter from "./service-jobs";
+import brandsRouter from "./brands";
+import suppliersRouter from "./suppliers";
+import tagsRouter from "./tags";
 
 const router: IRouter = Router();
 
@@ -26,5 +29,8 @@ router.use(inventoryRouter);
 router.use(dashboardRouter);
 router.use(appointmentsRouter);
 router.use(serviceJobsRouter);
+router.use(brandsRouter);
+router.use(suppliersRouter);
+router.use(tagsRouter);
 
 export default router;
