@@ -154,21 +154,21 @@ function DayCell({
       {day.sales > 0 && (
         <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.sales)}>
           <ShoppingCart className="w-2.5 h-2.5 shrink-0" />
-          {day.sales} sale{day.sales !== 1 ? "s" : ""}
+          {day.sales}
         </div>
       )}
 
       {day.serviceJobs > 0 && (
         <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.serviceJobs)}>
           <Wrench className="w-2.5 h-2.5 shrink-0" />
-          {day.serviceJobs} service job{day.serviceJobs !== 1 ? "s" : ""}
+          {day.serviceJobs}
         </div>
       )}
 
       {day.invoices > 0 && (
         <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.invoices)}>
           <FileText className="w-2.5 h-2.5 shrink-0" />
-          {day.invoices} invoice{day.invoices !== 1 ? "s" : ""}
+          {day.invoices}
         </div>
       )}
 
@@ -177,12 +177,12 @@ function DayCell({
           key={appt.id}
           onClick={() => onAppointmentClick(appt)}
           className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full truncate hover:opacity-80 transition-opacity",
+            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity",
             EVENT_COLORS.appointments
           )}
         >
           <CalendarDays className="w-2.5 h-2.5 shrink-0" />
-          <span className="truncate">{appt.title}</span>
+          1
         </button>
       ))}
 
@@ -191,12 +191,12 @@ function DayCell({
           key={b.id}
           onClick={() => onBirthdayClick(b)}
           className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full truncate hover:opacity-80 transition-opacity",
+            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity",
             EVENT_COLORS.birthdays
           )}
         >
           <Cake className="w-2.5 h-2.5 shrink-0" />
-          <span className="truncate">{b.firstName} {b.lastName}</span>
+          1
         </button>
       ))}
     </div>
