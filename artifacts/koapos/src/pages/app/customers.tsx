@@ -17,9 +17,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin, Settings2, AlertTriangle, ArrowUpDown, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { ContactSyncDialog } from "@/components/customers/sync-dialog";
 
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
@@ -127,6 +128,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [form, setForm] = useState<CustomerForm>(defaultForm);
@@ -272,9 +274,14 @@ export default function CustomersPage() {
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customers</h1>
-          <Button onClick={openCreate}>
-            <Plus className="w-4 h-4 mr-2" /> Add Customer
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setSyncDialogOpen(true)} disabled={customers.length === 0}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Sync Contacts
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="w-4 h-4 mr-2" /> Add Customer
+            </Button>
+          </div>
         </div>
 
         <div className="relative">
@@ -750,6 +757,12 @@ export default function CustomersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ContactSyncDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        customers={customers}
+      />
     </AppLayout>
   );
 }
