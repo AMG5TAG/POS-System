@@ -20,6 +20,8 @@ import StaffPage from "@/pages/app/staff";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
 import AppointmentsPage from "@/pages/app/appointments";
+import ServiceJobsPage from "@/pages/app/service-jobs";
+import ServiceJobNewPage from "@/pages/app/service-jobs-new";
 
 import NotFound from "@/pages/not-found";
 
@@ -78,6 +80,12 @@ function Router() {
       </Route>
       <Route path="/appointments">
         <ProtectedRoute component={AppointmentsPage} />
+      </Route>
+      <Route path="/service-jobs/new">
+        <ProtectedRoute component={ServiceJobNewPage} />
+      </Route>
+      <Route path="/service-jobs">
+        <ProtectedRoute component={ServiceJobsPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} />

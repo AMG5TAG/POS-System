@@ -32,6 +32,8 @@ tags:
     description: Inventory tracking
   - name: dashboard
     description: Dashboard summary and analytics
+  - name: service-jobs
+    description: Service job management
 
 paths:
   /healthz:
@@ -917,6 +919,77 @@ paths:
               schema:
                 $ref: "#/components/schemas/Appointment"
 
+  # ── Service Jobs ──────────────────────────────────────────────────────────
+  /service-jobs:
+    get:
+      operationId: listServiceJobs
+      tags: [service-jobs]
+      summary: List all service jobs
+      responses:
+        "200":
+          description: List of service jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceJob"
+    post:
+      operationId: createServiceJob
+      tags: [service-jobs]
+      summary: Create a new service job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJob"
+
+  /service-jobs/{id}:
+    patch:
+      operationId: updateServiceJob
+      tags: [service-jobs]
+      summary: Update a service job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJob"
+    delete:
+      operationId: deleteServiceJob
+      tags: [service-jobs]
+      summary: Delete a service job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /dashboard/calendar:
     get:
       operationId: getDashboardCalendar
@@ -1607,6 +1680,116 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CalendarDay"
+
+    # ── Service Jobs ─────────────────────────────────────────────────────────
+    ServiceJob:
+      type: object
+      required: [id, merchantId, jobNumber, status, bookInDate, isPartnerRepair, isCritical, isUnderWarranty, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        staffId:
+          type: ["integer", "null"]
+        jobNumber:
+          type: string
+        customerName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, in-progress, completed, cancelled]
+        bookInDate:
+          type: string
+        deviceType:
+          type: ["string", "null"]
+        deviceDescription:
+          type: ["string", "null"]
+        serialNumber:
+          type: ["string", "null"]
+        condition:
+          type: ["string", "null"]
+        partnerRepairCode:
+          type: ["string", "null"]
+        isPartnerRepair:
+          type: boolean
+        isCritical:
+          type: boolean
+        isUnderWarranty:
+          type: boolean
+        workDescription:
+          type: ["string", "null"]
+        additionalEquipment:
+          type: ["string", "null"]
+        passwordOrPin:
+          type: ["string", "null"]
+        accounts:
+          type: ["string", "null"]
+        signature:
+          type: ["string", "null"]
+        photos:
+          type: array
+          items:
+            type: string
+        estimatedCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ServiceJobInput:
+      type: object
+      properties:
+        customerId:
+          type: ["integer", "null"]
+        staffId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, in-progress, completed, cancelled]
+        bookInDate:
+          type: string
+        deviceType:
+          type: ["string", "null"]
+        deviceDescription:
+          type: ["string", "null"]
+        serialNumber:
+          type: ["string", "null"]
+        condition:
+          type: ["string", "null"]
+        partnerRepairCode:
+          type: ["string", "null"]
+        isPartnerRepair:
+          type: boolean
+        isCritical:
+          type: boolean
+        isUnderWarranty:
+          type: boolean
+        workDescription:
+          type: ["string", "null"]
+        additionalEquipment:
+          type: ["string", "null"]
+        passwordOrPin:
+          type: ["string", "null"]
+        accounts:
+          type: ["string", "null"]
+        signature:
+          type: ["string", "null"]
+        photos:
+          type: array
+          items:
+            type: string
+        estimatedCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
 
     # ── Appointments ────────────────────────────────────────────────────────
     Appointment:

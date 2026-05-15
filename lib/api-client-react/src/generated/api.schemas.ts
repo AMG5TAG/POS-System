@@ -447,6 +447,107 @@ export interface CalendarMonth {
   days: CalendarDay[];
 }
 
+export type ServiceJobStatus = typeof ServiceJobStatus[keyof typeof ServiceJobStatus];
+
+
+export const ServiceJobStatus = {
+  pending: 'pending',
+  'in-progress': 'in-progress',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ServiceJob {
+  id: number;
+  merchantId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  staffId?: number | null;
+  jobNumber: string;
+  /** @nullable */
+  customerName?: string | null;
+  status: ServiceJobStatus;
+  bookInDate: string;
+  /** @nullable */
+  deviceType?: string | null;
+  /** @nullable */
+  deviceDescription?: string | null;
+  /** @nullable */
+  serialNumber?: string | null;
+  /** @nullable */
+  condition?: string | null;
+  /** @nullable */
+  partnerRepairCode?: string | null;
+  isPartnerRepair: boolean;
+  isCritical: boolean;
+  isUnderWarranty: boolean;
+  /** @nullable */
+  workDescription?: string | null;
+  /** @nullable */
+  additionalEquipment?: string | null;
+  /** @nullable */
+  passwordOrPin?: string | null;
+  /** @nullable */
+  accounts?: string | null;
+  /** @nullable */
+  signature?: string | null;
+  photos?: string[];
+  /** @nullable */
+  estimatedCost?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof ServiceJobInputStatus];
+
+
+export const ServiceJobInputStatus = {
+  pending: 'pending',
+  'in-progress': 'in-progress',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ServiceJobInput {
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  staffId?: number | null;
+  status?: ServiceJobInputStatus;
+  bookInDate?: string;
+  /** @nullable */
+  deviceType?: string | null;
+  /** @nullable */
+  deviceDescription?: string | null;
+  /** @nullable */
+  serialNumber?: string | null;
+  /** @nullable */
+  condition?: string | null;
+  /** @nullable */
+  partnerRepairCode?: string | null;
+  isPartnerRepair?: boolean;
+  isCritical?: boolean;
+  isUnderWarranty?: boolean;
+  /** @nullable */
+  workDescription?: string | null;
+  /** @nullable */
+  additionalEquipment?: string | null;
+  /** @nullable */
+  passwordOrPin?: string | null;
+  /** @nullable */
+  accounts?: string | null;
+  /** @nullable */
+  signature?: string | null;
+  photos?: string[];
+  /** @nullable */
+  estimatedCost?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export type AppointmentStatus = typeof AppointmentStatus[keyof typeof AppointmentStatus];
 
 

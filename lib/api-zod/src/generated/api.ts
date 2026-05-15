@@ -1069,6 +1069,135 @@ export const UpdateAppointmentResponse = zod.object({
 
 
 /**
+ * @summary List all service jobs
+ */
+export const ListServiceJobsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "jobNumber": zod.string(),
+  "customerName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'completed', 'cancelled']),
+  "bookInDate": zod.string(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean(),
+  "isCritical": zod.boolean(),
+  "isUnderWarranty": zod.boolean(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListServiceJobsResponse = zod.array(ListServiceJobsResponseItem)
+
+
+/**
+ * @summary Create a new service job
+ */
+export const CreateServiceJobBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'completed', 'cancelled']).optional(),
+  "bookInDate": zod.string().optional(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean().optional(),
+  "isCritical": zod.boolean().optional(),
+  "isUnderWarranty": zod.boolean().optional(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update a service job
+ */
+export const UpdateServiceJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateServiceJobBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'completed', 'cancelled']).optional(),
+  "bookInDate": zod.string().optional(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean().optional(),
+  "isCritical": zod.boolean().optional(),
+  "isUnderWarranty": zod.boolean().optional(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateServiceJobResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "jobNumber": zod.string(),
+  "customerName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'completed', 'cancelled']),
+  "bookInDate": zod.string(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean(),
+  "isCritical": zod.boolean(),
+  "isUnderWarranty": zod.boolean(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a service job
+ */
+export const DeleteServiceJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Get calendar events for a given month
  */
 export const getDashboardCalendarQueryMonthMax = 12;

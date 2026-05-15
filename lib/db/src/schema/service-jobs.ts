@@ -11,11 +11,31 @@ export const serviceJobsTable = pgTable("service_jobs", {
   staffId: integer("staff_id"),
   jobNumber: text("job_number").notNull(),
   title: text("title").notNull(),
-  description: text("description"),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
   status: text("status").notNull().default("pending"),
+  bookInDate: text("book_in_date").notNull().default(""),
+  // Device info
+  deviceType: text("device_type"),
+  deviceDescription: text("device_description"),
+  serialNumber: text("serial_number"),
+  condition: text("condition"),
+  partnerRepairCode: text("partner_repair_code"),
+  // Flags (stored as text "true"/"false")
+  isPartnerRepair: text("is_partner_repair").notNull().default("false"),
+  isCritical: text("is_critical").notNull().default("false"),
+  isUnderWarranty: text("is_under_warranty").notNull().default("false"),
+  // Work detail
+  workDescription: text("work_description"),
+  additionalEquipment: text("additional_equipment"),
+  passwordOrPin: text("password_or_pin"),
+  accounts: text("accounts"),
+  // Media
+  signature: text("signature"),
+  photos: text("photos"),
+  // Legacy / optional
+  description: text("description"),
   estimatedCost: numeric("estimated_cost", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

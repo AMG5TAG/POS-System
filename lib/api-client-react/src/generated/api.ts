@@ -56,6 +56,8 @@ import type {
   RefundInput,
   RegisterInput,
   SalesDataPoint,
+  ServiceJob,
+  ServiceJobInput,
   Staff,
   StaffInput,
   StaffUpdate,
@@ -3613,6 +3615,296 @@ export const useUpdateAppointment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAppointmentMutationOptions(options));
+    }
+
+export const getListServiceJobsUrl = () => {
+
+
+
+
+  return `/api/service-jobs`
+}
+
+/**
+ * @summary List all service jobs
+ */
+export const listServiceJobs = async ( options?: RequestInit): Promise<ServiceJob[]> => {
+
+  return customFetch<ServiceJob[]>(getListServiceJobsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceJobsQueryKey = () => {
+    return [
+    `/api/service-jobs`
+    ] as const;
+    }
+
+
+export const getListServiceJobsQueryOptions = <TData = Awaited<ReturnType<typeof listServiceJobs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceJobsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceJobs>>> = ({ signal }) => listServiceJobs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceJobs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListServiceJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceJobs>>>
+export type ListServiceJobsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all service jobs
+ */
+
+export function useListServiceJobs<TData = Awaited<ReturnType<typeof listServiceJobs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListServiceJobsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateServiceJobUrl = () => {
+
+
+
+
+  return `/api/service-jobs`
+}
+
+/**
+ * @summary Create a new service job
+ */
+export const createServiceJob = async (serviceJobInput: ServiceJobInput, options?: RequestInit): Promise<ServiceJob> => {
+
+  return customFetch<ServiceJob>(getCreateServiceJobUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      serviceJobInput,)
+  }
+);}
+
+
+
+
+export const getCreateServiceJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceJob>>, TError,{data: BodyType<ServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createServiceJob>>, TError,{data: BodyType<ServiceJobInput>}, TContext> => {
+
+const mutationKey = ['createServiceJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createServiceJob>>, {data: BodyType<ServiceJobInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createServiceJob(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateServiceJobMutationResult = NonNullable<Awaited<ReturnType<typeof createServiceJob>>>
+    export type CreateServiceJobMutationBody = BodyType<ServiceJobInput>
+    export type CreateServiceJobMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a new service job
+ */
+export const useCreateServiceJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceJob>>, TError,{data: BodyType<ServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createServiceJob>>,
+        TError,
+        {data: BodyType<ServiceJobInput>},
+        TContext
+      > => {
+      return useMutation(getCreateServiceJobMutationOptions(options));
+    }
+
+export const getUpdateServiceJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-jobs/${id}`
+}
+
+/**
+ * @summary Update a service job
+ */
+export const updateServiceJob = async (id: number,
+    serviceJobInput: ServiceJobInput, options?: RequestInit): Promise<ServiceJob> => {
+
+  return customFetch<ServiceJob>(getUpdateServiceJobUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      serviceJobInput,)
+  }
+);}
+
+
+
+
+export const getUpdateServiceJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceJob>>, TError,{id: number;data: BodyType<ServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceJob>>, TError,{id: number;data: BodyType<ServiceJobInput>}, TContext> => {
+
+const mutationKey = ['updateServiceJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceJob>>, {id: number;data: BodyType<ServiceJobInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateServiceJob(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceJobMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceJob>>>
+    export type UpdateServiceJobMutationBody = BodyType<ServiceJobInput>
+    export type UpdateServiceJobMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a service job
+ */
+export const useUpdateServiceJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceJob>>, TError,{id: number;data: BodyType<ServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceJob>>,
+        TError,
+        {id: number;data: BodyType<ServiceJobInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateServiceJobMutationOptions(options));
+    }
+
+export const getDeleteServiceJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-jobs/${id}`
+}
+
+/**
+ * @summary Delete a service job
+ */
+export const deleteServiceJob = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteServiceJobUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteServiceJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteServiceJob>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteServiceJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteServiceJob>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteServiceJob(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteServiceJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteServiceJob>>>
+
+    export type DeleteServiceJobMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a service job
+ */
+export const useDeleteServiceJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteServiceJob>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteServiceJobMutationOptions(options));
     }
 
 export const getGetDashboardCalendarUrl = (params: GetDashboardCalendarParams,) => {
