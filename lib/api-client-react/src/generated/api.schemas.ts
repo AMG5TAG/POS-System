@@ -407,6 +407,46 @@ export interface InventoryUpdate {
   lowStockThreshold?: number;
 }
 
+export interface CalendarAppointment {
+  id: number;
+  title: string;
+  scheduledAt: string;
+  durationMinutes?: number;
+  status: string;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface CalendarBirthday {
+  id: number;
+  firstName: string;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+}
+
+export interface CalendarDay {
+  date: string;
+  /** @nullable */
+  publicHoliday?: string | null;
+  sales: number;
+  serviceJobs: number;
+  invoices: number;
+  appointments: CalendarAppointment[];
+  customerBirthdays: CalendarBirthday[];
+}
+
+export interface CalendarMonth {
+  year: number;
+  month: number;
+  days: CalendarDay[];
+}
+
 export interface DashboardSummary {
   totalSales: number;
   transactionCount: number;
@@ -500,4 +540,13 @@ export const GetTopProductsPeriod = {
   month: 'month',
   year: 'year',
 } as const;
+
+export type GetDashboardCalendarParams = {
+year: number;
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month: number;
+};
 

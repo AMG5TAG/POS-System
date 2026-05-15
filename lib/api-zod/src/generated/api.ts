@@ -984,3 +984,44 @@ export const GetTopProductsResponseItem = zod.object({
 export const GetTopProductsResponse = zod.array(GetTopProductsResponseItem)
 
 
+/**
+ * @summary Get calendar events for a given month
+ */
+export const getDashboardCalendarQueryMonthMax = 12;
+
+
+
+export const GetDashboardCalendarQueryParams = zod.object({
+  "year": zod.coerce.number(),
+  "month": zod.coerce.number().min(1).max(getDashboardCalendarQueryMonthMax)
+})
+
+export const GetDashboardCalendarResponse = zod.object({
+  "year": zod.number(),
+  "month": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "publicHoliday": zod.string().nullish(),
+  "sales": zod.number(),
+  "serviceJobs": zod.number(),
+  "invoices": zod.number(),
+  "appointments": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "scheduledAt": zod.string(),
+  "durationMinutes": zod.number().optional(),
+  "status": zod.string(),
+  "customerName": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})),
+  "customerBirthdays": zod.array(zod.object({
+  "id": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish()
+}))
+}))
+})
+
+

@@ -6,6 +6,7 @@ import { DollarSign, CreditCard, Users, Package, AlertTriangle } from "lucide-re
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<GetDashboardSummaryPeriod>("today");
@@ -175,6 +176,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        <DashboardCalendar />
       </div>
     </AppLayout>
   );

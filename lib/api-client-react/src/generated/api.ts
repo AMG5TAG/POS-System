@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CalendarMonth,
   Category,
   CategoryInput,
   CategoryUpdate,
@@ -28,6 +29,7 @@ import type {
   CustomerList,
   CustomerUpdate,
   DashboardSummary,
+  GetDashboardCalendarParams,
   GetDashboardSummaryParams,
   GetRecentTransactionsParams,
   GetSalesChartParams,
@@ -3301,6 +3303,90 @@ export function useGetTopProducts<TData = Awaited<ReturnType<typeof getTopProduc
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTopProductsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardCalendarUrl = (params: GetDashboardCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/calendar?${stringifiedParams}` : `/api/dashboard/calendar`
+}
+
+/**
+ * @summary Get calendar events for a given month
+ */
+export const getDashboardCalendar = async (params: GetDashboardCalendarParams, options?: RequestInit): Promise<CalendarMonth> => {
+
+  return customFetch<CalendarMonth>(getGetDashboardCalendarUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardCalendarQueryKey = (params?: GetDashboardCalendarParams,) => {
+    return [
+    `/api/dashboard/calendar`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardCalendarQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardCalendar>>, TError = ErrorType<unknown>>(params: GetDashboardCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardCalendarQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardCalendar>>> = ({ signal }) => getDashboardCalendar(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardCalendar>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardCalendarQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardCalendar>>>
+export type GetDashboardCalendarQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get calendar events for a given month
+ */
+
+export function useGetDashboardCalendar<TData = Awaited<ReturnType<typeof getDashboardCalendar>>, TError = ErrorType<unknown>>(
+ params: GetDashboardCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardCalendarQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

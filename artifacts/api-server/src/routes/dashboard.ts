@@ -1,8 +1,28 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable } from "@workspace/db";
-import { eq, and, gte, sql, desc } from "drizzle-orm";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable } from "@workspace/db";
+import { eq, and, gte, sql, desc, lt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams } from "@workspace/api-zod";
+import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams } from "@workspace/api-zod";
+
+// Australian public holidays (national + NSW) for 2026
+const AU_HOLIDAYS_2026: Record<string, string> = {
+  "2026-01-01": "New Year's Day",
+  "2026-01-26": "Australia Day",
+  "2026-04-03": "Good Friday",
+  "2026-04-04": "Easter Saturday",
+  "2026-04-05": "Easter Sunday",
+  "2026-04-06": "Easter Monday",
+  "2026-04-25": "Anzac Day",
+  "2026-06-08": "King's Birthday",
+  "2026-08-03": "Bank Holiday (NSW)",
+  "2026-10-05": "Labour Day (NSW)",
+  "2026-12-25": "Christmas Day",
+  "2026-12-26": "Boxing Day",
+};
+
+function getPublicHoliday(dateStr: string): string | null {
+  return AU_HOLIDAYS_2026[dateStr] ?? null;
+}
 
 const router: IRouter = Router();
 
@@ -242,6 +262,161 @@ router.get("/dashboard/top-products", requireAuth, async (req, res): Promise<voi
     .map((p) => ({ ...p, revenue: Math.round(p.revenue * 100) / 100 }));
 
   res.json(sorted);
+});
+
+router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> => {
+  const parsed = GetDashboardCalendarQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { year, month } = parsed.data;
+  const merchantId = req.session.merchantId!;
+
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
+
+  // Build a map of date -> events
+  const dayMap: Record<string, {
+    publicHoliday: string | null;
+    sales: number;
+    serviceJobs: number;
+    invoices: number;
+    appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; notes: string | null }[];
+    customerBirthdays: { id: number; firstName: string; lastName: string | null; phone: string | null; email: string | null }[];
+  }> = {};
+
+  // Pre-fill all days in month
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    dayMap[key] = {
+      publicHoliday: getPublicHoliday(key),
+      sales: 0,
+      serviceJobs: 0,
+      invoices: 0,
+      appointments: [],
+      customerBirthdays: [],
+    };
+  }
+
+  // Sales (transactions) aggregated by day
+  const txns = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.merchantId, merchantId),
+      eq(transactionsTable.status, "completed"),
+      gte(transactionsTable.createdAt, monthStart),
+      lt(transactionsTable.createdAt, monthEnd),
+    ));
+
+  for (const t of txns) {
+    const key = t.createdAt.toISOString().split("T")[0];
+    if (dayMap[key]) dayMap[key].sales += 1;
+  }
+
+  // Appointments
+  const appts = await db
+    .select()
+    .from(appointmentsTable)
+    .where(and(
+      eq(appointmentsTable.merchantId, merchantId),
+      gte(appointmentsTable.scheduledAt, monthStart),
+      lt(appointmentsTable.scheduledAt, monthEnd),
+    ));
+
+  // Get customer names for appointments
+  const apptCustomerIds = [...new Set(appts.filter((a) => a.customerId).map((a) => a.customerId!))];
+  const apptCustomers = apptCustomerIds.length > 0
+    ? await db.select().from(customersTable).where(
+        sql`${customersTable.id} = ANY(ARRAY[${sql.raw(apptCustomerIds.join(","))}]::int[])`
+      )
+    : [];
+  const apptCustomerMap = new Map(apptCustomers.map((c) => [c.id, c]));
+
+  for (const a of appts) {
+    // Convert to AEST (UTC+10) for the date key
+    const localDate = new Date(a.scheduledAt.getTime() + 10 * 60 * 60 * 1000);
+    const key = localDate.toISOString().split("T")[0];
+    if (!dayMap[key]) continue;
+    const customer = a.customerId ? apptCustomerMap.get(a.customerId) : null;
+    dayMap[key].appointments.push({
+      id: a.id,
+      title: a.title,
+      scheduledAt: a.scheduledAt.toISOString(),
+      durationMinutes: a.durationMinutes,
+      status: a.status,
+      customerName: customer ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null : null,
+      notes: a.notes ?? null,
+    });
+  }
+
+  // Service jobs
+  const jobs = await db
+    .select()
+    .from(serviceJobsTable)
+    .where(and(
+      eq(serviceJobsTable.merchantId, merchantId),
+      gte(serviceJobsTable.scheduledAt, monthStart),
+      lt(serviceJobsTable.scheduledAt, monthEnd),
+    ));
+
+  for (const j of jobs) {
+    const localDate = new Date(j.scheduledAt.getTime() + 10 * 60 * 60 * 1000);
+    const key = localDate.toISOString().split("T")[0];
+    if (dayMap[key]) dayMap[key].serviceJobs += 1;
+  }
+
+  // Invoices (by due date)
+  const invs = await db
+    .select()
+    .from(invoicesTable)
+    .where(and(
+      eq(invoicesTable.merchantId, merchantId),
+      gte(invoicesTable.dueDate, monthStart),
+      lt(invoicesTable.dueDate, monthEnd),
+    ));
+
+  for (const inv of invs) {
+    if (!inv.dueDate) continue;
+    const localDate = new Date(inv.dueDate.getTime() + 10 * 60 * 60 * 1000);
+    const key = localDate.toISOString().split("T")[0];
+    if (dayMap[key]) dayMap[key].invoices += 1;
+  }
+
+  // Customer birthdays (match by month/day)
+  const customers = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.merchantId, merchantId));
+
+  for (const c of customers) {
+    if (!c.dateOfBirth) continue;
+    // dateOfBirth is stored as "YYYY-MM-DD"
+    const dob = c.dateOfBirth as string;
+    const dobParts = dob.split("-");
+    if (dobParts.length < 3) continue;
+    const dobMonth = parseInt(dobParts[1], 10);
+    const dobDay = parseInt(dobParts[2], 10);
+    if (dobMonth !== month) continue;
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(dobDay).padStart(2, "0")}`;
+    if (!dayMap[key]) continue;
+    dayMap[key].customerBirthdays.push({
+      id: c.id,
+      firstName: c.firstName ?? "",
+      lastName: c.lastName ?? null,
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+    });
+  }
+
+  const days = Object.entries(dayMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, data]) => ({ date, ...data }));
+
+  res.json({ year, month, days });
 });
 
 export default router;

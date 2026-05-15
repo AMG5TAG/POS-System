@@ -837,6 +837,32 @@ paths:
                 items:
                   $ref: "#/components/schemas/TopProduct"
 
+  /dashboard/calendar:
+    get:
+      operationId: getDashboardCalendar
+      tags: [dashboard]
+      summary: Get calendar events for a given month
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+      responses:
+        "200":
+          description: Calendar events grouped by date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarMonth"
+
 components:
   schemas:
     HealthStatus:
@@ -1432,6 +1458,76 @@ components:
           type: integer
 
     # ── Dashboard ────────────────────────────────────────────────────────────
+    CalendarAppointment:
+      type: object
+      required: [id, title, scheduledAt, status]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        scheduledAt:
+          type: string
+        durationMinutes:
+          type: integer
+        status:
+          type: string
+        customerName:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    CalendarBirthday:
+      type: object
+      required: [id, firstName]
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+
+    CalendarDay:
+      type: object
+      required: [date, sales, serviceJobs, invoices, appointments, customerBirthdays]
+      properties:
+        date:
+          type: string
+        publicHoliday:
+          type: ["string", "null"]
+        sales:
+          type: integer
+        serviceJobs:
+          type: integer
+        invoices:
+          type: integer
+        appointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarAppointment"
+        customerBirthdays:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarBirthday"
+
+    CalendarMonth:
+      type: object
+      required: [year, month, days]
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarDay"
+
     DashboardSummary:
       type: object
       required: [totalSales, transactionCount, averageOrderValue, newCustomers, lowStockCount, period]

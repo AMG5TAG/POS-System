@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './calendarAppointment';
+export * from './calendarBirthday';
+export * from './calendarDay';
+export * from './calendarMonth';
 export * from './category';
 export * from './categoryInput';
 export * from './categoryUpdate';
@@ -14,6 +18,7 @@ export * from './customerInput';
 export * from './customerList';
 export * from './customerUpdate';
 export * from './dashboardSummary';
+export * from './getDashboardCalendarParams';
 export * from './getDashboardSummaryParams';
 export * from './getDashboardSummaryPeriod';
 export * from './getRecentTransactionsParams';
