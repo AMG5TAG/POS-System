@@ -215,10 +215,46 @@ export interface Customer {
   address?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
   loyaltyPoints?: number;
   totalSpent?: number;
   visitCount?: number;
   createdAt: string;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  abn?: string | null;
+  /** @nullable */
+  referredBy?: string | null;
+  /** @nullable */
+  whatsappSameAsPhone?: string | null;
+  /** @nullable */
+  billingStreet?: string | null;
+  /** @nullable */
+  billingCity?: string | null;
+  /** @nullable */
+  billingState?: string | null;
+  /** @nullable */
+  billingPostcode?: string | null;
+  /** @nullable */
+  billingCountry?: string | null;
+  /** @nullable */
+  shippingStreet?: string | null;
+  /** @nullable */
+  shippingCity?: string | null;
+  /** @nullable */
+  shippingState?: string | null;
+  /** @nullable */
+  shippingPostcode?: string | null;
+  /** @nullable */
+  shippingCountry?: string | null;
+  /** @nullable */
+  customerGroup?: string | null;
+  /** @nullable */
+  warningNote?: string | null;
+  /** @nullable */
+  agreedToMarketing?: string | null;
 }
 
 export interface CustomerInput {
@@ -228,6 +264,24 @@ export interface CustomerInput {
   phone?: string;
   address?: string;
   notes?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  referredBy?: string;
+  whatsappSameAsPhone?: string;
+  billingStreet?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingPostcode?: string;
+  billingCountry?: string;
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostcode?: string;
+  shippingCountry?: string;
+  customerGroup?: string;
+  warningNote?: string;
+  agreedToMarketing?: string;
 }
 
 export interface CustomerUpdate {
@@ -237,6 +291,24 @@ export interface CustomerUpdate {
   phone?: string;
   address?: string;
   notes?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  referredBy?: string;
+  whatsappSameAsPhone?: string;
+  billingStreet?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingPostcode?: string;
+  billingCountry?: string;
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostcode?: string;
+  shippingCountry?: string;
+  customerGroup?: string;
+  warningNote?: string;
+  agreedToMarketing?: string;
 }
 
 export interface CustomerList {

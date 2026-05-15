@@ -21,8 +21,44 @@ export interface Customer {
   address?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
   loyaltyPoints?: number;
   totalSpent?: number;
   visitCount?: number;
   createdAt: Date;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  abn?: string | null;
+  /** @nullable */
+  referredBy?: string | null;
+  /** @nullable */
+  whatsappSameAsPhone?: string | null;
+  /** @nullable */
+  billingStreet?: string | null;
+  /** @nullable */
+  billingCity?: string | null;
+  /** @nullable */
+  billingState?: string | null;
+  /** @nullable */
+  billingPostcode?: string | null;
+  /** @nullable */
+  billingCountry?: string | null;
+  /** @nullable */
+  shippingStreet?: string | null;
+  /** @nullable */
+  shippingCity?: string | null;
+  /** @nullable */
+  shippingState?: string | null;
+  /** @nullable */
+  shippingPostcode?: string | null;
+  /** @nullable */
+  shippingCountry?: string | null;
+  /** @nullable */
+  customerGroup?: string | null;
+  /** @nullable */
+  warningNote?: string | null;
+  /** @nullable */
+  agreedToMarketing?: string | null;
 }

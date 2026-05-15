@@ -13,4 +13,22 @@ export interface CustomerInput {
   phone?: string;
   address?: string;
   notes?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  referredBy?: string;
+  whatsappSameAsPhone?: string;
+  billingStreet?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingPostcode?: string;
+  billingCountry?: string;
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostcode?: string;
+  shippingCountry?: string;
+  customerGroup?: string;
+  warningNote?: string;
+  agreedToMarketing?: string;
 }

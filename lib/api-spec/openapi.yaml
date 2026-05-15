@@ -1361,6 +1361,8 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
         loyaltyPoints:
           type: integer
         totalSpent:
@@ -1370,6 +1372,40 @@ components:
         createdAt:
           type: string
           format: date-time
+        company:
+          type: ["string", "null"]
+        abn:
+          type: ["string", "null"]
+        referredBy:
+          type: ["string", "null"]
+        whatsappSameAsPhone:
+          type: ["string", "null"]
+        billingStreet:
+          type: ["string", "null"]
+        billingCity:
+          type: ["string", "null"]
+        billingState:
+          type: ["string", "null"]
+        billingPostcode:
+          type: ["string", "null"]
+        billingCountry:
+          type: ["string", "null"]
+        shippingStreet:
+          type: ["string", "null"]
+        shippingCity:
+          type: ["string", "null"]
+        shippingState:
+          type: ["string", "null"]
+        shippingPostcode:
+          type: ["string", "null"]
+        shippingCountry:
+          type: ["string", "null"]
+        customerGroup:
+          type: ["string", "null"]
+        warningNote:
+          type: ["string", "null"]
+        agreedToMarketing:
+          type: ["string", "null"]
 
     CustomerInput:
       type: object
@@ -1387,6 +1423,42 @@ components:
           type: string
         notes:
           type: string
+        dateOfBirth:
+          type: string
+        company:
+          type: string
+        abn:
+          type: string
+        referredBy:
+          type: string
+        whatsappSameAsPhone:
+          type: string
+        billingStreet:
+          type: string
+        billingCity:
+          type: string
+        billingState:
+          type: string
+        billingPostcode:
+          type: string
+        billingCountry:
+          type: string
+        shippingStreet:
+          type: string
+        shippingCity:
+          type: string
+        shippingState:
+          type: string
+        shippingPostcode:
+          type: string
+        shippingCountry:
+          type: string
+        customerGroup:
+          type: string
+        warningNote:
+          type: string
+        agreedToMarketing:
+          type: string
 
     CustomerUpdate:
       type: object
@@ -1402,6 +1474,42 @@ components:
         address:
           type: string
         notes:
+          type: string
+        dateOfBirth:
+          type: string
+        company:
+          type: string
+        abn:
+          type: string
+        referredBy:
+          type: string
+        whatsappSameAsPhone:
+          type: string
+        billingStreet:
+          type: string
+        billingCity:
+          type: string
+        billingState:
+          type: string
+        billingPostcode:
+          type: string
+        billingCountry:
+          type: string
+        shippingStreet:
+          type: string
+        shippingCity:
+          type: string
+        shippingState:
+          type: string
+        shippingPostcode:
+          type: string
+        shippingCountry:
+          type: string
+        customerGroup:
+          type: string
+        warningNote:
+          type: string
+        agreedToMarketing:
           type: string
 
     CustomerList:

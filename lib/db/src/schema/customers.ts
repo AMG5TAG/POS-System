@@ -18,6 +18,24 @@ export const customersTable = pgTable("customers", {
   visitCount: integer("visit_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  // New fields
+  company: text("company"),
+  abn: text("abn"),
+  referredBy: text("referred_by"),
+  whatsappSameAsPhone: text("whatsapp_same_as_phone"),
+  billingStreet: text("billing_street"),
+  billingCity: text("billing_city"),
+  billingState: text("billing_state"),
+  billingPostcode: text("billing_postcode"),
+  billingCountry: text("billing_country"),
+  shippingStreet: text("shipping_street"),
+  shippingCity: text("shipping_city"),
+  shippingState: text("shipping_state"),
+  shippingPostcode: text("shipping_postcode"),
+  shippingCountry: text("shipping_country"),
+  customerGroup: text("customer_group"),
+  warningNote: text("warning_note"),
+  agreedToMarketing: text("agreed_to_marketing"),
 });
 
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
