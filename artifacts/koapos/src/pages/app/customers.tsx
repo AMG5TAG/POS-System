@@ -97,9 +97,9 @@ function StepPill({
     <div
       className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
         active
-          ? "bg-teal-700 text-white"
+          ? "bg-primary text-primary-foreground"
           : done
-          ? "bg-teal-100 text-teal-700"
+          ? "bg-muted text-muted-foreground"
           : "text-muted-foreground"
       }`}
     >
@@ -116,7 +116,7 @@ function FieldRow({ children }: { children: React.ReactNode }) {
 function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
     <div className={`space-y-1.5 ${full ? "sm:col-span-2" : ""}`}>
-      <Label className="text-teal-700 font-medium">{label}</Label>
+      <Label className="font-medium">{label}</Label>
       {children}
     </div>
   );
@@ -551,11 +551,10 @@ export default function CustomersPage() {
                   </Field>
                 </FieldRow>
 
-                <label className="flex items-center gap-2 text-sm cursor-pointer text-teal-700 font-medium">
+                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium">
                   <Checkbox
                     checked={form.addShipping}
                     onCheckedChange={(v) => setField("addShipping", !!v)}
-                    className="data-[state=checked]:bg-teal-700 data-[state=checked]:border-teal-700"
                   />
                   Add a shipping address
                 </label>
@@ -657,11 +656,10 @@ export default function CustomersPage() {
                   <p className="text-xs text-muted-foreground pl-1">Displayed as a warning banner at POS and in service forms</p>
                 </div>
 
-                <label className="flex items-center gap-2.5 text-sm cursor-pointer text-teal-700 font-medium">
+                <label className="flex items-center gap-2.5 text-sm cursor-pointer font-medium">
                   <Checkbox
                     checked={form.agreedToMarketing}
                     onCheckedChange={(v) => setField("agreedToMarketing", !!v)}
-                    className="data-[state=checked]:bg-teal-700 data-[state=checked]:border-teal-700"
                   />
                   Customer Agrees to Marketing
                 </label>
@@ -669,15 +667,15 @@ export default function CustomersPage() {
                 <div className="border-t pt-2" />
 
                 {/* Ready to add summary */}
-                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
-                  <p className="text-xs font-bold tracking-widest text-teal-800 uppercase">Ready to Add</p>
+                <div className="rounded-xl border bg-muted/40 p-4 space-y-2">
+                  <p className="text-xs font-bold tracking-widest text-foreground uppercase">Ready to Add</p>
                   <div className="grid grid-cols-2 text-sm gap-1">
                     <span className="text-muted-foreground">Name</span>
                     <span className="font-medium text-right">
                       {[form.firstName, form.lastName].filter(Boolean).join(" ") || "—"}
                     </span>
                     <span className="text-muted-foreground">Group</span>
-                    <span className="font-medium text-right text-teal-700">{form.customerGroup}</span>
+                    <span className="font-medium text-right">{form.customerGroup}</span>
                     {form.email && (
                       <>
                         <span className="text-muted-foreground">Email</span>
@@ -704,7 +702,6 @@ export default function CustomersPage() {
             <Button
               onClick={goNext}
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-teal-700 hover:bg-teal-800 text-white"
             >
               {isLast ? (editingCustomer ? "Save Changes" : "Add Customer") : "Next →"}
             </Button>
