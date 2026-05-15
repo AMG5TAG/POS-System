@@ -11,7 +11,15 @@ import RegisterPage from "@/pages/marketing/register";
 import PricingPage from "@/pages/marketing/pricing";
 
 import DashboardPage from "@/pages/app/dashboard";
+
 import POSPage from "@/pages/app/pos";
+import POSHistoryPage from "@/pages/app/pos-history";
+import POSInvoicesPage from "@/pages/app/pos-invoices";
+import POSLaybuysPage from "@/pages/app/pos-laybuys";
+import POSParkedPage from "@/pages/app/pos-parked";
+import POSRefundPage from "@/pages/app/pos-refund";
+import POSCashPage from "@/pages/app/pos-cash";
+
 import ProductsPage from "@/pages/app/products";
 import ProductsOverviewPage from "@/pages/app/products-overview";
 import ProductsBundlesPage from "@/pages/app/products-bundles";
@@ -24,6 +32,7 @@ import ProductsBrandsPage from "@/pages/app/products-brands";
 import ProductsCategoriesPage from "@/pages/app/products-categories";
 import ProductsTagsPage from "@/pages/app/products-tags";
 import ProductsRecallsPage from "@/pages/app/products-recalls";
+
 import CustomersPage from "@/pages/app/customers";
 import TransactionsPage from "@/pages/app/transactions";
 import InventoryPage from "@/pages/app/inventory";
@@ -73,6 +82,26 @@ function Router() {
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
+      </Route>
+
+      {/* POS section */}
+      <Route path="/pos/history">
+        <ProtectedRoute component={POSHistoryPage} />
+      </Route>
+      <Route path="/pos/invoices">
+        <ProtectedRoute component={POSInvoicesPage} />
+      </Route>
+      <Route path="/pos/laybuys">
+        <ProtectedRoute component={POSLaybuysPage} />
+      </Route>
+      <Route path="/pos/parked">
+        <ProtectedRoute component={POSParkedPage} />
+      </Route>
+      <Route path="/pos/refund">
+        <ProtectedRoute component={POSRefundPage} />
+      </Route>
+      <Route path="/pos/cash">
+        <ProtectedRoute component={POSCashPage} />
       </Route>
       <Route path="/pos">
         <ProtectedRoute component={POSPage} />

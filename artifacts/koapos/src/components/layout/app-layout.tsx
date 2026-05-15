@@ -26,6 +26,11 @@ import {
   Tag,
   Hash,
   AlertTriangle,
+  History,
+  FileText,
+  Package2,
+  ParkingCircle,
+  Coins,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -43,6 +48,16 @@ import {
   SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
 
+const POS_SUBNAV = [
+  { name: "Sell", href: "/pos", icon: ShoppingCart },
+  { name: "History", href: "/pos/history", icon: History },
+  { name: "Invoices", href: "/pos/invoices", icon: FileText },
+  { name: "Laybuys", href: "/pos/laybuys", icon: Package2 },
+  { name: "Parked", href: "/pos/parked", icon: ParkingCircle },
+  { name: "Refund", href: "/pos/refund", icon: RotateCcw },
+  { name: "Cash", href: "/pos/cash", icon: Coins },
+];
+
 const PRODUCTS_SUBNAV = [
   { name: "Overview", href: "/products/overview", icon: LayoutGrid },
   { name: "Products", href: "/products", icon: Package },
@@ -56,11 +71,6 @@ const PRODUCTS_SUBNAV = [
   { name: "Categories", href: "/products/categories", icon: Tag },
   { name: "Tags", href: "/products/tags", icon: Hash },
   { name: "Recalls", href: "/products/recalls", icon: AlertTriangle },
-];
-
-const TOP_NAV = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "POS", href: "/pos", icon: ShoppingCart },
 ];
 
 const BOTTOM_NAV = [
@@ -79,7 +89,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const logoutMutation = useLogout();
 
+  const isPOSSection = location === "/pos" || location.startsWith("/pos/");
   const isProductsSection = location === "/products" || location.startsWith("/products/");
+
+  const [posOpen, setPosOpen] = useState(isPOSSection);
   const [productsOpen, setProductsOpen] = useState(isProductsSection);
 
   const handleLogout = () => {
@@ -102,6 +115,53 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const CollapsibleSection = ({
+    label,
+    icon: Icon,
+    isActive,
+    isOpen,
+    onToggle,
+    items,
+  }: {
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    isActive: boolean;
+    isOpen: boolean;
+    onToggle: () => void;
+    items: { name: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
+  }) => (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isActive}
+        onClick={onToggle}
+        className="flex items-center gap-3 cursor-pointer w-full"
+        tooltip={label}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span className="flex-1">{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+      </SidebarMenuButton>
+
+      {isOpen && (
+        <SidebarMenuSub>
+          {items.map((item) => {
+            const active = location === item.href;
+            return (
+              <SidebarMenuSubItem key={item.href}>
+                <SidebarMenuSubButton asChild isActive={active}>
+                  <Link href={item.href} className="flex items-center gap-2.5">
+                    <item.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{item.name}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuItem>
+  );
+
   return (
     <SidebarProvider>
       <div className="min-h-[100dvh] w-full flex bg-muted/10">
@@ -115,44 +175,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <SidebarContent className="px-2 py-4">
             <SidebarMenu>
-              {/* Top items */}
-              {TOP_NAV.map((item) => (
-                <NavLink key={item.href} {...item} />
-              ))}
+              <NavLink href="/dashboard" icon={LayoutDashboard} name="Dashboard" />
 
-              {/* Products — collapsible section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isProductsSection}
-                  onClick={() => setProductsOpen((o) => !o)}
-                  className="flex items-center gap-3 cursor-pointer w-full"
-                  tooltip="Products"
-                >
-                  <Package className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">Products</span>
-                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
-                </SidebarMenuButton>
+              {/* POS — collapsible */}
+              <CollapsibleSection
+                label="POS"
+                icon={ShoppingCart}
+                isActive={isPOSSection}
+                isOpen={posOpen}
+                onToggle={() => setPosOpen((o) => !o)}
+                items={POS_SUBNAV}
+              />
 
-                {productsOpen && (
-                  <SidebarMenuSub>
-                    {PRODUCTS_SUBNAV.map((item) => {
-                      const active = location === item.href;
-                      return (
-                        <SidebarMenuSubItem key={item.href}>
-                          <SidebarMenuSubButton asChild isActive={active}>
-                            <Link href={item.href} className="flex items-center gap-2.5">
-                              <item.icon className="w-3.5 h-3.5 shrink-0" />
-                              <span>{item.name}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      );
-                    })}
-                  </SidebarMenuSub>
-                )}
-              </SidebarMenuItem>
+              {/* Products — collapsible */}
+              <CollapsibleSection
+                label="Products"
+                icon={Package}
+                isActive={isProductsSection}
+                isOpen={productsOpen}
+                onToggle={() => setProductsOpen((o) => !o)}
+                items={PRODUCTS_SUBNAV}
+              />
 
-              {/* Bottom items */}
               {BOTTOM_NAV.map((item) => (
                 <NavLink key={item.href} {...item} />
               ))}

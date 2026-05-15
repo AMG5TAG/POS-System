@@ -14,6 +14,7 @@ import serviceJobsRouter from "./service-jobs";
 import brandsRouter from "./brands";
 import suppliersRouter from "./suppliers";
 import tagsRouter from "./tags";
+import invoicesRouter from "./invoices";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(serviceJobsRouter);
 router.use(brandsRouter);
 router.use(suppliersRouter);
 router.use(tagsRouter);
+router.use(invoicesRouter);
 
 export default router;
