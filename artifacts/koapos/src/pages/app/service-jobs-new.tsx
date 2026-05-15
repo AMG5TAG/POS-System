@@ -547,40 +547,24 @@ export default function ServiceJobNewPage() {
         </div>
 
         {/* Photos / Media */}
-        <div className="border rounded-xl p-5 space-y-4">
+        <div className="border rounded-xl p-5 space-y-3">
           <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
-
-          {/* Camera row */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-2">
             {[0, 1, 2, 3].map((i) => (
               <PhotoSlot
                 key={i}
                 index={i}
                 value={photos[i]}
                 onChange={(v) => updatePhoto(i, v)}
-                icon={<Camera className="w-6 h-6" />}
+                icon={<Camera className="w-4 h-4" />}
                 label="Camera"
               />
             ))}
-          </div>
-
-          {/* Attachments + video row */}
-          <div className="grid grid-cols-5 gap-3">
-            {[4, 5, 6, 7].map((i, idx) => (
-              <PhotoSlot
-                key={i}
-                index={i}
-                value={photos[i]}
-                onChange={(v) => updatePhoto(i, v)}
-                icon={<FileText className="w-5 h-5" />}
-                label={String(idx + 1)}
-              />
-            ))}
             <PhotoSlot
-              index={8}
-              value={photos[8]}
-              onChange={(v) => updatePhoto(8, v)}
-              icon={<Video className="w-5 h-5" />}
+              index={4}
+              value={photos[4]}
+              onChange={(v) => updatePhoto(4, v)}
+              icon={<Video className="w-4 h-4" />}
               label="Video"
               accept="video/*"
             />
