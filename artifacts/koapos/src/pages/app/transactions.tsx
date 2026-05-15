@@ -33,7 +33,7 @@ export default function TransactionsPage() {
   const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
 
   const { data: txData, isLoading } = useListTransactions(
-    { status: statusFilter || undefined, limit: 100 },
+    { status: statusFilter === "all" ? undefined : statusFilter || undefined, limit: 100 },
     { query: { queryKey: ["transactions", statusFilter] } }
   );
 
@@ -63,12 +63,12 @@ export default function TransactionsPage() {
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Transactions</h1>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All transactions" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Transactions</SelectItem>
+              <SelectItem value="all">All Transactions</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="refunded">Refunded</SelectItem>
             </SelectContent>

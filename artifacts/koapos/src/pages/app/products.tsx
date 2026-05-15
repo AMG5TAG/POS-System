@@ -65,7 +65,7 @@ export default function ProductsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
 
   const { data: productsData, isLoading } = useListProducts(
-    { search: search || undefined, categoryId: categoryFilter ? parseInt(categoryFilter) : undefined, limit: 100 },
+    { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 100 },
     { query: { queryKey: ["products", search, categoryFilter] } }
   );
 
@@ -205,12 +205,12 @@ export default function ProductsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Categories</SelectItem>
+              <SelectItem value="all">All Categories</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c.id} value={c.id.toString()}>
                   {c.name}
@@ -330,12 +330,12 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label>Category</Label>
-              <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
+              <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="No category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Category</SelectItem>
+                  <SelectItem value="none">No Category</SelectItem>
                   {categories.map((c) => (
                     <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                   ))}
