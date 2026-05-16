@@ -64,18 +64,18 @@ export function DashboardClockBar() {
     <div className="rounded-2xl border bg-card px-5 py-3 flex items-center gap-5">
       {/* Live clock */}
       <div className="flex items-baseline gap-0.5 shrink-0">
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-teal-600 leading-none">
+        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
           {hours}
         </span>
-        <span className="text-4xl font-bold text-teal-400 leading-none animate-pulse">:</span>
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-teal-600 leading-none">
+        <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
+        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
           {minutes}
         </span>
-        <span className="text-4xl font-bold text-teal-400 leading-none animate-pulse">:</span>
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-teal-600 leading-none">
+        <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
+        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
           {seconds}
         </span>
-        <span className="ml-1.5 text-sm font-semibold text-teal-500 self-end pb-0.5">{ampm}</span>
+        <span className="ml-1.5 text-sm font-semibold text-primary/70 self-end pb-0.5">{ampm}</span>
       </div>
 
       {/* Day + date */}
