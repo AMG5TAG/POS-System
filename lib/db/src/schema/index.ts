@@ -9,4 +9,5 @@ export * from "./invoices";
 export * from "./brands";
 export * from "./suppliers";
 export * from "./tags";
-export * from "./merchants";
+export * from "./customer-notes";
+export * from "./customer-files";

@@ -16,6 +16,7 @@ import suppliersRouter from "./suppliers";
 import tagsRouter from "./tags";
 import invoicesRouter from "./invoices";
 import integrationsRouter from "./integrations";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(suppliersRouter);
 router.use(tagsRouter);
 router.use(invoicesRouter);
 router.use(integrationsRouter);
+router.use(storageRouter);
 
 export default router;

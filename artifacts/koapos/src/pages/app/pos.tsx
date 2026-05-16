@@ -4,25 +4,36 @@ import {
   useListProducts, 
   useListCategories, 
   useCreateTransaction,
+  useListCustomers,
   Product,
+  Customer,
   TransactionInputPaymentMethod,
   TransactionItem
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt, SplitSquareHorizontal } from "lucide-react";
+import {
+  Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
+  SplitSquareHorizontal, User, X, AlertTriangle, UserSearch,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { ShoppingCart } from "lucide-react";
 
 export default function POSPage() {
   const [search, setSearch] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [cart, setCart] = useState<{product: Product, quantity: number}[]>([]);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
+
   const { data: productsData } = useListProducts({
     search: search || undefined,
     categoryId: activeCategoryId || undefined,
@@ -35,10 +46,16 @@ export default function POSPage() {
     query: { queryKey: ["categories"] }
   });
 
+  const { data: customersData } = useListCustomers(
+    { search: customerSearch || undefined, limit: 50 },
+    { query: { queryKey: ["customers-pos", customerSearch], enabled: customerPickerOpen } }
+  );
+
   const createTransactionMutation = useCreateTransaction();
 
   const products = productsData?.items || [];
-  const categories = categoriesData?.items || [];
+  const categories: import("@workspace/api-client-react").Category[] = categoriesData || [];
+  const customers = customersData?.items || [];
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -67,9 +84,18 @@ export default function POSPage() {
   const clearCart = () => setCart([]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const taxRate = 0.10; // 10% GST
+  const taxRate = 0.10;
   const taxTotal = subtotal * taxRate;
   const total = subtotal + taxTotal;
+
+  const selectCustomer = (c: Customer) => {
+    setSelectedCustomer(c);
+    setCustomerPickerOpen(false);
+    setCustomerSearch("");
+    if (c.warningNote) {
+      setWarningCustomer(c);
+    }
+  };
 
   const handleCheckout = (paymentMethod: TransactionInputPaymentMethod) => {
     const items: TransactionItem[] = cart.map(item => ({
@@ -89,12 +115,14 @@ export default function POSPage() {
         taxTotal,
         total,
         amountTendered: total,
+        customerId: selectedCustomer?.id,
       }
     }, {
       onSuccess: () => {
         toast.success("Transaction completed successfully");
         setCart([]);
         setPaymentModalOpen(false);
+        setSelectedCustomer(null);
       },
       onError: () => {
         toast.error("Failed to process transaction");
@@ -154,7 +182,7 @@ export default function POSPage() {
                     ) : (
                       <span className="text-4xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
                     )}
-                    {product.stockQuantity !== null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
+                    {product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
                       <Badge variant="destructive" className="absolute top-2 right-2">Low Stock</Badge>
                     )}
                   </div>
@@ -182,6 +210,44 @@ export default function POSPage() {
             <Button variant="ghost" size="icon" onClick={clearCart} disabled={cart.length === 0}>
               <Trash2 className="w-5 h-5 text-destructive" />
             </Button>
+          </div>
+
+          {/* Customer section */}
+          <div className="border-b px-4 py-3 shrink-0">
+            {selectedCustomer ? (
+              <div className={cn(
+                "flex items-center gap-3 rounded-lg p-2.5",
+                selectedCustomer.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40"
+              )}>
+                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                  {((selectedCustomer.firstName?.[0] ?? "") + (selectedCustomer.lastName?.[0] ?? "")).toUpperCase() || "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {[selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Customer"}
+                  </p>
+                  {selectedCustomer.warningNote && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> Warning on file
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedCustomer(null)}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setCustomerPickerOpen(true)}
+                className="w-full flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-3 py-2.5 transition-colors hover:border-primary"
+              >
+                <UserSearch className="w-4 h-4 shrink-0" />
+                Add customer to sale...
+              </button>
+            )}
           </div>
 
           <ScrollArea className="flex-1">
@@ -224,7 +290,7 @@ export default function POSPage() {
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax</span>
+                <span className="text-muted-foreground">Tax (GST 10%)</span>
                 <span>{formatCurrency(taxTotal)}</span>
               </div>
               <div className="flex justify-between text-lg font-bold pt-2 border-t mt-2">
@@ -243,6 +309,7 @@ export default function POSPage() {
         </div>
       </div>
 
+      {/* Payment modal */}
       <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -288,9 +355,92 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Customer picker modal */}
+      <Dialog open={customerPickerOpen} onOpenChange={(o) => { setCustomerPickerOpen(o); if (!o) setCustomerSearch(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Customer</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search by name, email, or phone..."
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <ScrollArea className="max-h-80">
+            {customers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                {customerSearch ? "No customers found." : "Start typing to search customers."}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {customers.map((c) => {
+                  const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
+                  const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => selectCustomer(c)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left"
+                    >
+                      <div className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+                        c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"
+                      )}>
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
+                      </div>
+                      {c.warningNote && (
+                        <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer warning popup */}
+      <Dialog open={!!warningCustomer} onOpenChange={(o) => { if (!o) setWarningCustomer(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" /> Customer Warning
+            </DialogTitle>
+          </DialogHeader>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-2">
+            <p className="font-semibold text-sm">
+              {warningCustomer ? [warningCustomer.firstName, warningCustomer.lastName].filter(Boolean).join(" ") : ""}
+            </p>
+            <p className="text-sm text-destructive">{warningCustomer?.warningNote}</p>
+          </div>
+          <p className="text-sm text-muted-foreground">Please review this warning before proceeding with the sale.</p>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => { setWarningCustomer(null); setSelectedCustomer(null); }}
+            >
+              Remove Customer
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setWarningCustomer(null)}
+            >
+              Acknowledge & Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
-
-// Temporary icon imports missed
-import { ShoppingCart } from "lucide-react";

@@ -34,6 +34,8 @@ tags:
     description: Dashboard summary and analytics
   - name: service-jobs
     description: Service job management
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 
 paths:
   /healthz:
@@ -530,6 +532,240 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  # ── Customer sub-resources ────────────────────────────────────────────────
+
+  /customers/{id}/history:
+    get:
+      operationId: getCustomerHistory
+      tags: [customers]
+      summary: Get all history for a customer (sales, appointments, services)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerHistory"
+
+  /customers/{id}/notes:
+    get:
+      operationId: listCustomerNotes
+      tags: [customers]
+      summary: List notes for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerNote"
+    post:
+      operationId: createCustomerNote
+      tags: [customers]
+      summary: Add a note to a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerNoteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerNote"
+
+  /customers/{id}/notes/{noteId}:
+    delete:
+      operationId: deleteCustomerNote
+      tags: [customers]
+      summary: Delete a customer note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /customers/{id}/files:
+    get:
+      operationId: listCustomerFiles
+      tags: [customers]
+      summary: List files attached to a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerFile"
+    post:
+      operationId: createCustomerFile
+      tags: [customers]
+      summary: Register an uploaded file against a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerFileInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFile"
+
+  /customers/{id}/files/{fileId}:
+    delete:
+      operationId: deleteCustomerFile
+      tags: [customers]
+      summary: Delete a customer file record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Storage ───────────────────────────────────────────────────────────────
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   # ── Transactions ──────────────────────────────────────────────────────────
   /transactions:
@@ -2075,3 +2311,125 @@ components:
           type: integer
         revenue:
           type: number
+
+    # ── Customer sub-resource schemas ────────────────────────────────────────
+
+    CustomerHistory:
+      type: object
+      required: [transactions, appointments, serviceJobs]
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        appointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        serviceJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceJob"
+
+    CustomerNote:
+      type: object
+      required: [id, customerId, merchantId, note, popupOnBooking, popupOnSale, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        customerId:
+          type: integer
+        note:
+          type: string
+        popupOnBooking:
+          type: boolean
+        popupOnSale:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CustomerNoteInput:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+        popupOnBooking:
+          type: boolean
+        popupOnSale:
+          type: boolean
+
+    CustomerFile:
+      type: object
+      required: [id, merchantId, customerId, filename, fileKey, contentType, sizeBytes, url, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        customerId:
+          type: integer
+        filename:
+          type: string
+        fileKey:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+        url:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CustomerFileInput:
+      type: object
+      required: [filename, fileKey, contentType, sizeBytes]
+      properties:
+        filename:
+          type: string
+        fileKey:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+
+    # ── Object storage schemas ────────────────────────────────────────────────
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/UploadUrlRequest'
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

@@ -667,6 +667,252 @@ export const DeleteCustomerParams = zod.object({
 
 
 /**
+ * @summary Get all history for a customer (sales, appointments, services)
+ */
+export const GetCustomerHistoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCustomerHistoryResponse = zod.object({
+  "transactions": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customer": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish()
+}).optional(),
+  "staffId": zod.number().nullish(),
+  "receiptNumber": zod.string().optional(),
+  "status": zod.enum(['completed', 'refunded', 'partial_refund', 'voided']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "discountTotal": zod.number().optional(),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'card', 'split', 'voucher', 'other']),
+  "amountTendered": zod.number().nullish(),
+  "changeDue": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalPrice": zod.number(),
+  "taxAmount": zod.number().optional(),
+  "discount": zod.number().optional()
+})),
+  "createdAt": zod.coerce.date()
+})),
+  "appointments": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date().optional(),
+  "durationMinutes": zod.number(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "staffName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "serviceJobs": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "jobNumber": zod.string(),
+  "customerName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'completed', 'cancelled']),
+  "bookInDate": zod.string(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean(),
+  "isCritical": zod.boolean(),
+  "isUnderWarranty": zod.boolean(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List notes for a customer
+ */
+export const ListCustomerNotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCustomerNotesResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number(),
+  "note": zod.string(),
+  "popupOnBooking": zod.boolean(),
+  "popupOnSale": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCustomerNotesResponse = zod.array(ListCustomerNotesResponseItem)
+
+
+/**
+ * @summary Add a note to a customer
+ */
+export const CreateCustomerNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateCustomerNoteBody = zod.object({
+  "note": zod.string(),
+  "popupOnBooking": zod.boolean().optional(),
+  "popupOnSale": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Delete a customer note
+ */
+export const DeleteCustomerNoteParams = zod.object({
+  "id": zod.coerce.number(),
+  "noteId": zod.coerce.number()
+})
+
+
+/**
+ * @summary List files attached to a customer
+ */
+export const ListCustomerFilesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCustomerFilesResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number(),
+  "filename": zod.string(),
+  "fileKey": zod.string(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number(),
+  "url": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCustomerFilesResponse = zod.array(ListCustomerFilesResponseItem)
+
+
+/**
+ * @summary Register an uploaded file against a customer
+ */
+export const CreateCustomerFileParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateCustomerFileBody = zod.object({
+  "filename": zod.string(),
+  "fileKey": zod.string(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number()
+})
+
+
+/**
+ * @summary Delete a customer file record
+ */
+export const DeleteCustomerFileParams = zod.object({
+  "id": zod.coerce.number(),
+  "fileId": zod.coerce.number()
+})
+
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+
+
+
+
+
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().min(1),
+  "contentType": zod.string().min(1)
+})
+
+
+
+
+
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().url(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().min(1),
+  "contentType": zod.string().min(1)
+}).optional()
+})
+
+
+/**
+ * @summary Serve a public asset
+ */
+export const GetPublicObjectParams = zod.object({
+  "filePath": zod.coerce.string()
+})
+
+
+/**
+ * @summary Serve an object entity
+ */
+export const GetStorageObjectParams = zod.object({
+  "objectPath": zod.coerce.string()
+})
+
+
+/**
  * @summary List transactions
  */
 export const ListTransactionsQueryParams = zod.object({

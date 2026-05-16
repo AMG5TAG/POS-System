@@ -749,6 +749,66 @@ export interface TopProduct {
   revenue: number;
 }
 
+export interface CustomerHistory {
+  transactions: Transaction[];
+  appointments: Appointment[];
+  serviceJobs: ServiceJob[];
+}
+
+export interface CustomerNote {
+  id: number;
+  merchantId: number;
+  customerId: number;
+  note: string;
+  popupOnBooking: boolean;
+  popupOnSale: boolean;
+  createdAt: string;
+}
+
+export interface CustomerNoteInput {
+  note: string;
+  popupOnBooking?: boolean;
+  popupOnSale?: boolean;
+}
+
+export interface CustomerFile {
+  id: number;
+  merchantId: number;
+  customerId: number;
+  filename: string;
+  fileKey: string;
+  contentType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
+}
+
+export interface CustomerFileInput {
+  filename: string;
+  fileKey: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
+export interface ErrorEnvelope {
+  error: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

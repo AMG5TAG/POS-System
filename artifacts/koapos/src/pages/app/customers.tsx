@@ -1,11 +1,21 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListCustomers,
   useCreateCustomer,
   useUpdateCustomer,
   useDeleteCustomer,
+  useGetCustomerHistory,
+  useListCustomerNotes,
+  useCreateCustomerNote,
+  useDeleteCustomerNote,
+  useListCustomerFiles,
+  useCreateCustomerFile,
+  useDeleteCustomerFile,
+  useRequestUploadUrl,
   Customer,
+  CustomerNote,
+  CustomerFile,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,11 +25,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
-  Mail, Phone, Building2, StickyNote, Calendar, Hash,
+  Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
+  Receipt, Clock, Wrench, ExternalLink, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,7 +41,7 @@ import { cn } from "@/lib/utils";
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account";
+type DetailTab = "overview" | "address" | "account" | "history" | "notes" | "files";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -83,17 +95,36 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
-function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value?: string | number | null }) {
+function InfoRow({ icon: Icon, label, value, href, className }: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value?: string | number | null;
+  href?: string;
+  className?: string;
+}) {
   if (!value && value !== 0) return null;
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-      <div className="text-sm min-w-0">
+      <div className={cn("text-sm min-w-0", className)}>
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-medium truncate">{value}</p>
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium truncate flex items-center gap-1 text-primary hover:underline">
+            {value} <ExternalLink className="w-3 h-3 shrink-0" />
+          </a>
+        ) : (
+          <p className="font-medium truncate">{value}</p>
+        )}
       </div>
     </div>
   );
+}
+
+function mapsUrl(addr: string) {
+  const q = encodeURIComponent(addr);
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|Mac/.test(ua)) return `maps://maps.apple.com/?q=${q}`;
+  return `https://maps.google.com/?q=${q}`;
 }
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
@@ -122,18 +153,32 @@ function SortTh({ label, sortKey, active, dir, onSort, className }: {
 
 /* ─── Customer detail dialog ─────────────────────────────────────────────── */
 
-function CustomerDetailDialog({
+function CustomerDetailInner({
   customer, onClose, onEdit, onDelete, deleteIsPending,
 }: {
-  customer: Customer | null;
+  customer: Customer;
   onClose: () => void;
   onEdit: (c: Customer) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
 }) {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<DetailTab>("overview");
+  const [newNote, setNewNote] = useState("");
+  const [notePopupOnSale, setNotePopupOnSale] = useState(false);
+  const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!customer) return null;
+  const { data: history, isLoading: histLoading } = useGetCustomerHistory(customer.id);
+  const { data: notes = [], isLoading: notesLoading } = useListCustomerNotes(customer.id);
+  const { data: files = [], isLoading: filesLoading } = useListCustomerFiles(customer.id);
+
+  const createNoteMutation = useCreateCustomerNote();
+  const deleteNoteMutation = useDeleteCustomerNote();
+  const createFileMutation = useCreateCustomerFile();
+  const deleteFileMutation = useDeleteCustomerFile();
+  const requestUploadMutation = useRequestUploadUrl();
 
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
@@ -152,139 +197,457 @@ function CustomerDetailDialog({
     { key: "overview", label: "Overview" },
     { key: "address",  label: "Address"  },
     { key: "account",  label: "Account"  },
+    { key: "history",  label: "History"  },
+    { key: "notes",    label: "Notes"    },
+    { key: "files",    label: "Files"    },
   ];
 
+  const invalidateNotes = () => queryClient.invalidateQueries({ queryKey: [`/customers/${customer.id}/notes`] });
+  const invalidateFiles = () => queryClient.invalidateQueries({ queryKey: [`/customers/${customer.id}/files`] });
+
+  const handleAddNote = () => {
+    if (!newNote.trim()) return;
+    createNoteMutation.mutate(
+      { id: customer.id, data: { note: newNote.trim(), popupOnSale: notePopupOnSale, popupOnBooking: notePopupOnBooking } },
+      {
+        onSuccess: () => { toast.success("Note added"); setNewNote(""); setNotePopupOnSale(false); setNotePopupOnBooking(false); invalidateNotes(); },
+        onError: () => toast.error("Failed to add note"),
+      }
+    );
+  };
+
+  const handleDeleteNote = (noteId: number) => {
+    deleteNoteMutation.mutate({ id: customer.id, noteId }, {
+      onSuccess: () => { toast.success("Note deleted"); invalidateNotes(); },
+      onError: () => toast.error("Failed to delete note"),
+    });
+  };
+
+  const handleDeleteFile = (fileId: number) => {
+    deleteFileMutation.mutate({ id: customer.id, fileId }, {
+      onSuccess: () => { toast.success("File removed"); invalidateFiles(); },
+      onError: () => toast.error("Failed to remove file"),
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const urlResp = await new Promise<{ uploadURL: string; objectPath: string }>((resolve, reject) => {
+        requestUploadMutation.mutate(
+          { data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" } },
+          { onSuccess: (d) => resolve(d as { uploadURL: string; objectPath: string }), onError: reject }
+        );
+      });
+      await fetch(urlResp.uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+      });
+      await new Promise<void>((resolve, reject) => {
+        createFileMutation.mutate(
+          { id: customer.id, data: { filename: file.name, fileKey: urlResp.objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
+          { onSuccess: () => resolve(), onError: reject }
+        );
+      });
+      toast.success("File uploaded");
+      invalidateFiles();
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  function formatBytes(n: number) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function fileIcon(contentType: string) {
+    if (contentType.startsWith("image/")) return "🖼️";
+    if (contentType === "application/pdf") return "📄";
+    if (contentType.includes("spreadsheet") || contentType.includes("excel")) return "📊";
+    if (contentType.includes("word") || contentType.includes("document")) return "📝";
+    return "📎";
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-base leading-tight truncate">{fullName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {customer.customerGroup && (
+                  <Badge variant="outline" className="text-xs px-2 py-0 h-5">{customer.customerGroup}</Badge>
+                )}
+                {customer.loyaltyPoints != null && customer.loyaltyPoints > 0 && (
+                  <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    {customer.loyaltyPoints} pts
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogTitle>
+      </DialogHeader>
+
+      {/* Tabs */}
+      <div className="flex border-b -mx-6 px-6 gap-0 overflow-x-auto">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn(
+              "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0",
+              tab === key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview ── */}
+      {tab === "overview" && (
+        <div className="space-y-3">
+          {customer.warningNote && (
+            <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2.5 text-sm">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{customer.warningNote}</span>
+            </div>
+          )}
+          <div className="rounded-xl border bg-muted/20 divide-y">
+            <InfoRow icon={Mail}      label="Email"   value={customer.email} href={customer.email ? `mailto:${customer.email}` : undefined} />
+            <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? `tel:${customer.phone.replace(/\s/g, "")}` : undefined} />
+            <InfoRow icon={Building2} label="Company" value={customer.company} />
+          </div>
+          <div className="rounded-xl border bg-muted/20 divide-y">
+            <InfoRow icon={Star}  label="Loyalty Points" value={customer.loyaltyPoints ?? 0} />
+            <InfoRow icon={User}  label="Visit Count"    value={`${customer.visitCount ?? 0} visits`} />
+            {customer.totalSpent != null && (
+              <InfoRow icon={Hash} label="Total Spent" value={formatCurrency(customer.totalSpent)} />
+            )}
+          </div>
+          {customer.notes && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
+              <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                <p className="whitespace-pre-wrap">{customer.notes}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Address ── */}
+      {tab === "address" && (
+        <div className="space-y-3">
+          <div className="rounded-xl border bg-muted/20">
+            <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
+            {billingAddr
+              ? <InfoRow icon={MapPin} label="" value={billingAddr} href={mapsUrl(billingAddr)} />
+              : <p className="px-4 pb-3 text-sm text-muted-foreground">No billing address on file.</p>}
+          </div>
+          <div className="rounded-xl border bg-muted/20">
+            <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shipping Address</p>
+            {shippingAddr
+              ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapsUrl(shippingAddr)} />
+              : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Account ── */}
+      {tab === "account" && (
+        <div className="space-y-3">
+          <div className="rounded-xl border bg-muted/20 divide-y">
+            <InfoRow icon={Calendar} label="Date of Birth" value={customer.dateOfBirth} />
+            <InfoRow icon={Hash}     label="ABN"           value={customer.abn} />
+            <InfoRow icon={User}     label="Referred By"   value={customer.referredBy} />
+          </div>
+          <div className="rounded-xl border bg-muted/20 divide-y">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Marketing Consent</p>
+                <p className="font-medium">{customer.agreedToMarketing === "true" ? "✓ Agreed" : "Not agreed"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── History ── */}
+      {tab === "history" && (
+        <div className="space-y-4">
+          {histLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading history...
+            </div>
+          ) : (
+            <>
+              {/* Transactions */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5" /> Sales ({history?.transactions?.length ?? 0})
+                </p>
+                {!history?.transactions?.length ? (
+                  <p className="text-sm text-muted-foreground pl-1">No sales recorded.</p>
+                ) : (
+                  <div className="rounded-xl border divide-y bg-muted/20">
+                    {history.transactions.map((tx) => (
+                      <div key={tx.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <div>
+                          <p className="font-medium">{tx.receiptNumber || `#${tx.id}`}</p>
+                          <p className="text-xs text-muted-foreground">{tx.paymentMethod} · {new Date(tx.createdAt).toLocaleDateString("en-AU")}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold">{formatCurrency(tx.total)}</p>
+                          <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Appointments */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> Appointments ({history?.appointments?.length ?? 0})
+                </p>
+                {!history?.appointments?.length ? (
+                  <p className="text-sm text-muted-foreground pl-1">No appointments recorded.</p>
+                ) : (
+                  <div className="rounded-xl border divide-y bg-muted/20">
+                    {history.appointments.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <div>
+                          <p className="font-medium">{a.title}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(a.scheduledAt).toLocaleString("en-AU")} · {a.durationMinutes}min</p>
+                        </div>
+                        <Badge variant="outline" className="text-xs capitalize">{a.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Service Jobs */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5" /> Service Jobs ({history?.serviceJobs?.length ?? 0})
+                </p>
+                {!history?.serviceJobs?.length ? (
+                  <p className="text-sm text-muted-foreground pl-1">No service jobs recorded.</p>
+                ) : (
+                  <div className="rounded-xl border divide-y bg-muted/20">
+                    {history.serviceJobs.map((j) => (
+                      <div key={j.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <div>
+                          <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
+                          <p className="text-xs text-muted-foreground">{j.deviceDescription || "—"}</p>
+                        </div>
+                        <div className="text-right">
+                          {j.estimatedCost != null && <p className="font-bold">{formatCurrency(j.estimatedCost)}</p>}
+                          <Badge variant="outline" className="text-xs capitalize">{j.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Notes ── */}
+      {tab === "notes" && (
+        <div className="space-y-4">
+          {/* Add note */}
+          <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Add Note</p>
+            <Textarea
+              placeholder="Enter a note about this customer..."
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              className="resize-none"
+              rows={3}
+            />
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={notePopupOnSale} onCheckedChange={(v) => setNotePopupOnSale(!!v)} />
+                Popup on POS sale
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={notePopupOnBooking} onCheckedChange={(v) => setNotePopupOnBooking(!!v)} />
+                Popup on booking
+              </label>
+              <Button
+                size="sm" className="ml-auto"
+                onClick={handleAddNote}
+                disabled={!newNote.trim() || createNoteMutation.isPending}
+              >
+                {createNoteMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
+                Add Note
+              </Button>
+            </div>
+          </div>
+
+          {/* Note list */}
+          {notesLoading ? (
+            <div className="flex items-center justify-center py-4 text-muted-foreground gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading notes...
+            </div>
+          ) : !notes.length ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No notes yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {notes.map((note: CustomerNote) => (
+                <div key={note.id} className="rounded-xl border bg-background p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm whitespace-pre-wrap">{note.note}</p>
+                    </div>
+                    <Button
+                      variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeleteNote(note.id)}
+                      disabled={deleteNoteMutation.isPending}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {note.popupOnSale && <Badge variant="secondary" className="text-xs">Popup on sale</Badge>}
+                    {note.popupOnBooking && <Badge variant="secondary" className="text-xs">Popup on booking</Badge>}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {new Date(note.createdAt).toLocaleDateString("en-AU")}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Files ── */}
+      {tab === "files" && (
+        <div className="space-y-4">
+          {/* Upload */}
+          <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-center space-y-2">
+            <Upload className="w-6 h-6 text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">Upload documents, IDs, or images</p>
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFile}
+            >
+              {uploadingFile
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...</>
+                : <><Upload className="w-3.5 h-3.5" /> Choose File</>}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileChange}
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+            />
+          </div>
+
+          {/* File list */}
+          {filesLoading ? (
+            <div className="flex items-center justify-center py-4 text-muted-foreground gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading files...
+            </div>
+          ) : !files.length ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No files attached yet.</p>
+          ) : (
+            <div className="rounded-xl border divide-y bg-muted/20">
+              {files.map((f: CustomerFile) => (
+                <div key={f.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-xl shrink-0">{fileIcon(f.contentType)}</span>
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-primary hover:underline truncate block"
+                    >
+                      {f.filename}
+                    </a>
+                    <p className="text-xs text-muted-foreground">{formatBytes(f.sizeBytes)} · {new Date(f.createdAt).toLocaleDateString("en-AU")}</p>
+                  </div>
+                  <Button
+                    variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDeleteFile(f.id)}
+                    disabled={deleteFileMutation.isPending}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+        <Button
+          variant="destructive" size="sm" className="gap-1.5"
+          onClick={() => { onDelete(customer.id); onClose(); }}
+          disabled={deleteIsPending}
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Delete
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+          <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
+            <Pencil className="w-3.5 h-3.5" /> Edit
+          </Button>
+        </div>
+      </DialogFooter>
+    </>
+  );
+}
+
+function CustomerDetailDialog({
+  customer, onClose, onEdit, onDelete, deleteIsPending,
+}: {
+  customer: Customer | null;
+  onClose: () => void;
+  onEdit: (c: Customer) => void;
+  onDelete: (id: number) => void;
+  deleteIsPending: boolean;
+}) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
-                {initials}
-              </div>
-              <div className="min-w-0">
-                <p className="font-bold text-base leading-tight truncate">{fullName}</p>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  {customer.customerGroup && (
-                    <Badge variant="outline" className="text-xs px-2 py-0 h-5">{customer.customerGroup}</Badge>
-                  )}
-                  {customer.loyaltyPoints != null && customer.loyaltyPoints > 0 && (
-                    <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      {customer.loyaltyPoints} pts
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-
-        {/* Tabs */}
-        <div className="flex border-b -mx-6 px-6 gap-0">
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-                tab === key
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Overview ── */}
-        {tab === "overview" && (
-          <div className="space-y-3">
-            {customer.warningNote && (
-              <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2.5 text-sm">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{customer.warningNote}</span>
-              </div>
-            )}
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <InfoRow icon={Mail}     label="Email"   value={customer.email} />
-              <InfoRow icon={Phone}    label="Phone"   value={customer.phone} />
-              <InfoRow icon={Building2} label="Company" value={customer.company} />
-            </div>
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <InfoRow icon={Star}     label="Loyalty Points" value={customer.loyaltyPoints ?? 0} />
-              <InfoRow icon={User}     label="Visit Count"    value={`${customer.visitCount ?? 0} visits`} />
-              {customer.totalSpent != null && (
-                <InfoRow icon={Hash} label="Total Spent" value={formatCurrency(customer.totalSpent)} />
-              )}
-            </div>
-            {customer.notes && (
-              <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
-                <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
-                  <p className="whitespace-pre-wrap">{customer.notes}</p>
-                </div>
-              </div>
-            )}
-          </div>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        {customer && (
+          <CustomerDetailInner
+            customer={customer}
+            onClose={onClose}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            deleteIsPending={deleteIsPending}
+          />
         )}
-
-        {/* ── Address ── */}
-        {tab === "address" && (
-          <div className="space-y-3">
-            <div className="rounded-xl border bg-muted/20">
-              <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
-              {billingAddr
-                ? <InfoRow icon={MapPin} label="" value={billingAddr} />
-                : <p className="px-4 pb-3 text-sm text-muted-foreground">No billing address on file.</p>}
-            </div>
-            <div className="rounded-xl border bg-muted/20">
-              <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shipping Address</p>
-              {shippingAddr
-                ? <InfoRow icon={MapPin} label="" value={shippingAddr} />
-                : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
-            </div>
-          </div>
-        )}
-
-        {/* ── Account ── */}
-        {tab === "account" && (
-          <div className="space-y-3">
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <InfoRow icon={Calendar} label="Date of Birth" value={customer.dateOfBirth} />
-              <InfoRow icon={Hash}     label="ABN"           value={customer.abn} />
-              <InfoRow icon={User}     label="Referred By"   value={customer.referredBy} />
-            </div>
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <div className="flex items-center gap-3 px-4 py-3">
-                <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div className="text-sm">
-                  <p className="text-xs text-muted-foreground">Marketing Consent</p>
-                  <p className="font-medium">{customer.agreedToMarketing === "true" ? "✓ Agreed" : "Not agreed"}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
-          <Button
-            variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => { onDelete(customer.id); onClose(); }}
-            disabled={deleteIsPending}
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </Button>
-          </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -321,11 +684,11 @@ export default function CustomersPage() {
   const sorted = [...customers].sort((a, b) => {
     let av: string | number = "", bv: string | number = "";
     switch (sortKey) {
-      case "name":         av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.toLowerCase(); break;
-      case "email":        av = (a.email ?? "").toLowerCase();   bv = (b.email ?? "").toLowerCase();   break;
-      case "company":      av = (a.company ?? "").toLowerCase(); bv = (b.company ?? "").toLowerCase(); break;
-      case "loyaltyPoints": av = a.loyaltyPoints ?? 0;   bv = b.loyaltyPoints ?? 0;   break;
-      case "visitCount":   av = a.visitCount ?? 0;       bv = b.visitCount ?? 0;       break;
+      case "name":          av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.toLowerCase(); break;
+      case "email":         av = (a.email ?? "").toLowerCase();   bv = (b.email ?? "").toLowerCase();   break;
+      case "company":       av = (a.company ?? "").toLowerCase(); bv = (b.company ?? "").toLowerCase(); break;
+      case "loyaltyPoints": av = a.loyaltyPoints ?? 0;            bv = b.loyaltyPoints ?? 0;            break;
+      case "visitCount":    av = a.visitCount ?? 0;               bv = b.visitCount ?? 0;               break;
     }
     const r = av < bv ? -1 : av > bv ? 1 : 0;
     return sortDir === "asc" ? r : -r;
@@ -498,7 +861,10 @@ export default function CustomersPage() {
                           className="rounded border-muted-foreground/40 accent-primary" />
                       </td>
                       <td className="p-3 font-medium">
-                        {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
+                        <div className="flex items-center gap-2">
+                          {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
+                          {customer.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                        </div>
                       </td>
                       <td className="p-3 hidden sm:table-cell text-muted-foreground">
                         {customer.email || "—"}
@@ -697,42 +1063,37 @@ export default function CustomersPage() {
                 <div className="rounded-xl border bg-muted/40 p-4 space-y-2">
                   <p className="text-xs font-bold tracking-widest text-foreground uppercase">Ready to Add</p>
                   <div className="grid grid-cols-2 text-sm gap-1">
-                    <span className="text-muted-foreground">Name</span>
-                    <span className="font-medium text-right">{[form.firstName, form.lastName].filter(Boolean).join(" ") || "—"}</span>
-                    <span className="text-muted-foreground">Group</span>
-                    <span className="font-medium text-right">{form.customerGroup}</span>
-                    {form.email && (<><span className="text-muted-foreground">Email</span><span className="font-medium text-right truncate">{form.email}</span></>)}
-                    {form.company && (<><span className="text-muted-foreground">Company</span><span className="font-medium text-right">{form.company}</span></>)}
+                    {form.firstName && <span>Name: <strong>{form.firstName} {form.lastName}</strong></span>}
+                    {form.email && <span>Email: <strong>{form.email}</strong></span>}
+                    {form.phone && <span>Phone: <strong>{form.phone}</strong></span>}
+                    {form.company && <span>Company: <strong>{form.company}</strong></span>}
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-medium">Additional Notes</Label>
+                  <Textarea
+                    value={form.notes}
+                    onChange={(e) => setField("notes", e.target.value)}
+                    placeholder="Any other notes about this customer..."
+                    className="resize-none"
+                    rows={3}
+                  />
                 </div>
               </>
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t">
-            <Button variant="outline" onClick={currentIndex === 0 ? () => setDialogOpen(false) : goBack}>
-              {currentIndex === 0 ? "Cancel" : "Back"}
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2 pt-2">
+            <Button variant="outline" onClick={goBack} disabled={currentIndex === 0}>Back</Button>
+            <Button
+              onClick={goNext}
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {isLast
+                ? (createMutation.isPending || updateMutation.isPending ? "Saving..." : editingCustomer ? "Update Customer" : "Add Customer")
+                : "Next →"}
             </Button>
-            <Button onClick={goNext} disabled={createMutation.isPending || updateMutation.isPending}>
-              {isLast ? (editingCustomer ? "Save Changes" : "Add Customer") : "Next →"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirmation */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Delete Customer</DialogTitle></DialogHeader>
-          <p className="text-muted-foreground">
-            Are you sure you want to delete{" "}
-            <strong>{[deletingCustomer?.firstName, deletingCustomer?.lastName].filter(Boolean).join(" ") || "this customer"}</strong>?
-            This cannot be undone.
-          </p>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => handleDelete()} disabled={deleteMutation.isPending}>Delete</Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>
