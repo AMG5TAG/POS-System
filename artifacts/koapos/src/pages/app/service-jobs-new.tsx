@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
+import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 import {
   useCreateServiceJob,
   useListCustomers,
@@ -158,6 +159,7 @@ export default function ServiceJobNewPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerId, setCustomerId] = useState("");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -337,6 +339,7 @@ export default function ServiceJobNewPage() {
   }
 
   return (
+    <>
     <AppLayout>
       <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
         {/* Header */}
@@ -388,7 +391,7 @@ export default function ServiceJobNewPage() {
                     {/* Create new customer — always pinned to top */}
                     <button
                       type="button"
-                      onClick={() => { setCustomerOpen(false); navigate("/customers"); }}
+                      onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
                       className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
                     >
                       <UserPlus className="w-3.5 h-3.5 shrink-0" />
@@ -424,7 +427,7 @@ export default function ServiceJobNewPage() {
                         <button
                           type="button"
                           className="text-primary font-medium underline-offset-2 hover:underline"
-                          onClick={() => { setCustomerOpen(false); navigate("/customers"); }}
+                          onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
                         >
                           create one
                         </button>
@@ -679,5 +682,16 @@ export default function ServiceJobNewPage() {
         </div>
       </div>
     </AppLayout>
+
+    <QuickAddCustomerDialog
+      open={quickAddOpen}
+      onClose={() => setQuickAddOpen(false)}
+      prefillName={customerSearch}
+      onCreated={(customer) => {
+        setCustomerId(String(customer.id));
+        setCustomerSearch("");
+      }}
+    />
+  </>
   );
 }
