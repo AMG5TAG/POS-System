@@ -270,7 +270,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                 <PillInput label="Date of Birth" type="date" value={form.dateOfBirth} onChange={setField("dateOfBirth")} />
                 <PillInput label="Company"               value={form.company}     onChange={setField("company")} />
               </div>
-              <PillInput label="ABN" value={form.abn} onChange={setField("abn")} placeholder="e.g. 12 345 678 901" />
             </div>
           )}
 
