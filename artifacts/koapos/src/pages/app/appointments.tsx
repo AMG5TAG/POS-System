@@ -361,22 +361,32 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                 type="button"
                 onClick={() => setCustomerOpen((o) => !o)}
                 className={cn(
-                  "w-full flex items-center justify-between border rounded-lg px-3 py-2 text-sm bg-background hover:bg-muted/40 transition-colors",
+                  "w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm bg-background hover:bg-muted/30 transition-colors",
                   !editing && !form.customerId && "border-destructive/40"
                 )}
               >
                 <span className={selected ? "text-foreground" : "text-muted-foreground"}>
-                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Select a customer..."}
+                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Search customer..."}
                 </span>
-                <Search className="w-4 h-4 text-muted-foreground" />
+                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               </button>
               {customerOpen && (
-                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-md">
+                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-lg">
                   <div className="p-2 border-b">
                     <Input autoFocus placeholder="Search by name or email..." value={customerSearch}
                       onChange={(e) => setSearch(e.target.value)} className="h-8 text-sm" />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
+                    {/* Add new customer — always pinned to top */}
+                    <button
+                      type="button"
+                      onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                      Add new customer
+                    </button>
+                    {/* No customer — edit mode only */}
                     {editing && (
                       <button type="button" onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
                         className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
@@ -391,16 +401,15 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                         {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
                       </button>
                     ))}
-                    {filtered.length === 0 && (
-                      <div className="px-3 py-3 flex flex-col items-center gap-2">
-                        <p className="text-sm text-muted-foreground">No customers found</p>
+                    {filtered.length === 0 && customerSearch && (
+                      <div className="px-3 py-3 text-sm text-center text-muted-foreground">
+                        No customers match &ldquo;{customerSearch}&rdquo; —{" "}
                         <button
                           type="button"
+                          className="text-primary font-medium underline-offset-2 hover:underline"
                           onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
-                          className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                         >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Add Customer
+                          create one
                         </button>
                       </div>
                     )}
