@@ -1,5 +1,5 @@
 import { Redirect } from "wouter";
 
 export default function SettingsPage() {
-  return <Redirect to="/settings/business" />;
+  return <Redirect to="/settings/customers" />;
 }

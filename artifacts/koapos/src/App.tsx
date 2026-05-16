@@ -189,13 +189,13 @@ function Router() {
       <Route path="/modules">
         <ProtectedRoute component={ModulesPage} />
       </Route>
-      <Route path="/settings/business">
+      <Route path="/management/business">
         <ProtectedRoute component={SettingsBusinessPage} />
       </Route>
-      <Route path="/settings/regional">
+      <Route path="/management/regional">
         <ProtectedRoute component={SettingsRegionalPage} />
       </Route>
-      <Route path="/settings/account">
+      <Route path="/management/account">
         <ProtectedRoute component={SettingsAccountPage} />
       </Route>
       <Route path="/settings/customers">

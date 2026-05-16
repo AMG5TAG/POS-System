@@ -50,18 +50,18 @@ const INVENTORY_SUBNAV = [
 ];
 
 const SETTINGS_SUBNAV = [
-  { name: "Business Details",  href: "/settings/business",  icon: Building2    },
-  { name: "Regional Settings", href: "/settings/regional",  icon: Globe        },
-  { name: "Account",           href: "/settings/account",   icon: UserCircle   },
-  { name: "Customers",         href: "/settings/customers", icon: Users        },
+  { name: "Customers", href: "/settings/customers", icon: Users },
 ];
 
 const MANAGEMENT_SUBNAV = [
-  { name: "Sales Overview",  href: "/management/sales-overview", icon: TrendingUp },
-  { name: "Staff",           href: "/staff",                     icon: UserSquare2 },
-  { name: "Modules",         href: "/modules",                   icon: Blocks },
-  { name: "Integrations",    href: "/management/integrations",   icon: Receipt },
-  { name: "Import / Export", href: "/management/import-export",  icon: ArrowLeftRight },
+  { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
+  { name: "Staff",             href: "/staff",                     icon: UserSquare2    },
+  { name: "Modules",           href: "/modules",                   icon: Blocks         },
+  { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
+  { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
+  { name: "Business Details",  href: "/management/business",       icon: Building2      },
+  { name: "Regional Settings", href: "/management/regional",       icon: Globe          },
+  { name: "Account",           href: "/management/account",        icon: UserCircle     },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -86,10 +86,10 @@ const SEARCH_INDEX = [
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
-  { label: "Settings · Business",  href: "/settings/business",  icon: Building2,  group: "Settings" },
-  { label: "Settings · Regional",  href: "/settings/regional",  icon: Globe,      group: "Settings" },
-  { label: "Settings · Account",   href: "/settings/account",   icon: UserCircle, group: "Settings" },
-  { label: "Settings · Customers", href: "/settings/customers", icon: Users,      group: "Settings" },
+  { label: "Business Details",      href: "/management/business",    icon: Building2,  group: "Management" },
+  { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
+  { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
+  { label: "Settings · Customers",  href: "/settings/customers",     icon: Users,      group: "Settings"   },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -124,10 +124,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff":                       ["Management", "Staff"],
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
-  "/settings/business":           ["Settings", "Business Details"],
-  "/settings/regional":           ["Settings", "Regional Settings"],
-  "/settings/account":            ["Settings", "Account"],
   "/settings/customers":          ["Settings", "Customers"],
+  "/management/business":         ["Management", "Business Details"],
+  "/management/regional":         ["Management", "Regional Settings"],
+  "/management/account":          ["Management", "Account"],
   "/management/sales-overview":   ["Management", "Sales Overview"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
