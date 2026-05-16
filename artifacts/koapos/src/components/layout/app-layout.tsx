@@ -61,7 +61,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
   { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
   {
-    name: "Employees",
+    name: "Staff",
     icon: UserSquare2,
     children: [
       { name: "Employees",      href: "/staff",                  icon: UserSquare2   },
