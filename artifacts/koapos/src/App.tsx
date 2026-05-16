@@ -44,6 +44,7 @@ import ServiceJobsPage from "@/pages/app/service-jobs";
 import ServiceJobNewPage from "@/pages/app/service-jobs-new";
 import ManagementSalesPage from "@/pages/app/management-sales";
 import ManagementIntegrationsPage from "@/pages/app/management-integrations";
+import ManagementImportExportPage from "@/pages/app/management-import-export";
 
 import NotFound from "@/pages/not-found";
 
@@ -175,6 +176,9 @@ function Router() {
       </Route>
       <Route path="/management/integrations">
         <ProtectedRoute component={ManagementIntegrationsPage} />
+      </Route>
+      <Route path="/management/import-export">
+        <ProtectedRoute component={ManagementImportExportPage} />
       </Route>
 
       <Route path="/modules">

@@ -33,6 +33,7 @@ import {
   Coins,
   TrendingUp,
   BriefcaseBusiness,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -78,10 +79,11 @@ const INVENTORY_SUBNAV = [
 
 // Visible to Owner + Manager roles only
 const MANAGEMENT_SUBNAV = [
-  { name: "Sales Overview", href: "/management/sales-overview",  icon: TrendingUp },
-  { name: "Staff",          href: "/staff",                      icon: UserSquare2 },
-  { name: "Modules",        href: "/modules",                    icon: Blocks },
-  { name: "Integrations",   href: "/management/integrations",    icon: Receipt },
+  { name: "Sales Overview", href: "/management/sales-overview",   icon: TrendingUp },
+  { name: "Staff",          href: "/staff",                       icon: UserSquare2 },
+  { name: "Modules",        href: "/modules",                     icon: Blocks },
+  { name: "Integrations",   href: "/management/integrations",     icon: Receipt },
+  { name: "Import / Export", href: "/management/import-export",   icon: ArrowLeftRight },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
