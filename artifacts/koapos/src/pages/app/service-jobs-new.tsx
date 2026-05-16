@@ -557,7 +557,7 @@ export default function ServiceJobNewPage() {
         {/* Work Details */}
         <div className="border rounded-xl p-5 space-y-5">
           <div className="flex items-center gap-2">
-            <span>💻</span>
+            <ClipboardList className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Work Details</h2>
           </div>
 
