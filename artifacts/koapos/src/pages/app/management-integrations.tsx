@@ -46,23 +46,59 @@ interface Integration {
 
 /* ─── Integration logos ──────────────────────────────────────────────────── */
 
+// Simple Icons CDN — returns a coloured SVG for each brand slug
+const SIMPLE_ICON = (slug: string, hex: string) =>
+  `https://cdn.simpleicons.org/${slug}/${hex}`;
+
+type LogoCfg =
+  | { type: "img";  src: string; bg: string; pad?: boolean }
+  | { type: "text"; bg: string; text: string; label: string; fontSize?: string };
+
+const LOGO_MAP: Record<string, LogoCfg> = {
+  google_business: { type: "img",  bg: "bg-white border",             src: SIMPLE_ICON("google",   "4285F4") },
+  stripe_own:      { type: "img",  bg: "bg-[#635BFF]",                src: SIMPLE_ICON("stripe",   "ffffff") },
+  australia_post:  { type: "img",  bg: "bg-[#DC1928]",                src: SIMPLE_ICON("australiapost", "ffffff") },
+  apple_wallet:    { type: "img",  bg: "bg-black",                    src: SIMPLE_ICON("apple",    "ffffff") },
+  commbank_eftpos: { type: "img",  bg: "bg-[#FFD100]",                src: SIMPLE_ICON("commonwealthbank", "000000"), pad: true },
+  tyro_eftpos:     { type: "text", bg: "bg-[#00A0DF]", text: "text-white", label: "tyro", fontSize: "text-[11px] font-extrabold tracking-tight" },
+  square_terminal: { type: "img",  bg: "bg-black",                    src: SIMPLE_ICON("square",   "ffffff") },
+  paypal:          { type: "img",  bg: "bg-[#003087]",                src: SIMPLE_ICON("paypal",   "ffffff") },
+  wechat_alipay:   { type: "img",  bg: "bg-[#07C160]",                src: SIMPLE_ICON("wechat",   "ffffff") },
+  openai:          { type: "img",  bg: "bg-black",                    src: SIMPLE_ICON("openai",   "ffffff") },
+};
+
 function IntegrationLogo({ integrationKey }: { integrationKey: string }) {
-  const logos: Record<string, { bg: string; text: string; symbol: string }> = {
-    google_business: { bg: "bg-blue-500",   text: "text-white", symbol: "G"  },
-    stripe_own:      { bg: "bg-[#635BFF]",  text: "text-white", symbol: "S"  },
-    australia_post:  { bg: "bg-red-600",    text: "text-white", symbol: "AP" },
-    apple_wallet:    { bg: "bg-black",      text: "text-white", symbol: "🍎" },
-    commbank_eftpos: { bg: "bg-yellow-400", text: "text-black", symbol: "CB" },
-    tyro_eftpos:     { bg: "bg-blue-600",   text: "text-white", symbol: "TY" },
-    square_terminal: { bg: "bg-black",      text: "text-white", symbol: "□"  },
-    paypal:          { bg: "bg-[#003087]",  text: "text-white", symbol: "P"  },
-    wechat_alipay:   { bg: "bg-green-500",  text: "text-white", symbol: "W"  },
-    openai:          { bg: "bg-emerald-600",text: "text-white", symbol: "AI" },
-  };
-  const cfg = logos[integrationKey] ?? { bg: "bg-muted", text: "text-foreground", symbol: "?" };
+  const cfg = LOGO_MAP[integrationKey];
+
+  if (!cfg) {
+    return (
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-muted text-foreground font-bold text-sm">
+        ?
+      </div>
+    );
+  }
+
+  if (cfg.type === "text") {
+    return (
+      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", cfg.bg, cfg.text)}>
+        <span className={cfg.fontSize ?? "text-xs font-bold"}>{cfg.label}</span>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm", cfg.bg, cfg.text)}>
-      {cfg.symbol}
+    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden", cfg.bg)}>
+      <img
+        src={cfg.src}
+        alt={integrationKey}
+        className={cn("object-contain", cfg.pad ? "w-6 h-6" : "w-7 h-7")}
+        onError={(e) => {
+          // Fallback to a neutral container on load error
+          const parent = (e.currentTarget as HTMLImageElement).parentElement;
+          if (parent) { parent.className = parent.className.replace(/bg-\S+/, "bg-muted"); }
+          (e.currentTarget as HTMLImageElement).style.display = "none";
+        }}
+      />
     </div>
   );
 }
