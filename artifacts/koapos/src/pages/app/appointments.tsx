@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListAppointments,
@@ -15,26 +15,32 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
-  CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote, ChevronRight,
+  CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote,
+  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
-type FormState = {
-  customerId: string;
-  staffId: string;
-  startTime: string;
-  endTime: string;
-  status: AppointmentInputStatus;
-  notes: string;
+/* ─── Status config ──────────────────────────────────────────────────────── */
+
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  scheduled:  { label: "Scheduled",  className: "bg-violet-50 text-violet-700 border-violet-300" },
+  completed:  { label: "Completed",  className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
+  cancelled:  { label: "Cancelled",  className: "bg-red-50 text-red-700 border-red-300" },
+  "no-show":  { label: "No Show",   className: "bg-amber-50 text-amber-700 border-amber-300" },
 };
+
+function getStatus(s: string) {
+  return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
+}
+
+/* ─── Time helpers ───────────────────────────────────────────────────────── */
 
 function toLocalDatetimeValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -55,26 +61,7 @@ function addOneHour(dt: string): string {
   return toLocalDatetimeValue(d);
 }
 
-function makeDefaultForm(): FormState {
-  const start = defaultStartTime();
-  return {
-    customerId: "",
-    staffId: "",
-    startTime: start,
-    endTime: addOneHour(start),
-    status: "scheduled",
-    notes: "",
-  };
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-violet-100 text-violet-700 border-violet-200",
-  completed:  "bg-emerald-100 text-emerald-700 border-emerald-200",
-  cancelled:  "bg-red-100 text-red-700 border-red-200",
-  "no-show":  "bg-amber-100 text-amber-700 border-amber-200",
-};
-
-function formatTime(iso: string) {
+function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-AU", {
     weekday: "short", day: "numeric", month: "short",
     hour: "numeric", minute: "2-digit", hour12: true,
@@ -82,15 +69,78 @@ function formatTime(iso: string) {
   });
 }
 
+function formatDateShort(iso: string) {
+  return new Date(iso).toLocaleString("en-AU", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+    timeZone: "Australia/Sydney",
+  });
+}
+
 function formatDuration(mins: number) {
-  if (mins < 60) return `${mins}m`;
+  if (!mins) return "—";
   const h = Math.floor(mins / 60);
   const m = mins % 60;
+  if (h === 0) return `${m}m`;
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-function statusLabel(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ");
+/* ─── Sorting ────────────────────────────────────────────────────────────── */
+
+type SortKey = "scheduledAt" | "customerName" | "staffName" | "status" | "durationMinutes";
+type SortDir = "asc" | "desc";
+
+function getSortValue(a: Appointment, key: SortKey): string {
+  switch (key) {
+    case "scheduledAt":      return a.scheduledAt ?? "";
+    case "customerName":     return (a.customerName ?? "").toLowerCase();
+    case "staffName":        return (a.staffName ?? "").toLowerCase();
+    case "status":           return a.status ?? "";
+    case "durationMinutes":  return String(a.durationMinutes ?? 0).padStart(6, "0");
+  }
+}
+
+function sortAppointments(appts: Appointment[], key: SortKey, dir: SortDir): Appointment[] {
+  const done   = appts.filter((a) => a.status === "completed" || a.status === "cancelled");
+  const active = appts.filter((a) => a.status !== "completed" && a.status !== "cancelled");
+
+  const cmp = (x: Appointment, y: Appointment) => {
+    const av = getSortValue(x, key);
+    const bv = getSortValue(y, key);
+    const r  = av < bv ? -1 : av > bv ? 1 : 0;
+    return dir === "asc" ? r : -r;
+  };
+  return [...active.sort(cmp), ...done.sort(cmp)];
+}
+
+/* ─── Sortable header ────────────────────────────────────────────────────── */
+
+interface SortableHeaderProps {
+  label: string;
+  sortKey: SortKey;
+  activeSortKey: SortKey;
+  dir: SortDir;
+  onSort: (k: SortKey) => void;
+  className?: string;
+}
+
+function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className }: SortableHeaderProps) {
+  const isActive = sortKey === activeSortKey;
+  return (
+    <th
+      className={cn("px-3 py-3 text-left font-medium select-none cursor-pointer group", className)}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        <span className={cn("transition-colors", isActive ? "text-foreground" : "text-muted-foreground/40 group-hover:text-muted-foreground")}>
+          {isActive
+            ? dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+            : <ChevronsUpDown className="w-3 h-3" />}
+        </span>
+      </span>
+    </th>
+  );
 }
 
 /* ─── Detail dialog ──────────────────────────────────────────────────────── */
@@ -105,6 +155,7 @@ interface DetailDialogProps {
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
   if (!appt) return null;
+  const { label, className } = getStatus(appt.status);
 
   return (
     <Dialog open={!!appt} onOpenChange={onClose}>
@@ -113,32 +164,28 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary shrink-0" />
             <span className="truncate">{appt.title || "Appointment"}</span>
+            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border", className)}>
+              {label}
+            </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <Badge className={cn("text-xs border px-2 py-0.5", STATUS_COLORS[appt.status] ?? "")}>
-              {statusLabel(appt.status)}
-            </Badge>
-          </div>
-
           {/* Time */}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <div className="flex items-start gap-3 px-4 py-3">
               <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
               <div className="text-sm">
-                <p className="font-medium">Start</p>
-                <p className="text-muted-foreground">{formatTime(appt.scheduledAt)}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Start</p>
+                <p className="font-medium">{formatDateTime(appt.scheduledAt)}</p>
               </div>
             </div>
             {appt.endAt && (
               <div className="flex items-start gap-3 px-4 py-3">
                 <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="text-sm">
-                  <p className="font-medium">End · <span className="font-normal text-muted-foreground">{formatDuration(appt.durationMinutes)}</span></p>
-                  <p className="text-muted-foreground">{formatTime(appt.endAt)}</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">End · {formatDuration(appt.durationMinutes)}</p>
+                  <p className="font-medium">{formatDateTime(appt.endAt)}</p>
                 </div>
               </div>
             )}
@@ -182,20 +229,16 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 
         <DialogFooter className="gap-2 flex-row justify-between sm:justify-between">
           <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
+            variant="destructive" size="sm" className="gap-1.5"
             onClick={() => { onDelete(appt.id); onClose(); }}
             disabled={deleteIsPending}
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete
+            <Trash2 className="w-3.5 h-3.5" /> Delete
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
             <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
+              <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
           </div>
         </DialogFooter>
@@ -204,7 +247,21 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   );
 }
 
-/* ─── Booking (create / edit) dialog ────────────────────────────────────── */
+/* ─── Booking dialog ─────────────────────────────────────────────────────── */
+
+type FormState = {
+  customerId: string;
+  staffId: string;
+  startTime: string;
+  endTime: string;
+  status: AppointmentInputStatus;
+  notes: string;
+};
+
+function makeDefaultForm(): FormState {
+  const start = defaultStartTime();
+  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "" };
+}
 
 interface BookingDialogProps {
   open: boolean;
@@ -215,88 +272,62 @@ interface BookingDialogProps {
 }
 
 function BookingDialog({ open, editing, onClose, customers, staff }: BookingDialogProps) {
-  const [form, setForm] = useState<FormState>(makeDefaultForm);
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [form, setForm]               = useState<FormState>(makeDefaultForm);
+  const [customerSearch, setSearch]   = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
   const queryClient = useQueryClient();
-
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
 
   useEffect(() => {
     if (open) {
-      if (editing) {
-        setForm({
-          customerId: editing.customerId ? String(editing.customerId) : "",
-          staffId: editing.staffId ? String(editing.staffId) : "",
-          startTime: toLocalDatetimeValue(new Date(editing.scheduledAt)),
-          endTime: toLocalDatetimeValue(new Date(editing.endAt!)),
-          status: editing.status as AppointmentInputStatus,
-          notes: editing.notes ?? "",
-        });
-      } else {
-        setForm(makeDefaultForm());
-      }
-      setCustomerSearch("");
+      setForm(editing ? {
+        customerId: editing.customerId ? String(editing.customerId) : "",
+        staffId:    editing.staffId    ? String(editing.staffId)    : "",
+        startTime:  toLocalDatetimeValue(new Date(editing.scheduledAt)),
+        endTime:    toLocalDatetimeValue(new Date(editing.endAt!)),
+        status:     editing.status as AppointmentInputStatus,
+        notes:      editing.notes ?? "",
+      } : makeDefaultForm());
+      setSearch("");
       setCustomerOpen(false);
     }
   }, [open, editing]);
 
-  function setField(key: keyof FormState, val: string) {
+  const setField = (key: keyof FormState, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
-  }
 
   const safeCustomers = Array.isArray(customers) ? customers : [];
-  const safeStaff = Array.isArray(staff) ? staff : [];
+  const safeStaff     = Array.isArray(staff)     ? staff     : [];
 
-  const filteredCustomers = safeCustomers.filter((c) => {
+  const filtered = safeCustomers.filter((c) => {
     const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-    return (
-      name.includes(customerSearch.toLowerCase()) ||
-      (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase())
-    );
+    return name.includes(customerSearch.toLowerCase()) || (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase());
   });
 
-  const selectedCustomer = safeCustomers.find((c) => String(c.id) === form.customerId);
+  const selected = safeCustomers.find((c) => String(c.id) === form.customerId);
 
   const handleSubmit = () => {
-    if (!form.startTime || !form.endTime) {
-      toast.error("Please set start and end times");
-      return;
-    }
+    if (!form.startTime || !form.endTime) { toast.error("Please set start and end times"); return; }
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
-      staffId: form.staffId ? Number(form.staffId) : null,
+      staffId:    form.staffId    ? Number(form.staffId)    : null,
       scheduledAt: new Date(form.startTime).toISOString(),
-      endAt: new Date(form.endTime).toISOString(),
+      endAt:       new Date(form.endTime).toISOString(),
       status: form.status,
-      notes: form.notes || null,
+      notes:  form.notes || null,
     };
-
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
     if (editing) {
-      updateMutation.mutate(
-        { id: editing.id, data: payload },
-        {
-          onSuccess: () => {
-            toast.success("Appointment updated");
-            queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
-            onClose();
-          },
-          onError: () => toast.error("Failed to update appointment"),
-        }
-      );
+      updateMutation.mutate({ id: editing.id, data: payload }, {
+        onSuccess: () => { toast.success("Appointment updated"); invalidate(); onClose(); },
+        onError:   () => toast.error("Failed to update appointment"),
+      });
     } else {
-      createMutation.mutate(
-        { data: payload },
-        {
-          onSuccess: () => {
-            toast.success("Appointment booked");
-            queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
-            onClose();
-          },
-          onError: () => toast.error("Failed to book appointment"),
-        }
-      );
+      createMutation.mutate({ data: payload }, {
+        onSuccess: () => { toast.success("Appointment booked"); invalidate(); onClose(); },
+        onError:   () => toast.error("Failed to book appointment"),
+      });
     }
   };
 
@@ -322,59 +353,31 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                 onClick={() => setCustomerOpen((o) => !o)}
                 className="w-full flex items-center justify-between border rounded-lg px-3 py-2 text-sm bg-background hover:bg-muted/40 transition-colors"
               >
-                <span className={selectedCustomer ? "text-foreground" : "text-muted-foreground"}>
-                  {selectedCustomer
-                    ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim()
-                    : "Search contacts..."}
+                <span className={selected ? "text-foreground" : "text-muted-foreground"}>
+                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Search contacts..."}
                 </span>
                 <Search className="w-4 h-4 text-muted-foreground" />
               </button>
               {customerOpen && (
                 <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-md">
                   <div className="p-2 border-b">
-                    <Input
-                      autoFocus
-                      placeholder="Search by name or email..."
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      className="h-8 text-sm"
-                    />
+                    <Input autoFocus placeholder="Search by name or email..." value={customerSearch}
+                      onChange={(e) => setSearch(e.target.value)} className="h-8 text-sm" />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40"
-                    >
+                    <button type="button" onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
                       No customer
                     </button>
-                    {filteredCustomers.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setField("customerId", String(c.id));
-                          setCustomerOpen(false);
-                          setCustomerSearch("");
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-2 text-sm hover:bg-muted/40",
-                          form.customerId === String(c.id) && "bg-primary/10 font-medium"
-                        )}
-                      >
-                        <span className="font-medium">
-                          {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}
-                        </span>
-                        {c.email && (
-                          <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>
-                        )}
+                    {filtered.map((c) => (
+                      <button key={c.id} type="button"
+                        onClick={() => { setField("customerId", String(c.id)); setCustomerOpen(false); setSearch(""); }}
+                        className={cn("w-full text-left px-3 py-2 text-sm hover:bg-muted/40", form.customerId === String(c.id) && "bg-primary/10 font-medium")}>
+                        <span className="font-medium">{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</span>
+                        {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
                       </button>
                     ))}
-                    {filteredCustomers.length === 0 && (
-                      <p className="px-3 py-4 text-sm text-muted-foreground text-center">
-                        No customers found
-                      </p>
-                    )}
+                    {filtered.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground text-center">No customers found</p>}
                   </div>
                 </div>
               )}
@@ -383,35 +386,19 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
 
           {/* Time */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Appointment Time
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Appointment Time</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-sm">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground" /> Start Time
-                </Label>
-                <Input
-                  type="datetime-local"
-                  value={form.startTime}
-                  onChange={(e) => {
-                    setField("startTime", e.target.value);
-                    setField("endTime", addOneHour(e.target.value));
-                  }}
-                  className="text-sm"
-                />
+                <Label className="flex items-center gap-1.5 text-sm"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> Start Time</Label>
+                <Input type="datetime-local" value={form.startTime}
+                  onChange={(e) => { setField("startTime", e.target.value); setField("endTime", addOneHour(e.target.value)); }} className="text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-sm">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground" /> End Time
                   <span className="text-muted-foreground text-xs font-normal">(auto +1hr)</span>
                 </Label>
-                <Input
-                  type="datetime-local"
-                  value={form.endTime}
-                  onChange={(e) => setField("endTime", e.target.value)}
-                  className="text-sm"
-                />
+                <Input type="datetime-local" value={form.endTime} onChange={(e) => setField("endTime", e.target.value)} className="text-sm" />
               </div>
             </div>
           </div>
@@ -431,21 +418,12 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-muted-foreground" /> Assigned Staff
-              </Label>
-              <Select
-                value={form.staffId || "__none__"}
-                onValueChange={(v) => setField("staffId", v === "__none__" ? "" : v)}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Not assigned" />
-                </SelectTrigger>
+              <Label className="flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-muted-foreground" /> Assigned Staff</Label>
+              <Select value={form.staffId || "__none__"} onValueChange={(v) => setField("staffId", v === "__none__" ? "" : v)}>
+                <SelectTrigger className="text-sm"><SelectValue placeholder="Not assigned" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Not assigned</SelectItem>
-                  {safeStaff.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                  ))}
+                  {safeStaff.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -454,13 +432,8 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
           {/* Notes */}
           <div className="space-y-1.5">
             <Label>Notes</Label>
-            <Textarea
-              placeholder="Any additional details..."
-              value={form.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-              rows={3}
-              className="text-sm resize-none"
-            />
+            <Textarea placeholder="Any additional details..." value={form.notes}
+              onChange={(e) => setField("notes", e.target.value)} rows={3} className="text-sm resize-none" />
           </div>
         </div>
 
@@ -478,142 +451,239 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function AppointmentsPage() {
-  const [bookingOpen, setBookingOpen]   = useState(false);
-  const [editing, setEditing]           = useState<Appointment | null>(null);
-  const [viewing, setViewing]           = useState<Appointment | null>(null);
-  const queryClient = useQueryClient();
+  const [collapsed, setCollapsed]     = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeSortKey, setSortKey]   = useState<SortKey>("scheduledAt");
+  const [sortDir, setSortDir]         = useState<SortDir>("asc");
+  const [selected, setSelected]       = useState<Set<number>>(new Set());
+  const [viewing, setViewing]         = useState<Appointment | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [editing, setEditing]         = useState<Appointment | null>(null);
 
-  const { data: appointments = [], isLoading } = useListAppointments(
-    {},
-    { query: { queryKey: ["listAppointments"] } }
-  );
+  const queryClient = useQueryClient();
+  const { data: appointmentsData, isLoading } = useListAppointments({}, { query: { queryKey: ["listAppointments"] } });
   const { data: customersData } = useListCustomers();
   const { data: staffData }     = useListStaff();
   const deleteMutation          = useDeleteAppointment();
 
+  const appts    = Array.isArray(appointmentsData) ? appointmentsData : [];
   const customers = Array.isArray(customersData) ? customersData : [];
   const staff     = Array.isArray(staffData)     ? staffData     : [];
 
+  const upcoming = appts.filter((a) => a.status === "scheduled").length;
+
+  /* Filter */
+  const filtered = appts.filter((a) => statusFilter === "all" || a.status === statusFilter);
+
+  /* Sort — completed/cancelled pinned to bottom */
+  const sorted = sortAppointments(filtered, activeSortKey, sortDir);
+
+  /* Sort handler */
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  /* Select */
+  const allSelected = sorted.length > 0 && sorted.every((a) => selected.has(a.id));
+  const toggleAll   = () => setSelected(allSelected ? new Set() : new Set(sorted.map((a) => a.id)));
+  const toggleOne   = (id: number) =>
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  /* Delete */
   const handleDelete = (id: number) => {
     if (!confirm("Delete this appointment?")) return;
-    deleteMutation.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          toast.success("Appointment deleted");
-          queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
-        },
-        onError: () => toast.error("Failed to delete appointment"),
-      }
-    );
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        toast.success("Appointment deleted");
+        queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
+      },
+      onError: () => toast.error("Failed to delete appointment"),
+    });
   };
 
   const openNew  = () => { setEditing(null); setBookingOpen(true); };
   const openEdit = (a: Appointment) => { setEditing(a); setBookingOpen(true); };
-  const openView = (a: Appointment) => setViewing(a);
 
-  // Group by date
-  const apptList = Array.isArray(appointments) ? appointments : [];
-  const grouped: Record<string, Appointment[]> = {};
-  for (const a of apptList) {
-    const date = new Date(a.scheduledAt).toLocaleDateString("en-AU", {
-      weekday: "long", day: "numeric", month: "long", year: "numeric",
-      timeZone: "Australia/Sydney",
-    });
-    if (!grouped[date]) grouped[date] = [];
-    grouped[date].push(a);
-  }
+  /* Shared header shorthand */
+  const sh = (label: string, key: SortKey, className?: string) => ({
+    label, sortKey: key, activeSortKey, dir: sortDir, onSort: handleSort, className,
+  });
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Appointments</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              {apptList.length} total appointment{apptList.length !== 1 ? "s" : ""}
-            </p>
+      <div className="p-6 space-y-0">
+        {/* Panel header */}
+        <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
+          <h1 className="text-base font-semibold">
+            All Appointments{" "}
+            <span className="font-normal text-muted-foreground text-sm">
+              ({upcoming} upcoming)
+            </span>
+          </h1>
+          <div className="flex items-center gap-3">
+            <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNew}>
+              <Plus className="w-3.5 h-3.5" />
+              New Appointment
+            </Button>
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronUp className={cn("w-4 h-4 transition-transform duration-200", collapsed && "rotate-180")} />
+            </button>
           </div>
-          <Button onClick={openNew} className="gap-2">
-            <Plus className="w-4 h-4" />
-            New Appointment
-          </Button>
         </div>
 
-        {isLoading ? (
-          <div className="py-20 text-center text-muted-foreground">Loading appointments...</div>
-        ) : apptList.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <CalendarClock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <p className="font-medium">No appointments yet</p>
-              <p className="text-sm text-muted-foreground mt-1">Click "New Appointment" to book one.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(grouped).map(([date, appts]) => (
-              <div key={date}>
-                <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                  {date}
-                </h2>
-                <div className="space-y-2">
-                  {appts.map((a) => (
-                    <Card
-                      key={a.id}
-                      className="hover:shadow-md transition-shadow cursor-pointer group"
-                      onClick={() => openView(a)}
-                    >
-                      <CardContent className="py-4 px-5 flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm">{a.title}</span>
-                            <Badge className={cn("text-[11px] border px-1.5 py-0.5", STATUS_COLORS[a.status] ?? "")}>
-                              {statusLabel(a.status)}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatTime(a.scheduledAt)} · {formatDuration(a.durationMinutes)}
-                            </span>
-                            {a.customerName && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-3 h-3" />
-                                {a.customerName}
-                              </span>
-                            )}
-                            {a.staffName && <span>Staff: {a.staffName}</span>}
-                          </div>
-                          {a.notes && (
-                            <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{a.notes}</p>
-                          )}
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+        {!collapsed && (
+          <>
+            {/* Filter bar */}
+            <div className="flex items-center justify-between border-x border-b border-border bg-muted/20 px-5 py-2.5 gap-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 text-xs w-40 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="no-show">No Show</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ))}
-          </div>
+              <span className="text-sm text-muted-foreground">{sorted.length} of {appts.length}</span>
+            </div>
+
+            {/* Table */}
+            <div className="border-x border-b border-border rounded-b-xl overflow-hidden">
+              {isLoading ? (
+                <div className="py-16 text-center text-sm text-muted-foreground">Loading appointments...</div>
+              ) : sorted.length === 0 ? (
+                <div className="py-16 text-center text-sm text-muted-foreground">
+                  {appts.length === 0 ? 'No appointments yet. Click "New Appointment" to book one.' : "No appointments match the current filter."}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground uppercase tracking-wide">
+                        <th className="w-10 px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={toggleAll}
+                            className="rounded border-muted-foreground/40 accent-primary"
+                          />
+                        </th>
+                        <SortableHeader {...sh("Date & Time", "scheduledAt")} />
+                        <SortableHeader {...sh("Duration", "durationMinutes")} />
+                        <SortableHeader {...sh("Customer", "customerName")} />
+                        <SortableHeader {...sh("Staff", "staffName")} />
+                        <SortableHeader {...sh("Status", "status")} />
+                        <th className="px-3 py-3 text-left font-medium">Notes</th>
+                        <th className="px-3 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border bg-background">
+                      {sorted.map((appt) => {
+                        const { label, className } = getStatus(appt.status);
+                        const isChecked   = selected.has(appt.id);
+                        const isDone      = appt.status === "completed" || appt.status === "cancelled";
+                        return (
+                          <tr
+                            key={appt.id}
+                            className={cn(
+                              "hover:bg-muted/30 transition-colors cursor-pointer",
+                              isChecked && "bg-primary/5",
+                              isDone    && "opacity-60",
+                            )}
+                            onClick={() => setViewing(appt)}
+                          >
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleOne(appt.id)}
+                                className="rounded border-muted-foreground/40 accent-primary"
+                              />
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap text-xs text-foreground">
+                              {formatDateShort(appt.scheduledAt)}
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                              {formatDuration(appt.durationMinutes)}
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {appt.customerName
+                                ? <span className="text-primary font-medium">{appt.customerName}</span>
+                                : <span className="text-muted-foreground">—</span>}
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap text-sm">
+                              {appt.staffName || <span className="text-muted-foreground">—</span>}
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border", className)}>
+                                {label}
+                              </span>
+                            </td>
+
+                            <td className="px-3 py-3 max-w-[200px]">
+                              <span className="text-xs text-muted-foreground line-clamp-1">
+                                {appt.notes || "—"}
+                              </span>
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => setViewing(appt)}
+                                  className="flex items-center gap-1 text-xs text-primary font-medium hover:underline"
+                                >
+                                  <Eye className="w-3 h-3" /> View
+                                </button>
+                                <button
+                                  onClick={() => openEdit(appt)}
+                                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                >
+                                  <Pencil className="w-3 h-3" /> Edit
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
-      {/* Detail dialog */}
       <DetailDialog
         appt={viewing}
         onClose={() => setViewing(null)}
-        onEdit={(a) => { setViewing(null); openEdit(a); }}
-        onDelete={(id) => { handleDelete(id); }}
+        onEdit={openEdit}
+        onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
       />
 
-      {/* Create / edit dialog */}
       <BookingDialog
         open={bookingOpen}
         editing={editing}
-        onClose={() => { setBookingOpen(false); setEditing(null); }}
+        onClose={() => setBookingOpen(false)}
         customers={customers}
         staff={staff}
       />
