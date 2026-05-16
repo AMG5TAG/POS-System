@@ -1648,7 +1648,23 @@ components:
           type: integer
         name:
           type: string
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
         email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
+        company:
+          type: ["string", "null"]
+        abn:
+          type: ["string", "null"]
+        billingAddress:
+          type: ["string", "null"]
+        postalAddress:
           type: ["string", "null"]
         role:
           type: string
@@ -1657,6 +1673,14 @@ components:
           type: ["string", "null"]
         isActive:
           type: boolean
+        defaultRegisterType:
+          type: ["string", "null"]
+        payRate:
+          type: ["string", "null"]
+        loadingRate:
+          type: ["string", "null"]
+        superRate:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -1668,12 +1692,36 @@ components:
         name:
           type: string
           minLength: 1
+        firstName:
+          type: string
+        lastName:
+          type: string
         email:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+        company:
+          type: string
+        abn:
+          type: string
+        billingAddress:
+          type: string
+        postalAddress:
           type: string
         role:
           type: string
           enum: [owner, manager, cashier]
         pin:
+          type: string
+        defaultRegisterType:
+          type: string
+        payRate:
+          type: string
+        loadingRate:
+          type: string
+        superRate:
           type: string
 
     StaffUpdate:
@@ -1681,7 +1729,23 @@ components:
       properties:
         name:
           type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
         email:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+        company:
+          type: string
+        abn:
+          type: string
+        billingAddress:
+          type: string
+        postalAddress:
           type: string
         role:
           type: string
@@ -1690,6 +1754,14 @@ components:
           type: string
         isActive:
           type: boolean
+        defaultRegisterType:
+          type: string
+        payRate:
+          type: string
+        loadingRate:
+          type: string
+        superRate:
+          type: string
 
     # ── Inventory ────────────────────────────────────────────────────────────
     InventoryItem:

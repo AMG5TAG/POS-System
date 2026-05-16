@@ -910,10 +910,22 @@ export const ListStaffResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "billingAddress": zod.string().nullish(),
+  "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
   "pin": zod.string().nullish(),
   "isActive": zod.boolean(),
+  "defaultRegisterType": zod.string().nullish(),
+  "payRate": zod.string().nullish(),
+  "loadingRate": zod.string().nullish(),
+  "superRate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListStaffResponse = zod.array(ListStaffResponseItem)
@@ -927,9 +939,21 @@ export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
 export const CreateStaffBody = zod.object({
   "name": zod.string().min(1),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
   "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "company": zod.string().optional(),
+  "abn": zod.string().optional(),
+  "billingAddress": zod.string().optional(),
+  "postalAddress": zod.string().optional(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
-  "pin": zod.string().optional()
+  "pin": zod.string().optional(),
+  "defaultRegisterType": zod.string().optional(),
+  "payRate": zod.string().optional(),
+  "loadingRate": zod.string().optional(),
+  "superRate": zod.string().optional()
 })
 
 
@@ -944,10 +968,22 @@ export const GetStaffMemberResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "billingAddress": zod.string().nullish(),
+  "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
   "pin": zod.string().nullish(),
   "isActive": zod.boolean(),
+  "defaultRegisterType": zod.string().nullish(),
+  "payRate": zod.string().nullish(),
+  "loadingRate": zod.string().nullish(),
+  "superRate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -961,20 +997,44 @@ export const UpdateStaffParams = zod.object({
 
 export const UpdateStaffBody = zod.object({
   "name": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
   "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "company": zod.string().optional(),
+  "abn": zod.string().optional(),
+  "billingAddress": zod.string().optional(),
+  "postalAddress": zod.string().optional(),
   "role": zod.enum(['owner', 'manager', 'cashier']).optional(),
   "pin": zod.string().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "defaultRegisterType": zod.string().optional(),
+  "payRate": zod.string().optional(),
+  "loadingRate": zod.string().optional(),
+  "superRate": zod.string().optional()
 })
 
 export const UpdateStaffResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "billingAddress": zod.string().nullish(),
+  "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
   "pin": zod.string().nullish(),
   "isActive": zod.boolean(),
+  "defaultRegisterType": zod.string().nullish(),
+  "payRate": zod.string().nullish(),
+  "loadingRate": zod.string().nullish(),
+  "superRate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 

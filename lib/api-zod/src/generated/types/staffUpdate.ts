@@ -9,8 +9,20 @@ import type { StaffUpdateRole } from './staffUpdateRole';
 
 export interface StaffUpdate {
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  billingAddress?: string;
+  postalAddress?: string;
   role?: StaffUpdateRole;
   pin?: string;
   isActive?: boolean;
+  defaultRegisterType?: string;
+  payRate?: string;
+  loadingRate?: string;
+  superRate?: string;
 }

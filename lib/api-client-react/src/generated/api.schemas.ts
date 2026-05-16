@@ -421,11 +421,35 @@ export interface Staff {
   merchantId: number;
   name: string;
   /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
   email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  abn?: string | null;
+  /** @nullable */
+  billingAddress?: string | null;
+  /** @nullable */
+  postalAddress?: string | null;
   role: StaffRole;
   /** @nullable */
   pin?: string | null;
   isActive: boolean;
+  /** @nullable */
+  defaultRegisterType?: string | null;
+  /** @nullable */
+  payRate?: string | null;
+  /** @nullable */
+  loadingRate?: string | null;
+  /** @nullable */
+  superRate?: string | null;
   createdAt: string;
 }
 
@@ -441,9 +465,21 @@ export const StaffInputRole = {
 export interface StaffInput {
   /** @minLength 1 */
   name: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  billingAddress?: string;
+  postalAddress?: string;
   role: StaffInputRole;
   pin?: string;
+  defaultRegisterType?: string;
+  payRate?: string;
+  loadingRate?: string;
+  superRate?: string;
 }
 
 export type StaffUpdateRole = typeof StaffUpdateRole[keyof typeof StaffUpdateRole];
@@ -457,10 +493,22 @@ export const StaffUpdateRole = {
 
 export interface StaffUpdate {
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  billingAddress?: string;
+  postalAddress?: string;
   role?: StaffUpdateRole;
   pin?: string;
   isActive?: boolean;
+  defaultRegisterType?: string;
+  payRate?: string;
+  loadingRate?: string;
+  superRate?: string;
 }
 
 export interface InventoryItem {

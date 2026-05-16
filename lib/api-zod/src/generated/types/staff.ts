@@ -12,10 +12,34 @@ export interface Staff {
   merchantId: number;
   name: string;
   /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
   email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  abn?: string | null;
+  /** @nullable */
+  billingAddress?: string | null;
+  /** @nullable */
+  postalAddress?: string | null;
   role: StaffRole;
   /** @nullable */
   pin?: string | null;
   isActive: boolean;
+  /** @nullable */
+  defaultRegisterType?: string | null;
+  /** @nullable */
+  payRate?: string | null;
+  /** @nullable */
+  loadingRate?: string | null;
+  /** @nullable */
+  superRate?: string | null;
   createdAt: Date;
 }

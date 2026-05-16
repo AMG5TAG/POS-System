@@ -10,7 +10,19 @@ import type { StaffInputRole } from './staffInputRole';
 export interface StaffInput {
   /** @minLength 1 */
   name: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  company?: string;
+  abn?: string;
+  billingAddress?: string;
+  postalAddress?: string;
   role: StaffInputRole;
   pin?: string;
+  defaultRegisterType?: string;
+  payRate?: string;
+  loadingRate?: string;
+  superRate?: string;
 }
