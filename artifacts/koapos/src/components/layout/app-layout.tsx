@@ -78,9 +78,10 @@ const INVENTORY_SUBNAV = [
 
 // Visible to Owner + Manager roles only
 const MANAGEMENT_SUBNAV = [
-  { name: "Sales Overview", href: "/management/sales-overview", icon: TrendingUp },
-  { name: "Staff",          href: "/staff",                     icon: UserSquare2 },
-  { name: "Modules",        href: "/modules",                   icon: Blocks },
+  { name: "Sales Overview", href: "/management/sales-overview",  icon: TrendingUp },
+  { name: "Staff",          href: "/staff",                      icon: UserSquare2 },
+  { name: "Modules",        href: "/modules",                    icon: Blocks },
+  { name: "Integrations",   href: "/management/integrations",    icon: Receipt },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -93,7 +94,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isManagementSection =
     location.startsWith("/management/") ||
     location === "/staff" ||
-    location === "/modules";
+    location === "/modules" ||
+    location === "/management/integrations";
 
   const [posOpen,    setPosOpen]    = useState(isPOSSection);
   const [invOpen,    setInvOpen]    = useState(isInventorySection);

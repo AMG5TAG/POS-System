@@ -15,6 +15,7 @@ import brandsRouter from "./brands";
 import suppliersRouter from "./suppliers";
 import tagsRouter from "./tags";
 import invoicesRouter from "./invoices";
+import integrationsRouter from "./integrations";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(brandsRouter);
 router.use(suppliersRouter);
 router.use(tagsRouter);
 router.use(invoicesRouter);
+router.use(integrationsRouter);
 
 export default router;

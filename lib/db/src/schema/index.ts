@@ -9,3 +9,4 @@ export * from "./invoices";
 export * from "./brands";
 export * from "./suppliers";
 export * from "./tags";
+export * from "./merchants";

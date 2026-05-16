@@ -64,6 +64,20 @@ export const merchantModulesTable = pgTable("merchant_modules", {
   enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const merchantIntegrationsTable = pgTable("merchant_integrations", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
+  integrationKey: text("integration_key").notNull(),
+  status: text("status").notNull().default("disconnected"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  credentials: text("credentials"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertMerchantSchema = createInsertSchema(merchantsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMerchant = z.infer<typeof insertMerchantSchema>;
 export type Merchant = typeof merchantsTable.$inferSelect;
