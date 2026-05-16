@@ -119,7 +119,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const active = location === href;
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton asChild isActive={active} tooltip={name}>
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          tooltip={name}
+          className="data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground"
+        >
           <Link href={href} className="flex items-center gap-3">
             <Icon className="w-4 h-4 shrink-0" />
             <span>{name}</span>
@@ -150,7 +155,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarMenuButton
         isActive={isActive}
         onClick={onToggle}
-        className={`flex items-center gap-3 cursor-pointer w-full${accent ? " text-primary font-semibold hover:text-primary" : ""}`}
+        className={`flex items-center gap-3 cursor-pointer w-full data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground${accent ? " text-primary font-semibold hover:text-primary" : ""}`}
         tooltip={label}
       >
         <Icon className={`w-4 h-4 shrink-0${accent ? " text-primary" : ""}`} />
