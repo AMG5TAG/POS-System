@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -14,6 +14,8 @@ import {
   Plus,
   Trash2,
   ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
   SlidersHorizontal,
   Printer,
   Eye,
@@ -53,6 +55,69 @@ function formatDate(d: string) {
   if (!d) return "—";
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
+}
+
+/* ─── Sorting ────────────────────────────────────────────────────────────── */
+
+type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description";
+type SortDir = "asc" | "desc";
+
+function getValue(job: ServiceJob, key: SortKey): string {
+  switch (key) {
+    case "jobNumber":    return job.jobNumber ?? "";
+    case "priority":     return job.isCritical ? "1" : "0"; // critical sorts first when desc
+    case "customerName": return (job.customerName ?? "").toLowerCase();
+    case "bookInDate":   return job.bookInDate ?? "";
+    case "status":       return job.status ?? "";
+    case "deviceType":   return (job.deviceType ?? "").toLowerCase();
+    case "description":  return (job.workDescription ?? job.deviceDescription ?? "").toLowerCase();
+  }
+}
+
+function sortJobs(jobs: ServiceJob[], key: SortKey, dir: SortDir): ServiceJob[] {
+  const active    = jobs.filter((j) => j.status !== "completed");
+  const completed = jobs.filter((j) => j.status === "completed");
+
+  const compare = (a: ServiceJob, b: ServiceJob) => {
+    const av = getValue(a, key);
+    const bv = getValue(b, key);
+    const result = av < bv ? -1 : av > bv ? 1 : 0;
+    return dir === "asc" ? result : -result;
+  };
+
+  return [...active.sort(compare), ...completed.sort(compare)];
+}
+
+/* ─── Sortable column header ─────────────────────────────────────────────── */
+
+interface SortableHeaderProps {
+  label: string;
+  sortKey: SortKey;
+  activeSortKey: SortKey;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}
+
+function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className }: SortableHeaderProps) {
+  const isActive = sortKey === activeSortKey;
+  return (
+    <th
+      className={cn("px-3 py-3 text-left font-medium select-none cursor-pointer group", className)}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        <span className={cn("transition-colors", isActive ? "text-foreground" : "text-muted-foreground/40 group-hover:text-muted-foreground")}>
+          {isActive ? (
+            dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+          ) : (
+            <ChevronsUpDown className="w-3 h-3" />
+          )}
+        </span>
+      </span>
+    </th>
+  );
 }
 
 /* ─── Priority dot ──────────────────────────────────────────────────────── */
@@ -108,19 +173,13 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <Wrench className="w-5 h-5 text-primary shrink-0" />
             <span className="font-mono">{job.jobNumber}</span>
-            <span
-              className={cn(
-                "ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border",
-                className
-              )}
-            >
+            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border", className)}>
               {label}
             </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Flags */}
           {(job.isCritical || job.isUnderWarranty || job.isPartnerRepair) && (
             <div className="flex flex-wrap gap-2">
               {job.isCritical && (
@@ -141,30 +200,27 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
             </div>
           )}
 
-          {/* Customer & Date */}
           <div className="rounded-xl border bg-muted/20 divide-y">
-            <DetailRow icon={User}     label="Customer"      value={job.customerName} />
-            <DetailRow icon={Calendar} label="Book-In Date"  value={formatDate(job.bookInDate)} />
+            <DetailRow icon={User}     label="Customer"     value={job.customerName} />
+            <DetailRow icon={Calendar} label="Book-In Date" value={formatDate(job.bookInDate)} />
             {job.partnerRepairCode && (
               <DetailRow icon={Hash} label="Partner Repair Code" value={job.partnerRepairCode} />
             )}
           </div>
 
-          {/* Device */}
           {(job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
               </div>
-              <DetailRow icon={MonitorSmartphone} label="Device Type"        value={job.deviceType} />
-              <DetailRow icon={MonitorSmartphone} label="Description"        value={job.deviceDescription} />
-              <DetailRow icon={Hash}              label="Serial Number"      value={job.serialNumber} />
-              <DetailRow icon={AlertCircle}       label="Known Damage"       value={job.condition} />
+              <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType} />
+              <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription} />
+              <DetailRow icon={Hash}              label="Serial Number" value={job.serialNumber} />
+              <DetailRow icon={AlertCircle}       label="Known Damage"  value={job.condition} />
             </div>
           )}
 
-          {/* Work Details */}
           {(job.workDescription || job.additionalEquipment || job.passwordOrPin || job.accounts) && (
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -178,7 +234,6 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
             </div>
           )}
 
-          {/* Photos */}
           {photos.length > 0 && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -189,18 +244,12 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
               </div>
               <div className="p-4 grid grid-cols-4 gap-2">
                 {photos.map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt={`photo ${i + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg border"
-                  />
+                  <img key={i} src={src} alt={`photo ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border" />
                 ))}
               </div>
             </div>
           )}
 
-          {/* Signature */}
           {job.signature && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -235,11 +284,13 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ServiceJobsPage() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [priority, setPriority]   = useState("all");
-  const [statusFilter, setStatus] = useState("all");
-  const [selected, setSelected]   = useState<Set<number>>(new Set());
-  const [viewing, setViewing]     = useState<ServiceJob | null>(null);
+  const [collapsed, setCollapsed]   = useState(false);
+  const [priority, setPriority]     = useState("all");
+  const [statusFilter, setStatus]   = useState("all");
+  const [selected, setSelected]     = useState<Set<number>>(new Set());
+  const [viewing, setViewing]       = useState<ServiceJob | null>(null);
+  const [activeSortKey, setSortKey] = useState<SortKey>("bookInDate");
+  const [sortDir, setSortDir]       = useState<SortDir>("desc");
 
   const queryClient = useQueryClient();
   const { data: jobsData, isLoading } = useListServiceJobs();
@@ -248,6 +299,7 @@ export default function ServiceJobsPage() {
   const jobs   = Array.isArray(jobsData) ? jobsData : [];
   const active = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled").length;
 
+  /* Filter */
   const filtered = jobs.filter((j) => {
     if (priority === "critical" && !j.isCritical) return false;
     if (priority === "normal"   &&  j.isCritical) return false;
@@ -255,12 +307,29 @@ export default function ServiceJobsPage() {
     return true;
   });
 
-  const allSelected = filtered.length > 0 && filtered.every((j) => selected.has(j.id));
+  /* Sort — completed always pinned to bottom */
+  const sorted = sortJobs(filtered, activeSortKey, sortDir);
+
+  /* Column header click handler */
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  /* Multi-select */
+  const allSelected = sorted.length > 0 && sorted.every((j) => selected.has(j.id));
   const toggleAll   = () =>
-    setSelected(allSelected ? new Set() : new Set(filtered.map((j) => j.id)));
+    setSelected(allSelected ? new Set() : new Set(sorted.map((j) => j.id)));
   const toggleOne   = (id: number) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  /* Delete */
   const handleDelete = (job: ServiceJob) => {
     if (!confirm(`Delete service job ${job.jobNumber}?`)) return;
     deleteMutation.mutate(
@@ -275,6 +344,11 @@ export default function ServiceJobsPage() {
       }
     );
   };
+
+  /* Shared header props shorthand */
+  const sh = (label: string, key: SortKey, className?: string) => ({
+    label, sortKey: key, activeSortKey, dir: sortDir, onSort: handleSort, className,
+  });
 
   return (
     <AppLayout>
@@ -334,7 +408,7 @@ export default function ServiceJobsPage() {
                 </Select>
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{filtered.length} of {jobs.length}</span>
+                <span>{sorted.length} of {jobs.length}</span>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.print()}>
                   <Printer className="w-3.5 h-3.5" />
                   Print
@@ -346,7 +420,7 @@ export default function ServiceJobsPage() {
             <div className="border-x border-b border-border rounded-b-xl overflow-hidden">
               {isLoading ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading service jobs...</div>
-              ) : filtered.length === 0 ? (
+              ) : sorted.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   No service jobs match the current filters.
                 </div>
@@ -363,30 +437,31 @@ export default function ServiceJobsPage() {
                             className="rounded border-muted-foreground/40 accent-primary"
                           />
                         </th>
-                        <th className="px-3 py-3 text-left font-medium">Job #</th>
-                        <th className="px-3 py-3 text-left font-medium">Priority</th>
-                        <th className="px-3 py-3 text-left font-medium">Contact</th>
-                        <th className="px-3 py-3 text-left font-medium">Date</th>
-                        <th className="px-3 py-3 text-left font-medium">Status</th>
-                        <th className="px-3 py-3 text-left font-medium">Device Type</th>
-                        <th className="px-3 py-3 text-left font-medium">Description</th>
-                        <th className="px-3 py-3 text-left font-medium"></th>
+                        <SortableHeader {...sh("Job #",       "jobNumber")} />
+                        <SortableHeader {...sh("Priority",    "priority")} />
+                        <SortableHeader {...sh("Contact",     "customerName")} />
+                        <SortableHeader {...sh("Date",        "bookInDate")} />
+                        <SortableHeader {...sh("Status",      "status")} />
+                        <SortableHeader {...sh("Device Type", "deviceType")} />
+                        <SortableHeader {...sh("Description", "description")} />
+                        <th className="px-3 py-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border bg-background">
-                      {filtered.map((job) => {
+                      {sorted.map((job) => {
                         const { label, className } = getStatus(job.status);
                         const isChecked = selected.has(job.id);
+                        const isCompleted = job.status === "completed";
                         return (
                           <tr
                             key={job.id}
                             className={cn(
                               "hover:bg-muted/30 transition-colors cursor-pointer",
-                              isChecked && "bg-primary/5"
+                              isChecked   && "bg-primary/5",
+                              isCompleted && "opacity-60"
                             )}
                             onClick={() => setViewing(job)}
                           >
-                            {/* Checkbox — stop propagation so click doesn't open dialog */}
                             <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
@@ -405,11 +480,9 @@ export default function ServiceJobsPage() {
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap">
-                              {job.customerName ? (
-                                <span className="text-primary font-medium">{job.customerName}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
+                              {job.customerName
+                                ? <span className="text-primary font-medium">{job.customerName}</span>
+                                : <span className="text-muted-foreground">—</span>}
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap text-muted-foreground text-xs">
@@ -423,13 +496,9 @@ export default function ServiceJobsPage() {
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap">
-                              {job.deviceType ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border border-border">
-                                  {job.deviceType}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
+                              {job.deviceType
+                                ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border border-border">{job.deviceType}</span>
+                                : <span className="text-muted-foreground">—</span>}
                             </td>
 
                             <td className="px-3 py-3 max-w-[220px]">
@@ -438,7 +507,6 @@ export default function ServiceJobsPage() {
                               </span>
                             </td>
 
-                            {/* Actions — stop propagation */}
                             <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-3">
                                 <button
@@ -469,7 +537,6 @@ export default function ServiceJobsPage() {
         )}
       </div>
 
-      {/* Detail dialog */}
       <DetailDialog
         job={viewing}
         onClose={() => setViewing(null)}
