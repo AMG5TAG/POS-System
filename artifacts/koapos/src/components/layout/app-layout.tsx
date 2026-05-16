@@ -12,7 +12,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, LayoutDashboard as DashboardIcon,
-  Building2, Globe, UserCircle,
+  Building2, Globe, UserCircle, Monitor,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -55,6 +55,7 @@ const SETTINGS_SUBNAV = [
 
 const MANAGEMENT_SUBNAV = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
+  { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
   { name: "Staff",             href: "/staff",                     icon: UserSquare2    },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
@@ -86,6 +87,7 @@ const SEARCH_INDEX = [
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
+  { label: "POS Registers",         href: "/management/registers",   icon: Monitor,    group: "Management" },
   { label: "Business Details",      href: "/management/business",    icon: Building2,  group: "Management" },
   { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
   { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
@@ -125,6 +127,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
   "/settings/customers":          ["Settings", "Customers"],
+  "/management/registers":        ["Management", "POS Registers"],
   "/management/business":         ["Management", "Business Details"],
   "/management/regional":         ["Management", "Regional Settings"],
   "/management/account":          ["Management", "Account"],
