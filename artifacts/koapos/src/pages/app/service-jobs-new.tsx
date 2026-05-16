@@ -26,6 +26,7 @@ import {
   MonitorSmartphone,
   Search,
   Check,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -383,12 +384,22 @@ export default function ServiceJobNewPage() {
                     />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
+                    {/* Create new customer — always pinned to top */}
+                    <button
+                      type="button"
+                      onClick={() => { setCustomerOpen(false); navigate("/customers"); }}
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                      Create new customer
+                    </button>
+                    {/* Walk-in / no customer */}
                     <button
                       type="button"
                       onClick={() => { setCustomerId(""); setCustomerOpen(false); }}
                       className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40"
                     >
-                      No customer
+                      No customer (walk-in)
                     </button>
                     {filteredCustomers.map((c: Customer) => (
                       <button
@@ -406,8 +417,17 @@ export default function ServiceJobNewPage() {
                         {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
                       </button>
                     ))}
-                    {filteredCustomers.length === 0 && (
-                      <p className="px-3 py-4 text-sm text-muted-foreground text-center">No customers found</p>
+                    {filteredCustomers.length === 0 && customerSearch && (
+                      <div className="px-3 py-3 text-sm text-center text-muted-foreground">
+                        No customers match &ldquo;{customerSearch}&rdquo; —{" "}
+                        <button
+                          type="button"
+                          className="text-primary font-medium underline-offset-2 hover:underline"
+                          onClick={() => { setCustomerOpen(false); navigate("/customers"); }}
+                        >
+                          create one
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -528,21 +548,23 @@ export default function ServiceJobNewPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Condition</Label>
+              <Label>Known Damage</Label>
               <Input
-                placeholder="e.g. Good, Fair, Cracked screen..."
+                placeholder="e.g. Cracked screen, water damage..."
                 value={condition}
                 onChange={(e) => setCondition(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Partner Repair Code</Label>
-              <Input
-                placeholder="e.g. PR-00123..."
-                value={partnerRepairCode}
-                onChange={(e) => setPartnerRepairCode(e.target.value)}
-              />
-            </div>
+            {isPartnerRepair && (
+              <div className="space-y-1.5">
+                <Label>Partner Repair Code</Label>
+                <Input
+                  placeholder="e.g. PR-00123..."
+                  value={partnerRepairCode}
+                  onChange={(e) => setPartnerRepairCode(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
