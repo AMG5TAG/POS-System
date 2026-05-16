@@ -7,6 +7,8 @@ import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
+import { ServiceJobsTiles } from "@/components/dashboard/ServiceJobsTiles";
+import { DashboardPanels } from "@/components/dashboard/DashboardPanels";
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<GetDashboardSummaryPeriod>("today");
@@ -47,8 +49,10 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        <ServiceJobsTiles />
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sales Overview</h1>
           <Select value={period} onValueChange={(val) => setPeriod(val as GetDashboardSummaryPeriod)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select period" />
@@ -176,6 +180,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        <DashboardPanels />
 
         <DashboardCalendar />
       </div>

@@ -113,12 +113,14 @@ function DayCell({
   day,
   isCurrentMonth,
   isToday,
+  isPast,
   onAppointmentClick,
   onBirthdayClick,
 }: {
   day: CalendarDay | null;
   isCurrentMonth: boolean;
   isToday: boolean;
+  isPast: boolean;
   onAppointmentClick: (appt: CalendarAppointment) => void;
   onBirthdayClick: (b: CalendarBirthday) => void;
 }) {
@@ -133,12 +135,13 @@ function DayCell({
   return (
     <div className={cn(
       "min-h-[110px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
-      isCurrentMonth ? "bg-card" : "bg-muted/20 opacity-50",
-      isToday ? "border-primary ring-1 ring-primary/30" : "border-border/60",
+      isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 opacity-60",
+      isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60",
     )}>
       <div className={cn(
         "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full shrink-0 self-start",
-        isToday ? "bg-primary text-primary-foreground" : "text-foreground"
+        isToday ? "bg-primary text-primary-foreground" :
+        isPast && isCurrentMonth ? "text-muted-foreground/60 line-through" : "text-foreground"
       )}>
         {dayNum}
       </div>
@@ -304,6 +307,7 @@ export function DashboardCalendar() {
                       day={day}
                       isCurrentMonth={day !== null}
                       isToday={day?.date === todayStr}
+                      isPast={day !== null && day.date < todayStr}
                       onAppointmentClick={setSelectedAppt}
                       onBirthdayClick={setSelectedBirthday}
                     />
