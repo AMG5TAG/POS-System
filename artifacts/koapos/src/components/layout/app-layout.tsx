@@ -53,22 +53,24 @@ const SETTINGS_SUBNAV = [
   { name: "Customers", href: "/settings/customers", icon: Users },
 ];
 
-const STAFF_SUBNAV = [
-  { name: "Employees",      href: "/staff",                  icon: UserSquare2  },
-  { name: "Timesheet",      href: "/staff/timesheet",        icon: Clock        },
-  { name: "Rostering",      href: "/staff/rostering",        icon: CalendarClock },
-  { name: "Leave Requests", href: "/staff/leave-requests",   icon: ClipboardList },
-  { name: "Cost Summary",   href: "/staff/cost-summary",     icon: Coins        },
-];
+type NavLeaf  = { name: string; href: string;  icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }> };
+type NavItem  = NavLeaf | NavGroup;
 
-const MANAGEMENT_SUBNAV = [
+const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
   { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
-  { name: "Employees",         href: "/staff",                     icon: UserSquare2    },
-  { name: "Timesheet",         href: "/staff/timesheet",           icon: Clock          },
-  { name: "Rostering",         href: "/staff/rostering",           icon: CalendarClock  },
-  { name: "Leave Requests",    href: "/staff/leave-requests",      icon: ClipboardList  },
-  { name: "Cost Summary",      href: "/staff/cost-summary",        icon: Coins          },
+  {
+    name: "Employees",
+    icon: UserSquare2,
+    children: [
+      { name: "Employees",      href: "/staff",                  icon: UserSquare2   },
+      { name: "Timesheet",      href: "/staff/timesheet",        icon: Clock         },
+      { name: "Rostering",      href: "/staff/rostering",        icon: CalendarClock },
+      { name: "Leave Requests", href: "/staff/leave-requests",   icon: ClipboardList },
+      { name: "Cost Summary",   href: "/staff/cost-summary",     icon: Coins         },
+    ],
+  },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
   { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
@@ -280,6 +282,50 @@ function Breadcrumbs({ location }: { location: string }) {
   );
 }
 
+/* ─── Nested group (level 3) ─────────────────────────────────────────────── */
+
+function NavNestedGroup({
+  name, icon: Icon, children, location,
+}: {
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: NavLeaf[];
+  location: string;
+}) {
+  const isChildActive = children.some((c) => location === c.href);
+  const [open, setOpen] = useState(isChildActive);
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        isActive={isChildActive}
+        onClick={() => setOpen((o) => !o)}
+        className="cursor-pointer w-full"
+      >
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1">{name}</span>
+        <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </SidebarMenuSubButton>
+      {open && (
+        <SidebarMenuSub>
+          {children.map((child) => {
+            const active = location === child.href;
+            return (
+              <SidebarMenuSubItem key={child.href}>
+                <SidebarMenuSubButton asChild isActive={active}>
+                  <Link href={child.href} className="flex items-center gap-2.5">
+                    <child.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{child.name}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuSubItem>
+  );
+}
+
 /* ─── Main layout ────────────────────────────────────────────────────────── */
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -335,7 +381,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     isActive: boolean; isOpen: boolean; onToggle: () => void;
-    items: { name: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
+    items: NavItem[];
     accent?: boolean;
   }) => (
     <SidebarMenuItem>
@@ -350,6 +396,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {isOpen && (
         <SidebarMenuSub>
           {items.map((item) => {
+            if ("children" in item) {
+              return (
+                <NavNestedGroup
+                  key={item.name}
+                  name={item.name}
+                  icon={item.icon}
+                  children={item.children}
+                  location={location}
+                />
+              );
+            }
             const active = location === item.href;
             return (
               <SidebarMenuSubItem key={item.href}>
