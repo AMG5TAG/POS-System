@@ -61,7 +61,7 @@ const defaultForm: CustomerForm = {
   whatsappSameAsPhone: false, dateOfBirth: "", company: "",
   abn: "", referredBy: "", billingStreet: "", billingCity: "",
   billingState: "", billingPostcode: "", billingCountry: "Australia",
-  addShipping: false, shippingSameAsBilling: false,
+  addShipping: true, shippingSameAsBilling: true,
   shippingStreet: "", shippingCity: "", shippingState: "",
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
