@@ -120,12 +120,17 @@ const ROUTE_LABEL: Record<string, string[]> = {
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
 
-function GlobalSearch() {
+function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const setOpenWithCallback = (val: boolean) => {
+    setOpen(val);
+    onOpenChange?.(val);
+  };
 
   const results = query.trim().length === 0
     ? SEARCH_INDEX.slice(0, 8)
@@ -138,10 +143,10 @@ function GlobalSearch() {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setOpen(true);
+        setOpenWithCallback(true);
         setTimeout(() => inputRef.current?.focus(), 50);
       }
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") setOpenWithCallback(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -150,7 +155,7 @@ function GlobalSearch() {
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        setOpenWithCallback(false);
       }
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -159,23 +164,23 @@ function GlobalSearch() {
 
   const go = (href: string) => {
     navigate(href);
-    setOpen(false);
+    setOpenWithCallback(false);
     setQuery("");
   };
 
   return (
-    <div ref={containerRef} className="relative flex-1 max-w-xl">
+    <div ref={containerRef} className="relative flex-1">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpenWithCallback(true)}
+          onChange={(e) => { setQuery(e.target.value); setOpenWithCallback(true); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && results.length > 0) go(results[0].href);
-            if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); }
+            if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
           placeholder="Search everything..."
           className="w-full h-9 pl-9 pr-14 rounded-full border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
@@ -253,9 +258,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     location === "/modules" ||
     location === "/management/integrations";
 
-  const [posOpen,  setPosOpen]  = useState(isPOSSection);
-  const [invOpen,  setInvOpen]  = useState(isInventorySection);
-  const [mgmtOpen, setMgmtOpen] = useState(isManagementSection);
+  const [posOpen,     setPosOpen]     = useState(isPOSSection);
+  const [invOpen,     setInvOpen]     = useState(isInventorySection);
+  const [mgmtOpen,    setMgmtOpen]    = useState(isManagementSection);
+  const [searchOpen,  setSearchOpen]  = useState(false);
 
   const canManage = !!user;
 
@@ -376,24 +382,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* ── Top header bar ── */}
-          <header className="h-14 flex items-center gap-4 px-4 border-b bg-background shrink-0">
+          <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
             {/* Mobile sidebar trigger */}
             <SidebarTrigger className="md:hidden shrink-0" />
 
-            {/* Breadcrumbs */}
-            <Breadcrumbs location={location} />
+            {/* Breadcrumbs — fade + collapse when search is open */}
+            <div
+              className={cn(
+                "shrink-0 overflow-hidden transition-all duration-300 ease-in-out",
+                searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100",
+              )}
+            >
+              <Breadcrumbs location={location} />
+            </div>
 
-            {/* Spacer */}
-            <div className="flex-1" />
+            {/* Search bar — expands to fill all available space when focused */}
+            <div className="flex-1 min-w-0 flex">
+              <GlobalSearch onOpenChange={setSearchOpen} />
+            </div>
 
-            {/* Search bar */}
-            <GlobalSearch />
-
-            {/* Spacer */}
-            <div className="flex-1" />
-
-            {/* Right actions */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Right actions — fade + collapse when search is open */}
+            <div
+              className={cn(
+                "flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out",
+                searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100",
+              )}
+            >
               {/* POS quick link */}
               <Link href="/pos">
                 <Button
