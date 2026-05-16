@@ -1,45 +1,184 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListTransactions, useGetTransaction, useRefundTransaction, Transaction } from "@workspace/api-client-react";
+import { useListTransactions, useRefundTransaction, Transaction } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Receipt, Eye, RotateCcw, CreditCard, Banknote } from "lucide-react";
+import {
+  Receipt, RotateCcw, CreditCard, Banknote,
+  ChevronUp, ChevronDown, ChevronsUpDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
-const paymentMethodIcons: Record<string, React.ReactNode> = {
-  card: <CreditCard className="w-4 h-4" />,
-  cash: <Banknote className="w-4 h-4" />,
+/* ─── Types ──────────────────────────────────────────────────────────────── */
+
+type SortKey = "date" | "total" | "status" | "payment";
+type SortDir  = "asc" | "desc";
+
+const STATUS_COLORS: Record<string, string> = {
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-300",
+  refunded:  "bg-red-50 text-red-700 border-red-300",
+  voided:    "bg-muted text-muted-foreground border-border",
 };
 
-const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  completed: "default",
-  refunded: "destructive",
-  voided: "secondary",
+const PAYMENT_ICONS: Record<string, React.ReactNode> = {
+  card: <CreditCard className="w-3.5 h-3.5" />,
+  cash: <Banknote   className="w-3.5 h-3.5" />,
 };
+
+/* ─── Sort header ────────────────────────────────────────────────────────── */
+
+function SortTh({ label, sortKey, active, dir, onSort, className, align = "left" }: {
+  label: string; sortKey: SortKey; active: SortKey; dir: SortDir;
+  onSort: (k: SortKey) => void; className?: string; align?: "left" | "right";
+}) {
+  const isActive = active === sortKey;
+  return (
+    <th className={cn("p-3 font-medium whitespace-nowrap cursor-pointer select-none group", align === "right" ? "text-right" : "text-left", className)}
+      onClick={() => onSort(sortKey)}>
+      <span className={cn("inline-flex items-center gap-1 hover:text-foreground transition-colors", align === "right" && "flex-row-reverse")}>
+        {label}
+        <span className={cn("transition-colors", isActive ? "text-foreground" : "text-muted-foreground/40 group-hover:text-muted-foreground")}>
+          {isActive ? dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" /> : <ChevronsUpDown className="w-3 h-3" />}
+        </span>
+      </span>
+    </th>
+  );
+}
+
+/* ─── Receipt detail dialog ──────────────────────────────────────────────── */
+
+function ReceiptDialog({
+  tx, onClose, onRefund,
+}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void }) {
+  if (!tx) return null;
+
+  const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
+
+  return (
+    <Dialog open={!!tx} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-primary shrink-0" />
+            <span className="truncate">Receipt #{tx.receiptNumber}</span>
+            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize", statusClass)}>
+              {tx.status}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          <div className="rounded-xl border bg-muted/20 divide-y text-sm">
+            <div className="flex justify-between px-4 py-3">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium">{formatDate(tx.createdAt)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-3">
+              <span className="text-muted-foreground">Payment</span>
+              <span className="flex items-center gap-1.5 capitalize font-medium">
+                {PAYMENT_ICONS[tx.paymentMethod] ?? <CreditCard className="w-3.5 h-3.5" />}
+                {tx.paymentMethod}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border divide-y overflow-hidden">
+            {(tx.items as { productName: string; unitPrice: number; quantity: number; totalPrice: number }[]).map((item, i) => (
+              <div key={i} className="flex justify-between px-4 py-3 text-sm">
+                <div>
+                  <p className="font-medium">{item.productName}</p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(item.unitPrice)} × {item.quantity}</p>
+                </div>
+                <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 divide-y text-sm">
+            <div className="flex justify-between px-4 py-3">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatCurrency(tx.subtotal)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-3">
+              <span className="text-muted-foreground">GST (10%)</span>
+              <span>{formatCurrency(tx.taxTotal)}</span>
+            </div>
+            {(tx.discountTotal ?? 0) > 0 && (
+              <div className="flex justify-between px-4 py-3 text-emerald-600">
+                <span>Discount</span>
+                <span>−{formatCurrency(tx.discountTotal ?? 0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between px-4 py-3 font-bold text-base">
+              <span>Total</span>
+              <span>{formatCurrency(tx.total)}</span>
+            </div>
+          </div>
+
+          {tx.notes && <p className="text-xs text-muted-foreground italic px-1">{tx.notes}</p>}
+        </div>
+
+        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+          {tx.status === "completed" ? (
+            <Button variant="destructive" size="sm" className="gap-1.5"
+              onClick={() => { onRefund(tx); onClose(); }}>
+              <RotateCcw className="w-3.5 h-3.5" /> Refund
+            </Button>
+          ) : <div />}
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [statusFilter, setStatusFilter]   = useState<string>("");
+  const [selectedTx, setSelectedTx]       = useState<Transaction | null>(null);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
-  const [refundReason, setRefundReason] = useState("");
-  const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
+  const [refundReason, setRefundReason]   = useState("");
+  const [refundingTx, setRefundingTx]     = useState<Transaction | null>(null);
+  const [sortKey, setSortKey]             = useState<SortKey>("date");
+  const [sortDir, setSortDir]             = useState<SortDir>("desc");
+  const [checked, setChecked]             = useState<Set<number>>(new Set());
 
   const { data: txData, isLoading } = useListTransactions(
-    { status: statusFilter === "all" ? undefined : statusFilter || undefined, limit: 100 },
+    { status: statusFilter === "all" ? undefined : statusFilter || undefined, limit: 1000 },
     { query: { queryKey: ["transactions", statusFilter] } }
   );
-
   const refundMutation = useRefundTransaction();
-
   const transactions = txData?.items || [];
+
+  /* Sort */
+  const sorted = [...transactions].sort((a, b) => {
+    let av: string | number = "", bv: string | number = "";
+    switch (sortKey) {
+      case "date":    av = a.createdAt; bv = b.createdAt; break;
+      case "total":   av = a.total;    bv = b.total;     break;
+      case "status":  av = a.status;   bv = b.status;    break;
+      case "payment": av = a.paymentMethod; bv = b.paymentMethod; break;
+    }
+    const r = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === "asc" ? r : -r;
+  });
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => { if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; } setSortDir("asc"); return key; });
+  }, []);
+
+  const allChecked = sorted.length > 0 && sorted.every((t) => checked.has(t.id));
+  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(sorted.map((t) => t.id)));
+  const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleRefund = () => {
     if (!refundingTx) return;
@@ -48,15 +187,17 @@ export default function TransactionsPage() {
       {
         onSuccess: () => {
           toast.success("Transaction refunded");
-          setRefundDialogOpen(false);
-          setRefundReason("");
+          setRefundDialogOpen(false); setRefundReason("");
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
-          if (selectedTx?.id === refundingTx.id) setSelectedTx(null);
         },
         onError: () => toast.error("Failed to process refund"),
       }
     );
   };
+
+  const sh = (label: string, key: SortKey, className?: string, align?: "left" | "right") => ({
+    label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className, align,
+  });
 
   return (
     <AppLayout>
@@ -64,9 +205,7 @@ export default function TransactionsPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Transactions</h1>
           <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All transactions" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Transactions</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
@@ -78,170 +217,96 @@ export default function TransactionsPage() {
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading transactions...</div>
         ) : transactions.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+          <div className="rounded-lg border">
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
               <Receipt className="w-16 h-16 text-muted-foreground/30" />
               <div>
                 <p className="font-medium text-lg">No transactions yet</p>
                 <p className="text-muted-foreground text-sm">Transactions will appear here after your first sale.</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-lg border overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted/50 border-b">
                 <tr>
-                  <th className="text-left p-4 font-medium">Receipt</th>
-                  <th className="text-left p-4 font-medium hidden md:table-cell">Date</th>
-                  <th className="text-left p-4 font-medium hidden sm:table-cell">Payment</th>
-                  <th className="text-center p-4 font-medium hidden lg:table-cell">Status</th>
-                  <th className="text-right p-4 font-medium">Total</th>
-                  <th className="p-4" />
+                  <th className="p-3 w-10">
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                      className="rounded border-muted-foreground/40 accent-primary" />
+                  </th>
+                  <th className="p-3 text-left font-medium whitespace-nowrap">Receipt</th>
+                  <SortTh {...sh("Date", "date", "hidden md:table-cell")} />
+                  <SortTh {...sh("Payment", "payment", "hidden sm:table-cell")} />
+                  <SortTh {...sh("Status", "status", "hidden lg:table-cell")} />
+                  <SortTh {...sh("Total", "total", undefined, "right")} />
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="bg-background hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <p className="font-mono text-xs font-medium">{tx.receiptNumber}</p>
-                      {tx.items && Array.isArray(tx.items) && (
-                        <p className="text-xs text-muted-foreground">{(tx.items as any[]).length} item{(tx.items as any[]).length !== 1 ? "s" : ""}</p>
-                      )}
-                    </td>
-                    <td className="p-4 hidden md:table-cell text-muted-foreground text-xs">{formatDate(tx.createdAt)}</td>
-                    <td className="p-4 hidden sm:table-cell">
-                      <span className="flex items-center gap-1.5 capitalize text-muted-foreground">
-                        {paymentMethodIcons[tx.paymentMethod] ?? <CreditCard className="w-4 h-4" />}
-                        {tx.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center hidden lg:table-cell">
-                      <Badge variant={statusColors[tx.status] ?? "secondary"} className="capitalize">
-                        {tx.status}
-                      </Badge>
-                    </td>
-                    <td className="p-4 text-right font-bold">{formatCurrency(tx.total)}</td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedTx(tx)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {tx.status === "completed" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => { setRefundingTx(tx); setRefundDialogOpen(true); }}
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </Button>
+                {sorted.map((tx) => {
+                  const isChecked   = checked.has(tx.id);
+                  const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
+                  return (
+                    <tr key={tx.id}
+                      className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
+                      onClick={() => setSelectedTx(tx)}
+                    >
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(tx.id)}
+                          className="rounded border-muted-foreground/40 accent-primary" />
+                      </td>
+                      <td className="p-3">
+                        <p className="font-mono text-xs font-medium">{tx.receiptNumber}</p>
+                        {tx.items && Array.isArray(tx.items) && (
+                          <p className="text-xs text-muted-foreground">
+                            {(tx.items as unknown[]).length} item{(tx.items as unknown[]).length !== 1 ? "s" : ""}
+                          </p>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
+                        {formatDate(tx.createdAt)}
+                      </td>
+                      <td className="p-3 hidden sm:table-cell">
+                        <span className="flex items-center gap-1.5 capitalize text-muted-foreground">
+                          {PAYMENT_ICONS[tx.paymentMethod] ?? <CreditCard className="w-3.5 h-3.5" />}
+                          {tx.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell">
+                        <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize", statusClass)}>
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-bold">{formatCurrency(tx.total)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      <Dialog open={!!selectedTx} onOpenChange={(open) => !open && setSelectedTx(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Receipt #{selectedTx?.receiptNumber}</DialogTitle>
-          </DialogHeader>
-          {selectedTx && (
-            <div className="space-y-4 py-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Date</span>
-                <span>{formatDate(selectedTx.createdAt)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Payment</span>
-                <span className="capitalize">{selectedTx.paymentMethod}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Status</span>
-                <Badge variant={statusColors[selectedTx.status] ?? "secondary"} className="capitalize">
-                  {selectedTx.status}
-                </Badge>
-              </div>
-              <div className="border rounded-lg divide-y">
-                {(selectedTx.items as any[]).map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between p-3 text-sm">
-                    <div>
-                      <p className="font-medium">{item.productName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(item.unitPrice)} × {item.quantity}
-                      </p>
-                    </div>
-                    <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-1 text-sm border-t pt-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(selectedTx.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">GST (10%)</span>
-                  <span>{formatCurrency(selectedTx.taxTotal)}</span>
-                </div>
-                {selectedTx.discountTotal > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>-{formatCurrency(selectedTx.discountTotal)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold text-base pt-1 border-t">
-                  <span>Total</span>
-                  <span>{formatCurrency(selectedTx.total)}</span>
-                </div>
-              </div>
-              {selectedTx.notes && (
-                <p className="text-xs text-muted-foreground italic">{selectedTx.notes}</p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            {selectedTx?.status === "completed" && (
-              <Button
-                variant="destructive"
-                onClick={() => { setRefundingTx(selectedTx); setSelectedTx(null); setRefundDialogOpen(true); }}
-              >
-                <RotateCcw className="w-4 h-4 mr-2" /> Refund
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setSelectedTx(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReceiptDialog
+        tx={selectedTx}
+        onClose={() => setSelectedTx(null)}
+        onRefund={(tx) => { setRefundingTx(tx); setRefundDialogOpen(true); }}
+      />
 
       <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Refund Transaction</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Refund Transaction</DialogTitle></DialogHeader>
           <p className="text-muted-foreground text-sm">
             Refund <strong>{formatCurrency(refundingTx?.total || 0)}</strong> for receipt{" "}
             <strong>{refundingTx?.receiptNumber}</strong>?
           </p>
           <div>
             <Label>Reason (optional)</Label>
-            <Input
-              value={refundReason}
-              onChange={(e) => setRefundReason(e.target.value)}
-              placeholder="Customer requested refund"
-            />
+            <Input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder="Customer requested refund" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRefundDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleRefund} disabled={refundMutation.isPending}>
-              Process Refund
-            </Button>
+            <Button variant="destructive" onClick={handleRefund} disabled={refundMutation.isPending}>Process Refund</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
