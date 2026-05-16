@@ -554,47 +554,52 @@ export default function ServiceJobNewPage() {
           </div>
         </div>
 
-        {/* Additional Equipment */}
-        <div className="space-y-1.5">
-          <Label>Additional Equipment</Label>
-          <Textarea
-            placeholder="List any additional equipment..."
-            value={additionalEquipment}
-            onChange={(e) => setAdditionalEquipment(e.target.value)}
-            rows={2}
-            className="resize-none"
-          />
-        </div>
+        {/* Work Details */}
+        <div className="border rounded-xl p-5 space-y-5">
+          <div className="flex items-center gap-2">
+            <span>💻</span>
+            <h2 className="font-semibold text-sm">Work Details</h2>
+          </div>
 
-        {/* Work Description */}
-        <div className="space-y-1.5">
-          <Label>Work Description</Label>
-          <Textarea
-            placeholder="Describe the service..."
-            value={workDescription}
-            onChange={(e) => setWorkDescription(e.target.value)}
-            rows={3}
-            className="resize-none"
-          />
-        </div>
-
-        {/* Password / Accounts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Password or PIN</Label>
-            <Input
-              placeholder="Enter password or PIN..."
-              value={passwordOrPin}
-              onChange={(e) => setPasswordOrPin(e.target.value)}
+            <Label>Additional Equipment</Label>
+            <Textarea
+              placeholder="List any additional equipment..."
+              value={additionalEquipment}
+              onChange={(e) => setAdditionalEquipment(e.target.value)}
+              rows={2}
+              className="resize-none"
             />
           </div>
+
           <div className="space-y-1.5">
-            <Label>Accounts</Label>
-            <Input
-              placeholder="e.g. Google, Microsoft..."
-              value={accounts}
-              onChange={(e) => setAccounts(e.target.value)}
+            <Label>Work Description</Label>
+            <Textarea
+              placeholder="Describe the service..."
+              value={workDescription}
+              onChange={(e) => setWorkDescription(e.target.value)}
+              rows={3}
+              className="resize-none"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Password or PIN</Label>
+              <Input
+                placeholder="Enter password or PIN..."
+                value={passwordOrPin}
+                onChange={(e) => setPasswordOrPin(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Accounts</Label>
+              <Input
+                placeholder="e.g. Google, Microsoft..."
+                value={accounts}
+                onChange={(e) => setAccounts(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
