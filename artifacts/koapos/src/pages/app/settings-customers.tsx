@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields } from "@/lib/customer-settings";
-import { useGetCustomers } from "@workspace/api-client-react";
+import { useListCustomers } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +38,11 @@ const REQUIRED_FIELD_LABELS: { key: keyof CustomerRequiredFields; label: string;
 
 export default function SettingsCustomersPage() {
   const { settings, save } = useCustomerSettings();
-  const { data: customers = [] } = useGetCustomers();
+  const { data: customersData } = useListCustomers(
+    { limit: 1000 },
+    { query: { queryKey: ["customers-settings"] } }
+  );
+  const customers = customersData?.items ?? [];
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup]         = useState<CustomerGroup | null>(null);
