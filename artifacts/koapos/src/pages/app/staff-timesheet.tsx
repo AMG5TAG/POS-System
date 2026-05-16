@@ -18,8 +18,6 @@ export default function StaffTimesheetPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Staff</h1>
         </div>
 
-        <PageTabsNav tabs={STAFF_TABS} />
-
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
           <Clock className="h-10 w-10 mx-auto mb-4 opacity-30" />
           <p className="font-medium text-base">Timesheet</p>

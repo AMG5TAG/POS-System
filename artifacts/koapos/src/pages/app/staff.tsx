@@ -539,8 +539,6 @@ export default function StaffPage() {
           </Button>
         </div>
 
-        <PageTabsNav tabs={STAFF_TABS} />
-
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading staff...</div>
         ) : members.length === 0 ? (
