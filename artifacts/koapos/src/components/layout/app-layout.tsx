@@ -60,7 +60,8 @@ const POS_SUBNAV = [
   { name: "Cash",     href: "/pos/cash",      icon: Coins },
 ];
 
-const PRODUCTS_SUBNAV = [
+// "Inventory" is the renamed Products section
+const INVENTORY_SUBNAV = [
   { name: "Overview",        href: "/products/overview",         icon: LayoutGrid },
   { name: "Products",        href: "/products",                  icon: Package },
   { name: "Bundles",         href: "/products/bundles",          icon: Layers },
@@ -79,16 +80,7 @@ const PRODUCTS_SUBNAV = [
 const MANAGEMENT_SUBNAV = [
   { name: "Sales Overview", href: "/management/sales-overview", icon: TrendingUp },
   { name: "Staff",          href: "/staff",                     icon: UserSquare2 },
-];
-
-const BOTTOM_NAV = [
-  { name: "Customers",     href: "/customers",    icon: Users },
-  { name: "Appointments",  href: "/appointments", icon: CalendarClock },
-  { name: "Services",      href: "/service-jobs", icon: Wrench },
-  { name: "Transactions",  href: "/transactions", icon: Receipt },
-  { name: "Inventory",     href: "/inventory",    icon: Boxes },
-  { name: "Modules",       href: "/modules",      icon: Blocks },
-  { name: "Settings",      href: "/settings",     icon: Settings },
+  { name: "Modules",        href: "/modules",                   icon: Blocks },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -97,12 +89,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const logoutMutation = useLogout();
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
-  const isProductsSection   = location === "/products" || location.startsWith("/products/");
-  const isManagementSection = location.startsWith("/management/") || location === "/staff";
+  const isInventorySection  = location === "/products" || location.startsWith("/products/");
+  const isManagementSection =
+    location.startsWith("/management/") ||
+    location === "/staff" ||
+    location === "/modules";
 
-  const [posOpen,        setPosOpen]        = useState(isPOSSection);
-  const [productsOpen,   setProductsOpen]   = useState(isProductsSection);
-  const [mgmtOpen,       setMgmtOpen]       = useState(isManagementSection);
+  const [posOpen,    setPosOpen]    = useState(isPOSSection);
+  const [invOpen,    setInvOpen]    = useState(isInventorySection);
+  const [mgmtOpen,   setMgmtOpen]   = useState(isManagementSection);
 
   // Merchants (email/password login) are always owners.
   // When staff PIN login is added this can check staff.role === "owner" | "manager".
@@ -141,6 +136,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     isOpen,
     onToggle,
     items,
+    accent,
   }: {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
@@ -148,20 +144,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     isOpen: boolean;
     onToggle: () => void;
     items: { name: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
+    accent?: boolean;
   }) => (
     <SidebarMenuItem>
       <SidebarMenuButton
         isActive={isActive}
         onClick={onToggle}
-        className="flex items-center gap-3 cursor-pointer w-full"
+        className={`flex items-center gap-3 cursor-pointer w-full${accent ? " text-primary font-semibold hover:text-primary" : ""}`}
         tooltip={label}
       >
-        <Icon className="w-4 h-4 shrink-0" />
+        <Icon className={`w-4 h-4 shrink-0${accent ? " text-primary" : ""}`} />
         <span className="flex-1">{label}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
+          className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
-          }`}
+          }${accent ? " text-primary" : " text-muted-foreground"}`}
         />
       </SidebarMenuButton>
 
@@ -198,9 +195,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <SidebarContent className="px-2 py-4">
             <SidebarMenu>
+              {/* 1. Dashboard */}
               <NavLink href="/dashboard" icon={LayoutDashboard} name="Dashboard" />
 
-              {/* POS — collapsible */}
+              {/* 2. POS */}
               <CollapsibleSection
                 label="POS"
                 icon={ShoppingCart}
@@ -210,17 +208,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 items={POS_SUBNAV}
               />
 
-              {/* Products — collapsible */}
+              {/* 3. Services */}
+              <NavLink href="/service-jobs" icon={Wrench} name="Services" />
+
+              {/* 4. Appointments */}
+              <NavLink href="/appointments" icon={CalendarClock} name="Appointments" />
+
+              {/* 5. Inventory (renamed Products) */}
               <CollapsibleSection
-                label="Products"
-                icon={Package}
-                isActive={isProductsSection}
-                isOpen={productsOpen}
-                onToggle={() => setProductsOpen((o) => !o)}
-                items={PRODUCTS_SUBNAV}
+                label="Inventory"
+                icon={Boxes}
+                isActive={isInventorySection}
+                isOpen={invOpen}
+                onToggle={() => setInvOpen((o) => !o)}
+                items={INVENTORY_SUBNAV}
               />
 
-              {/* Management — collapsible, owner/manager only */}
+              {/* 6. Customers */}
+              <NavLink href="/customers" icon={Users} name="Customers" />
+
+              {/* 7. Management — owner/manager only, primary colour accent */}
               {canManage && (
                 <CollapsibleSection
                   label="Management"
@@ -229,12 +236,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   isOpen={mgmtOpen}
                   onToggle={() => setMgmtOpen((o) => !o)}
                   items={MANAGEMENT_SUBNAV}
+                  accent
                 />
               )}
 
-              {BOTTOM_NAV.map((item) => (
-                <NavLink key={item.href} {...item} />
-              ))}
+              {/* 8. Settings */}
+              <NavLink href="/settings" icon={Settings} name="Settings" />
             </SidebarMenu>
           </SidebarContent>
 
