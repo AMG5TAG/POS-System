@@ -64,6 +64,11 @@ const STAFF_SUBNAV = [
 const MANAGEMENT_SUBNAV = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
   { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
+  { name: "Employees",         href: "/staff",                     icon: UserSquare2    },
+  { name: "Timesheet",         href: "/staff/timesheet",           icon: Clock          },
+  { name: "Rostering",         href: "/staff/rostering",           icon: CalendarClock  },
+  { name: "Leave Requests",    href: "/staff/leave-requests",      icon: ClipboardList  },
+  { name: "Cost Summary",      href: "/staff/cost-summary",        icon: Coins          },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
   { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
@@ -90,11 +95,11 @@ const SEARCH_INDEX = [
   { label: "Stocktake",        href: "/products/stocktake",          icon: ClipboardList,   group: "Inventory" },
   { label: "Suppliers",        href: "/products/suppliers",          icon: Truck,           group: "Inventory" },
   { label: "Categories",       href: "/products/categories",         icon: Tag,             group: "Inventory" },
-  { label: "Staff · Employees",      href: "/staff",                  icon: UserSquare2,   group: "Staff"       },
-  { label: "Staff · Timesheet",     href: "/staff/timesheet",        icon: Clock,         group: "Staff"       },
-  { label: "Staff · Rostering",     href: "/staff/rostering",        icon: CalendarClock, group: "Staff"       },
-  { label: "Staff · Leave Requests",href: "/staff/leave-requests",   icon: ClipboardList, group: "Staff"       },
-  { label: "Staff · Cost Summary",  href: "/staff/cost-summary",     icon: Coins,         group: "Staff"       },
+  { label: "Staff · Employees",      href: "/staff",                  icon: UserSquare2,   group: "Management"  },
+  { label: "Staff · Timesheet",     href: "/staff/timesheet",        icon: Clock,         group: "Management"  },
+  { label: "Staff · Rostering",     href: "/staff/rostering",        icon: CalendarClock, group: "Management"  },
+  { label: "Staff · Leave Requests",href: "/staff/leave-requests",   icon: ClipboardList, group: "Management"  },
+  { label: "Staff · Cost Summary",  href: "/staff/cost-summary",     icon: Coins,         group: "Management"  },
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
@@ -285,16 +290,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
-  const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection =
     location.startsWith("/management/") ||
+    location === "/staff" ||
+    location.startsWith("/staff/") ||
     location === "/modules" ||
     location === "/management/integrations";
   const isSettingsSection   = location === "/settings" || location.startsWith("/settings/");
 
   const [posOpen,      setPosOpen]     = useState(isPOSSection);
   const [invOpen,      setInvOpen]     = useState(isInventorySection);
-  const [staffOpen,    setStaffOpen]   = useState(isStaffSection);
   const [mgmtOpen,     setMgmtOpen]    = useState(isManagementSection);
   const [settingsOpen, setSettingsOpen] = useState(isSettingsSection);
   const [searchOpen,   setSearchOpen]  = useState(false);
@@ -389,11 +394,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 items={INVENTORY_SUBNAV}
               />
               <NavLink href="/customers" icon={Users}    name="Customers" />
-              <CollapsibleSection
-                label="Staff" icon={UserSquare2}
-                isActive={isStaffSection} isOpen={staffOpen} onToggle={() => setStaffOpen((o) => !o)}
-                items={STAFF_SUBNAV}
-              />
               {canManage && (
                 <CollapsibleSection
                   label="Management" icon={BriefcaseBusiness}
