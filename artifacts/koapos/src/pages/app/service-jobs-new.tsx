@@ -353,8 +353,8 @@ export default function ServiceJobNewPage() {
           </div>
         </div>
 
-        {/* Customer + Status */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Customer */}
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-1.5">
             <Label>
               Customer <span className="text-destructive">*</span>
@@ -435,20 +435,6 @@ export default function ServiceJobNewPage() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         {/* Book-In Date + Partner Repair */}
@@ -568,31 +554,6 @@ export default function ServiceJobNewPage() {
           </div>
         </div>
 
-        {/* Photos / Media */}
-        <div className="border rounded-xl p-5 space-y-3">
-          <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
-          <div className="grid grid-cols-5 gap-2">
-            {[0, 1, 2, 3].map((i) => (
-              <PhotoSlot
-                key={i}
-                index={i}
-                value={photos[i]}
-                onChange={(v) => updatePhoto(i, v)}
-                icon={<Camera className="w-4 h-4" />}
-                label="Camera"
-              />
-            ))}
-            <PhotoSlot
-              index={4}
-              value={photos[4]}
-              onChange={(v) => updatePhoto(4, v)}
-              icon={<Video className="w-4 h-4" />}
-              label="Video"
-              accept="video/*"
-            />
-          </div>
-        </div>
-
         {/* Additional Equipment */}
         <div className="space-y-1.5">
           <Label>Additional Equipment</Label>
@@ -637,6 +598,31 @@ export default function ServiceJobNewPage() {
           </div>
         </div>
 
+        {/* Photos / Media */}
+        <div className="border rounded-xl p-5 space-y-3">
+          <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
+          <div className="grid grid-cols-5 gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <PhotoSlot
+                key={i}
+                index={i}
+                value={photos[i]}
+                onChange={(v) => updatePhoto(i, v)}
+                icon={<Camera className="w-4 h-4" />}
+                label="Camera"
+              />
+            ))}
+            <PhotoSlot
+              index={4}
+              value={photos[4]}
+              onChange={(v) => updatePhoto(4, v)}
+              icon={<Video className="w-4 h-4" />}
+              label="Video"
+              accept="video/*"
+            />
+          </div>
+        </div>
+
         {/* Customer Signature */}
         <div className="space-y-3">
           <div>
@@ -673,14 +659,6 @@ export default function ServiceJobNewPage() {
               {signatureSaved ? "Signature Saved" : "Save Signature"}
             </Button>
           </div>
-        </div>
-
-        {/* T&C notice */}
-        <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-orange-700 font-medium">
-            IMPORTANT: Please advise customer of Terms &amp; Conditions before submitting.
-          </p>
         </div>
 
         {/* Submit */}
