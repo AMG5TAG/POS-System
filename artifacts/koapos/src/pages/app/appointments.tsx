@@ -21,8 +21,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote,
-  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
+  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, UserPlus,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -275,6 +276,7 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
   const [customerSearch, setSearch]   = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [, navigate]                  = useLocation();
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
@@ -308,6 +310,7 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   const selected = safeCustomers.find((c) => String(c.id) === form.customerId);
 
   const handleSubmit = () => {
+    if (!editing && !form.customerId) { toast.error("Please select a customer"); return; }
     if (!form.startTime || !form.endTime) { toast.error("Please set start and end times"); return; }
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
@@ -346,15 +349,23 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
         <div className="space-y-5 py-2">
           {/* Customer */}
           <div className="space-y-1.5">
-            <Label>Customer <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Label>
+              Customer{" "}
+              {editing
+                ? <span className="text-muted-foreground font-normal">(optional)</span>
+                : <span className="text-destructive">*</span>}
+            </Label>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setCustomerOpen((o) => !o)}
-                className="w-full flex items-center justify-between border rounded-lg px-3 py-2 text-sm bg-background hover:bg-muted/40 transition-colors"
+                className={cn(
+                  "w-full flex items-center justify-between border rounded-lg px-3 py-2 text-sm bg-background hover:bg-muted/40 transition-colors",
+                  !editing && !form.customerId && "border-destructive/40"
+                )}
               >
                 <span className={selected ? "text-foreground" : "text-muted-foreground"}>
-                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Search contacts..."}
+                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Select a customer..."}
                 </span>
                 <Search className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -365,10 +376,12 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                       onChange={(e) => setSearch(e.target.value)} className="h-8 text-sm" />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
-                    <button type="button" onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
-                      No customer
-                    </button>
+                    {editing && (
+                      <button type="button" onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
+                        className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
+                        No customer
+                      </button>
+                    )}
                     {filtered.map((c) => (
                       <button key={c.id} type="button"
                         onClick={() => { setField("customerId", String(c.id)); setCustomerOpen(false); setSearch(""); }}
@@ -377,11 +390,26 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                         {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
                       </button>
                     ))}
-                    {filtered.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground text-center">No customers found</p>}
+                    {filtered.length === 0 && (
+                      <div className="px-3 py-3 flex flex-col items-center gap-2">
+                        <p className="text-sm text-muted-foreground">No customers found</p>
+                        <button
+                          type="button"
+                          onClick={() => { onClose(); navigate("/customers"); }}
+                          className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Add Customer
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
+            {!editing && !form.customerId && (
+              <p className="text-xs text-muted-foreground">A customer is required to book an on-site appointment.</p>
+            )}
           </div>
 
           {/* Time */}
