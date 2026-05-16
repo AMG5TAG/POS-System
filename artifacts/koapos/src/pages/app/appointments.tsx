@@ -23,10 +23,10 @@ import {
   CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, UserPlus,
 } from "lucide-react";
-import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
 /* ─── Status config ──────────────────────────────────────────────────────── */
 
@@ -276,7 +276,7 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
   const [customerSearch, setSearch]   = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
-  const [, navigate]                  = useLocation();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
@@ -337,6 +337,7 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -395,7 +396,7 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                         <p className="text-sm text-muted-foreground">No customers found</p>
                         <button
                           type="button"
-                          onClick={() => { onClose(); navigate("/customers"); }}
+                          onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
                           className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
@@ -473,6 +474,18 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <QuickAddCustomerDialog
+      open={quickAddOpen}
+      onClose={() => setQuickAddOpen(false)}
+      prefillName={customerSearch}
+      onCreated={(customer) => {
+        setField("customerId", String(customer.id));
+        setSearch("");
+        queryClient.invalidateQueries({ queryKey: ["listCustomers"] });
+      }}
+    />
+    </>
   );
 }
 
