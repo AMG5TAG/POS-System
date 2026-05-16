@@ -12,6 +12,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, LayoutDashboard as DashboardIcon,
+  Building2, Globe, UserCircle,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -49,8 +50,10 @@ const INVENTORY_SUBNAV = [
 ];
 
 const SETTINGS_SUBNAV = [
-  { name: "General",   href: "/settings",           icon: Settings },
-  { name: "Customers", href: "/settings/customers", icon: Users    },
+  { name: "Business Details",  href: "/settings/business",  icon: Building2    },
+  { name: "Regional Settings", href: "/settings/regional",  icon: Globe        },
+  { name: "Account",           href: "/settings/account",   icon: UserCircle   },
+  { name: "Customers",         href: "/settings/customers", icon: Users        },
 ];
 
 const MANAGEMENT_SUBNAV = [
@@ -83,8 +86,10 @@ const SEARCH_INDEX = [
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
-  { label: "Settings · General",   href: "/settings",           icon: Settings, group: "Settings" },
-  { label: "Settings · Customers", href: "/settings/customers", icon: Users,    group: "Settings" },
+  { label: "Settings · Business",  href: "/settings/business",  icon: Building2,  group: "Settings" },
+  { label: "Settings · Regional",  href: "/settings/regional",  icon: Globe,      group: "Settings" },
+  { label: "Settings · Account",   href: "/settings/account",   icon: UserCircle, group: "Settings" },
+  { label: "Settings · Customers", href: "/settings/customers", icon: Users,      group: "Settings" },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -118,7 +123,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/products/recalls":            ["Inventory", "Recalls"],
   "/staff":                       ["Management", "Staff"],
   "/modules":                     ["Management", "Modules"],
-  "/settings":                    ["Settings", "General"],
+  "/settings":                    ["Settings"],
+  "/settings/business":           ["Settings", "Business Details"],
+  "/settings/regional":           ["Settings", "Regional Settings"],
+  "/settings/account":            ["Settings", "Account"],
   "/settings/customers":          ["Settings", "Customers"],
   "/management/sales-overview":   ["Management", "Sales Overview"],
   "/management/integrations":     ["Management", "Integrations"],

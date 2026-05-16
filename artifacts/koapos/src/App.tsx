@@ -40,6 +40,9 @@ import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
+import SettingsBusinessPage from "@/pages/app/settings-business";
+import SettingsRegionalPage from "@/pages/app/settings-regional";
+import SettingsAccountPage from "@/pages/app/settings-account";
 import SettingsCustomersPage from "@/pages/app/settings-customers";
 import AppointmentsPage from "@/pages/app/appointments";
 import ServiceJobsPage from "@/pages/app/service-jobs";
@@ -186,11 +189,20 @@ function Router() {
       <Route path="/modules">
         <ProtectedRoute component={ModulesPage} />
       </Route>
-      <Route path="/settings">
-        <ProtectedRoute component={SettingsPage} />
+      <Route path="/settings/business">
+        <ProtectedRoute component={SettingsBusinessPage} />
+      </Route>
+      <Route path="/settings/regional">
+        <ProtectedRoute component={SettingsRegionalPage} />
+      </Route>
+      <Route path="/settings/account">
+        <ProtectedRoute component={SettingsAccountPage} />
       </Route>
       <Route path="/settings/customers">
         <ProtectedRoute component={SettingsCustomersPage} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={SettingsPage} />
       </Route>
 
       <Route component={NotFound} />
