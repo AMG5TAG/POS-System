@@ -40,6 +40,7 @@ import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
+import SettingsCustomersPage from "@/pages/app/settings-customers";
 import AppointmentsPage from "@/pages/app/appointments";
 import ServiceJobsPage from "@/pages/app/service-jobs";
 import ServiceJobNewPage from "@/pages/app/service-jobs-new";
@@ -187,6 +188,9 @@ function Router() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
+      </Route>
+      <Route path="/settings/customers">
+        <ProtectedRoute component={SettingsCustomersPage} />
       </Route>
 
       <Route component={NotFound} />

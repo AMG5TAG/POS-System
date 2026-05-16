@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { useCustomerSettings } from "@/lib/customer-settings";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListCustomers,
@@ -66,8 +67,6 @@ const defaultForm: CustomerForm = {
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
 };
-
-const CUSTOMER_GROUPS = ["Standard", "VIP", "Wholesale", "Trade", "Staff"];
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -659,6 +658,8 @@ function CustomerDetailDialog({
 
 export default function CustomersPage() {
   const queryClient = useQueryClient();
+  const { settings: customerSettings } = useCustomerSettings();
+  const customerGroups = customerSettings.groups.map(g => g.name);
   const [search, setSearch]             = useState("");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1046,7 +1047,7 @@ export default function CustomersPage() {
                   <Select value={form.customerGroup} onValueChange={(v) => setField("customerGroup", v)}>
                     <SelectTrigger className="rounded-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CUSTOMER_GROUPS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                      {customerGroups.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>

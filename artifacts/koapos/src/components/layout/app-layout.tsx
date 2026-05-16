@@ -48,6 +48,11 @@ const INVENTORY_SUBNAV = [
   { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
 ];
 
+const SETTINGS_SUBNAV = [
+  { name: "General",   href: "/settings",           icon: Settings },
+  { name: "Customers", href: "/settings/customers", icon: Users    },
+];
+
 const MANAGEMENT_SUBNAV = [
   { name: "Sales Overview",  href: "/management/sales-overview", icon: TrendingUp },
   { name: "Staff",           href: "/staff",                     icon: UserSquare2 },
@@ -78,7 +83,8 @@ const SEARCH_INDEX = [
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
-  { label: "Settings",         href: "/settings",                    icon: Settings,        group: "Pages" },
+  { label: "Settings · General",   href: "/settings",           icon: Settings, group: "Settings" },
+  { label: "Settings · Customers", href: "/settings/customers", icon: Users,    group: "Settings" },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -112,7 +118,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/products/recalls":            ["Inventory", "Recalls"],
   "/staff":                       ["Management", "Staff"],
   "/modules":                     ["Management", "Modules"],
-  "/settings":                    ["Settings"],
+  "/settings":                    ["Settings", "General"],
+  "/settings/customers":          ["Settings", "Customers"],
   "/management/sales-overview":   ["Management", "Sales Overview"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
@@ -257,11 +264,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     location === "/staff" ||
     location === "/modules" ||
     location === "/management/integrations";
+  const isSettingsSection   = location === "/settings" || location.startsWith("/settings/");
 
-  const [posOpen,     setPosOpen]     = useState(isPOSSection);
-  const [invOpen,     setInvOpen]     = useState(isInventorySection);
-  const [mgmtOpen,    setMgmtOpen]    = useState(isManagementSection);
-  const [searchOpen,  setSearchOpen]  = useState(false);
+  const [posOpen,      setPosOpen]     = useState(isPOSSection);
+  const [invOpen,      setInvOpen]     = useState(isInventorySection);
+  const [mgmtOpen,     setMgmtOpen]    = useState(isManagementSection);
+  const [settingsOpen, setSettingsOpen] = useState(isSettingsSection);
+  const [searchOpen,   setSearchOpen]  = useState(false);
 
   const canManage = !!user;
 
@@ -360,7 +369,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   items={MANAGEMENT_SUBNAV} accent
                 />
               )}
-              <NavLink href="/settings" icon={Settings} name="Settings" />
+              <CollapsibleSection
+                label="Settings" icon={Settings}
+                isActive={isSettingsSection} isOpen={settingsOpen} onToggle={() => setSettingsOpen((o) => !o)}
+                items={SETTINGS_SUBNAV}
+              />
             </SidebarMenu>
           </SidebarContent>
 
