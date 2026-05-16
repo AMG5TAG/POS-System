@@ -272,7 +272,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const NavLink = ({
     href, icon: Icon, name,
   }: { href: string; icon: React.ComponentType<{ className?: string }>; name: string }) => {
-    const active = location === href;
+    const active = location === href || location.startsWith(href + "/");
     return (
       <SidebarMenuItem>
         <SidebarMenuButton
