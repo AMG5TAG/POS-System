@@ -42,6 +42,7 @@ import SettingsPage from "@/pages/app/settings";
 import AppointmentsPage from "@/pages/app/appointments";
 import ServiceJobsPage from "@/pages/app/service-jobs";
 import ServiceJobNewPage from "@/pages/app/service-jobs-new";
+import ManagementSalesPage from "@/pages/app/management-sales";
 
 import NotFound from "@/pages/not-found";
 
@@ -166,6 +167,12 @@ function Router() {
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} />
       </Route>
+
+      {/* Management section */}
+      <Route path="/management/sales-overview">
+        <ProtectedRoute component={ManagementSalesPage} />
+      </Route>
+
       <Route path="/modules">
         <ProtectedRoute component={ModulesPage} />
       </Route>

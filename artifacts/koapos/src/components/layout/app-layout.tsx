@@ -31,6 +31,8 @@ import {
   Package2,
   ParkingCircle,
   Coins,
+  TrendingUp,
+  BriefcaseBusiness,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -49,39 +51,44 @@ import {
 } from "@/components/ui/sidebar";
 
 const POS_SUBNAV = [
-  { name: "Sell", href: "/pos", icon: ShoppingCart },
-  { name: "History", href: "/pos/history", icon: History },
-  { name: "Invoices", href: "/pos/invoices", icon: FileText },
-  { name: "Laybuys", href: "/pos/laybuys", icon: Package2 },
-  { name: "Parked", href: "/pos/parked", icon: ParkingCircle },
-  { name: "Refund", href: "/pos/refund", icon: RotateCcw },
-  { name: "Cash", href: "/pos/cash", icon: Coins },
+  { name: "Sell",     href: "/pos",           icon: ShoppingCart },
+  { name: "History",  href: "/pos/history",   icon: History },
+  { name: "Invoices", href: "/pos/invoices",  icon: FileText },
+  { name: "Laybuys",  href: "/pos/laybuys",   icon: Package2 },
+  { name: "Parked",   href: "/pos/parked",    icon: ParkingCircle },
+  { name: "Refund",   href: "/pos/refund",    icon: RotateCcw },
+  { name: "Cash",     href: "/pos/cash",      icon: Coins },
 ];
 
 const PRODUCTS_SUBNAV = [
-  { name: "Overview", href: "/products/overview", icon: LayoutGrid },
-  { name: "Products", href: "/products", icon: Package },
-  { name: "Bundles", href: "/products/bundles", icon: Layers },
-  { name: "Stocktake", href: "/products/stocktake", icon: ClipboardList },
-  { name: "Purchase Orders", href: "/products/purchase-orders", icon: ShoppingCart },
-  { name: "Pre-Orders", href: "/products/pre-orders", icon: Clock },
-  { name: "Return Auth.", href: "/products/return-auth", icon: RotateCcw },
-  { name: "Suppliers", href: "/products/suppliers", icon: Truck },
-  { name: "Brands", href: "/products/brands", icon: Bookmark },
-  { name: "Categories", href: "/products/categories", icon: Tag },
-  { name: "Tags", href: "/products/tags", icon: Hash },
-  { name: "Recalls", href: "/products/recalls", icon: AlertTriangle },
+  { name: "Overview",        href: "/products/overview",         icon: LayoutGrid },
+  { name: "Products",        href: "/products",                  icon: Package },
+  { name: "Bundles",         href: "/products/bundles",          icon: Layers },
+  { name: "Stocktake",       href: "/products/stocktake",        icon: ClipboardList },
+  { name: "Purchase Orders", href: "/products/purchase-orders",  icon: ShoppingCart },
+  { name: "Pre-Orders",      href: "/products/pre-orders",       icon: Clock },
+  { name: "Return Auth.",    href: "/products/return-auth",      icon: RotateCcw },
+  { name: "Suppliers",       href: "/products/suppliers",        icon: Truck },
+  { name: "Brands",          href: "/products/brands",           icon: Bookmark },
+  { name: "Categories",      href: "/products/categories",       icon: Tag },
+  { name: "Tags",            href: "/products/tags",             icon: Hash },
+  { name: "Recalls",         href: "/products/recalls",          icon: AlertTriangle },
+];
+
+// Visible to Owner + Manager roles only
+const MANAGEMENT_SUBNAV = [
+  { name: "Sales Overview", href: "/management/sales-overview", icon: TrendingUp },
+  { name: "Staff",          href: "/staff",                     icon: UserSquare2 },
 ];
 
 const BOTTOM_NAV = [
-  { name: "Customers", href: "/customers", icon: Users },
-  { name: "Appointments", href: "/appointments", icon: CalendarClock },
-  { name: "Services", href: "/service-jobs", icon: Wrench },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
-  { name: "Inventory", href: "/inventory", icon: Boxes },
-  { name: "Staff", href: "/staff", icon: UserSquare2 },
-  { name: "Modules", href: "/modules", icon: Blocks },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Customers",     href: "/customers",    icon: Users },
+  { name: "Appointments",  href: "/appointments", icon: CalendarClock },
+  { name: "Services",      href: "/service-jobs", icon: Wrench },
+  { name: "Transactions",  href: "/transactions", icon: Receipt },
+  { name: "Inventory",     href: "/inventory",    icon: Boxes },
+  { name: "Modules",       href: "/modules",      icon: Blocks },
+  { name: "Settings",      href: "/settings",     icon: Settings },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -89,19 +96,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const logoutMutation = useLogout();
 
-  const isPOSSection = location === "/pos" || location.startsWith("/pos/");
-  const isProductsSection = location === "/products" || location.startsWith("/products/");
+  const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
+  const isProductsSection   = location === "/products" || location.startsWith("/products/");
+  const isManagementSection = location.startsWith("/management/") || location === "/staff";
 
-  const [posOpen, setPosOpen] = useState(isPOSSection);
-  const [productsOpen, setProductsOpen] = useState(isProductsSection);
+  const [posOpen,        setPosOpen]        = useState(isPOSSection);
+  const [productsOpen,   setProductsOpen]   = useState(isProductsSection);
+  const [mgmtOpen,       setMgmtOpen]       = useState(isManagementSection);
+
+  // Merchants (email/password login) are always owners.
+  // When staff PIN login is added this can check staff.role === "owner" | "manager".
+  const canManage = !!user;
 
   const handleLogout = () => {
-    logoutMutation.mutate(undefined, {
-      onSuccess: () => logout(),
-    });
+    logoutMutation.mutate(undefined, { onSuccess: () => logout() });
   };
 
-  const NavLink = ({ href, icon: Icon, name }: { href: string; icon: React.ComponentType<{ className?: string }>; name: string }) => {
+  const NavLink = ({
+    href,
+    icon: Icon,
+    name,
+  }: {
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    name: string;
+  }) => {
     const active = location === href;
     return (
       <SidebarMenuItem>
@@ -139,7 +158,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <Icon className="w-4 h-4 shrink-0" />
         <span className="flex-1">{label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
       </SidebarMenuButton>
 
       {isOpen && (
@@ -196,6 +219,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 onToggle={() => setProductsOpen((o) => !o)}
                 items={PRODUCTS_SUBNAV}
               />
+
+              {/* Management — collapsible, owner/manager only */}
+              {canManage && (
+                <CollapsibleSection
+                  label="Management"
+                  icon={BriefcaseBusiness}
+                  isActive={isManagementSection}
+                  isOpen={mgmtOpen}
+                  onToggle={() => setMgmtOpen((o) => !o)}
+                  items={MANAGEMENT_SUBNAV}
+                />
+              )}
 
               {BOTTOM_NAV.map((item) => (
                 <NavLink key={item.href} {...item} />
