@@ -320,6 +320,7 @@ function CustomerDetailInner({
         ))}
       </div>
 
+      <div className="min-h-[320px]">
       {/* ── Overview ── */}
       {tab === "overview" && (
         <div className="space-y-3">
@@ -608,6 +609,7 @@ function CustomerDetailInner({
         </div>
       )}
 
+      </div>
       <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
         <Button
           variant="destructive" size="sm" className="gap-1.5"
@@ -927,7 +929,7 @@ export default function CustomersPage() {
             <StepPill label="Account Settings" icon={<Settings2 className="w-4 h-4" />} active={step === "account"} done={false} />
           </div>
 
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-2 min-h-[400px]">
             {step === "personal" && (
               <>
                 <FieldRow>
