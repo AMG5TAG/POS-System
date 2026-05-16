@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils";
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const EVENT_COLORS = {
-  publicHoliday: "bg-red-100 text-red-700 border-red-200",
-  sales:         "bg-emerald-100 text-emerald-700 border-emerald-200",
-  serviceJobs:   "bg-blue-100 text-blue-700 border-blue-200",
-  invoices:      "bg-amber-100 text-amber-700 border-amber-200",
-  appointments:  "bg-violet-100 text-violet-700 border-violet-200",
-  birthdays:     "bg-pink-100 text-pink-700 border-pink-200",
+  publicHoliday: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700",
+  sales:         "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-700",
+  serviceJobs:   "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-700",
+  invoices:      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-700",
+  appointments:  "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700",
+  birthdays:     "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-700",
 };
 
 interface SelectedDay {
@@ -125,7 +125,7 @@ function DayCell({
   onBirthdayClick: (b: CalendarBirthday) => void;
 }) {
   if (!day) {
-    return <div className="min-h-[110px] bg-muted/20 rounded-lg" />;
+    return <div className="min-h-[110px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70" />;
   }
 
   const dayNum = parseInt(day.date.split("-")[2], 10);
@@ -135,8 +135,8 @@ function DayCell({
   return (
     <div className={cn(
       "min-h-[110px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
-      isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 opacity-60",
-      isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60",
+      isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 dark:bg-muted/20 opacity-60",
+      isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60 dark:border-border",
     )}>
       <div className={cn(
         "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full shrink-0 self-start",
