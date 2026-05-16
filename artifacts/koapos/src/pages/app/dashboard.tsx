@@ -9,6 +9,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
 import { ServiceJobsTiles } from "@/components/dashboard/ServiceJobsTiles";
 import { DashboardPanels } from "@/components/dashboard/DashboardPanels";
+import { DashboardClockBar } from "@/components/dashboard/DashboardClockBar";
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<GetDashboardSummaryPeriod>("today");
@@ -49,6 +50,7 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        <DashboardClockBar />
         <ServiceJobsTiles />
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
