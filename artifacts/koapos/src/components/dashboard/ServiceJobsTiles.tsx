@@ -123,7 +123,15 @@ function OverdueBanner({ jobs }: { jobs: ServiceJob[] }) {
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
-export function ServiceJobsTiles() {
+export function ServiceJobsTiles({
+  showStatusTiles = true,
+  showMetricTiles = true,
+  showOverdueBanner = true,
+}: {
+  showStatusTiles?: boolean;
+  showMetricTiles?: boolean;
+  showOverdueBanner?: boolean;
+}) {
   const { data: jobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-dash"] } });
   const { data: customersData } = useListCustomers({ limit: 1 }, { query: { queryKey: ["customers-dash"] } });
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
@@ -148,84 +156,88 @@ export function ServiceJobsTiles() {
   return (
     <div className="space-y-4">
       {/* Row 1: Service job status tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatusTile
-          icon={<Timer className="w-6 h-6" />}
-          value={inProgress}
-          label="In Progress"
-          bg="bg-blue-50 border border-blue-100"
-          iconColor="text-blue-500"
-          valueColor="text-blue-700"
-        />
-        <StatusTile
-          icon={<Hourglass className="w-6 h-6" />}
-          value={awaitingCustomer}
-          label="Awaiting Customer"
-          bg="bg-orange-50 border border-orange-100"
-          iconColor="text-orange-500"
-          valueColor="text-orange-700"
-        />
-        <StatusTile
-          icon={<CircleDot className="w-6 h-6" />}
-          value={pending}
-          label="Pending"
-          bg="bg-yellow-50 border border-yellow-100"
-          iconColor="text-yellow-500"
-          valueColor="text-yellow-700"
-        />
-        <StatusTile
-          icon={<AlertTriangle className="w-6 h-6" />}
-          value={critical}
-          label="Critical"
-          bg="bg-red-50 border border-red-100"
-          iconColor="text-red-500"
-          valueColor="text-red-700"
-          dot={critical > 0}
-        />
-        <StatusTile
-          icon={<CalendarDays className="w-6 h-6" />}
-          value={upcomingAppts}
-          label="Upcoming Appts"
-          bg="bg-violet-50 border border-violet-100"
-          iconColor="text-violet-500"
-          valueColor="text-violet-700"
-        />
-      </div>
+      {showStatusTiles && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <StatusTile
+            icon={<Timer className="w-6 h-6" />}
+            value={inProgress}
+            label="In Progress"
+            bg="bg-blue-50 border border-blue-100"
+            iconColor="text-blue-500"
+            valueColor="text-blue-700"
+          />
+          <StatusTile
+            icon={<Hourglass className="w-6 h-6" />}
+            value={awaitingCustomer}
+            label="Awaiting Customer"
+            bg="bg-orange-50 border border-orange-100"
+            iconColor="text-orange-500"
+            valueColor="text-orange-700"
+          />
+          <StatusTile
+            icon={<CircleDot className="w-6 h-6" />}
+            value={pending}
+            label="Pending"
+            bg="bg-yellow-50 border border-yellow-100"
+            iconColor="text-yellow-500"
+            valueColor="text-yellow-700"
+          />
+          <StatusTile
+            icon={<AlertTriangle className="w-6 h-6" />}
+            value={critical}
+            label="Critical"
+            bg="bg-red-50 border border-red-100"
+            iconColor="text-red-500"
+            valueColor="text-red-700"
+            dot={critical > 0}
+          />
+          <StatusTile
+            icon={<CalendarDays className="w-6 h-6" />}
+            value={upcomingAppts}
+            label="Upcoming Appts"
+            bg="bg-violet-50 border border-violet-100"
+            iconColor="text-violet-500"
+            valueColor="text-violet-700"
+          />
+        </div>
+      )}
 
       {/* Row 2: Business metric tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricTile
-          icon={<TrendingUp className="w-5 h-5" />}
-          value={formatCurrency(fySales)}
-          label={`${fyLabel} Sales`}
-          iconColor="text-emerald-500"
-          valueColor="text-emerald-700"
-        />
-        <MetricTile
-          icon={<FileText className="w-5 h-5" />}
-          value={jobs.length}
-          label="Total Jobs"
-          iconColor="text-blue-500"
-          valueColor="text-foreground"
-        />
-        <MetricTile
-          icon={<Truck className="w-5 h-5" />}
-          value={0}
-          label="Pending Deliveries"
-          iconColor="text-teal-500"
-          valueColor="text-foreground"
-        />
-        <MetricTile
-          icon={<Users2 className="w-5 h-5" />}
-          value={totalCustomers}
-          label="Total Customers"
-          iconColor="text-emerald-500"
-          valueColor="text-foreground"
-        />
-      </div>
+      {showMetricTiles && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <MetricTile
+            icon={<TrendingUp className="w-5 h-5" />}
+            value={formatCurrency(fySales)}
+            label={`${fyLabel} Sales`}
+            iconColor="text-emerald-500"
+            valueColor="text-emerald-700"
+          />
+          <MetricTile
+            icon={<FileText className="w-5 h-5" />}
+            value={jobs.length}
+            label="Total Jobs"
+            iconColor="text-blue-500"
+            valueColor="text-foreground"
+          />
+          <MetricTile
+            icon={<Truck className="w-5 h-5" />}
+            value={0}
+            label="Pending Deliveries"
+            iconColor="text-teal-500"
+            valueColor="text-foreground"
+          />
+          <MetricTile
+            icon={<Users2 className="w-5 h-5" />}
+            value={totalCustomers}
+            label="Total Customers"
+            iconColor="text-emerald-500"
+            valueColor="text-foreground"
+          />
+        </div>
+      )}
 
       {/* Overdue banner */}
-      <OverdueBanner jobs={jobs} />
+      {showOverdueBanner && <OverdueBanner jobs={jobs} />}
     </div>
   );
 }

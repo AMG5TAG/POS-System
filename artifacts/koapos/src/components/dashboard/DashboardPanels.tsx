@@ -460,11 +460,17 @@ function NotificationsPanel() {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-export function DashboardPanels() {
+export function DashboardPanels({
+  showNotifications = true,
+  showServiceJobsPanel = true,
+}: {
+  showNotifications?: boolean;
+  showServiceJobsPanel?: boolean;
+}) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <NotificationsPanel />
-      <AllServiceJobsPanel />
+      {showNotifications && <NotificationsPanel />}
+      {showServiceJobsPanel && <AllServiceJobsPanel />}
     </div>
   );
 }

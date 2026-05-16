@@ -5,7 +5,6 @@ import { Settings2 } from "lucide-react";
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// Hardcoded trading hours — future: pull from merchant settings
 const OPEN_HOUR = 9;
 const OPEN_MIN = 0;
 const CLOSE_HOUR = 17;
@@ -45,7 +44,7 @@ function formatHour(h: number, m: number) {
 
 const openLabel = `${formatHour(OPEN_HOUR, OPEN_MIN)} – ${formatHour(CLOSE_HOUR, CLOSE_MIN)}`;
 
-export function DashboardClockBar() {
+export function DashboardClockBar({ onCustomize }: { onCustomize?: () => void }) {
   const { user } = useAuth();
   const [now, setNow] = useState(() => new Date());
 
@@ -94,8 +93,12 @@ export function DashboardClockBar() {
         </p>
       </div>
 
-      {/* Settings icon */}
-      <button className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-auto">
+      {/* Customise button */}
+      <button
+        onClick={onCustomize}
+        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-auto"
+        title="Customise dashboard"
+      >
         <Settings2 className="w-4 h-4" />
       </button>
     </div>
