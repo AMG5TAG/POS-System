@@ -38,6 +38,10 @@ import CustomersPage from "@/pages/app/customers";
 import TransactionsPage from "@/pages/app/transactions";
 import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
+import StaffTimesheetPage from "@/pages/app/staff-timesheet";
+import StaffRosteringPage from "@/pages/app/staff-rostering";
+import StaffLeaveRequestsPage from "@/pages/app/staff-leave-requests";
+import StaffCostSummaryPage from "@/pages/app/staff-cost-summary";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
 import SettingsBusinessPage from "@/pages/app/settings-business";
@@ -171,6 +175,18 @@ function Router() {
       </Route>
       <Route path="/service-jobs">
         <ProtectedRoute component={ServiceJobsPage} />
+      </Route>
+      <Route path="/staff/timesheet">
+        <ProtectedRoute component={StaffTimesheetPage} />
+      </Route>
+      <Route path="/staff/rostering">
+        <ProtectedRoute component={StaffRosteringPage} />
+      </Route>
+      <Route path="/staff/leave-requests">
+        <ProtectedRoute component={StaffLeaveRequestsPage} />
+      </Route>
+      <Route path="/staff/cost-summary">
+        <ProtectedRoute component={StaffCostSummaryPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} />

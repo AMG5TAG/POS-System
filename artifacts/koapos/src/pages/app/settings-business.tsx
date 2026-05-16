@@ -14,7 +14,21 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, X, Plus, Trash2, Globe, Facebook, Instagram, Youtube, Linkedin, Twitter,
+  Building2, Tag, Image, Palette, Phone, MapPin, Clock, Umbrella, CreditCard, Share2,
 } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const BUSINESS_TABS = [
+  { href: "#business-info",  label: "Business Info",  icon: Building2   },
+  { href: "#categories",     label: "Categories",     icon: Tag         },
+  { href: "#logo",           label: "Logo",           icon: Image       },
+  { href: "#branding",       label: "Branding",       icon: Palette     },
+  { href: "#contact",        label: "Contact",        icon: Phone       },
+  { href: "#address",        label: "Address",        icon: MapPin      },
+  { href: "#hours",          label: "Hours",          icon: Clock       },
+  { href: "#payments",       label: "Payments",       icon: CreditCard  },
+  { href: "#social",         label: "Social",         icon: Share2      },
+];
 
 /* ─── Colour swatch ──────────────────────────────────────────────────────── */
 
@@ -194,8 +208,10 @@ export default function SettingsBusinessPage() {
           </Button>
         </div>
 
+        <PageTabsNav tabs={BUSINESS_TABS} />
+
         {/* ── Business Details ──────────────────────────────────────────────── */}
-        <Card>
+        <Card id="business-info">
           <CardHeader><CardTitle className="text-base">Business Details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -229,7 +245,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Business Categories ───────────────────────────────────────────── */}
-        <Card>
+        <Card id="categories">
           <CardHeader><CardTitle className="text-base">Business Categories</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex gap-2">
@@ -256,7 +272,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Logo ─────────────────────────────────────────────────────────── */}
-        <Card>
+        <Card id="logo">
           <CardHeader><CardTitle className="text-base">Logo</CardTitle></CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
@@ -289,7 +305,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Branding ─────────────────────────────────────────────────────── */}
-        <Card>
+        <Card id="branding">
           <CardHeader><CardTitle className="text-base">Branding</CardTitle></CardHeader>
           <CardContent className="space-y-6">
             {/* Font */}
@@ -351,7 +367,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Contact Information ───────────────────────────────────────────── */}
-        <Card>
+        <Card id="contact">
           <CardHeader><CardTitle className="text-base">Contact Information</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -372,7 +388,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Address ──────────────────────────────────────────────────────── */}
-        <Card>
+        <Card id="address">
           <CardHeader><CardTitle className="text-base">Address</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -401,7 +417,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Opening Hours ─────────────────────────────────────────────────── */}
-        <Card>
+        <Card id="hours">
           <CardHeader><CardTitle className="text-base">Opening Hours</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -457,7 +473,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Accepted Payment Types ────────────────────────────────────────── */}
-        <Card>
+        <Card id="payments">
           <CardHeader><CardTitle className="text-base">Accepted Payment Types</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -477,7 +493,7 @@ export default function SettingsBusinessPage() {
         </Card>
 
         {/* ── Social Media Links ────────────────────────────────────────────── */}
-        <Card>
+        <Card id="social">
           <CardHeader><CardTitle className="text-base">Social Media Links</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {(

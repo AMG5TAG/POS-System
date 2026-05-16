@@ -13,10 +13,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
+  Clock, CalendarClock, ClipboardList, Coins,
 } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+
+const STAFF_TABS = [
+  { href: "/staff",                label: "Employees",      icon: UserSquare2  },
+  { href: "/staff/timesheet",      label: "Timesheet",      icon: Clock        },
+  { href: "/staff/rostering",      label: "Rostering",      icon: CalendarClock },
+  { href: "/staff/leave-requests", label: "Leave Requests", icon: ClipboardList },
+  { href: "/staff/cost-summary",   label: "Cost Summary",   icon: Coins        },
+];
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -528,6 +538,8 @@ export default function StaffPage() {
             <Plus className="w-4 h-4 mr-2" /> Add Staff Member
           </Button>
         </div>
+
+        <PageTabsNav tabs={STAFF_TABS} />
 
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading staff...</div>
