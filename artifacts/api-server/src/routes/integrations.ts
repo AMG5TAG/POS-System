@@ -11,44 +11,19 @@ const router: IRouter = Router();
    - "credentials" → modal form with named fields
 */
 export const INTEGRATIONS = [
-  {
-    key: "google_business",
-    label: "Google Business Profile",
-    description: "Keep your Google Maps listing accurate with business hours, posts, and offers.",
-    authType: "oauth" as const,
-    oauthProvider: "google",
-  },
+  /* ── Payments & EFTPOS ─────────────────────────────────────────────────── */
   {
     key: "stripe_own",
     label: "Stripe (Own Account)",
+    category: "Payments & EFTPOS",
     description: "Connect your own Stripe account to accept card payments from customers.",
     authType: "oauth" as const,
     oauthProvider: "stripe",
   },
   {
-    key: "australia_post",
-    label: "Australia Post Shipping",
-    description: "Calculate real-time postage rates at online checkout.",
-    authType: "credentials" as const,
-    fields: [
-      { name: "apiKey",        label: "API Key",        type: "password" },
-      { name: "accountNumber", label: "Account Number", type: "text" },
-    ],
-  },
-  {
-    key: "apple_wallet",
-    label: "Apple Wallet",
-    description: "Issue digital loyalty cards and coupons to Apple Wallet.",
-    authType: "credentials" as const,
-    fields: [
-      { name: "passTypeId",        label: "Pass Type ID",           type: "text" },
-      { name: "teamId",            label: "Apple Team ID",          type: "text" },
-      { name: "certificateBase64", label: "Certificate (Base64)",   type: "password" },
-    ],
-  },
-  {
     key: "commbank_eftpos",
     label: "CommBank EFTPOS",
+    category: "Payments & EFTPOS",
     description: "Integrate with CommBank Smart terminal for card-present payments.",
     authType: "credentials" as const,
     fields: [
@@ -60,6 +35,7 @@ export const INTEGRATIONS = [
   {
     key: "tyro_eftpos",
     label: "Tyro EFTPOS",
+    category: "Payments & EFTPOS",
     description: "Australia's most popular independent EFTPOS provider. Supports contactless, Apple Pay & Google Pay.",
     authType: "credentials" as const,
     fields: [
@@ -71,6 +47,7 @@ export const INTEGRATIONS = [
   {
     key: "square_terminal",
     label: "Square Terminal",
+    category: "Payments & EFTPOS",
     description: "Accept in-store card payments via Square Terminal or Square Reader.",
     authType: "credentials" as const,
     fields: [
@@ -81,6 +58,7 @@ export const INTEGRATIONS = [
   {
     key: "paypal",
     label: "PayPal",
+    category: "Payments & EFTPOS",
     description: "Accept PayPal in-store via QR code — customer scans with the PayPal app to pay.",
     authType: "credentials" as const,
     fields: [
@@ -92,7 +70,8 @@ export const INTEGRATIONS = [
   {
     key: "wechat_alipay",
     label: "WeChat Pay & Alipay",
-    description: "Display merchant QR codes for WeChat Pay and Alipay in-store.",
+    category: "Payments & EFTPOS",
+    description: "Display merchant QR codes for WeChat Pay and Alipay in-store — ideal for tourist-heavy and CBD locations.",
     authType: "credentials" as const,
     fields: [
       { name: "wechatMerchantId", label: "WeChat Merchant ID", type: "text" },
@@ -101,14 +80,152 @@ export const INTEGRATIONS = [
       { name: "alipayApiKey",     label: "Alipay API Key",     type: "password" },
     ],
   },
+  /* ── Buy Now, Pay Later ────────────────────────────────────────────────── */
+  {
+    key: "afterpay",
+    label: "Afterpay",
+    category: "Buy Now, Pay Later",
+    description: "Let customers split purchases into 4 fortnightly payments — Australia's leading BNPL with over 3.8 million users.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  {
+    key: "zip",
+    label: "Zip Pay",
+    category: "Buy Now, Pay Later",
+    description: "Offer interest-free pay-later and pay-over-time options at checkout with Zip.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  {
+    key: "klarna",
+    label: "Klarna",
+    category: "Buy Now, Pay Later",
+    description: "Give customers flexibility to pay in 4, pay later, or finance larger purchases with Klarna.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Digital Wallets ───────────────────────────────────────────────────── */
+  {
+    key: "apple_wallet",
+    label: "Apple Wallet",
+    category: "Digital Wallets",
+    description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",
+    authType: "credentials" as const,
+    fields: [
+      { name: "passTypeId",        label: "Pass Type ID",           type: "text" },
+      { name: "teamId",            label: "Apple Team ID",          type: "text" },
+      { name: "certificateBase64", label: "Certificate (Base64)",   type: "password" },
+    ],
+  },
+  {
+    key: "google_pay",
+    label: "Google Wallet",
+    category: "Digital Wallets",
+    description: "Issue loyalty cards and offers to Google Wallet — reach Android users with passes and promotions.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Accounting & Finance ──────────────────────────────────────────────── */
+  {
+    key: "xero",
+    label: "Xero",
+    category: "Accounting & Finance",
+    description: "Automatically push daily sales summaries, invoices, and refunds into your Xero accounts.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  {
+    key: "myob",
+    label: "MYOB",
+    category: "Accounting & Finance",
+    description: "Sync sales data and end-of-day takings directly to MYOB AccountRight or Essentials.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Payroll & Staff ───────────────────────────────────────────────────── */
+  {
+    key: "deputy",
+    label: "Deputy",
+    category: "Payroll & Staff",
+    description: "Sync staff rosters, clock-ins, and timesheets with Deputy for seamless Australian payroll.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Shipping & Fulfilment ─────────────────────────────────────────────── */
+  {
+    key: "australia_post",
+    label: "Australia Post",
+    category: "Shipping & Fulfilment",
+    description: "Calculate real-time postage rates, print labels, and book pickups at online checkout.",
+    authType: "credentials" as const,
+    fields: [
+      { name: "apiKey",        label: "API Key",        type: "password" },
+      { name: "accountNumber", label: "Account Number", type: "text" },
+    ],
+  },
+  {
+    key: "sendle",
+    label: "Sendle",
+    category: "Shipping & Fulfilment",
+    description: "Book door-to-door parcel delivery across Australia with carbon-neutral Sendle — no fixed contracts.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Marketing & CRM ──────────────────────────────────────────────────── */
+  {
+    key: "google_business",
+    label: "Google Business Profile",
+    category: "Marketing & CRM",
+    description: "Keep your Google Maps listing accurate with business hours, special offers, and posts.",
+    authType: "oauth" as const,
+    oauthProvider: "google",
+  },
+  {
+    key: "mailchimp",
+    label: "Mailchimp",
+    category: "Marketing & CRM",
+    description: "Automatically add customers to Mailchimp audiences and trigger post-purchase email flows.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  {
+    key: "meta_business",
+    label: "Meta Business",
+    category: "Marketing & CRM",
+    description: "Sync your product catalogue and customer audiences to Facebook & Instagram for targeted ads.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── AI & Automation ──────────────────────────────────────────────────── */
   {
     key: "openai",
     label: "OpenAI (Your Own Key)",
-    description: "Use your own OpenAI API key for AI Insights, demand forecasting, and AI-generated content.",
+    category: "AI & Automation",
+    description: "Use your own OpenAI API key for AI Insights, demand forecasting, and AI-generated product descriptions.",
     authType: "credentials" as const,
     fields: [
       { name: "apiKey", label: "API Key", type: "password" },
     ],
+  },
+  {
+    key: "zapier",
+    label: "Zapier",
+    category: "AI & Automation",
+    description: "Connect KoaPOS to 6,000+ apps — automate workflows triggered by sales, new customers, and inventory alerts.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
   },
 ] as const;
 
@@ -180,15 +297,18 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
   const rowMap = new Map(rows.map((r) => [r.integrationKey, r]));
 
   const result = INTEGRATIONS.map((intg) => {
-    const row = rowMap.get(intg.key);
+    const row        = rowMap.get(intg.key);
+    const comingSoon = "comingSoon" in intg ? (intg.comingSoon as boolean) : false;
     return {
       key:         intg.key,
       label:       intg.label,
+      category:    intg.category,
       description: intg.description,
       authType:    intg.authType,
       fields:      "fields" in intg ? intg.fields : [],
-      status:      row?.status ?? "disconnected",
-      connectedAt: row?.connectedAt?.toISOString() ?? null,
+      comingSoon,
+      status:      comingSoon ? "disconnected" : (row?.status ?? "disconnected"),
+      connectedAt: comingSoon ? null : (row?.connectedAt?.toISOString() ?? null),
       oauthConfigured:
         intg.authType === "oauth"
           ? intg.oauthProvider === "google"
@@ -210,6 +330,10 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
 
   if (!intg) {
     res.status(404).json({ error: "Unknown integration" });
+    return;
+  }
+  if ("comingSoon" in intg && intg.comingSoon) {
+    res.status(400).json({ error: "This integration is coming soon" });
     return;
   }
   if (intg.authType !== "credentials") {
