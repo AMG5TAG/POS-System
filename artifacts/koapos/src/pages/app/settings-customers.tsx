@@ -97,7 +97,7 @@ export default function SettingsCustomersPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 max-w-4xl space-y-8">
+      <div className="p-6 md:p-8 space-y-8">
 
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customer Settings</h1>

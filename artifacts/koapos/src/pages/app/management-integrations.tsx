@@ -370,7 +370,7 @@ export default function ManagementIntegrationsPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-5xl mx-auto space-y-8">
+      <div className="p-6 space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>

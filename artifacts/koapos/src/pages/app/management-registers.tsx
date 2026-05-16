@@ -168,7 +168,7 @@ export default function ManagementRegistersPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 max-w-4xl space-y-6">
+      <div className="p-6 md:p-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">

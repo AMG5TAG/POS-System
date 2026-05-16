@@ -341,7 +341,7 @@ export default function ServiceJobNewPage() {
   return (
     <>
     <AppLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
+      <div className="p-6 space-y-6 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button

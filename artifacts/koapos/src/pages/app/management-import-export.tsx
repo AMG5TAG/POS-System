@@ -663,7 +663,7 @@ export default function ManagementImportExportPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="p-6 space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">Import / Export</h1>
