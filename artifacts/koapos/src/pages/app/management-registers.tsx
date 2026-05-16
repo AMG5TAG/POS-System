@@ -178,7 +178,7 @@ export default function ManagementRegistersPage() {
               Assign each register to a staff member — it becomes their default till when they log in to KoaPOS.
             </p>
           </div>
-          <Button onClick={openNew} className="shrink-0 bg-[#0d9488] hover:bg-[#0f766e] text-white">
+          <Button onClick={openNew} className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground">
             <Plus className="h-4 w-4 mr-1" />New Register
           </Button>
         </div>
