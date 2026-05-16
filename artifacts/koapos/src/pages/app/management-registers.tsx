@@ -98,7 +98,7 @@ function TypeBadge({ type }: { type: RegisterType }) {
 
 /* ─── Empty form ─────────────────────────────────────────────────────────── */
 
-const EMPTY_FORM = { name: "", type: "Cash" as RegisterType, staffName: "", staffEmail: "" };
+const EMPTY_FORM = { name: "", type: "Cash" as RegisterType, staffId: "", staffName: "", staffEmail: "" };
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
@@ -123,7 +123,8 @@ export default function ManagementRegistersPage() {
 
   const openEdit = (reg: PosRegister) => {
     setEditing(reg);
-    setForm({ name: reg.name, type: reg.type, staffName: reg.staffName, staffEmail: reg.staffEmail });
+    const matched = staffList.find((s) => s.name === reg.staffName);
+    setForm({ name: reg.name, type: reg.type, staffId: matched ? String(matched.id) : "", staffName: reg.staffName, staffEmail: reg.staffEmail });
     setDialogOpen(true);
   };
 
@@ -149,11 +150,16 @@ export default function ManagementRegistersPage() {
     setDialogOpen(false);
   };
 
-  const handleStaffSelect = (staffId: string) => {
-    const member = staffList.find((s) => String(s.id) === staffId);
+  const handleStaffSelect = (val: string) => {
+    if (val === "__none__") {
+      setForm((f) => ({ ...f, staffId: "", staffName: "", staffEmail: "" }));
+      return;
+    }
+    const member = staffList.find((s) => String(s.id) === val);
     if (member) {
       setForm((f) => ({
         ...f,
+        staffId: String(member.id),
         staffName: member.name,
         staffEmail: member.email ?? "",
       }));
@@ -282,34 +288,23 @@ export default function ManagementRegistersPage() {
                 </SelectContent>
               </Select>
             </div>
-            {staffList.length > 0 ? (
-              <div>
-                <Label>Assign to Staff Member</Label>
-                <Select onValueChange={handleStaffSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select staff member…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.name}
-                        {s.email && <span className="text-muted-foreground ml-1 text-xs">({s.email})</span>}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <Label>Assigned Staff Email</Label>
-                <Input
-                  value={form.staffEmail}
-                  onChange={(e) => setForm({ ...form, staffEmail: e.target.value })}
-                  placeholder="staff@yourbusiness.com"
-                  type="email"
-                />
-              </div>
-            )}
+            <div>
+              <Label>Assign to Staff Member</Label>
+              <Select onValueChange={handleStaffSelect} value={form.staffId || "__none__"}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select staff member…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Unassigned —</SelectItem>
+                  {staffList.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                      {s.email && <span className="text-muted-foreground ml-1 text-xs">({s.email})</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
