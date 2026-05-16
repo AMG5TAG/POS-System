@@ -52,7 +52,7 @@ const emptyAddress = (): AddressFields => ({ street: "", city: "", state: "", po
 
 const defaultForm = (): WizardForm => ({
   firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "", company: "", abn: "",
-  billing: emptyAddress(), postalSameAsBilling: false, postal: emptyAddress(),
+  billing: emptyAddress(), postalSameAsBilling: true, postal: emptyAddress(),
   role: "cashier", isActive: true, pin: "",
   defaultRegisterType: "", payRate: "", loadingRate: "", superRate: "",
 });
@@ -120,6 +120,49 @@ function StepNav({ current }: { current: number }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ─── POS Register selector ──────────────────────────────────────────────── */
+
+const POS_REGISTERS_KEY = "koapos_pos_registers";
+
+function PosRegisterSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const registers: { id: string; name: string; type: string }[] = (() => {
+    try { return JSON.parse(localStorage.getItem(POS_REGISTERS_KEY) ?? "[]"); }
+    catch { return []; }
+  })();
+
+  return (
+    <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
+      <SectionHeader icon={Monitor} label="POS Register Default" />
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-foreground/80">Default Register</Label>
+        <Select value={value || "__none__"} onValueChange={(v) => onChange(v === "__none__" ? "" : v)}>
+          <SelectTrigger className="rounded-full">
+            <SelectValue placeholder="Select register…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">— None —</SelectItem>
+            {registers.length === 0 ? (
+              <SelectItem value="__no_registers__" disabled>
+                No registers configured — add them in Management → POS Registers
+              </SelectItem>
+            ) : (
+              registers.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name}
+                  {r.type && <span className="text-muted-foreground ml-1 text-xs">({r.type})</span>}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1.5">
+          When this employee opens the POS, it will default to this register. If using PIN login, the existing register is kept.
+        </p>
+      </div>
     </div>
   );
 }
@@ -342,22 +385,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                 </p>
               </div>
 
-              {/* Summary */}
-              <div className="rounded-xl border bg-primary/5 p-4 space-y-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-primary mb-3">Summary</p>
-                {[
-                  ["Name",    fullName],
-                  ["Email",   form.email   || "—"],
-                  ["Phone",   form.phone   || "—"],
-                  ["Company", form.company || "—"],
-                  ["Role",    form.role],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-medium text-primary">{v}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
@@ -365,26 +392,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
           {step === 3 && (
             <div className="space-y-5">
               {/* POS Register Default */}
-              <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
-                <SectionHeader icon={Monitor} label="POS Register Default" />
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-foreground/80">Default Register Type</Label>
-                  <Select value={form.defaultRegisterType || "__none__"} onValueChange={(v) => set("defaultRegisterType")(v === "__none__" ? "" : v)}>
-                    <SelectTrigger className="rounded-full">
-                      <SelectValue placeholder="Select type…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— None —</SelectItem>
-                      <SelectItem value="retail">Retail</SelectItem>
-                      <SelectItem value="hospitality">Hospitality</SelectItem>
-                      <SelectItem value="service">Service</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    When this employee opens the POS, the register will default to this mode. If the register is already open (PIN login), the existing mode is kept.
-                  </p>
-                </div>
-              </div>
+              <PosRegisterSelect value={form.defaultRegisterType} onChange={set("defaultRegisterType")} />
 
               {/* Payroll Details */}
               <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
