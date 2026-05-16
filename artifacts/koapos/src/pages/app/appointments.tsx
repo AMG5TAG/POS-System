@@ -20,7 +20,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { CalendarClock, Plus, Trash2, Pencil, Search, Clock, User } from "lucide-react";
+import {
+  CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote, ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -71,6 +73,138 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled:  "bg-red-100 text-red-700 border-red-200",
   "no-show":  "bg-amber-100 text-amber-700 border-amber-200",
 };
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString("en-AU", {
+    weekday: "short", day: "numeric", month: "short",
+    hour: "numeric", minute: "2-digit", hour12: true,
+    timeZone: "Australia/Sydney",
+  });
+}
+
+function formatDuration(mins: number) {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function statusLabel(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ");
+}
+
+/* ─── Detail dialog ──────────────────────────────────────────────────────── */
+
+interface DetailDialogProps {
+  appt: Appointment | null;
+  onClose: () => void;
+  onEdit: (a: Appointment) => void;
+  onDelete: (id: number) => void;
+  deleteIsPending: boolean;
+}
+
+function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
+  if (!appt) return null;
+
+  return (
+    <Dialog open={!!appt} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <CalendarClock className="w-5 h-5 text-primary shrink-0" />
+            <span className="truncate">{appt.title || "Appointment"}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Status */}
+          <div className="flex items-center gap-2">
+            <Badge className={cn("text-xs border px-2 py-0.5", STATUS_COLORS[appt.status] ?? "")}>
+              {statusLabel(appt.status)}
+            </Badge>
+          </div>
+
+          {/* Time */}
+          <div className="rounded-xl border bg-muted/20 divide-y">
+            <div className="flex items-start gap-3 px-4 py-3">
+              <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">Start</p>
+                <p className="text-muted-foreground">{formatTime(appt.scheduledAt)}</p>
+              </div>
+            </div>
+            {appt.endAt && (
+              <div className="flex items-start gap-3 px-4 py-3">
+                <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium">End · <span className="font-normal text-muted-foreground">{formatDuration(appt.durationMinutes)}</span></p>
+                  <p className="text-muted-foreground">{formatTime(appt.endAt)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Customer / Staff */}
+          {(appt.customerName || appt.staffName) && (
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              {appt.customerName && (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground">Customer</p>
+                    <p className="font-medium">{appt.customerName}</p>
+                  </div>
+                </div>
+              )}
+              {appt.staffName && (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground">Assigned Staff</p>
+                    <p className="font-medium">{appt.staffName}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notes */}
+          {appt.notes && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-start gap-3">
+              <StickyNote className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                <p className="whitespace-pre-wrap">{appt.notes}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 flex-row justify-between sm:justify-between">
+          <Button
+            variant="destructive"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => { onDelete(appt.id); onClose(); }}
+            disabled={deleteIsPending}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Booking (create / edit) dialog ────────────────────────────────────── */
 
 interface BookingDialogProps {
   open: boolean;
@@ -286,13 +420,8 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) => setField("status", v)}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.status} onValueChange={(v) => setField("status", v)}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="scheduled">Scheduled</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
@@ -346,24 +475,12 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   );
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString("en-AU", {
-    weekday: "short", day: "numeric", month: "short",
-    hour: "numeric", minute: "2-digit", hour12: true,
-    timeZone: "Australia/Sydney",
-  });
-}
-
-function formatDuration(mins: number) {
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function AppointmentsPage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Appointment | null>(null);
+  const [bookingOpen, setBookingOpen]   = useState(false);
+  const [editing, setEditing]           = useState<Appointment | null>(null);
+  const [viewing, setViewing]           = useState<Appointment | null>(null);
   const queryClient = useQueryClient();
 
   const { data: appointments = [], isLoading } = useListAppointments(
@@ -371,11 +488,11 @@ export default function AppointmentsPage() {
     { query: { queryKey: ["listAppointments"] } }
   );
   const { data: customersData } = useListCustomers();
-  const { data: staffData } = useListStaff();
-  const deleteMutation = useDeleteAppointment();
+  const { data: staffData }     = useListStaff();
+  const deleteMutation          = useDeleteAppointment();
 
   const customers = Array.isArray(customersData) ? customersData : [];
-  const staff = Array.isArray(staffData) ? staffData : [];
+  const staff     = Array.isArray(staffData)     ? staffData     : [];
 
   const handleDelete = (id: number) => {
     if (!confirm("Delete this appointment?")) return;
@@ -391,12 +508,13 @@ export default function AppointmentsPage() {
     );
   };
 
-  const openNew = () => { setEditing(null); setDialogOpen(true); };
-  const openEdit = (a: Appointment) => { setEditing(a); setDialogOpen(true); };
+  const openNew  = () => { setEditing(null); setBookingOpen(true); };
+  const openEdit = (a: Appointment) => { setEditing(a); setBookingOpen(true); };
+  const openView = (a: Appointment) => setViewing(a);
 
-  // Group appointments by date
-  const grouped: Record<string, Appointment[]> = {};
+  // Group by date
   const apptList = Array.isArray(appointments) ? appointments : [];
+  const grouped: Record<string, Appointment[]> = {};
   for (const a of apptList) {
     const date = new Date(a.scheduledAt).toLocaleDateString("en-AU", {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -441,13 +559,17 @@ export default function AppointmentsPage() {
                 </h2>
                 <div className="space-y-2">
                   {appts.map((a) => (
-                    <Card key={a.id} className="hover:shadow-sm transition-shadow">
+                    <Card
+                      key={a.id}
+                      className="hover:shadow-md transition-shadow cursor-pointer group"
+                      onClick={() => openView(a)}
+                    >
                       <CardContent className="py-4 px-5 flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm">{a.title}</span>
                             <Badge className={cn("text-[11px] border px-1.5 py-0.5", STATUS_COLORS[a.status] ?? "")}>
-                              {a.status.charAt(0).toUpperCase() + a.status.slice(1).replace("-", " ")}
+                              {statusLabel(a.status)}
                             </Badge>
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
@@ -467,20 +589,7 @@ export default function AppointmentsPage() {
                             <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{a.notes}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(a)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(a.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </CardContent>
                     </Card>
                   ))}
@@ -491,10 +600,20 @@ export default function AppointmentsPage() {
         )}
       </div>
 
+      {/* Detail dialog */}
+      <DetailDialog
+        appt={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={(a) => { setViewing(null); openEdit(a); }}
+        onDelete={(id) => { handleDelete(id); }}
+        deleteIsPending={deleteMutation.isPending}
+      />
+
+      {/* Create / edit dialog */}
       <BookingDialog
-        open={dialogOpen}
+        open={bookingOpen}
         editing={editing}
-        onClose={() => { setDialogOpen(false); setEditing(null); }}
+        onClose={() => { setBookingOpen(false); setEditing(null); }}
         customers={customers}
         staff={staff}
       />
