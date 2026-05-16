@@ -15,7 +15,10 @@ interface QuickAddCustomerDialogProps {
   prefillName?: string;
 }
 
-const empty = { firstName: "", lastName: "", email: "", phone: "" };
+const empty = {
+  firstName: "", lastName: "", email: "", phone: "",
+  billingStreet: "", billingCity: "", billingState: "", billingPostcode: "",
+};
 
 export function QuickAddCustomerDialog({
   open,
@@ -31,10 +34,9 @@ export function QuickAddCustomerDialog({
     if (open) {
       const parts = prefillName.trim().split(/\s+/);
       setForm({
+        ...empty,
         firstName: parts[0] ?? "",
         lastName:  parts.slice(1).join(" "),
-        email:     "",
-        phone:     "",
       });
     }
   }, [open, prefillName]);
@@ -51,10 +53,15 @@ export function QuickAddCustomerDialog({
     createMutation.mutate(
       {
         data: {
-          firstName:  form.firstName.trim() || undefined,
-          lastName:   form.lastName.trim()  || undefined,
-          email:      form.email.trim()     || undefined,
-          phone:      form.phone.trim()     || undefined,
+          firstName:       form.firstName.trim()       || undefined,
+          lastName:        form.lastName.trim()        || undefined,
+          email:           form.email.trim()           || undefined,
+          phone:           form.phone.trim()           || undefined,
+          billingStreet:   form.billingStreet.trim()   || undefined,
+          billingCity:     form.billingCity.trim()     || undefined,
+          billingState:    form.billingState.trim()    || undefined,
+          billingPostcode: form.billingPostcode.trim() || undefined,
+          billingCountry:  "Australia",
           customerGroup: "Standard",
           agreedToMarketing: "false",
           whatsappSameAsPhone: "false",
@@ -84,35 +91,49 @@ export function QuickAddCustomerDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-1">
+          {/* Name */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>
-                First Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                autoFocus
-                value={form.firstName}
-                onChange={set("firstName")}
-                placeholder="Jane"
-              />
+              <Label>First Name <span className="text-destructive">*</span></Label>
+              <Input autoFocus value={form.firstName} onChange={set("firstName")} placeholder="Jane" />
             </div>
             <div className="space-y-1.5">
               <Label>Last Name</Label>
               <Input value={form.lastName} onChange={set("lastName")} placeholder="Doe" />
             </div>
           </div>
+
+          {/* Contact */}
           <div className="space-y-1.5">
             <Label>Email</Label>
-            <Input
-              type="email"
-              value={form.email}
-              onChange={set("email")}
-              placeholder="jane@example.com"
-            />
+            <Input type="email" value={form.email} onChange={set("email")} placeholder="jane@example.com" />
           </div>
           <div className="space-y-1.5">
             <Label>Phone</Label>
             <Input value={form.phone} onChange={set("phone")} placeholder="0400 000 000" />
+          </div>
+
+          {/* Address */}
+          <div className="space-y-3 pt-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Address</p>
+            <div className="space-y-1.5">
+              <Label>Street</Label>
+              <Input value={form.billingStreet} onChange={set("billingStreet")} placeholder="123 Main St" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Input value={form.billingCity} onChange={set("billingCity")} placeholder="Sydney" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>State</Label>
+                <Input value={form.billingState} onChange={set("billingState")} placeholder="NSW" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Postcode</Label>
+              <Input value={form.billingPostcode} onChange={set("billingPostcode")} placeholder="2000" />
+            </div>
           </div>
         </div>
 
