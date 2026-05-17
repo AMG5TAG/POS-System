@@ -496,14 +496,16 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               <NavLink href="/dashboard"   icon={LayoutDashboard} name="Dashboard" />
               <CollapsibleSection
                 label="POS" icon={ShoppingCart}
-                isActive={isPOSSection} isOpen={posOpen} onToggle={() => setPosOpen((o) => !o)}
+                isActive={isPOSSection} isOpen={posOpen}
+                onToggle={() => { setPosOpen((o) => !o); setInvOpen(false); setMgmtOpen(false); setSettingsOpen(false); }}
                 items={POS_SUBNAV}
               />
               <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
               <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
               <CollapsibleSection
                 label="Inventory" icon={Boxes}
-                isActive={isInventorySection} isOpen={invOpen} onToggle={() => setInvOpen((o) => !o)}
+                isActive={isInventorySection} isOpen={invOpen}
+                onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); setSettingsOpen(false); }}
                 items={INVENTORY_SUBNAV}
                 defaultHref="/products/overview"
               />
@@ -511,14 +513,16 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               {canManage && (
                 <CollapsibleSection
                   label="Management" icon={BriefcaseBusiness}
-                  isActive={isManagementSection} isOpen={mgmtOpen} onToggle={() => setMgmtOpen((o) => !o)}
+                  isActive={isManagementSection} isOpen={mgmtOpen}
+                  onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setSettingsOpen(false); }}
                   items={MANAGEMENT_SUBNAV} accent
                   defaultHref="/management/sales-overview"
                 />
               )}
               <CollapsibleSection
                 label="Settings" icon={Settings}
-                isActive={isSettingsSection} isOpen={settingsOpen} onToggle={() => setSettingsOpen((o) => !o)}
+                isActive={isSettingsSection} isOpen={settingsOpen}
+                onToggle={() => { setSettingsOpen((o) => !o); setPosOpen(false); setInvOpen(false); setMgmtOpen(false); }}
                 items={SETTINGS_SUBNAV}
               />
             </SidebarMenu>
