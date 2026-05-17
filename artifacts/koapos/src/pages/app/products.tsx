@@ -21,7 +21,8 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Search, Plus, Pencil, Trash2, Package,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
-  Tag, Barcode, Boxes, Settings2, DollarSign, Image,
+  Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
+  Shuffle, Video, Weight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,19 +33,34 @@ import { cn } from "@/lib/utils";
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
-type FormTab   = "details" | "pricing" | "inventory" | "settings";
+type FormTab   = "details" | "pricing" | "media" | "settings";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
-  sku: string; barcode: string; imageUrl: string; categoryId: string;
+  sku: string; barcode: string; categoryId: string;
+  /* images */
+  imageUrl: string; imageUrl2: string; imageUrl3: string; imageUrl4: string;
+  videoUrl: string;
+  /* pricing extras */
+  supplier: string; supplierCode: string;
+  /* physical */
+  weight: string; weightUnit: string;
+  lengthCm: string; widthCm: string; heightCm: string;
+  /* stock */
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  /* notes */
   internalNotes: string;
 };
 
 const defaultForm: ProductForm = {
   name: "", description: "", price: "", costPrice: "", sku: "", barcode: "",
-  imageUrl: "", categoryId: "", stockQuantity: "0", lowStockThreshold: "5",
+  categoryId: "",
+  imageUrl: "", imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
+  supplier: "", supplierCode: "",
+  weight: "", weightUnit: "kg",
+  lengthCm: "", widthCm: "", heightCm: "",
+  stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   internalNotes: "",
 };
@@ -52,9 +68,24 @@ const defaultForm: ProductForm = {
 const FORM_TABS: { key: FormTab; label: string }[] = [
   { key: "details",   label: "Details"   },
   { key: "pricing",   label: "Pricing"   },
-  { key: "inventory", label: "Inventory" },
+  { key: "media",     label: "Media"     },
   { key: "settings",  label: "Settings"  },
 ];
+
+/* ─── SKU helpers ────────────────────────────────────────────────────────── */
+
+const SKU_PREFIX_KEY = "koapos_sku_prefix";
+
+function getSavedPrefix() {
+  try { return localStorage.getItem(SKU_PREFIX_KEY) || "KP"; } catch { return "KP"; }
+}
+function savePrefix(v: string) {
+  try { localStorage.setItem(SKU_PREFIX_KEY, v); } catch { /* ignore */ }
+}
+function generateSKU(prefix: string) {
+  const n = Math.floor(Math.random() * 90000) + 10000;
+  return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
+}
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
@@ -98,6 +129,26 @@ function InfoRow({ icon: Icon, label, value, valueClass }: {
 function SectionHeader({ label }: { label: string }) {
   return (
     <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground">{label}</p>
+  );
+}
+
+/* ─── Image slot ─────────────────────────────────────────────────────────── */
+
+function ImageSlot({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="aspect-square rounded-xl border-2 border-dashed bg-muted/20 flex flex-col items-center justify-center overflow-hidden relative group cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => { const v = prompt("Paste image URL:", value); if (v !== null) onChange(v); }}>
+        {value ? (
+          <img src={value} alt={label} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+        ) : (
+          <ImageIcon className="w-8 h-8 text-muted-foreground/30" />
+        )}
+      </div>
+      <p className="text-xs text-center text-muted-foreground">{label}</p>
+    </div>
   );
 }
 
@@ -258,6 +309,7 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
   const [formTab, setFormTab]           = useState<FormTab>("details");
+  const [skuPrefix, setSkuPrefix]       = useState(getSavedPrefix);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("name");
@@ -308,8 +360,12 @@ export default function ProductsPage() {
       name: p.name, description: p.description || "",
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
       sku: p.sku || "", barcode: (p as Product & { barcode?: string }).barcode || "",
-      imageUrl: (p as Product & { imageUrl?: string }).imageUrl || "",
       categoryId: p.categoryId?.toString() || "",
+      imageUrl: (p as Product & { imageUrl?: string }).imageUrl || "",
+      imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
+      supplier: "", supplierCode: "",
+      weight: "", weightUnit: "kg",
+      lengthCm: "", widthCm: "", heightCm: "",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
       lowStockThreshold: p.lowStockThreshold?.toString() || "5",
       taxRate: p.taxRate?.toString() || "10",
@@ -372,7 +428,6 @@ export default function ProductsPage() {
     label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className,
   });
 
-  /* Advance to the next tab */
   const goNextTab = () => {
     const idx = FORM_TABS.findIndex((t) => t.key === formTab);
     if (idx < FORM_TABS.length - 1) setFormTab(FORM_TABS[idx + 1].key);
@@ -381,6 +436,20 @@ export default function ProductsPage() {
 
   const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  const handleGenerateSKU = () => {
+    setField("sku", generateSKU(skuPrefix));
+  };
+
+  const handleSkuPrefixChange = (v: string) => {
+    const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    setSkuPrefix(clean);
+    savePrefix(clean);
+  };
+
+  const marginPct = form.costPrice && form.price && parseFloat(form.price) > 0
+    ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
+    : null;
 
   return (
     <AppLayout>
@@ -544,12 +613,20 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">SKU Code</Label>
-                    <Input
-                      value={form.sku}
-                      onChange={(e) => setField("sku", e.target.value)}
-                      placeholder="e.g. SCR-00123"
-                      className="mt-1.5"
-                    />
+                    <div className="flex gap-1.5 mt-1.5">
+                      <Input
+                        value={form.sku}
+                        onChange={(e) => setField("sku", e.target.value)}
+                        placeholder="e.g. KP-12345"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button" variant="outline" size="icon" className="shrink-0 h-9 w-9"
+                        onClick={handleGenerateSKU} title="Generate SKU"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Barcode</Label>
@@ -582,23 +659,42 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                <div className="border-t pt-4">
-                  <SectionHeader label="Primary Image" />
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="w-16 h-16 rounded-lg border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
-                      {form.imageUrl
-                        ? <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
-                        : <Image className="w-6 h-6 text-muted-foreground/40" />
-                      }
+                {/* Physical details */}
+                <div className="border-t pt-4 space-y-3">
+                  <SectionHeader label="Physical Details" />
+                  <div className="grid grid-cols-5 gap-3">
+                    <div className="col-span-2">
+                      <Label className="text-xs text-muted-foreground">Weight</Label>
+                      <div className="flex gap-1.5 mt-1.5">
+                        <Input
+                          type="number" step="0.001" min="0"
+                          value={form.weight}
+                          onChange={(e) => setField("weight", e.target.value)}
+                          placeholder="0.000"
+                          className="flex-1"
+                        />
+                        <Select value={form.weightUnit} onValueChange={(v) => setField("weightUnit", v)}>
+                          <SelectTrigger className="w-[72px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="g">g</SelectItem>
+                            <SelectItem value="lb">lb</SelectItem>
+                            <SelectItem value="oz">oz</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <Input
-                        value={form.imageUrl}
-                        onChange={(e) => setField("imageUrl", e.target.value)}
-                        placeholder="https://example.com/image.jpg"
-                        className="text-sm"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Paste a direct image URL (JPG, PNG, WebP)</p>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">L (cm)</Label>
+                      <Input type="number" step="0.01" min="0" value={form.lengthCm} onChange={(e) => setField("lengthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">W (cm)</Label>
+                      <Input type="number" step="0.01" min="0" value={form.widthCm} onChange={(e) => setField("widthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">H (cm)</Label>
+                      <Input type="number" step="0.01" min="0" value={form.heightCm} onChange={(e) => setField("heightCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
                     </div>
                   </div>
                 </div>
@@ -608,8 +704,44 @@ export default function ProductsPage() {
             {/* ── Pricing ── */}
             {formTab === "pricing" && (
               <div className="py-5 space-y-6">
+                {/* Supplier */}
                 <div>
-                  <SectionHeader label="Standard Pricing" />
+                  <SectionHeader label="Supplier" />
+                  <div className="mt-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Primary Supplier</Label>
+                      <Input
+                        value={form.supplier}
+                        onChange={(e) => setField("supplier", e.target.value)}
+                        placeholder="No supplier"
+                        className="mt-1.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Supplier Code</Label>
+                      <Input
+                        value={form.supplierCode}
+                        onChange={(e) => setField("supplierCode", e.target.value)}
+                        placeholder="Supplier product code"
+                        className="mt-1.5"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Standard pricing */}
+                <div className="border-t pt-5">
+                  <div className="flex items-center justify-between">
+                    <SectionHeader label="Standard Pricing" />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      GST Free
+                      <Switch
+                        checked={form.taxRate === "0"}
+                        onCheckedChange={(v) => setField("taxRate", v ? "0" : "10")}
+                        className="scale-75"
+                      />
+                    </div>
+                  </div>
                   <div className="mt-3 grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs text-muted-foreground">Cost Price (ex GST)</Label>
@@ -638,28 +770,18 @@ export default function ProductsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 max-w-[200px]">
-                    <Label className="text-xs text-muted-foreground">GST Rate (%)</Label>
-                    <Input
-                      type="number" step="0.1" min="0"
-                      value={form.taxRate}
-                      onChange={(e) => setField("taxRate", e.target.value)}
-                      className="mt-1.5"
-                    />
-                  </div>
-                  {form.costPrice && form.price && parseFloat(form.price) > 0 && (
+                  {marginPct !== null && (
                     <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
                       <DollarSign className="w-3.5 h-3.5 shrink-0" />
                       <span>
-                        Margin: <span className={cn("font-semibold", (parseFloat(form.price) - parseFloat(form.costPrice || "0")) / parseFloat(form.price) < 0.2 ? "text-destructive" : "text-emerald-600")}>
-                          {Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)}%
-                        </span>
+                        Margin: <span className={cn("font-semibold", marginPct < 20 ? "text-destructive" : "text-emerald-600")}>{marginPct}%</span>
                         {" · "}Profit: <span className="font-semibold text-foreground">${(parseFloat(form.price) - parseFloat(form.costPrice)).toFixed(2)}</span>
                       </span>
                     </div>
                   )}
                 </div>
 
+                {/* Options */}
                 <div className="border-t pt-5">
                   <SectionHeader label="Options" />
                   <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
@@ -676,51 +798,71 @@ export default function ProductsPage() {
               </div>
             )}
 
-            {/* ── Inventory ── */}
-            {formTab === "inventory" && (
-              <div className="py-5 space-y-4">
-                <SectionHeader label="Stock Tracking" />
-                <div className="flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium">No Stock Tracking</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Always shows as in-stock</p>
+            {/* ── Media ── */}
+            {formTab === "media" && (
+              <div className="py-5 space-y-6">
+                <div>
+                  <SectionHeader label="Product Images" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Click any slot to set an image URL. Images: JPG, PNG, WebP · Min 800×800px</p>
+                  <div className="grid grid-cols-4 gap-3">
+                    <ImageSlot label="Primary"  value={form.imageUrl}  onChange={(v) => setField("imageUrl", v)}  />
+                    <ImageSlot label="Image 2"  value={form.imageUrl2} onChange={(v) => setField("imageUrl2", v)} />
+                    <ImageSlot label="Image 3"  value={form.imageUrl3} onChange={(v) => setField("imageUrl3", v)} />
+                    <ImageSlot label="Image 4"  value={form.imageUrl4} onChange={(v) => setField("imageUrl4", v)} />
                   </div>
-                  <Switch
-                    checked={!form.trackInventory}
-                    onCheckedChange={(v) => setField("trackInventory", !v)}
-                  />
                 </div>
 
-                {form.trackInventory && (
-                  <div className="grid grid-cols-2 gap-4 pt-1">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Stock Quantity</Label>
-                      <Input
-                        type="number" min="0"
-                        value={form.stockQuantity}
-                        onChange={(e) => setField("stockQuantity", e.target.value)}
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Low Stock Alert (units)</Label>
-                      <Input
-                        type="number" min="0"
-                        value={form.lowStockThreshold}
-                        onChange={(e) => setField("lowStockThreshold", e.target.value)}
-                        className="mt-1.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Alert when stock falls below this level</p>
-                    </div>
+                <div className="border-t pt-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Video className="w-4 h-4 text-muted-foreground" />
+                    <SectionHeader label="Video" />
                   </div>
-                )}
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Video URL (YouTube or direct link)</Label>
+                    <Input
+                      value={form.videoUrl}
+                      onChange={(e) => setField("videoUrl", e.target.value)}
+                      placeholder="https://youtube.com/watch?v=… or direct video URL"
+                      className="mt-1.5"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1.5">Displayed as a video preview on the product detail page.</p>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* ── Settings ── */}
             {formTab === "settings" && (
               <div className="py-5 space-y-5">
+                {/* Inventory */}
                 <div>
+                  <SectionHeader label="Inventory" />
+                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">No Stock Tracking</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Always shows as in-stock</p>
+                    </div>
+                    <Switch
+                      checked={!form.trackInventory}
+                      onCheckedChange={(v) => setField("trackInventory", !v)}
+                    />
+                  </div>
+                  {form.trackInventory && (
+                    <div className="grid grid-cols-2 gap-4 mt-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Stock Quantity</Label>
+                        <Input type="number" min="0" value={form.stockQuantity} onChange={(e) => setField("stockQuantity", e.target.value)} className="mt-1.5" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Low Stock Alert (units)</Label>
+                        <Input type="number" min="0" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} className="mt-1.5" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Availability */}
+                <div className="border-t pt-5">
                   <SectionHeader label="Availability" />
                   <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
                     <div>
@@ -734,6 +876,31 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
+                {/* SKU Generator settings */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="SKU Generator" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">Set the prefix used when auto-generating SKU codes.</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 max-w-[180px]">
+                      <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
+                      <Input
+                        value={skuPrefix}
+                        onChange={(e) => handleSkuPrefixChange(e.target.value)}
+                        placeholder="KP"
+                        maxLength={6}
+                        className="mt-1.5 font-mono uppercase"
+                      />
+                    </div>
+                    <div className="pt-6">
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={handleGenerateSKU}>
+                        <Shuffle className="w-3.5 h-3.5" /> Preview: {generateSKU(skuPrefix || "KP")}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Generated format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
+                </div>
+
+                {/* Internal Notes */}
                 <div className="border-t pt-5">
                   <SectionHeader label="Internal Notes" />
                   <Textarea

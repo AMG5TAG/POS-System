@@ -19,6 +19,7 @@ import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
   SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarFooter,
   SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -329,10 +330,53 @@ function NavNestedGroup({
   );
 }
 
+/* ─── Collapsed sidebar footer ───────────────────────────────────────────── */
+
+function SidebarFooterContent({
+  user, onLogout, isPending,
+}: {
+  user: { ownerName?: string; email?: string } | null;
+  onLogout: () => void;
+  isPending: boolean;
+}) {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  if (collapsed) {
+    return (
+      <div className="flex justify-center">
+        <button
+          onClick={onLogout}
+          disabled={isPending}
+          title="Sign out"
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-sm truncate">
+        <p className="font-medium truncate">{user?.ownerName || "Merchant"}</p>
+        <p className="text-muted-foreground truncate text-xs">{user?.email}</p>
+      </div>
+      <Button
+        variant="outline" className="w-full justify-start gap-2"
+        onClick={onLogout} disabled={isPending}
+      >
+        <LogOut className="w-4 h-4" /> Sign out
+      </Button>
+    </div>
+  );
+}
+
 /* ─── Main layout ────────────────────────────────────────────────────────── */
 
 export function AppLayout({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const logoutMutation = useLogout();
@@ -378,17 +422,23 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   };
 
   const CollapsibleSection = ({
-    label, icon: Icon, isActive, isOpen, onToggle, items, accent,
+    label, icon: Icon, isActive, isOpen, onToggle, items, accent, defaultHref,
   }: {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     isActive: boolean; isOpen: boolean; onToggle: () => void;
     items: NavItem[];
     accent?: boolean;
-  }) => (
+    defaultHref?: string;
+  }) => {
+    const handleClick = () => {
+      if (defaultHref) navigate(defaultHref);
+      onToggle();
+    };
+    return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        isActive={isActive} onClick={onToggle} tooltip={label}
+        isActive={isActive} onClick={handleClick} tooltip={label}
         className={`flex items-center gap-3 cursor-pointer w-full data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground${accent ? " text-primary font-semibold hover:text-primary" : ""}`}
       >
         <Icon className={`w-4 h-4 shrink-0${accent ? " text-primary" : ""}`} />
@@ -424,7 +474,8 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
         </SidebarMenuSub>
       )}
     </SidebarMenuItem>
-  );
+    );
+  };
 
   return (
     <SidebarProvider defaultOpen={!hideSidebar}>
@@ -451,6 +502,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
                 label="Inventory" icon={Boxes}
                 isActive={isInventorySection} isOpen={invOpen} onToggle={() => setInvOpen((o) => !o)}
                 items={INVENTORY_SUBNAV}
+                defaultHref="/products/overview"
               />
               <NavLink href="/customers" icon={Users}    name="Customers" />
               {canManage && (
@@ -458,6 +510,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
                   label="Management" icon={BriefcaseBusiness}
                   isActive={isManagementSection} isOpen={mgmtOpen} onToggle={() => setMgmtOpen((o) => !o)}
                   items={MANAGEMENT_SUBNAV} accent
+                  defaultHref="/management/sales-overview"
                 />
               )}
               <CollapsibleSection
@@ -469,18 +522,11 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           </SidebarContent>
 
           <SidebarFooter className="p-4 border-t">
-            <div className="flex flex-col gap-4">
-              <div className="text-sm truncate">
-                <p className="font-medium truncate">{user?.ownerName || "Merchant"}</p>
-                <p className="text-muted-foreground truncate text-xs">{user?.email}</p>
-              </div>
-              <Button
-                variant="outline" className="w-full justify-start gap-2"
-                onClick={handleLogout} disabled={logoutMutation.isPending}
-              >
-                <LogOut className="w-4 h-4" /> Sign out
-              </Button>
-            </div>
+            <SidebarFooterContent
+              user={user}
+              onLogout={handleLogout}
+              isPending={logoutMutation.isPending}
+            />
           </SidebarFooter>
         </Sidebar>
 
