@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProducts, useListCategories, useCreateTransaction,
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
   SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
-  Gift, Eye, EyeOff, Briefcase, CalendarDays, UserRound, Percent,
+  Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Lock, User, Monitor,
 } from "lucide-react";
 
@@ -63,8 +63,9 @@ export default function POSPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [walkIn, setWalkIn] = useState<WalkIn | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
-  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
@@ -95,8 +96,8 @@ export default function POSPage() {
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: customersData } = useListCustomers(
-    { search: customerSearch || undefined, limit: 50 },
-    { query: { queryKey: ["customers-pos", customerSearch], enabled: customerPickerOpen } }
+    { search: customerSearch || undefined, limit: 100 },
+    { query: { queryKey: ["customers-pos", customerSearch], enabled: customerOpen } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
@@ -191,6 +192,25 @@ export default function POSPage() {
     } catch { /* ignore */ }
   }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn]);
 
+  /* Click-outside closes customer dropdown */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node))
+        setCustomerOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  /* Filtered customers for inline dropdown */
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.toLowerCase();
+    return (customers).filter(c => {
+      const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
+      return !q || name.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
+    });
+  }, [customers, customerSearch]);
+
   /* ── Cart operations ── */
   const addToCart = (product: Product) => {
     if ((product.price ?? 0) === 0) {
@@ -236,7 +256,7 @@ export default function POSPage() {
 
   const selectCustomer = (c: Customer) => {
     setSelectedCustomer(c); setWalkIn(null);
-    setCustomerPickerOpen(false); setCustomerSearch("");
+    setCustomerOpen(false); setCustomerSearch("");
     if (c.warningNote) setWarningCustomer(c);
   };
 
@@ -341,7 +361,7 @@ export default function POSPage() {
                   onClick={() => addToCart(product)}
                   className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md"
                 >
-                  <div className="aspect-square w-full bg-muted flex items-center justify-center relative">
+                  <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
                     {product.imageUrl
                       ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                       : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
@@ -389,7 +409,7 @@ export default function POSPage() {
                 title="Link to service or appointment"
                 className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", (linkedService || linkedAppointment) && "text-primary")}
               >
-                <Briefcase className="w-4 h-4" />
+                <LinkIcon className="w-4 h-4" />
               </button>
               <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={clearCart} disabled={cart.length === 0} title="Clear cart">
                 <Trash2 className="w-4 h-4 text-destructive" />
@@ -398,7 +418,7 @@ export default function POSPage() {
           </div>
 
           {/* Customer row */}
-          <div className="border-b px-3 py-2 shrink-0">
+          <div className="border-b px-3 py-2 shrink-0 relative" ref={customerDropdownRef}>
             {activeCustomerName ? (
               <div className={cn("flex items-center gap-2 rounded-lg px-2.5 py-2", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
                 <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
@@ -414,10 +434,14 @@ export default function POSPage() {
             ) : (
               <div className="flex gap-1.5">
                 <button
-                  onClick={() => setCustomerPickerOpen(true)}
-                  className="flex-1 flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-2.5 py-1.5 transition-colors hover:border-primary"
+                  onClick={() => setCustomerOpen(o => !o)}
+                  className={cn(
+                    "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
+                    customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
+                  )}
                 >
-                  <UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer
+                  <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
+                  <Search className="w-3 h-3 text-muted-foreground shrink-0" />
                 </button>
                 <button
                   onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
@@ -427,13 +451,55 @@ export default function POSPage() {
                 </button>
               </div>
             )}
+            {/* Inline customer dropdown */}
+            {customerOpen && !activeCustomerName && (
+              <div className="absolute z-50 left-3 right-3 top-full mt-0.5 bg-popover border rounded-lg shadow-lg">
+                <div className="p-2 border-b">
+                  <Input
+                    autoFocus
+                    placeholder="Search by name, email or phone..."
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto">
+                  {filteredCustomers.length === 0 ? (
+                    <div className="px-3 py-4 text-sm text-center text-muted-foreground">
+                      {customerSearch ? `No customers match "${customerSearch}"` : "Start typing to search customers"}
+                    </div>
+                  ) : (
+                    filteredCustomers.map(c => {
+                      const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
+                      const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => selectCustomer(c)}
+                          className="w-full text-left px-3 py-2.5 hover:bg-muted/40 flex items-center gap-2.5 transition-colors"
+                        >
+                          <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>
+                            {initials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
+                          </div>
+                          {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Service/appointment link indicator */}
           {(linkedService || linkedAppointment) && (
             <div className="border-b px-3 py-1.5 bg-primary/5 shrink-0">
               <div className="flex items-center gap-1.5 text-[11px] text-primary">
-                {linkedService && <><Briefcase className="w-3 h-3 shrink-0" /><span className="truncate">Service {linkedService.jobNumber}: {linkedService.deviceType || linkedService.deviceDescription || "service"}</span></>}
+                {linkedService && <><LinkIcon className="w-3 h-3 shrink-0" /><span className="truncate">Service {linkedService.jobNumber}: {linkedService.deviceType || linkedService.deviceDescription || "service"}</span></>}
                 {linkedAppointment && <><CalendarDays className="w-3 h-3 shrink-0" /><span className="truncate">Appt #{linkedAppointment.id}: {linkedAppointment.title}</span></>}
                 <button onClick={() => { setLinkedService(null); setLinkedAppointment(null); }} className="ml-auto shrink-0 hover:text-destructive"><X className="w-3 h-3" /></button>
               </div>
@@ -441,14 +507,14 @@ export default function POSPage() {
           )}
 
           {/* Cart items */}
+          {cart.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+              <Receipt className="w-14 h-14 mb-3 opacity-20" />
+              <p className="font-medium text-sm">No items in cart</p>
+              <p className="text-xs mt-1">Tap products to add them to the sale.</p>
+            </div>
+          ) : (
           <ScrollArea className="flex-1">
-            {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                <Receipt className="w-14 h-14 mb-3 opacity-20" />
-                <p className="font-medium text-sm">No items in cart</p>
-                <p className="text-xs mt-1">Tap products to add them to the sale.</p>
-              </div>
-            ) : (
               <div className="p-2.5 space-y-1.5">
                 {cart.map((item) => {
                   const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
@@ -499,8 +565,8 @@ export default function POSPage() {
                   );
                 })}
               </div>
-            )}
           </ScrollArea>
+          )}
 
           {/* Sale notes */}
           {cart.length > 0 && (
@@ -621,33 +687,6 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Customer picker ─── */}
-      <Dialog open={customerPickerOpen} onOpenChange={o => { setCustomerPickerOpen(o); if (!o) setCustomerSearch(""); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Select Customer</DialogTitle></DialogHeader>
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search by name, email, or phone..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} autoFocus />
-          </div>
-          <ScrollArea className="max-h-80">
-            {customers.length === 0
-              ? <div className="text-center py-8 text-muted-foreground text-sm">{customerSearch ? "No customers found." : "Start typing to search customers."}</div>
-              : <div className="space-y-1">{customers.map(c => {
-                  const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
-                  const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
-                  return (
-                    <button key={c.id} onClick={() => selectCustomer(c)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left">
-                      <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0", c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>{initials}</div>
-                      <div className="flex-1 min-w-0"><p className="text-sm font-medium">{name}</p><p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p></div>
-                      {c.warningNote && <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />}
-                    </button>
-                  );
-                })}</div>
-            }
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
       {/* ─── Walk-in dialog ─── */}
       <Dialog open={walkInDialogOpen} onOpenChange={setWalkInDialogOpen}>
         <DialogContent className="sm:max-w-xs">
@@ -699,7 +738,7 @@ export default function POSPage() {
       {/* ─── Service / Appointment link ─── */}
       <Dialog open={serviceLinkOpen} onOpenChange={setServiceLinkOpen}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Briefcase className="w-4 h-4" /> Link to Service or Appointment</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Link to Service or Appointment</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
@@ -709,7 +748,7 @@ export default function POSPage() {
                   : <div className="divide-y">{(serviceJobs as ServiceJob[] ?? []).slice(0, 15).map(sj => (
                       <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
-                        <Briefcase className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <LinkIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">#{sj.jobNumber} · {sj.deviceType || sj.deviceDescription || "Service"}</p>
                           <p className="text-xs text-muted-foreground">{sj.status} · {sj.customerName || "No customer"}</p>
