@@ -13,9 +13,27 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase } from "lucide-react";
+import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Receipt } from "lucide-react";
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
+export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
+
+export const ALL_PAYMENT_METHODS = [
+  { id: "card",  label: "Credit / Debit Card", description: "EFTPOS and card payments",           icon: CreditCard },
+  { id: "cash",  label: "Cash",                description: "Physical cash and change",           icon: Banknote },
+  { id: "split", label: "Split Payment",        description: "Divide the total across methods",    icon: SplitSquareHorizontal },
+  { id: "other", label: "Other",               description: "Vouchers, store credit, layby, etc", icon: Receipt },
+] as const;
+
+export type PaymentMethodId = (typeof ALL_PAYMENT_METHODS)[number]["id"];
+
+export function getEnabledPaymentMethods(): PaymentMethodId[] {
+  try {
+    const stored = localStorage.getItem(PAYMENT_METHODS_KEY);
+    if (stored) return JSON.parse(stored) as PaymentMethodId[];
+  } catch { /* ignore */ }
+  return ALL_PAYMENT_METHODS.map((m) => m.id);
+}
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -102,6 +120,46 @@ function TypeBadge({ type }: { type: RegisterType }) {
 /* ─── Empty form ─────────────────────────────────────────────────────────── */
 
 const EMPTY_FORM = { name: "", type: "Cash" as RegisterType, staffId: "", staffName: "", staffEmail: "" };
+
+/* ─── Payment Methods section ────────────────────────────────────────────── */
+
+function PaymentMethodsSection() {
+  const [enabled, setEnabled] = useState<PaymentMethodId[]>(getEnabledPaymentMethods);
+
+  const toggle = (id: PaymentMethodId, checked: boolean) => {
+    const next = checked ? [...enabled, id] : enabled.filter((m) => m !== id);
+    if (next.length === 0) { toast.error("At least one payment method must be enabled"); return; }
+    setEnabled(next);
+    localStorage.setItem(PAYMENT_METHODS_KEY, JSON.stringify(next));
+    toast.success(checked ? `${ALL_PAYMENT_METHODS.find(m => m.id === id)?.label} enabled` : `${ALL_PAYMENT_METHODS.find(m => m.id === id)?.label} disabled`);
+  };
+
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b bg-muted/20">
+        <p className="font-semibold text-sm">Payment Methods</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Choose which payment options appear in the POS checkout screen.</p>
+      </div>
+      <div className="divide-y">
+        {ALL_PAYMENT_METHODS.map(({ id, label, description, icon: Icon }) => {
+          const isOn = enabled.includes(id);
+          return (
+            <div key={id} className="flex items-center gap-4 px-5 py-3.5">
+              <div className={`p-2 rounded-lg shrink-0 transition-colors ${isOn ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium transition-colors ${!isOn && "text-muted-foreground"}`}>{label}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </div>
+              <Switch checked={isOn} onCheckedChange={(v) => toggle(id, v)} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* ─── Force Staff Login toggle ───────────────────────────────────────────── */
 
@@ -281,9 +339,10 @@ export default function ManagementRegistersPage() {
           </div>
         )}
 
-        {/* POS Settings */}
+        {/* Payment Methods */}
         <div className="border-t pt-6 space-y-3">
           <h2 className="text-base font-semibold">POS Settings</h2>
+          <PaymentMethodsSection />
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
           </div>

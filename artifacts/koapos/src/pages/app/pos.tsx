@@ -12,14 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { ALL_PAYMENT_METHODS, getEnabledPaymentMethods } from "@/pages/app/management-registers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
-  SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
+  Search, Plus, Minus, Trash2, Receipt,
+  X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
@@ -699,23 +700,25 @@ export default function POSPage() {
           <DialogHeader>
             <DialogTitle className="text-center text-2xl font-bold pt-4">Amount Due: {formatCurrency(total)}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-6">
-            {([
-              { method: "card" as const, label: "Credit Card", icon: CreditCard },
-              { method: "cash" as const, label: "Cash", icon: Banknote },
-              { method: "split" as const, label: "Split Payment", icon: SplitSquareHorizontal },
-              { method: "other" as const, label: "Other", icon: Receipt },
-            ] as const).map(({ method, label, icon: Icon }) => (
-              <Button
-                key={method} variant="outline"
-                className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-                onClick={() => handleCheckout(method)}
-                disabled={createTransactionMutation.isPending}
-              >
-                <Icon className="w-8 h-8" />{label}
-              </Button>
-            ))}
-          </div>
+          {(() => {
+            const enabledIds = getEnabledPaymentMethods();
+            const methods = ALL_PAYMENT_METHODS.filter((m) => enabledIds.includes(m.id));
+            const cols = methods.length === 1 ? "grid-cols-1" : methods.length === 3 ? "grid-cols-3" : "grid-cols-2";
+            return (
+              <div className={`grid ${cols} gap-4 py-6`}>
+                {methods.map(({ id, label, icon: Icon }) => (
+                  <Button
+                    key={id} variant="outline"
+                    className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
+                    onClick={() => handleCheckout(id as Parameters<typeof handleCheckout>[0])}
+                    disabled={createTransactionMutation.isPending}
+                  >
+                    <Icon className="w-8 h-8" />{label}
+                  </Button>
+                ))}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
