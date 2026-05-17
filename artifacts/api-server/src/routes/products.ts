@@ -37,6 +37,7 @@ function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof c
     lowStockThreshold: p.lowStockThreshold ?? null,
     taxRate: p.taxRate ? parseFloat(p.taxRate) : null,
     isActive: p.isActive === "true",
+    excludeFromLoyalty: p.excludeFromLoyalty === "true",
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -155,7 +156,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { price, costPrice, taxRate, trackInventory, isActive, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, ...rest } = parsed.data;
   const [product] = await db
     .insert(productsTable)
     .values({
@@ -166,6 +167,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       taxRate: taxRate?.toString(),
       trackInventory: trackInventory === false ? "false" : "true",
       isActive: isActive === false ? "false" : "true",
+      excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
     })
     .returning();
   res.status(201).json(formatProduct(product));
@@ -204,13 +206,14 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { price, costPrice, taxRate, trackInventory, isActive, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, ...rest } = parsed.data;
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
   if (taxRate !== undefined) updates.taxRate = taxRate.toString();
   if (trackInventory !== undefined) updates.trackInventory = trackInventory ? "true" : "false";
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
+  if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
 
   const [product] = await db
     .update(productsTable)

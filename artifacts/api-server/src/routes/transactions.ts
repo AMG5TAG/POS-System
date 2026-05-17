@@ -44,6 +44,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     amountTendered: t.amountTendered ? parseFloat(t.amountTendered) : null,
     changeDue: t.changeDue ? parseFloat(t.changeDue) : null,
     notes: t.notes ?? null,
+    loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
     items: Array.isArray(t.items) ? t.items : [],
     createdAt: t.createdAt.toISOString(),
   };
@@ -102,7 +103,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes } = parsed.data;
+  const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes, loyaltyEarned } = parsed.data;
 
   const receiptNumber = generateReceiptNumber(req.session.merchantId!);
 
@@ -122,6 +123,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       amountTendered: amountTendered?.toString(),
       changeDue: changeDue?.toString(),
       notes: notes ?? null,
+      loyaltyEarned: loyaltyEarned?.toString() ?? null,
       items,
     })
     .returning();

@@ -289,6 +289,7 @@ export const ListProductsResponse = zod.object({
   "lowStockThreshold": zod.number().nullish(),
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
+  "excludeFromLoyalty": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -316,7 +317,8 @@ export const CreateProductBody = zod.object({
   "stockQuantity": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
   "taxRate": zod.number().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "excludeFromLoyalty": zod.boolean().optional()
 })
 
 
@@ -351,6 +353,7 @@ export const GetProductResponse = zod.object({
   "lowStockThreshold": zod.number().nullish(),
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
+  "excludeFromLoyalty": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -375,7 +378,8 @@ export const UpdateProductBody = zod.object({
   "stockQuantity": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
   "taxRate": zod.number().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "excludeFromLoyalty": zod.boolean().optional()
 })
 
 export const UpdateProductResponse = zod.object({
@@ -402,6 +406,7 @@ export const UpdateProductResponse = zod.object({
   "lowStockThreshold": zod.number().nullish(),
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
+  "excludeFromLoyalty": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -721,6 +726,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -969,6 +975,7 @@ export const ListTransactionsResponse = zod.object({
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1006,7 +1013,8 @@ export const CreateTransactionBody = zod.object({
   "total": zod.number(),
   "amountTendered": zod.number().optional(),
   "changeDue": zod.number().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "loyaltyEarned": zod.number().optional()
 })
 
 
@@ -1064,6 +1072,7 @@ export const GetTransactionResponse = zod.object({
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1136,6 +1145,7 @@ export const RefundTransactionResponse = zod.object({
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1294,6 +1304,68 @@ export const DeleteStaffParams = zod.object({
 
 
 /**
+ * @summary Get merchant loyalty settings
+ */
+export const GetLoyaltySettingsResponse = zod.object({
+  "programType": zod.enum(['cashback', 'points', 'tiered', 'stamp', 'custom']),
+  "isEnabled": zod.boolean(),
+  "cashbackRate": zod.number().optional(),
+  "pointsPerDollar": zod.number().optional(),
+  "dollarPerPoint": zod.number().optional(),
+  "tiers": zod.array(zod.object({
+  "name": zod.string(),
+  "minSpend": zod.number(),
+  "rate": zod.number()
+})).optional(),
+  "stampsRequired": zod.number().optional(),
+  "stampRewardValue": zod.number().optional(),
+  "customDescription": zod.string().optional(),
+  "customValue": zod.number().optional(),
+  "excludedCustomerGroups": zod.array(zod.string()).optional()
+})
+
+
+/**
+ * @summary Update merchant loyalty settings
+ */
+export const UpdateLoyaltySettingsBody = zod.object({
+  "programType": zod.enum(['cashback', 'points', 'tiered', 'stamp', 'custom']),
+  "isEnabled": zod.boolean(),
+  "cashbackRate": zod.number().optional(),
+  "pointsPerDollar": zod.number().optional(),
+  "dollarPerPoint": zod.number().optional(),
+  "tiers": zod.array(zod.object({
+  "name": zod.string(),
+  "minSpend": zod.number(),
+  "rate": zod.number()
+})).optional(),
+  "stampsRequired": zod.number().optional(),
+  "stampRewardValue": zod.number().optional(),
+  "customDescription": zod.string().optional(),
+  "customValue": zod.number().optional(),
+  "excludedCustomerGroups": zod.array(zod.string()).optional()
+})
+
+export const UpdateLoyaltySettingsResponse = zod.object({
+  "programType": zod.enum(['cashback', 'points', 'tiered', 'stamp', 'custom']),
+  "isEnabled": zod.boolean(),
+  "cashbackRate": zod.number().optional(),
+  "pointsPerDollar": zod.number().optional(),
+  "dollarPerPoint": zod.number().optional(),
+  "tiers": zod.array(zod.object({
+  "name": zod.string(),
+  "minSpend": zod.number(),
+  "rate": zod.number()
+})).optional(),
+  "stampsRequired": zod.number().optional(),
+  "stampRewardValue": zod.number().optional(),
+  "customDescription": zod.string().optional(),
+  "customValue": zod.number().optional(),
+  "excludedCustomerGroups": zod.array(zod.string()).optional()
+})
+
+
+/**
  * @summary List inventory levels
  */
 export const ListInventoryQueryParams = zod.object({
@@ -1406,6 +1478,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),

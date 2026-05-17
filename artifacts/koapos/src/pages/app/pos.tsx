@@ -5,17 +5,19 @@ import {
   useListCategories, 
   useCreateTransaction,
   useListCustomers,
+  useGetLoyaltySettings,
   Product,
   Customer,
   TransactionInputPaymentMethod,
   TransactionItem
 } from "@workspace/api-client-react";
+import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import {
   Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
-  SplitSquareHorizontal, User, X, AlertTriangle, UserSearch,
+  SplitSquareHorizontal, X, AlertTriangle, UserSearch,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -52,6 +54,7 @@ export default function POSPage() {
   );
 
   const createTransactionMutation = useCreateTransaction();
+  const { data: loyaltySettings } = useGetLoyaltySettings();
 
   const products = productsData?.items || [];
   const categories: import("@workspace/api-client-react").Category[] = categoriesData || [];
@@ -88,6 +91,49 @@ export default function POSPage() {
   const taxTotal = subtotal * taxRate;
   const total = subtotal + taxTotal;
 
+  const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
+    if (!loyaltySettings?.isEnabled || cart.length === 0) {
+      return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
+    }
+    const excluded = (loyaltySettings.excludedCustomerGroups ?? []).map((g: string) => g.toLowerCase());
+    const group = (selectedCustomer?.customerGroup ?? "").toLowerCase();
+    if (selectedCustomer && group && excluded.includes(group)) {
+      return { loyaltyAmount: 0, loyaltyLabel: "No loyalty (excluded group)", loyaltyUnit: "" };
+    }
+    const eligibleSubtotal = cart.reduce((sum, item) => {
+      if (item.product.excludeFromLoyalty) return sum;
+      return sum + item.product.price * item.quantity;
+    }, 0);
+    if (eligibleSubtotal === 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
+
+    switch (loyaltySettings.programType) {
+      case "cashback": {
+        const amt = eligibleSubtotal * (loyaltySettings.cashbackRate ?? 0.01);
+        return { loyaltyAmount: amt, loyaltyLabel: `${((loyaltySettings.cashbackRate ?? 0.01) * 100).toFixed(1)}% cashback`, loyaltyUnit: "$" };
+      }
+      case "points": {
+        const pts = Math.floor(eligibleSubtotal * (loyaltySettings.pointsPerDollar ?? 1));
+        return { loyaltyAmount: pts, loyaltyLabel: `${pts} pts earned`, loyaltyUnit: "pts" };
+      }
+      case "tiered": {
+        const spent = selectedCustomer?.totalSpent ?? 0;
+        const tiers = [...(loyaltySettings.tiers ?? [])].sort((a, b) => b.minSpend - a.minSpend);
+        const tier = tiers.find((t) => spent >= t.minSpend) ?? tiers[tiers.length - 1];
+        const rate = tier?.rate ?? 0.01;
+        const amt = eligibleSubtotal * rate;
+        return { loyaltyAmount: amt, loyaltyLabel: `${(rate * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`, loyaltyUnit: "$" };
+      }
+      case "stamp":
+        return { loyaltyAmount: 1, loyaltyLabel: "1 stamp earned", loyaltyUnit: "stamp" };
+      case "custom": {
+        const amt = eligibleSubtotal * (loyaltySettings.customValue ?? 0.01);
+        return { loyaltyAmount: amt, loyaltyLabel: "reward earned", loyaltyUnit: "$" };
+      }
+      default:
+        return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
+    }
+  }, [cart, loyaltySettings, selectedCustomer]);
+
   const selectCustomer = (c: Customer) => {
     setSelectedCustomer(c);
     setCustomerPickerOpen(false);
@@ -107,6 +153,8 @@ export default function POSPage() {
       taxAmount: (item.product.price * item.quantity) * (item.product.taxRate || taxRate)
     }));
 
+    const storedLoyalty = loyaltyUnit === "pts" || loyaltyUnit === "stamp" ? loyaltyAmount : loyaltyAmount;
+
     createTransactionMutation.mutate({
       data: {
         items,
@@ -116,6 +164,7 @@ export default function POSPage() {
         total,
         amountTendered: total,
         customerId: selectedCustomer?.id,
+        loyaltyEarned: loyaltyAmount > 0 ? storedLoyalty : undefined,
       }
     }, {
       onSuccess: () => {
@@ -297,6 +346,21 @@ export default function POSPage() {
                 <span>Total</span>
                 <span className="text-primary">{formatCurrency(total)}</span>
               </div>
+              {loyaltyAmount > 0 && loyaltyUnit !== "" && (
+                <div className="flex items-center justify-between pt-2 border-t mt-1 text-emerald-600">
+                  <span className="flex items-center gap-1.5 text-xs font-medium">
+                    <Gift className="w-3.5 h-3.5" />
+                    {loyaltyLabel}
+                  </span>
+                  <span className="text-xs font-semibold">
+                    {loyaltyUnit === "$"
+                      ? `+${formatCurrency(loyaltyAmount)}`
+                      : loyaltyUnit === "pts"
+                      ? `+${loyaltyAmount} pts`
+                      : "+1 stamp"}
+                  </span>
+                </div>
+              )}
             </div>
             <Button 
               className="w-full h-16 text-xl font-bold" 

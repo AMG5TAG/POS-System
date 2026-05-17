@@ -28,6 +28,7 @@ export const productsTable = pgTable("products", {
   lowStockThreshold: integer("low_stock_threshold").default(5),
   taxRate: numeric("tax_rate", { precision: 5, scale: 2 }).default("10"),
   isActive: text("is_active").notNull().default("true"),
+  excludeFromLoyalty: text("exclude_from_loyalty").notNull().default("false"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

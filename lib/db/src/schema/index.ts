@@ -11,3 +11,4 @@ export * from "./suppliers";
 export * from "./tags";
 export * from "./customer-notes";
 export * from "./customer-files";
+export * from "./loyalty-settings";

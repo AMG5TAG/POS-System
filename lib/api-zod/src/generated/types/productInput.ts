@@ -22,4 +22,5 @@ export interface ProductInput {
   lowStockThreshold?: number;
   taxRate?: number;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
 }

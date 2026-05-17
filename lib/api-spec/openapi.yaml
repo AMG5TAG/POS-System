@@ -32,6 +32,8 @@ tags:
     description: Inventory tracking
   - name: dashboard
     description: Dashboard summary and analytics
+  - name: loyalty
+    description: Loyalty program settings
   - name: service-jobs
     description: Service job management
   - name: Storage
@@ -943,6 +945,37 @@ paths:
         "204":
           description: Deleted
 
+  # ── Loyalty ───────────────────────────────────────────────────────────────
+  /loyalty/settings:
+    get:
+      operationId: getLoyaltySettings
+      tags: [loyalty]
+      summary: Get merchant loyalty settings
+      responses:
+        "200":
+          description: Loyalty settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltySettings"
+    put:
+      operationId: updateLoyaltySettings
+      tags: [loyalty]
+      summary: Update merchant loyalty settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoyaltySettingsInput"
+      responses:
+        "200":
+          description: Updated loyalty settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltySettings"
+
   # ── Inventory ─────────────────────────────────────────────────────────────
   /inventory:
     get:
@@ -1457,6 +1490,8 @@ components:
           type: ["number", "null"]
         isActive:
           type: boolean
+        excludeFromLoyalty:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -1493,6 +1528,8 @@ components:
           type: number
         isActive:
           type: boolean
+        excludeFromLoyalty:
+          type: boolean
 
     ProductUpdate:
       type: object
@@ -1522,6 +1559,8 @@ components:
         taxRate:
           type: number
         isActive:
+          type: boolean
+        excludeFromLoyalty:
           type: boolean
 
     ProductList:
@@ -1815,6 +1854,8 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        loyaltyEarned:
+          type: ["number", "null"]
         items:
           type: array
           items:
@@ -1852,6 +1893,8 @@ components:
           type: number
         notes:
           type: string
+        loyaltyEarned:
+          type: number
 
     RefundInput:
       type: object
@@ -2433,3 +2476,79 @@ components:
       properties:
         error:
           type: string
+
+    # ── Loyalty ───────────────────────────────────────────────────────────────
+    LoyaltyTier:
+      type: object
+      required: [name, minSpend, rate]
+      properties:
+        name:
+          type: string
+        minSpend:
+          type: number
+        rate:
+          type: number
+
+    LoyaltySettings:
+      type: object
+      required: [programType, isEnabled]
+      properties:
+        programType:
+          type: string
+          enum: [cashback, points, tiered, stamp, custom]
+        isEnabled:
+          type: boolean
+        cashbackRate:
+          type: number
+        pointsPerDollar:
+          type: number
+        dollarPerPoint:
+          type: number
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyTier"
+        stampsRequired:
+          type: integer
+        stampRewardValue:
+          type: number
+        customDescription:
+          type: string
+        customValue:
+          type: number
+        excludedCustomerGroups:
+          type: array
+          items:
+            type: string
+
+    LoyaltySettingsInput:
+      type: object
+      required: [programType, isEnabled]
+      properties:
+        programType:
+          type: string
+          enum: [cashback, points, tiered, stamp, custom]
+        isEnabled:
+          type: boolean
+        cashbackRate:
+          type: number
+        pointsPerDollar:
+          type: number
+        dollarPerPoint:
+          type: number
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyTier"
+        stampsRequired:
+          type: integer
+        stampRewardValue:
+          type: number
+        customDescription:
+          type: string
+        customValue:
+          type: number
+        excludedCustomerGroups:
+          type: array
+          items:
+            type: string

@@ -33,5 +33,6 @@ export interface Product {
   /** @nullable */
   taxRate?: number | null;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
   createdAt: Date;
 }

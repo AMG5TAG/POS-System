@@ -20,4 +20,5 @@ export interface TransactionInput {
   amountTendered?: number;
   changeDue?: number;
   notes?: string;
+  loyaltyEarned?: number;
 }

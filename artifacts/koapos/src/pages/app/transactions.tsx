@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -121,6 +121,17 @@ function ReceiptDialog({
               <span>{formatCurrency(tx.total)}</span>
             </div>
           </div>
+
+          {(tx.loyaltyEarned != null && tx.loyaltyEarned > 0) && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 px-4 py-3 flex items-center justify-between text-sm">
+              <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
+                <Gift className="w-3.5 h-3.5" /> Loyalty Earned
+              </span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                +{formatCurrency(tx.loyaltyEarned)}
+              </span>
+            </div>
+          )}
 
           {tx.notes && <p className="text-xs text-muted-foreground italic px-1">{tx.notes}</p>}
         </div>

@@ -31,6 +31,8 @@ export interface Transaction {
   changeDue?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  loyaltyEarned?: number | null;
   items: TransactionItem[];
   createdAt: Date;
 }

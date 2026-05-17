@@ -19,6 +19,7 @@ export const transactionsTable = pgTable("transactions", {
   amountTendered: numeric("amount_tendered", { precision: 10, scale: 2 }),
   changeDue: numeric("change_due", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  loyaltyEarned: numeric("loyalty_earned", { precision: 10, scale: 2 }),
   items: jsonb("items").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

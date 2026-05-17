@@ -17,6 +17,7 @@ import tagsRouter from "./tags";
 import invoicesRouter from "./invoices";
 import integrationsRouter from "./integrations";
 import storageRouter from "./storage";
+import loyaltyRouter from "./loyalty";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(tagsRouter);
 router.use(invoicesRouter);
 router.use(integrationsRouter);
 router.use(storageRouter);
+router.use(loyaltyRouter);
 
 export default router;

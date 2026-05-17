@@ -21,4 +21,5 @@ export interface ProductUpdate {
   lowStockThreshold?: number;
   taxRate?: number;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
 }

@@ -37,13 +37,13 @@ type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
   sku: string; categoryId: string; stockQuantity: string;
   lowStockThreshold: string; taxRate: string;
-  trackInventory: boolean; isActive: boolean;
+  trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
 };
 
 const defaultForm: ProductForm = {
   name: "", description: "", price: "", costPrice: "", sku: "",
   categoryId: "", stockQuantity: "0", lowStockThreshold: "5",
-  taxRate: "10", trackInventory: true, isActive: true,
+  taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
 };
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
@@ -292,6 +292,7 @@ export default function ProductsPage() {
       taxRate: p.taxRate?.toString() || "10",
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
+      excludeFromLoyalty: p.excludeFromLoyalty ?? false,
     });
     setDialogOpen(true);
   };
@@ -308,6 +309,7 @@ export default function ProductsPage() {
       lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
+      excludeFromLoyalty: form.excludeFromLoyalty,
     };
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
@@ -505,6 +507,13 @@ export default function ProductsPage() {
             <div className="flex items-center gap-3 md:col-span-2">
               <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
               <Label>Active (available in POS)</Label>
+            </div>
+            <div className="flex items-center gap-3 md:col-span-2">
+              <Switch checked={form.excludeFromLoyalty} onCheckedChange={(v) => setForm({ ...form, excludeFromLoyalty: v })} />
+              <div>
+                <Label>Exclude from Loyalty</Label>
+                <p className="text-xs text-muted-foreground">Customers won't earn rewards when purchasing this product.</p>
+              </div>
             </div>
           </div>
           <DialogFooter>

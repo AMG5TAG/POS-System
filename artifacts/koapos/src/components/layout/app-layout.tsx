@@ -12,7 +12,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, LayoutDashboard as DashboardIcon,
-  Building2, Globe, UserCircle, Monitor,
+  Building2, Globe, UserCircle, Monitor, Gift,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -71,6 +71,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Cost Summary",   href: "/staff/cost-summary",     icon: Coins         },
     ],
   },
+  { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
   { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
@@ -102,6 +103,7 @@ const SEARCH_INDEX = [
   { label: "Staff · Rostering",     href: "/staff/rostering",        icon: CalendarClock, group: "Management"  },
   { label: "Staff · Leave Requests",href: "/staff/leave-requests",   icon: ClipboardList, group: "Management"  },
   { label: "Staff · Cost Summary",  href: "/staff/cost-summary",     icon: Coins,         group: "Management"  },
+  { label: "Loyalty",          href: "/management/loyalty",          icon: Gift,            group: "Management" },
   { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
@@ -156,6 +158,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/sales-overview":   ["Management", "Sales Overview"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
+  "/management/loyalty":          ["Management", "Loyalty"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
@@ -340,8 +343,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     location.startsWith("/management/") ||
     location === "/staff" ||
     location.startsWith("/staff/") ||
-    location === "/modules" ||
-    location === "/management/integrations";
+    location === "/modules";
   const isSettingsSection   = location === "/settings" || location.startsWith("/settings/");
 
   const [posOpen,      setPosOpen]     = useState(isPOSSection);

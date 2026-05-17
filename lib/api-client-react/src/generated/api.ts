@@ -51,6 +51,8 @@ import type {
   ListProductsParams,
   ListTransactionsParams,
   LoginInput,
+  LoyaltySettings,
+  LoyaltySettingsInput,
   Merchant,
   MerchantUpdate,
   Module,
@@ -3578,6 +3580,154 @@ export const useDeleteStaff = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteStaffMutationOptions(options));
+    }
+
+export const getGetLoyaltySettingsUrl = () => {
+
+
+
+
+  return `/api/loyalty/settings`
+}
+
+/**
+ * @summary Get merchant loyalty settings
+ */
+export const getLoyaltySettings = async ( options?: RequestInit): Promise<LoyaltySettings> => {
+
+  return customFetch<LoyaltySettings>(getGetLoyaltySettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLoyaltySettingsQueryKey = () => {
+    return [
+    `/api/loyalty/settings`
+    ] as const;
+    }
+
+
+export const getGetLoyaltySettingsQueryOptions = <TData = Awaited<ReturnType<typeof getLoyaltySettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoyaltySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLoyaltySettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLoyaltySettings>>> = ({ signal }) => getLoyaltySettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLoyaltySettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLoyaltySettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getLoyaltySettings>>>
+export type GetLoyaltySettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get merchant loyalty settings
+ */
+
+export function useGetLoyaltySettings<TData = Awaited<ReturnType<typeof getLoyaltySettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoyaltySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLoyaltySettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateLoyaltySettingsUrl = () => {
+
+
+
+
+  return `/api/loyalty/settings`
+}
+
+/**
+ * @summary Update merchant loyalty settings
+ */
+export const updateLoyaltySettings = async (loyaltySettingsInput: LoyaltySettingsInput, options?: RequestInit): Promise<LoyaltySettings> => {
+
+  return customFetch<LoyaltySettings>(getUpdateLoyaltySettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      loyaltySettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateLoyaltySettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoyaltySettings>>, TError,{data: BodyType<LoyaltySettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLoyaltySettings>>, TError,{data: BodyType<LoyaltySettingsInput>}, TContext> => {
+
+const mutationKey = ['updateLoyaltySettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLoyaltySettings>>, {data: BodyType<LoyaltySettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateLoyaltySettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLoyaltySettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateLoyaltySettings>>>
+    export type UpdateLoyaltySettingsMutationBody = BodyType<LoyaltySettingsInput>
+    export type UpdateLoyaltySettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update merchant loyalty settings
+ */
+export const useUpdateLoyaltySettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoyaltySettings>>, TError,{data: BodyType<LoyaltySettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLoyaltySettings>>,
+        TError,
+        {data: BodyType<LoyaltySettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLoyaltySettingsMutationOptions(options));
     }
 
 export const getListInventoryUrl = (params?: ListInventoryParams,) => {

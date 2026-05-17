@@ -144,6 +144,7 @@ export interface Product {
   /** @nullable */
   taxRate?: number | null;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
   createdAt: string;
 }
 
@@ -163,6 +164,7 @@ export interface ProductInput {
   lowStockThreshold?: number;
   taxRate?: number;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
 }
 
 export interface ProductUpdate {
@@ -180,6 +182,7 @@ export interface ProductUpdate {
   lowStockThreshold?: number;
   taxRate?: number;
   isActive?: boolean;
+  excludeFromLoyalty?: boolean;
 }
 
 export interface ProductList {
@@ -368,6 +371,8 @@ export interface Transaction {
   changeDue?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  loyaltyEarned?: number | null;
   items: TransactionItem[];
   createdAt: string;
 }
@@ -395,6 +400,7 @@ export interface TransactionInput {
   amountTendered?: number;
   changeDue?: number;
   notes?: string;
+  loyaltyEarned?: number;
 }
 
 export interface RefundInput {
@@ -807,6 +813,62 @@ export interface UploadUrlResponse {
 
 export interface ErrorEnvelope {
   error: string;
+}
+
+export interface LoyaltyTier {
+  name: string;
+  minSpend: number;
+  rate: number;
+}
+
+export type LoyaltySettingsProgramType = typeof LoyaltySettingsProgramType[keyof typeof LoyaltySettingsProgramType];
+
+
+export const LoyaltySettingsProgramType = {
+  cashback: 'cashback',
+  points: 'points',
+  tiered: 'tiered',
+  stamp: 'stamp',
+  custom: 'custom',
+} as const;
+
+export interface LoyaltySettings {
+  programType: LoyaltySettingsProgramType;
+  isEnabled: boolean;
+  cashbackRate?: number;
+  pointsPerDollar?: number;
+  dollarPerPoint?: number;
+  tiers?: LoyaltyTier[];
+  stampsRequired?: number;
+  stampRewardValue?: number;
+  customDescription?: string;
+  customValue?: number;
+  excludedCustomerGroups?: string[];
+}
+
+export type LoyaltySettingsInputProgramType = typeof LoyaltySettingsInputProgramType[keyof typeof LoyaltySettingsInputProgramType];
+
+
+export const LoyaltySettingsInputProgramType = {
+  cashback: 'cashback',
+  points: 'points',
+  tiered: 'tiered',
+  stamp: 'stamp',
+  custom: 'custom',
+} as const;
+
+export interface LoyaltySettingsInput {
+  programType: LoyaltySettingsInputProgramType;
+  isEnabled: boolean;
+  cashbackRate?: number;
+  pointsPerDollar?: number;
+  dollarPerPoint?: number;
+  tiers?: LoyaltyTier[];
+  stampsRequired?: number;
+  stampRewardValue?: number;
+  customDescription?: string;
+  customValue?: number;
+  excludedCustomerGroups?: string[];
 }
 
 export type ListProductsParams = {

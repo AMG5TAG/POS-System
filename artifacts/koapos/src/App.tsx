@@ -55,6 +55,7 @@ import ManagementSalesPage from "@/pages/app/management-sales";
 import ManagementRegistersPage from "@/pages/app/management-registers";
 import ManagementIntegrationsPage from "@/pages/app/management-integrations";
 import ManagementImportExportPage from "@/pages/app/management-import-export";
+import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
 
 import NotFound from "@/pages/not-found";
 
@@ -204,6 +205,9 @@ function Router() {
       </Route>
       <Route path="/management/import-export">
         <ProtectedRoute component={ManagementImportExportPage} />
+      </Route>
+      <Route path="/management/loyalty">
+        <ProtectedRoute component={ManagementLoyaltyPage} />
       </Route>
 
       <Route path="/modules">
