@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,112 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Bookmark, Pencil, Trash2, Search, Globe, ImageIcon, X } from "lucide-react";
+import { Plus, Bookmark, Pencil, Trash2, Search, Globe, ImageIcon, X, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type Brand = { id: number; name: string; description: string | null; website: string | null; logoUrl: string | null; createdAt: string };
 
 const API = "/api/brands";
-const headers = { "Content-Type": "application/json" };
+const hdrs = { "Content-Type": "application/json" };
+
+/* ─── Logo uploader ─────────────────────────────────────────────────────── */
+
+function LogoUploader({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const upload = async (file: File) => {
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    setUploading(true);
+    try {
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+        credentials: "include",
+      });
+      if (!urlRes.ok) throw new Error("Could not get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+
+      const putRes = await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!putRes.ok) throw new Error("Upload to storage failed");
+
+      onChange(`/api/storage${objectPath}`);
+      toast.success("Logo uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFile = (files: FileList | null) => { if (files?.[0]) upload(files[0]); };
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Logo</Label>
+      <div className="flex items-center gap-3">
+        {/* Preview box */}
+        <div
+          className={cn(
+            "w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center shrink-0 overflow-hidden transition-colors cursor-pointer",
+            dragOver ? "border-primary bg-primary/5" : "bg-muted/20 hover:bg-muted/30",
+            uploading && "opacity-60 pointer-events-none",
+          )}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files); }}
+        >
+          {uploading ? (
+            <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+          ) : value ? (
+            <img src={value} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+          ) : (
+            <ImageIcon className="w-7 h-7 text-muted-foreground/40" />
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            {uploading ? "Uploading…" : value ? "Replace" : "Upload Logo"}
+          </Button>
+          {value && (
+            <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 text-xs" onClick={() => onChange("")}>
+              <X className="w-3 h-3" /> Remove
+            </Button>
+          )}
+          <p className="text-[11px] text-muted-foreground leading-tight">PNG, JPG, SVG<br />Drag & drop or click</p>
+        </div>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleFile(e.target.files)}
+      />
+    </div>
+  );
+}
+
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ProductsBrandsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -41,8 +140,8 @@ export default function ProductsBrandsPage() {
     setSaving(true);
     const body = JSON.stringify(form);
     const res = editing
-      ? await fetch(`${API}/${editing.id}`, { method: "PATCH", headers, body, credentials: "include" })
-      : await fetch(API, { method: "POST", headers, body, credentials: "include" });
+      ? await fetch(`${API}/${editing.id}`, { method: "PATCH", headers: hdrs, body, credentials: "include" })
+      : await fetch(API, { method: "POST", headers: hdrs, body, credentials: "include" });
     setSaving(false);
     if (!res.ok) { toast.error("Failed to save brand"); return; }
     toast.success(editing ? "Brand updated" : "Brand added");
@@ -116,32 +215,7 @@ export default function ProductsBrandsPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{editing ? "Edit Brand" : "Add Brand"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            {/* Logo upload / preview */}
-            <div className="space-y-1.5">
-              <Label>Logo</Label>
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-xl border-2 border-dashed bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
-                  {form.logoUrl ? (
-                    <img src={form.logoUrl} alt="Logo preview" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
-                  )}
-                </div>
-                <div className="flex-1 space-y-1.5">
-                  <Input
-                    value={form.logoUrl}
-                    onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-                    placeholder="Paste image URL..."
-                    className="text-sm"
-                  />
-                  {form.logoUrl && (
-                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setForm({ ...form, logoUrl: "" })}>
-                      <X className="w-3 h-3 mr-1" /> Remove
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
+            <LogoUploader value={form.logoUrl} onChange={(url) => setForm({ ...form, logoUrl: url })} />
 
             <div className="space-y-1.5">
               <Label>Brand Name *</Label>
