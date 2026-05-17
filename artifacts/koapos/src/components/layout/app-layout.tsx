@@ -429,7 +429,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   return (
     <SidebarProvider defaultOpen={!hideSidebar}>
       <div className="min-h-[100dvh] w-full flex bg-muted/10">
-        <Sidebar className="border-r">
+        <Sidebar collapsible="icon" className="border-r">
           <SidebarHeader className="h-16 flex items-center px-4 border-b">
             <Link href="/dashboard" className="flex items-center gap-2 w-full">
               <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain shrink-0" />
