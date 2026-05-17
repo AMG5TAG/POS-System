@@ -5,13 +5,12 @@ import {
   useCreateAppointment,
   useDeleteAppointment,
   useUpdateAppointment,
-  useListCustomers,
   useListStaff,
   Appointment,
   AppointmentInputStatus,
-  Customer,
   Staff,
 } from "@workspace/api-client-react";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -20,13 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
-  CalendarClock, Plus, Trash2, Pencil, Search, Clock, User, StickyNote,
-  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, UserPlus,
+  CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
+  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
 /* ─── Status config ──────────────────────────────────────────────────────── */
 
@@ -268,15 +266,11 @@ interface BookingDialogProps {
   open: boolean;
   editing: Appointment | null;
   onClose: () => void;
-  customers: Customer[];
   staff: Staff[];
 }
 
-function BookingDialog({ open, editing, onClose, customers, staff }: BookingDialogProps) {
+function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
-  const [customerSearch, setSearch]   = useState("");
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
@@ -291,23 +285,13 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
         status:     editing.status as AppointmentInputStatus,
         notes:      editing.notes ?? "",
       } : makeDefaultForm());
-      setSearch("");
-      setCustomerOpen(false);
     }
   }, [open, editing]);
 
   const setField = (key: keyof FormState, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
 
-  const safeCustomers = Array.isArray(customers) ? customers : [];
-  const safeStaff     = Array.isArray(staff)     ? staff     : [];
-
-  const filtered = safeCustomers.filter((c) => {
-    const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-    return name.includes(customerSearch.toLowerCase()) || (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase());
-  });
-
-  const selected = safeCustomers.find((c) => String(c.id) === form.customerId);
+  const safeStaff = Array.isArray(staff) ? staff : [];
 
   const handleSubmit = () => {
     if (!editing && !form.customerId) { toast.error("Please select a customer"); return; }
@@ -337,7 +321,6 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -356,67 +339,14 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
                 ? <span className="text-muted-foreground font-normal">(optional)</span>
                 : <span className="text-destructive">*</span>}
             </Label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setCustomerOpen((o) => !o)}
-                className={cn(
-                  "w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm bg-background hover:bg-muted/30 transition-colors",
-                  !editing && !form.customerId && "border-destructive/40"
-                )}
-              >
-                <span className={selected ? "text-foreground" : "text-muted-foreground"}>
-                  {selected ? `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() : "Search customer..."}
-                </span>
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-              </button>
-              {customerOpen && (
-                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-lg">
-                  <div className="p-2 border-b">
-                    <Input autoFocus placeholder="Search by name or email..." value={customerSearch}
-                      onChange={(e) => setSearch(e.target.value)} className="h-8 text-sm" />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {/* Add new customer — always pinned to top */}
-                    <button
-                      type="button"
-                      onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
-                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
-                    >
-                      <UserPlus className="w-3.5 h-3.5 shrink-0" />
-                      Add new customer
-                    </button>
-                    {/* No customer — edit mode only */}
-                    {editing && (
-                      <button type="button" onClick={() => { setField("customerId", ""); setCustomerOpen(false); }}
-                        className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
-                        No customer
-                      </button>
-                    )}
-                    {filtered.map((c) => (
-                      <button key={c.id} type="button"
-                        onClick={() => { setField("customerId", String(c.id)); setCustomerOpen(false); setSearch(""); }}
-                        className={cn("w-full text-left px-3 py-2 text-sm hover:bg-muted/40", form.customerId === String(c.id) && "bg-primary/10 font-medium")}>
-                        <span className="font-medium">{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</span>
-                        {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
-                      </button>
-                    ))}
-                    {filtered.length === 0 && customerSearch && (
-                      <div className="px-3 py-3 text-sm text-center text-muted-foreground">
-                        No customers match &ldquo;{customerSearch}&rdquo; —{" "}
-                        <button
-                          type="button"
-                          className="text-primary font-medium underline-offset-2 hover:underline"
-                          onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
-                        >
-                          create one
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <CustomerSearchInput
+              value={form.customerId}
+              onChange={(id) => setField("customerId", id)}
+              placeholder="Search customer..."
+              allowNone={!!editing}
+              noneLabel="No customer"
+              invalid={!editing && !form.customerId}
+            />
             {!editing && !form.customerId && (
               <p className="text-xs text-muted-foreground">A customer is required to book an on-site appointment.</p>
             )}
@@ -483,18 +413,6 @@ function BookingDialog({ open, editing, onClose, customers, staff }: BookingDial
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    <QuickAddCustomerDialog
-      open={quickAddOpen}
-      onClose={() => setQuickAddOpen(false)}
-      prefillName={customerSearch}
-      onCreated={(customer) => {
-        setField("customerId", String(customer.id));
-        setSearch("");
-        queryClient.invalidateQueries({ queryKey: ["listCustomers"] });
-      }}
-    />
-    </>
   );
 }
 
@@ -512,13 +430,11 @@ export default function AppointmentsPage() {
 
   const queryClient = useQueryClient();
   const { data: appointmentsData, isLoading } = useListAppointments({}, { query: { queryKey: ["listAppointments"] } });
-  const { data: customersData } = useListCustomers();
-  const { data: staffData }     = useListStaff();
+  const { data: staffData } = useListStaff();
   const deleteMutation          = useDeleteAppointment();
 
-  const appts    = Array.isArray(appointmentsData) ? appointmentsData : [];
-  const customers = Array.isArray(customersData) ? customersData : [];
-  const staff     = Array.isArray(staffData)     ? staffData     : [];
+  const appts = Array.isArray(appointmentsData) ? appointmentsData : [];
+  const staff = Array.isArray(staffData) ? staffData : [];
 
   const upcoming = appts.filter((a) => a.status === "scheduled").length;
 
@@ -734,7 +650,6 @@ export default function AppointmentsPage() {
         open={bookingOpen}
         editing={editing}
         onClose={() => setBookingOpen(false)}
-        customers={customers}
         staff={staff}
       />
     </AppLayout>

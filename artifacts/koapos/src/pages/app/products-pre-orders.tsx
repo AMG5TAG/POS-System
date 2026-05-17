@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useListCustomers } from "@workspace/api-client-react";
+import { useListProducts } from "@workspace/api-client-react";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,12 +24,10 @@ export default function ProductsPreOrdersPage() {
   const [orders, setOrders] = useState<PreOrder[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ customerId: "", productId: "", quantity: "1", depositAmount: "", expectedDate: "", notes: "", status: "Pending" as PreOrderStatus });
+  const [form, setForm] = useState({ customerId: "", customerName: "", productId: "", quantity: "1", depositAmount: "", expectedDate: "", notes: "", status: "Pending" as PreOrderStatus });
 
   const { data: productsData } = useListProducts({ limit: 500 });
-  const { data: customersData } = useListCustomers({ limit: 500 });
   const products = productsData?.items ?? [];
-  const customers = Array.isArray(customersData?.items) ? customersData.items : [];
 
   const filtered = orders.filter((o) =>
     o.customerName.toLowerCase().includes(search.toLowerCase()) ||
@@ -38,12 +37,11 @@ export default function ProductsPreOrdersPage() {
 
   const handleSave = () => {
     if (!form.customerId || !form.productId) { toast.error("Customer and product are required"); return; }
-    const customer = customers.find((c) => String(c.id) === form.customerId);
     const product = products.find((p) => String(p.id) === form.productId);
     const po: PreOrder = {
       id: nextId,
       poNumber: `PRE-${String(nextId++).padStart(4, "0")}`,
-      customerName: `${customer?.firstName ?? ""} ${customer?.lastName ?? ""}`.trim(),
+      customerName: form.customerName,
       productName: product?.name ?? "",
       quantity: parseInt(form.quantity) || 1,
       depositAmount: parseFloat(form.depositAmount) || 0,
@@ -55,7 +53,7 @@ export default function ProductsPreOrdersPage() {
     setOrders((prev) => [po, ...prev]);
     toast.success(`${po.poNumber} created`);
     setDialogOpen(false);
-    setForm({ customerId: "", productId: "", quantity: "1", depositAmount: "", expectedDate: "", notes: "", status: "Pending" });
+    setForm({ customerId: "", customerName: "", productId: "", quantity: "1", depositAmount: "", expectedDate: "", notes: "", status: "Pending" });
   };
 
   const deleteOrder = (id: number) => { setOrders((prev) => prev.filter((o) => o.id !== id)); toast.success("Pre-order deleted"); };
@@ -122,10 +120,11 @@ export default function ProductsPreOrdersPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Customer</Label>
-              <Select value={form.customerId} onValueChange={(v) => setForm({ ...form, customerId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</SelectItem>)}</SelectContent>
-              </Select>
+              <CustomerSearchInput
+                value={form.customerId}
+                onChange={(id, c) => setForm({ ...form, customerId: id, customerName: c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "" })}
+                placeholder="Select customer"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Product</Label>

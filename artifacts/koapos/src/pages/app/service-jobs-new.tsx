@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
   useCreateServiceJob,
-  useListCustomers,
-  Customer,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +23,7 @@ import {
   ArrowLeft,
   AlertCircle,
   MonitorSmartphone,
-  Search,
   Check,
-  UserPlus,
   ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -153,13 +149,7 @@ export default function ServiceJobNewPage() {
   const queryClient = useQueryClient();
   const createMutation = useCreateServiceJob();
 
-  const { data: customersData } = useListCustomers();
-  const customers = Array.isArray(customersData) ? customersData : [];
-
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [customerOpen, setCustomerOpen] = useState(false);
   const [customerId, setCustomerId] = useState("");
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -306,16 +296,6 @@ export default function ServiceJobNewPage() {
     });
   }
 
-  const selectedCustomer = customers.find((c) => String(c.id) === customerId);
-
-  const filteredCustomers = customers.filter((c: Customer) => {
-    const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-    return (
-      name.includes(customerSearch.toLowerCase()) ||
-      (c.email ?? "").toLowerCase().includes(customerSearch.toLowerCase())
-    );
-  });
-
   function handleSubmit() {
     createMutation.mutate(
       {
@@ -351,7 +331,6 @@ export default function ServiceJobNewPage() {
   }
 
   return (
-    <>
     <AppLayout>
       <div className="p-6 space-y-6 pb-12">
         {/* Header */}
@@ -375,82 +354,14 @@ export default function ServiceJobNewPage() {
             <Label>
               Customer <span className="text-destructive">*</span>
             </Label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setCustomerOpen((o) => !o)}
-                className="w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm bg-background hover:bg-muted/30 transition-colors"
-              >
-                <span className={selectedCustomer ? "text-foreground" : "text-muted-foreground"}>
-                  {selectedCustomer
-                    ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim()
-                    : "Search customer..."}
-                </span>
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-              </button>
-              {customerOpen && (
-                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-lg shadow-lg">
-                  <div className="p-2 border-b">
-                    <Input
-                      autoFocus
-                      placeholder="Search by name or email..."
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {/* Create new customer — always pinned to top */}
-                    <button
-                      type="button"
-                      onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
-                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
-                    >
-                      <UserPlus className="w-3.5 h-3.5 shrink-0" />
-                      Create new customer
-                    </button>
-                    {/* Walk-in / no customer */}
-                    <button
-                      type="button"
-                      onClick={() => { setCustomerId(""); setCustomerOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40"
-                    >
-                      No customer (walk-in)
-                    </button>
-                    {filteredCustomers.map((c: Customer) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => { setCustomerId(String(c.id)); setCustomerOpen(false); setCustomerSearch(""); }}
-                        className={cn(
-                          "w-full text-left px-3 py-2 text-sm hover:bg-muted/40",
-                          customerId === String(c.id) && "bg-primary/10 font-medium"
-                        )}
-                      >
-                        <span className="font-medium">
-                          {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}
-                        </span>
-                        {c.email && <span className="ml-2 text-muted-foreground text-xs">{c.email}</span>}
-                      </button>
-                    ))}
-                    {filteredCustomers.length === 0 && customerSearch && (
-                      <div className="px-3 py-3 text-sm text-center text-muted-foreground">
-                        No customers match &ldquo;{customerSearch}&rdquo; —{" "}
-                        <button
-                          type="button"
-                          className="text-primary font-medium underline-offset-2 hover:underline"
-                          onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
-                        >
-                          create one
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <CustomerSearchInput
+              value={customerId}
+              onChange={(id) => setCustomerId(id)}
+              placeholder="Search customer..."
+              allowNone
+              noneLabel="No customer (walk-in)"
+            />
           </div>
-
         </div>
 
         {/* Book-In Date + Partner Repair */}
@@ -698,16 +609,5 @@ export default function ServiceJobNewPage() {
         </div>
       </div>
     </AppLayout>
-
-    <QuickAddCustomerDialog
-      open={quickAddOpen}
-      onClose={() => setQuickAddOpen(false)}
-      prefillName={customerSearch}
-      onCreated={(customer) => {
-        setCustomerId(String(customer.id));
-        setCustomerSearch("");
-      }}
-    />
-  </>
   );
 }

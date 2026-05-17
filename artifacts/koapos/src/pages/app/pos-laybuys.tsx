@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListCustomers, useListProducts } from "@workspace/api-client-react";
+import { useListProducts } from "@workspace/api-client-react";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Plus, Package2, Search, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,12 +24,10 @@ export default function POSLaybuysPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
-  const [form, setForm] = useState({ customerId: "", depositAmount: "", nextPaymentDate: "" });
+  const [form, setForm] = useState({ customerId: "", customerName: "", depositAmount: "", nextPaymentDate: "" });
   const [selectedItems, setSelectedItems] = useState<LaybyItem[]>([]);
 
-  const { data: customersData } = useListCustomers({ limit: 500 });
   const { data: productsData } = useListProducts({ limit: 500 });
-  const customers = customersData?.items ?? [];
   const products = (productsData?.items ?? []).filter((p) => p.name?.toLowerCase().includes(productSearch.toLowerCase()));
 
   const addProduct = (p: { id: number; name?: string | null; price?: number | null }) => {
@@ -45,11 +43,10 @@ export default function POSLaybuysPage() {
     if (!form.customerId) { toast.error("Customer is required"); return; }
     if (!selectedItems.length) { toast.error("Add at least one product"); return; }
     const deposit = parseFloat(form.depositAmount) || 0;
-    const customer = customers.find((c) => String(c.id) === form.customerId);
     const layby: Layby = {
       id: nextId,
       reference: `LB-${String(nextId++).padStart(4, "0")}`,
-      customerName: `${customer?.firstName ?? ""} ${customer?.lastName ?? ""}`.trim(),
+      customerName: form.customerName,
       items: selectedItems,
       depositPaid: deposit,
       totalAmount: total,
@@ -61,7 +58,7 @@ export default function POSLaybuysPage() {
     setLaybys((prev) => [layby, ...prev]);
     toast.success(`${layby.reference} created`);
     setDialogOpen(false);
-    setForm({ customerId: "", depositAmount: "", nextPaymentDate: "" });
+    setForm({ customerId: "", customerName: "", depositAmount: "", nextPaymentDate: "" });
     setSelectedItems([]);
   };
 
@@ -133,10 +130,11 @@ export default function POSLaybuysPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Customer</Label>
-              <Select value={form.customerId} onValueChange={(v) => setForm({ ...form, customerId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</SelectItem>)}</SelectContent>
-              </Select>
+              <CustomerSearchInput
+                value={form.customerId}
+                onChange={(id, c) => setForm({ ...form, customerId: id, customerName: c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "" })}
+                placeholder="Select customer"
+              />
             </div>
 
             <div className="border rounded-lg p-3 space-y-2">

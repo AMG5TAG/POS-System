@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListCustomers } from "@workspace/api-client-react";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,10 +23,8 @@ export default function ProductsReturnAuthPage() {
   const [returns, setReturns] = useState<RA[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ customerId: "", reason: "", items: "", refundAmount: "", notes: "", status: "Pending" as RAStatus });
+  const [form, setForm] = useState({ customerId: "", customerName: "", reason: "", items: "", refundAmount: "", notes: "", status: "Pending" as RAStatus });
 
-  const { data: customersData } = useListCustomers({ limit: 500 });
-  const customers = Array.isArray(customersData?.items) ? customersData.items : [];
 
   const filtered = returns.filter((r) =>
     r.raNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -36,11 +34,10 @@ export default function ProductsReturnAuthPage() {
   const handleSave = () => {
     if (!form.customerId) { toast.error("Customer is required"); return; }
     if (!form.items) { toast.error("Describe the items being returned"); return; }
-    const customer = customers.find((c) => String(c.id) === form.customerId);
     const ra: RA = {
       id: nextId,
       raNumber: `RA-${String(nextId++).padStart(4, "0")}`,
-      customerName: `${customer?.firstName ?? ""} ${customer?.lastName ?? ""}`.trim(),
+      customerName: form.customerName,
       reason: form.reason,
       items: form.items,
       refundAmount: parseFloat(form.refundAmount) || 0,
@@ -51,7 +48,7 @@ export default function ProductsReturnAuthPage() {
     setReturns((prev) => [ra, ...prev]);
     toast.success(`${ra.raNumber} created`);
     setDialogOpen(false);
-    setForm({ customerId: "", reason: "", items: "", refundAmount: "", notes: "", status: "Pending" });
+    setForm({ customerId: "", customerName: "", reason: "", items: "", refundAmount: "", notes: "", status: "Pending" });
   };
 
   return (
@@ -114,10 +111,11 @@ export default function ProductsReturnAuthPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Customer</Label>
-              <Select value={form.customerId} onValueChange={(v) => setForm({ ...form, customerId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}</SelectItem>)}</SelectContent>
-              </Select>
+              <CustomerSearchInput
+                value={form.customerId}
+                onChange={(id, c) => setForm({ ...form, customerId: id, customerName: c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "" })}
+                placeholder="Select customer"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Items Being Returned</Label>

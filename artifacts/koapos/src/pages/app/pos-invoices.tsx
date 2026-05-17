@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListCustomers, useListProducts } from "@workspace/api-client-react";
+import { useListProducts } from "@workspace/api-client-react";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,9 +49,6 @@ export default function POSInvoicesPage() {
     startDate: "",
     occurrences: 1,
   });
-
-  const { data: customersData } = useListCustomers({ limit: 500 });
-  const customers = customersData?.items ?? [];
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
@@ -254,16 +252,12 @@ export default function POSInvoicesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Customer (optional)</Label>
-                <Select value={form.customerId} onValueChange={(v) => setForm({ ...form, customerId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CustomerSearchInput
+                  value={form.customerId}
+                  onChange={(id) => setForm({ ...form, customerId: id })}
+                  allowNone
+                  placeholder="Walk-in customer"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Due Date</Label>
