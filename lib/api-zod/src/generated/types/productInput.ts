@@ -5,6 +5,7 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductInputGroupPrices } from './productInputGroupPrices';
 
 export interface ProductInput {
   /** @minLength 1 */
@@ -24,4 +25,5 @@ export interface ProductInput {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  groupPrices?: ProductInputGroupPrices;
 }

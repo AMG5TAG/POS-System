@@ -293,6 +293,7 @@ export const ListProductsResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -322,7 +323,8 @@ export const CreateProductBody = zod.object({
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
-  "productType": zod.string().optional()
+  "productType": zod.string().optional(),
+  "groupPrices": zod.record(zod.string(), zod.number()).optional()
 })
 
 
@@ -361,6 +363,7 @@ export const GetProductResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -387,7 +390,8 @@ export const UpdateProductBody = zod.object({
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
-  "productType": zod.string().optional()
+  "productType": zod.string().optional(),
+  "groupPrices": zod.record(zod.string(), zod.number()).optional()
 })
 
 export const UpdateProductResponse = zod.object({
@@ -418,6 +422,7 @@ export const UpdateProductResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "createdAt": zod.coerce.date()
 })
 

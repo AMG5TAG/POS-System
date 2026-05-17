@@ -108,6 +108,8 @@ export interface Subscription {
   cancelAtPeriodEnd?: boolean;
 }
 
+export type ProductGroupPrices = {[key: string]: number};
+
 export interface Category {
   id: number;
   merchantId: number;
@@ -150,8 +152,11 @@ export interface Product {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType: string;
+  groupPrices?: ProductGroupPrices;
   createdAt: string;
 }
+
+export type ProductInputGroupPrices = {[key: string]: number};
 
 export interface ProductInput {
   /** @minLength 1 */
@@ -171,7 +176,10 @@ export interface ProductInput {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  groupPrices?: ProductInputGroupPrices;
 }
+
+export type ProductUpdateGroupPrices = {[key: string]: number};
 
 export interface ProductUpdate {
   name?: string;
@@ -190,6 +198,7 @@ export interface ProductUpdate {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  groupPrices?: ProductUpdateGroupPrices;
 }
 
 export interface ProductList {

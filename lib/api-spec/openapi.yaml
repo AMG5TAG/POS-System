@@ -1554,6 +1554,10 @@ components:
           type: boolean
         productType:
           type: string
+        groupPrices:
+          type: object
+          additionalProperties:
+            type: number
         createdAt:
           type: string
           format: date-time
@@ -1594,6 +1598,10 @@ components:
           type: boolean
         productType:
           type: string
+        groupPrices:
+          type: object
+          additionalProperties:
+            type: number
 
     ProductUpdate:
       type: object
@@ -1628,6 +1636,10 @@ components:
           type: boolean
         productType:
           type: string
+        groupPrices:
+          type: object
+          additionalProperties:
+            type: number
 
     ProductList:
       type: object

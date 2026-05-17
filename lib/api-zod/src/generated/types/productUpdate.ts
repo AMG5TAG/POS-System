@@ -5,6 +5,7 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductUpdateGroupPrices } from './productUpdateGroupPrices';
 
 export interface ProductUpdate {
   name?: string;
@@ -23,4 +24,5 @@ export interface ProductUpdate {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  groupPrices?: ProductUpdateGroupPrices;
 }

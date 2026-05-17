@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Category } from './category';
+import type { ProductGroupPrices } from './productGroupPrices';
 
 export interface Product {
   id: number;
@@ -35,5 +36,6 @@ export interface Product {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType: string;
+  groupPrices?: ProductGroupPrices;
   createdAt: Date;
 }

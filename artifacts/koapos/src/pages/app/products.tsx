@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProducts,
@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import {
   Search, Plus, Pencil, Trash2, Package,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
@@ -53,6 +54,8 @@ type ProductForm = {
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
   /* notes */
   internalNotes: string;
+  /* group pricing */
+  groupPrices: Record<string, string>;
 };
 
 const defaultForm: ProductForm = {
@@ -66,6 +69,7 @@ const defaultForm: ProductForm = {
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   internalNotes: "",
+  groupPrices: {},
 };
 
 const FORM_TABS: { key: FormTab; label: string }[] = [
@@ -335,6 +339,9 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [hideCosts, setHideCosts]       = useState(true);
   const [showHideCostsBtn]              = useState(() => { try { return localStorage.getItem("koapos_display_show_hide_costs_btn") === "true"; } catch { return false; } });
+  const [enableGroupPricing]            = useState(() => { try { return localStorage.getItem("koapos_enable_group_pricing") === "true"; } catch { return false; } });
+  const { settings: customerSettings }  = useCustomerSettings();
+  const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
 
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
@@ -400,6 +407,10 @@ export default function ProductsPage() {
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
       internalNotes: "",
+      groupPrices: Object.fromEntries(
+        Object.entries((p as Product & { groupPrices?: Record<string, number> }).groupPrices ?? {})
+          .map(([k, v]) => [k, v.toString()])
+      ),
     });
     setFormTab("details");
     setDialogOpen(true);
@@ -422,6 +433,11 @@ export default function ProductsPage() {
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
       excludeFromLoyalty: form.excludeFromLoyalty,
+      groupPrices: Object.fromEntries(
+        Object.entries(form.groupPrices)
+          .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
+          .map(([k, v]) => [k, parseFloat(v)])
+      ),
     };
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
@@ -929,6 +945,46 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Customer Group Pricing */}
+                {enableGroupPricing && (
+                  <div className="border-t pt-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <SectionHeader label="Customer Group Pricing" />
+                      <span className="text-xs text-muted-foreground">Leave blank to use standard price</span>
+                    </div>
+                    <div className="space-y-2">
+                      {customerGroups.map((group) => (
+                        <div key={group.id} className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 w-36 shrink-0">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                            <span className="text-sm font-medium truncate">{group.name}</span>
+                          </div>
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm select-none">$</span>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={form.groupPrices[group.id] ?? ""}
+                              onChange={(e) => setField("groupPrices", { ...form.groupPrices, [group.id]: e.target.value })}
+                              placeholder={form.price || "0.00"}
+                              className="pl-7 text-sm"
+                            />
+                          </div>
+                          {form.groupPrices[group.id] && form.price && parseFloat(form.groupPrices[group.id]) < parseFloat(form.price) && (
+                            <span className="text-xs text-amber-600 whitespace-nowrap">
+                              -{Math.round((1 - parseFloat(form.groupPrices[group.id]) / parseFloat(form.price)) * 100)}%
+                            </span>
+                          )}
+                          {form.groupPrices[group.id] && form.price && parseFloat(form.groupPrices[group.id]) > parseFloat(form.price) && (
+                            <span className="text-xs text-emerald-600 whitespace-nowrap">
+                              +{Math.round((parseFloat(form.groupPrices[group.id]) / parseFloat(form.price) - 1) * 100)}%
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Options */}
                 <div className="border-t pt-5">
