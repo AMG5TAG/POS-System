@@ -5,8 +5,9 @@ export const brandsTable = pgTable("brands", {
   id: serial("id").primaryKey(),
   merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
   name: text("name").notNull(),
-  description: text("description"),
+  logoUrl: text("logo_url"),
   website: text("website"),
+  description: text("description"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -14,16 +14,16 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/brands", requireAuth, async (req, res): Promise<void> => {
-  const { name, description, website } = req.body;
+  const { name, description, website, logoUrl } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
-  const [brand] = await db.insert(brandsTable).values({ name, description, website, merchantId: req.session.merchantId! }).returning();
+  const [brand] = await db.insert(brandsTable).values({ name, description, website, logoUrl, merchantId: req.session.merchantId! }).returning();
   res.status(201).json(brand);
 });
 
 router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { name, description, website } = req.body;
-  const [brand] = await db.update(brandsTable).set({ name, description, website }).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!))).returning();
+  const { name, description, website, logoUrl } = req.body;
+  const [brand] = await db.update(brandsTable).set({ name, description, website, logoUrl }).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!))).returning();
   if (!brand) { res.status(404).json({ error: "Brand not found" }); return; }
   res.json(brand);
 });
