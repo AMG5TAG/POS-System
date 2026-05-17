@@ -20,6 +20,7 @@ import {
   Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
   SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
+  Footprints, NotebookPen,
   Lock, User, Monitor,
 } from "lucide-react";
 
@@ -67,6 +68,7 @@ export default function POSPage() {
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
+  const [notesOpen, setNotesOpen] = useState(false);
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
   /* kode */
@@ -444,9 +446,17 @@ export default function POSPage() {
                 </button>
                 <button
                   onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
-                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-2.5 py-1.5 transition-colors hover:border-amber-400"
+                  className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400"
+                  title="Walk-in customer"
                 >
-                  <UserRound className="w-3.5 h-3.5 shrink-0" /> Walk-in
+                  <Footprints className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setNotesOpen(o => !o)}
+                  className={cn("p-1.5 border border-dashed rounded-lg transition-colors", notesOpen || saleNotes ? "text-primary border-primary" : "text-muted-foreground hover:text-foreground hover:border-foreground")}
+                  title="Sale notes"
+                >
+                  <NotebookPen className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
@@ -567,10 +577,11 @@ export default function POSPage() {
           </ScrollArea>
           )}
 
-          {/* Sale notes */}
-          {cart.length > 0 && (
-            <div className="border-t px-2.5 py-2 shrink-0">
+          {/* Sale notes — inline panel toggled by notes icon */}
+          {notesOpen && (
+            <div className="border-b px-2.5 py-2 shrink-0">
               <textarea
+                autoFocus
                 className="w-full text-xs border rounded-lg px-2.5 py-2 resize-none bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-muted-foreground"
                 rows={2}
                 placeholder="Add a note to this sale... (prints on receipt)"
