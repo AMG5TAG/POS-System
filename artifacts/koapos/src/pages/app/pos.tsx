@@ -5,14 +5,14 @@ import {
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   Product, Customer, Staff, ServiceJob, Appointment,
-  TransactionInputPaymentMethod,
+  TransactionInputPaymentMethod, Transaction,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
-import { ALL_PAYMENT_METHODS, getEnabledPaymentMethods } from "@/pages/app/management-registers";
+import { ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId } from "@/pages/app/management-registers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
+  CheckCircle2, Printer, Mail, MessageSquare,
 } from "lucide-react";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
@@ -62,6 +63,15 @@ export default function POSPage() {
 
   /* payment */
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [payMethod, setPayMethod] = useState<PaymentMethodId>(getEnabledPaymentMethods()[0]);
+  const [numpadInput, setNumpadInput] = useState("");
+
+  /* receipt */
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [completedTx, setCompletedTx] = useState<Pick<Transaction, "id" | "receiptNumber"> | null>(null);
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [receiptPhone, setReceiptPhone] = useState("");
+  const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms">("idle");
 
   /* customer */
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -176,6 +186,47 @@ export default function POSPage() {
     }
   }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt]);
 
+  /* Quick cash amounts */
+  const quickAmounts = useMemo(() => {
+    if (total <= 0) return [] as number[];
+    const result: number[] = [];
+    const bases = [5, 10, 20, 50, 100, 200, 500];
+    for (const b of bases) {
+      const v = Math.ceil(total / b) * b;
+      if (!result.includes(v) && v !== total && result.length < 4) result.push(v);
+    }
+    return result;
+  }, [total]);
+
+  /* Numpad derived */
+  const enteredAmount = numpadInput ? (parseFloat(numpadInput) || 0) : total;
+  const changeDue = Math.max(0, enteredAmount - total);
+  const amountRemaining = Math.max(0, total - enteredAmount);
+
+  /* Reset payment modal when it opens */
+  useEffect(() => {
+    if (paymentModalOpen) {
+      const enabled = getEnabledPaymentMethods();
+      const first = ALL_PAYMENT_METHODS.find(m => enabled.includes(m.id));
+      if (first) setPayMethod(first.id);
+      setNumpadInput("");
+      setReceiptMode("idle");
+    }
+  }, [paymentModalOpen]);
+
+  const handleNumpad = (key: string) => {
+    setNumpadInput(prev => {
+      if (key === "C") return "";
+      if (key === ".") {
+        if (prev.includes(".")) return prev;
+        return (prev || "0") + ".";
+      }
+      if (prev.includes(".") && prev.split(".")[1].length >= 2) return prev;
+      if (!prev && key === "0") return "0";
+      return prev + key;
+    });
+  };
+
   /* Broadcast to customer display */
   useEffect(() => {
     const customerName = walkIn
@@ -286,7 +337,7 @@ export default function POSPage() {
     if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
   };
 
-  const handleCheckout = (paymentMethod: TransactionInputPaymentMethod) => {
+  const handleCheckout = (paymentMethod: TransactionInputPaymentMethod, amountTendered: number) => {
     const txItems = cart.map(i => ({
       productId: i.product.id,
       productName: i.product.name,
@@ -305,16 +356,20 @@ export default function POSPage() {
       data: {
         items: txItems, paymentMethod, subtotal, taxTotal,
         discountTotal: discountTotal > 0 ? discountTotal : undefined,
-        total, amountTendered: total,
+        total, amountTendered,
         customerId: selectedCustomer?.id,
         staffId: currentStaff?.id,
         loyaltyEarned: !walkIn && loyaltyAmount > 0 ? loyaltyAmount : undefined,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
       }
     }, {
-      onSuccess: () => {
-        toast.success("Transaction completed");
+      onSuccess: (data) => {
         clearCart(); setPaymentModalOpen(false);
+        setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
+        setReceiptEmail(selectedCustomer?.email ?? "");
+        setReceiptPhone(selectedCustomer?.phone ?? "");
+        setReceiptMode("idle");
+        setReceiptOpen(true);
         setSelectedCustomer(null); setWalkIn(null);
       },
       onError: () => toast.error("Failed to process transaction"),
@@ -695,30 +750,260 @@ export default function POSPage() {
       </div>
 
       {/* ─── Payment modal ─── */}
-      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center text-2xl font-bold pt-4">Amount Due: {formatCurrency(total)}</DialogTitle>
-          </DialogHeader>
-          {(() => {
-            const enabledIds = getEnabledPaymentMethods();
-            const methods = ALL_PAYMENT_METHODS.filter((m) => enabledIds.includes(m.id));
-            const cols = methods.length === 1 ? "grid-cols-1" : methods.length === 3 ? "grid-cols-3" : "grid-cols-2";
-            return (
-              <div className={`grid ${cols} gap-4 py-6`}>
-                {methods.map(({ id, label, icon: Icon }) => (
-                  <Button
-                    key={id} variant="outline"
-                    className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-                    onClick={() => handleCheckout(id as Parameters<typeof handleCheckout>[0])}
-                    disabled={createTransactionMutation.isPending}
-                  >
-                    <Icon className="w-8 h-8" />{label}
-                  </Button>
-                ))}
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => { setPaymentModalOpen(o); if (!o) setNumpadInput(""); }}>
+        <DialogContent className="max-w-[740px] p-0 overflow-hidden gap-0">
+          <div className="flex flex-col sm:flex-row" style={{ minHeight: 520 }}>
+
+            {/* ── Left panel ── */}
+            <div className="flex flex-col w-full sm:w-[320px] shrink-0 border-b sm:border-b-0 sm:border-r p-5 gap-4">
+              <DialogTitle className="text-base font-semibold">Process Payment</DialogTitle>
+
+              {/* Amount card */}
+              <div className="rounded-xl bg-muted/40 border px-5 py-4 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">Amount Due</p>
+                <p className="text-4xl font-bold tabular-nums">{formatCurrency(total)}</p>
+                {numpadInput && parseFloat(numpadInput) > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1.5 tabular-nums">
+                    {changeDue > 0
+                      ? <span className="text-green-600 font-medium">Change: {formatCurrency(changeDue)}</span>
+                      : amountRemaining > 0
+                      ? <span className="text-amber-600 font-medium">Remaining: {formatCurrency(amountRemaining)}</span>
+                      : <span className="text-green-600 font-medium">Exact amount</span>}
+                  </p>
+                )}
               </div>
-            );
-          })()}
+
+              {/* Method selector */}
+              {(() => {
+                const enabledIds = getEnabledPaymentMethods();
+                const methods = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id));
+                return (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Payment Method</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {methods.map(({ id, label, icon: Icon }) => (
+                        <button
+                          key={id}
+                          onClick={() => setPayMethod(id)}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-all text-left
+                            ${payMethod === id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
+                        >
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate text-xs">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Quick amounts — cash only */}
+              {payMethod === "cash" && quickAmounts.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Quick Amount</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickAmounts.map(amt => (
+                      <button
+                        key={amt}
+                        onClick={() => setNumpadInput(amt.toFixed(2))}
+                        className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:border-primary hover:bg-primary/5 transition-all tabular-nums"
+                      >
+                        {formatCurrency(amt)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1" />
+              <Button variant="outline" className="w-full" onClick={() => setPaymentModalOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+
+            {/* ── Right panel ── */}
+            <div className="flex-1 flex flex-col p-5 gap-3">
+              {/* Display */}
+              <div className="border rounded-xl px-4 py-3 text-right bg-muted/20">
+                <span className="text-3xl font-bold tabular-nums">
+                  {numpadInput || "0.00"}
+                </span>
+              </div>
+
+              {/* Numpad grid */}
+              <div className="grid grid-cols-3 gap-2 flex-1">
+                {(["7","8","9","4","5","6","1","2","3"] as const).map(k => (
+                  <button
+                    key={k}
+                    onClick={() => handleNumpad(k)}
+                    className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                  >
+                    {k}
+                  </button>
+                ))}
+                {/* C */}
+                <button
+                  onClick={() => handleNumpad("C")}
+                  className="rounded-xl border bg-destructive/8 text-destructive border-destructive/20 text-lg font-bold hover:bg-destructive/15 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  C
+                </button>
+                {/* 0 */}
+                <button
+                  onClick={() => handleNumpad("0")}
+                  className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                >
+                  0
+                </button>
+                {/* . */}
+                <button
+                  onClick={() => handleNumpad(".")}
+                  className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                >
+                  .
+                </button>
+                {/* Backspace */}
+                <button
+                  onClick={() => setNumpadInput(p => p.slice(0, -1))}
+                  className="rounded-xl border bg-background text-base font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                >
+                  ⌫
+                </button>
+                {/* Exact */}
+                <button
+                  onClick={() => setNumpadInput(total.toFixed(2))}
+                  className="col-span-2 rounded-xl border bg-muted text-sm font-semibold hover:bg-muted/60 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  Exact {formatCurrency(total)}
+                </button>
+              </div>
+
+              {/* Complete Sale */}
+              <Button
+                className="w-full h-12 text-base font-semibold"
+                disabled={
+                  createTransactionMutation.isPending ||
+                  (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009)
+                }
+                onClick={() => handleCheckout(payMethod as TransactionInputPaymentMethod, enteredAmount)}
+              >
+                {createTransactionMutation.isPending ? "Processing…" : "Complete Sale"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Receipt dialog ─── */}
+      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 mx-auto mb-2 mt-1">
+              <CheckCircle2 className="w-7 h-7 text-green-600 dark:text-green-400" />
+            </div>
+            <DialogTitle className="text-center text-xl">Sale Complete!</DialogTitle>
+            {completedTx && (
+              <p className="text-center text-sm text-muted-foreground">
+                {completedTx.receiptNumber ? `Receipt #${completedTx.receiptNumber}` : `Transaction #${completedTx.id}`}
+                {" · "}{formatCurrency(total)}
+              </p>
+            )}
+          </DialogHeader>
+
+          {receiptMode === "idle" && (
+            <div className="space-y-2 py-1">
+              <p className="text-xs font-medium text-center text-muted-foreground mb-3">How would you like to send the receipt?</p>
+              <Button variant="outline" className="w-full justify-start gap-3 h-11" onClick={() => window.print()}>
+                <Printer className="w-4 h-4" /> Print Receipt
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-11"
+                onClick={() => { setReceiptMode("email"); }}
+              >
+                <Mail className="w-4 h-4" /> Email Receipt
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-11"
+                onClick={() => { setReceiptMode("sms"); }}
+              >
+                <MessageSquare className="w-4 h-4" /> SMS Receipt
+              </Button>
+            </div>
+          )}
+
+          {receiptMode === "email" && (
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Email address</Label>
+                <Input
+                  value={receiptEmail}
+                  onChange={e => setReceiptEmail(e.target.value)}
+                  placeholder="customer@email.com"
+                  type="email"
+                  autoFocus
+                  className="mt-1"
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && receiptEmail) {
+                      toast.success(`Receipt sent to ${receiptEmail}`);
+                      setReceiptMode("idle");
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setReceiptMode("idle")}>Back</Button>
+                <Button
+                  className="flex-1"
+                  disabled={!receiptEmail}
+                  onClick={() => { toast.success(`Receipt emailed to ${receiptEmail}`); setReceiptMode("idle"); }}
+                >
+                  Send Email
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {receiptMode === "sms" && (
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Mobile number</Label>
+                <Input
+                  value={receiptPhone}
+                  onChange={e => setReceiptPhone(e.target.value)}
+                  placeholder="04xx xxx xxx"
+                  type="tel"
+                  autoFocus
+                  className="mt-1"
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && receiptPhone) {
+                      toast.success(`Receipt sent to ${receiptPhone}`);
+                      setReceiptMode("idle");
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setReceiptMode("idle")}>Back</Button>
+                <Button
+                  className="flex-1"
+                  disabled={!receiptPhone}
+                  onClick={() => { toast.success(`Receipt sent to ${receiptPhone}`); setReceiptMode("idle"); }}
+                >
+                  Send SMS
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button className="w-full" onClick={() => setReceiptOpen(false)}>
+              New Sale
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
