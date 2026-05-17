@@ -13,15 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import {
   Search, Plus, Pencil, Trash2, Package,
-  ChevronUp, ChevronDown, ChevronsUpDown,
-  Tag, Barcode, Boxes, Settings2, DollarSign,
+  ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
+  Tag, Barcode, Boxes, Settings2, DollarSign, Image,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,19 +32,29 @@ import { cn } from "@/lib/utils";
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
+type FormTab   = "details" | "pricing" | "inventory" | "settings";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
-  sku: string; categoryId: string; stockQuantity: string;
-  lowStockThreshold: string; taxRate: string;
+  sku: string; barcode: string; imageUrl: string; categoryId: string;
+  stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  internalNotes: string;
 };
 
 const defaultForm: ProductForm = {
-  name: "", description: "", price: "", costPrice: "", sku: "",
-  categoryId: "", stockQuantity: "0", lowStockThreshold: "5",
+  name: "", description: "", price: "", costPrice: "", sku: "", barcode: "",
+  imageUrl: "", categoryId: "", stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
+  internalNotes: "",
 };
+
+const FORM_TABS: { key: FormTab; label: string }[] = [
+  { key: "details",   label: "Details"   },
+  { key: "pricing",   label: "Pricing"   },
+  { key: "inventory", label: "Inventory" },
+  { key: "settings",  label: "Settings"  },
+];
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
@@ -80,6 +90,14 @@ function InfoRow({ icon: Icon, label, value, valueClass }: {
         <p className={cn("font-medium", valueClass)}>{value}</p>
       </div>
     </div>
+  );
+}
+
+/* ─── Section header helper ──────────────────────────────────────────────── */
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground">{label}</p>
   );
 }
 
@@ -212,7 +230,7 @@ function ProductDetailDialog({
           </div>
         )}
 
-        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+        <div className="flex items-center justify-between pt-2 border-t">
           <Button variant="destructive" size="sm" className="gap-1.5"
             onClick={() => { onDelete(product.id); onClose(); }} disabled={deleteIsPending}>
             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -223,7 +241,7 @@ function ProductDetailDialog({
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -239,6 +257,7 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
+  const [formTab, setFormTab]           = useState<FormTab>("details");
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("name");
@@ -279,31 +298,40 @@ export default function ProductsPage() {
   const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(sorted.map((p) => p.id)));
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const openCreate = () => { setEditingProduct(null); setForm(defaultForm); setDialogOpen(true); };
+  const openCreate = () => {
+    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setDialogOpen(true);
+  };
 
   const openEdit = (p: Product) => {
     setEditingProduct(p);
     setForm({
       name: p.name, description: p.description || "",
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
-      sku: p.sku || "", categoryId: p.categoryId?.toString() || "",
+      sku: p.sku || "", barcode: (p as Product & { barcode?: string }).barcode || "",
+      imageUrl: (p as Product & { imageUrl?: string }).imageUrl || "",
+      categoryId: p.categoryId?.toString() || "",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
       lowStockThreshold: p.lowStockThreshold?.toString() || "5",
       taxRate: p.taxRate?.toString() || "10",
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
+      internalNotes: "",
     });
+    setFormTab("details");
     setDialogOpen(true);
   };
 
   const handleSave = () => {
-    if (!form.name || !form.price) { toast.error("Name and price are required"); return; }
+    if (!form.name) { toast.error("Product name is required"); return; }
+    if (!form.price) { toast.error("Sell price is required"); return; }
     const payload = {
       name: form.name, description: form.description || undefined,
       price: parseFloat(form.price),
       costPrice: form.costPrice ? parseFloat(form.costPrice) : undefined,
       sku: form.sku || undefined,
+      barcode: form.barcode || undefined,
+      imageUrl: form.imageUrl || undefined,
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
       stockQuantity: parseInt(form.stockQuantity) || 0,
       lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
@@ -343,6 +371,16 @@ export default function ProductsPage() {
   const sh = (label: string, key: SortKey, className?: string) => ({
     label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className,
   });
+
+  /* Advance to the next tab */
+  const goNextTab = () => {
+    const idx = FORM_TABS.findIndex((t) => t.key === formTab);
+    if (idx < FORM_TABS.length - 1) setFormTab(FORM_TABS[idx + 1].key);
+  };
+  const isLastTab = formTab === FORM_TABS[FORM_TABS.length - 1].key;
+
+  const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   return (
     <AppLayout>
@@ -448,83 +486,292 @@ export default function ProductsPage() {
         deleteIsPending={deleteMutation.isPending}
       />
 
+      {/* ─── Add / Edit Product dialog ─────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle>
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+          {/* Header */}
+          <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
+            <DialogTitle className="flex items-center justify-between">
+              <span>{editingProduct ? "Edit Product" : "New Product"}</span>
+              <Badge variant="outline" className="font-normal text-xs">Standard</Badge>
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            <div className="md:col-span-2">
-              <Label>Name *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Product name" />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Description</Label>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" rows={2} />
-            </div>
-            <div>
-              <Label>Price (AUD) *</Label>
-              <Input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" />
-            </div>
-            <div>
-              <Label>Cost Price (AUD)</Label>
-              <Input type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} placeholder="0.00" />
-            </div>
-            <div>
-              <Label>SKU</Label>
-              <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="ABC-001" />
-            </div>
-            <div>
-              <Label>Category</Label>
-              <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="No category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Category</SelectItem>
-                  {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>GST Rate (%)</Label>
-              <Input type="number" step="0.01" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} />
-            </div>
-            <div className="flex items-center gap-3 pt-6">
-              <Switch checked={form.trackInventory} onCheckedChange={(v) => setForm({ ...form, trackInventory: v })} />
-              <Label>Track Inventory</Label>
-            </div>
-            {form.trackInventory && (
-              <>
-                <div>
-                  <Label>Stock Quantity</Label>
-                  <Input type="number" value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
+
+          {/* Tab nav */}
+          <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
+            {FORM_TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFormTab(key)}
+                className={cn(
+                  "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                  formTab === key
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto px-6">
+
+            {/* ── Details ── */}
+            {formTab === "details" && (
+              <div className="py-5 space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Product Name *</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) => setField("name", e.target.value)}
+                      placeholder='e.g. Laptop Screen 15.6"'
+                      className="mt-1.5"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Description</Label>
+                    <Textarea
+                      value={form.description}
+                      onChange={(e) => setField("description", e.target.value)}
+                      placeholder="Product description, specifications..."
+                      rows={3}
+                      className="mt-1.5 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">SKU Code</Label>
+                    <Input
+                      value={form.sku}
+                      onChange={(e) => setField("sku", e.target.value)}
+                      placeholder="e.g. SCR-00123"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Barcode</Label>
+                    <Input
+                      value={form.barcode}
+                      onChange={(e) => setField("barcode", e.target.value)}
+                      placeholder="Scan or type barcode"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Category</Label>
+                    <Select value={form.categoryId || "none"} onValueChange={(v) => setField("categoryId", v === "none" ? "" : v)}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="No category" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No Category</SelectItem>
+                        {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Select value={form.isActive ? "active" : "inactive"} onValueChange={(v) => setField("isActive", v === "active")}>
+                      <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label>Low Stock Threshold</Label>
-                  <Input type="number" value={form.lowStockThreshold} onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })} />
+
+                <div className="border-t pt-4">
+                  <SectionHeader label="Primary Image" />
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-lg border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
+                      {form.imageUrl
+                        ? <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+                        : <Image className="w-6 h-6 text-muted-foreground/40" />
+                      }
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        value={form.imageUrl}
+                        onChange={(e) => setField("imageUrl", e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Paste a direct image URL (JPG, PNG, WebP)</p>
+                    </div>
+                  </div>
                 </div>
-              </>
-            )}
-            <div className="flex items-center gap-3 md:col-span-2">
-              <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
-              <Label>Active (available in POS)</Label>
-            </div>
-            <div className="flex items-center gap-3 md:col-span-2">
-              <Switch checked={form.excludeFromLoyalty} onCheckedChange={(v) => setForm({ ...form, excludeFromLoyalty: v })} />
-              <div>
-                <Label>Exclude from Loyalty</Label>
-                <p className="text-xs text-muted-foreground">Customers won't earn rewards when purchasing this product.</p>
               </div>
+            )}
+
+            {/* ── Pricing ── */}
+            {formTab === "pricing" && (
+              <div className="py-5 space-y-6">
+                <div>
+                  <SectionHeader label="Standard Pricing" />
+                  <div className="mt-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Cost Price (ex GST)</Label>
+                      <div className="relative mt-1.5">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm select-none">$</span>
+                        <Input
+                          type="number" step="0.01" min="0"
+                          value={form.costPrice}
+                          onChange={(e) => setField("costPrice", e.target.value)}
+                          placeholder="0.00"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Sell Price (inc GST) *</Label>
+                      <div className="relative mt-1.5">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm select-none">$</span>
+                        <Input
+                          type="number" step="0.01" min="0"
+                          value={form.price}
+                          onChange={(e) => setField("price", e.target.value)}
+                          placeholder="0.00"
+                          className="pl-7"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 max-w-[200px]">
+                    <Label className="text-xs text-muted-foreground">GST Rate (%)</Label>
+                    <Input
+                      type="number" step="0.1" min="0"
+                      value={form.taxRate}
+                      onChange={(e) => setField("taxRate", e.target.value)}
+                      className="mt-1.5"
+                    />
+                  </div>
+                  {form.costPrice && form.price && parseFloat(form.price) > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                      <DollarSign className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        Margin: <span className={cn("font-semibold", (parseFloat(form.price) - parseFloat(form.costPrice || "0")) / parseFloat(form.price) < 0.2 ? "text-destructive" : "text-emerald-600")}>
+                          {Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)}%
+                        </span>
+                        {" · "}Profit: <span className="font-semibold text-foreground">${(parseFloat(form.price) - parseFloat(form.costPrice)).toFixed(2)}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t pt-5">
+                  <SectionHeader label="Options" />
+                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">No Loyalty Points</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
+                    </div>
+                    <Switch
+                      checked={form.excludeFromLoyalty}
+                      onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Inventory ── */}
+            {formTab === "inventory" && (
+              <div className="py-5 space-y-4">
+                <SectionHeader label="Stock Tracking" />
+                <div className="flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                  <div>
+                    <p className="text-sm font-medium">No Stock Tracking</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Always shows as in-stock</p>
+                  </div>
+                  <Switch
+                    checked={!form.trackInventory}
+                    onCheckedChange={(v) => setField("trackInventory", !v)}
+                  />
+                </div>
+
+                {form.trackInventory && (
+                  <div className="grid grid-cols-2 gap-4 pt-1">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Stock Quantity</Label>
+                      <Input
+                        type="number" min="0"
+                        value={form.stockQuantity}
+                        onChange={(e) => setField("stockQuantity", e.target.value)}
+                        className="mt-1.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Low Stock Alert (units)</Label>
+                      <Input
+                        type="number" min="0"
+                        value={form.lowStockThreshold}
+                        onChange={(e) => setField("lowStockThreshold", e.target.value)}
+                        className="mt-1.5"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Alert when stock falls below this level</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Settings ── */}
+            {formTab === "settings" && (
+              <div className="py-5 space-y-5">
+                <div>
+                  <SectionHeader label="Availability" />
+                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">Active</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                    </div>
+                    <Switch
+                      checked={form.isActive}
+                      onCheckedChange={(v) => setField("isActive", v)}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-5">
+                  <SectionHeader label="Internal Notes" />
+                  <Textarea
+                    value={form.internalNotes}
+                    onChange={(e) => setField("internalNotes", e.target.value)}
+                    placeholder="Internal notes, specifications, special handling..."
+                    rows={4}
+                    className="mt-3 resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
+            {!isLastTab ? (
+              <Button variant="outline" onClick={goNextTab} className="gap-1.5">
+                Next Tab <ChevronRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button
+                onClick={handleSave}
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {editingProduct ? "Save Changes" : "Create Product"}
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending}>
-              {editingProduct ? "Save Changes" : "Create Product"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ─── Category manager ──────────────────────────────────────────────── */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Manage Categories</DialogTitle></DialogHeader>
