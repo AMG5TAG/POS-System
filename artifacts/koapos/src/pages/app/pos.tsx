@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -69,6 +70,8 @@ export default function POSPage() {
   const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [notesOpen, setNotesOpen] = useState(false);
+  const [pendingPaymentAfterPin, setPendingPaymentAfterPin] = useState(false);
+  const forceStaffLogin = localStorage.getItem("koapos_force_staff_login") === "true";
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
   /* kode */
@@ -275,6 +278,7 @@ export default function POSPage() {
     try { localStorage.setItem("koapos_pos_staff", JSON.stringify(staff)); } catch { /* ignore */ }
     setPinDialogOpen(false); setPinInput(""); setPinError("");
     toast.success(`Signed in as ${staff.name}`);
+    if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
   };
 
   const handleCheckout = (paymentMethod: TransactionInputPaymentMethod) => {
@@ -394,9 +398,14 @@ export default function POSPage() {
 
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-3 border-b shrink-0 gap-2">
-            <h2 className="font-bold flex items-center gap-2 text-sm shrink-0">
-              <ShoppingCart className="w-4 h-4" /> Current Sale
-            </h2>
+            <div className="flex flex-col shrink-0">
+              <h2 className="font-bold flex items-center gap-2 text-sm">
+                <ShoppingCart className="w-4 h-4" /> Current Sale
+              </h2>
+              {currentStaff && (
+                <span className="text-[10px] text-primary ml-6 leading-none mt-0.5">{currentStaff.name}</span>
+              )}
+            </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
               <button
                 onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
@@ -452,7 +461,7 @@ export default function POSPage() {
                   <LinkIcon className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => setNotesOpen(o => !o)}
+                  onClick={() => setNotesOpen(true)}
                   className={cn("p-1.5 border border-dashed rounded-lg transition-colors", notesOpen || saleNotes ? "text-primary border-primary" : "text-muted-foreground hover:text-foreground hover:border-foreground")}
                   title="Sale notes"
                 >
@@ -577,19 +586,6 @@ export default function POSPage() {
           </ScrollArea>
           )}
 
-          {/* Sale notes — inline panel toggled by notes icon */}
-          {notesOpen && (
-            <div className="border-b px-2.5 py-2 shrink-0">
-              <textarea
-                autoFocus
-                className="w-full text-xs border rounded-lg px-2.5 py-2 resize-none bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-muted-foreground"
-                rows={2}
-                placeholder="Add a note to this sale... (prints on receipt)"
-                value={saleNotes}
-                onChange={(e) => setSaleNotes(e.target.value)}
-              />
-            </div>
-          )}
 
           {/* Totals */}
           <div className="border-t bg-background px-3 py-2.5 shrink-0 space-y-1.5">
@@ -663,7 +659,14 @@ export default function POSPage() {
             <Button
               className="w-full h-12 text-base font-bold mt-1"
               disabled={cart.length === 0}
-              onClick={() => setPaymentModalOpen(true)}
+              onClick={() => {
+                if (forceStaffLogin && !currentStaff) {
+                  setPendingPaymentAfterPin(true);
+                  setPinInput(""); setPinError(""); setPinDialogOpen(true);
+                  return;
+                }
+                setPaymentModalOpen(true);
+              }}
             >
               Charge {formatCurrency(total)}
             </Button>
@@ -792,6 +795,29 @@ export default function POSPage() {
               </Button>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Sale Note dialog ─── */}
+      <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <NotebookPen className="w-4 h-4" /> Sale Note
+            </DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            placeholder="Add a note to this sale... (prints on receipt)"
+            value={saleNotes}
+            onChange={(e) => setSaleNotes(e.target.value)}
+            rows={4}
+            className="resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSaleNotes(""); setNotesOpen(false); }}>Clear</Button>
+            <Button onClick={() => setNotesOpen(false)}>Done</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

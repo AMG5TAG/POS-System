@@ -50,6 +50,7 @@ import SettingsBusinessPage from "@/pages/app/settings-business";
 import SettingsRegionalPage from "@/pages/app/settings-regional";
 import SettingsAccountPage from "@/pages/app/settings-account";
 import SettingsCustomersPage from "@/pages/app/settings-customers";
+import SettingsPOSPage from "@/pages/app/settings-pos";
 import AppointmentsPage from "@/pages/app/appointments";
 import ServiceJobsPage from "@/pages/app/service-jobs";
 import ServiceJobNewPage from "@/pages/app/service-jobs-new";
@@ -228,6 +229,9 @@ function Router() {
       </Route>
       <Route path="/management/account">
         <ProtectedRoute component={SettingsAccountPage} />
+      </Route>
+      <Route path="/settings/pos">
+        <ProtectedRoute component={SettingsPOSPage} />
       </Route>
       <Route path="/settings/customers">
         <ProtectedRoute component={SettingsCustomersPage} />

@@ -173,7 +173,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <Wrench className="w-5 h-5 text-primary shrink-0" />
             <span className="font-mono">{job.jobNumber}</span>
-            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border", className)}>
+            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
               {label}
             </span>
           </DialogTitle>
@@ -490,7 +490,7 @@ export default function ServiceJobsPage() {
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap">
-                              <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border", className)}>
+                              <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
                                 {label}
                               </span>
                             </td>

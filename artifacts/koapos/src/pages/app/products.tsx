@@ -82,7 +82,7 @@ const PRODUCT_TYPES = [
   { value: "variant",      label: "Variant",      icon: Layers,    desc: "With size/colour options" },
   { value: "composite",    label: "Composite",    icon: Boxes,     desc: "Made from other products" },
   { value: "service",      label: "Service",      icon: Briefcase, desc: "No inventory tracking" },
-  { value: "digital",      label: "Digital",      icon: Download,  desc: "File download, no stock" },
+  { value: "digital",      label: "Download",     icon: Download,  desc: "File download, no stock" },
   { value: "digital_code", label: "Digital Code", icon: KeyRound,  desc: "Code-based delivery" },
 ] as const;
 
@@ -498,7 +498,7 @@ export default function ProductsPage() {
 
           {/* All Categories */}
           <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[160px] border-0 shadow-none bg-transparent">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>

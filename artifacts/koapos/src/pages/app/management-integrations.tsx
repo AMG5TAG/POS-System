@@ -219,7 +219,7 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: CardP
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-semibold text-sm">{intg.label}</span>
             {intg.comingSoon && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted text-muted-foreground">
                 <Clock className="w-2.5 h-2.5" /> Coming Soon
               </span>
             )}
@@ -229,7 +229,7 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: CardP
               </span>
             )}
             {isConnected && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-100 text-emerald-700">
                 <CheckCircle2 className="w-3 h-3" /> Connected
               </span>
             )}

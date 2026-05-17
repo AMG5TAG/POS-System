@@ -51,6 +51,7 @@ const INVENTORY_SUBNAV = [
 ];
 
 const SETTINGS_SUBNAV = [
+  { name: "POS",       href: "/settings/pos",       icon: ShoppingCart },
   { name: "Customers", href: "/settings/customers", icon: Users },
 ];
 
@@ -114,6 +115,7 @@ const SEARCH_INDEX = [
   { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
   { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
   { label: "Inventory Settings",   href: "/management/inventory",   icon: Boxes,      group: "Management" },
+  { label: "Settings · POS",         href: "/settings/pos",           icon: ShoppingCart, group: "Settings" },
   { label: "Settings · Customers",  href: "/settings/customers",     icon: Users,      group: "Settings"   },
 ];
 
@@ -153,6 +155,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/cost-summary":          ["Staff", "Cost Summary"],
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
+  "/settings/pos":                ["Settings", "POS"],
   "/settings/customers":          ["Settings", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],
   "/management/business":         ["Management", "Business Details"],
@@ -566,7 +569,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
                 <Button
                   variant={isPOSSection ? "default" : "outline"}
                   size="sm"
-                  className="gap-1.5 font-semibold rounded-full h-8 px-3"
+                  className="gap-1.5 font-semibold rounded-md h-8 px-3"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">POS</span>
@@ -576,7 +579,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               {/* Dark/light toggle */}
               <button
                 onClick={toggleTheme}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 aria-label="Toggle theme"
               >
                 {theme === "dark" ? (

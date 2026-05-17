@@ -10,13 +10,13 @@ export function PageTabsNav({ tabs }: { tabs: TabItem[] }) {
   const [location] = useLocation();
 
   return (
-    <div className="flex items-center bg-muted rounded-full p-1 gap-0.5 overflow-x-auto flex-nowrap shrink-0">
+    <div className="flex items-center bg-muted rounded-xl p-1 gap-0.5 overflow-x-auto flex-nowrap shrink-0">
       {tabs.map(({ href, label, icon: Icon }) => {
         const isAnchor = href.startsWith("#");
         const active = !isAnchor && location === href;
 
         const btnClass = [
-          "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap cursor-pointer select-none",
+          "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap cursor-pointer select-none",
           active
             ? "bg-background shadow-sm text-primary"
             : "text-muted-foreground hover:text-foreground",

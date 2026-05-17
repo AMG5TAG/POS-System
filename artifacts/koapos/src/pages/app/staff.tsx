@@ -388,7 +388,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                   value={form.pin}
                   onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
                   placeholder="••••"
-                  className="rounded-full w-28 text-center tracking-widest font-mono"
+                  className="rounded-md w-28 text-center tracking-widest font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
                   Used to quickly switch staff on the POS without logging out. Leave blank to disable PIN login for this employee.

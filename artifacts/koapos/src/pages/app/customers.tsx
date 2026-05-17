@@ -72,7 +72,7 @@ const defaultForm: CustomerForm = {
 
 function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
   return (
-    <div className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+    <div className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
       active ? "bg-primary text-primary-foreground" : done ? "bg-muted text-muted-foreground" : "text-muted-foreground",
     )}>
       {done && !active ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <span className="shrink-0">{icon}</span>}
@@ -935,18 +935,18 @@ export default function CustomersPage() {
               <>
                 <FieldRow>
                   <Field label="First Name">
-                    <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" className="rounded-full" />
+                    <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" />
                   </Field>
                   <Field label="Last Name">
-                    <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" className="rounded-full" />
+                    <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" />
                   </Field>
                 </FieldRow>
                 <FieldRow>
                   <Field label="Email">
-                    <Input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="jane@example.com" className="rounded-full" />
+                    <Input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="jane@example.com" />
                   </Field>
                   <Field label="Phone">
-                    <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="0400 000 000" className="rounded-full" />
+                    <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="0400 000 000" />
                     <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer mt-1 pl-1">
                       <Checkbox checked={form.whatsappSameAsPhone} onCheckedChange={(v) => setField("whatsappSameAsPhone", !!v)} />
                       <span className="flex items-center gap-1">
@@ -960,18 +960,18 @@ export default function CustomersPage() {
                 </FieldRow>
                 <FieldRow>
                   <Field label="Date of Birth">
-                    <Input type="date" value={form.dateOfBirth} onChange={(e) => setField("dateOfBirth", e.target.value)} className="rounded-full" />
+                    <Input type="date" value={form.dateOfBirth} onChange={(e) => setField("dateOfBirth", e.target.value)} />
                   </Field>
                   <Field label="Company">
-                    <Input value={form.company} onChange={(e) => setField("company", e.target.value)} placeholder="Acme Corp" className="rounded-full" />
+                    <Input value={form.company} onChange={(e) => setField("company", e.target.value)} placeholder="Acme Corp" />
                   </Field>
                 </FieldRow>
                 <FieldRow>
                   <Field label="ABN">
-                    <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" className="rounded-full" />
+                    <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" />
                   </Field>
                   <Field label="Referred By">
-                    <Input value={form.referredBy} onChange={(e) => setField("referredBy", e.target.value)} placeholder="No One" className="rounded-full" />
+                    <Input value={form.referredBy} onChange={(e) => setField("referredBy", e.target.value)} placeholder="No One" />
                   </Field>
                 </FieldRow>
               </>
@@ -981,22 +981,22 @@ export default function CustomersPage() {
               <>
                 <p className="text-xs font-bold tracking-widest text-foreground uppercase">Billing Address</p>
                 <Field label="Street Address" full>
-                  <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} placeholder="123 Main St" className="rounded-full" />
+                  <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} placeholder="123 Main St" />
                 </Field>
                 <FieldRow>
                   <Field label="City">
-                    <Input value={form.billingCity} onChange={(e) => setField("billingCity", e.target.value)} placeholder="Sydney" className="rounded-full" />
+                    <Input value={form.billingCity} onChange={(e) => setField("billingCity", e.target.value)} placeholder="Sydney" />
                   </Field>
                   <Field label="State">
-                    <Input value={form.billingState} onChange={(e) => setField("billingState", e.target.value)} placeholder="NSW" className="rounded-full" />
+                    <Input value={form.billingState} onChange={(e) => setField("billingState", e.target.value)} placeholder="NSW" />
                   </Field>
                 </FieldRow>
                 <FieldRow>
                   <Field label="Postcode">
-                    <Input value={form.billingPostcode} onChange={(e) => setField("billingPostcode", e.target.value)} placeholder="2000" className="rounded-full" />
+                    <Input value={form.billingPostcode} onChange={(e) => setField("billingPostcode", e.target.value)} placeholder="2000" />
                   </Field>
                   <Field label="Country">
-                    <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} placeholder="Australia" className="rounded-full" />
+                    <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} placeholder="Australia" />
                   </Field>
                 </FieldRow>
                 <label className="flex items-center gap-2 text-sm cursor-pointer font-medium">
@@ -1016,22 +1016,22 @@ export default function CustomersPage() {
                     {!form.shippingSameAsBilling && (
                       <>
                         <Field label="Street / PO Box" full>
-                          <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} placeholder="PO Box 123" className="rounded-full" />
+                          <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} placeholder="PO Box 123" />
                         </Field>
                         <FieldRow>
                           <Field label="City">
-                            <Input value={form.shippingCity} onChange={(e) => setField("shippingCity", e.target.value)} placeholder="Sydney" className="rounded-full" />
+                            <Input value={form.shippingCity} onChange={(e) => setField("shippingCity", e.target.value)} placeholder="Sydney" />
                           </Field>
                           <Field label="State">
-                            <Input value={form.shippingState} onChange={(e) => setField("shippingState", e.target.value)} placeholder="NSW" className="rounded-full" />
+                            <Input value={form.shippingState} onChange={(e) => setField("shippingState", e.target.value)} placeholder="NSW" />
                           </Field>
                         </FieldRow>
                         <FieldRow>
                           <Field label="Postcode">
-                            <Input value={form.shippingPostcode} onChange={(e) => setField("shippingPostcode", e.target.value)} placeholder="2000" className="rounded-full" />
+                            <Input value={form.shippingPostcode} onChange={(e) => setField("shippingPostcode", e.target.value)} placeholder="2000" />
                           </Field>
                           <Field label="Country">
-                            <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} placeholder="Australia" className="rounded-full" />
+                            <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} placeholder="Australia" />
                           </Field>
                         </FieldRow>
                       </>
@@ -1045,7 +1045,7 @@ export default function CustomersPage() {
               <>
                 <Field label="Customer Group" full>
                   <Select value={form.customerGroup} onValueChange={(v) => setField("customerGroup", v)}>
-                    <SelectTrigger className="rounded-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {customerGroups.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                     </SelectContent>
@@ -1055,7 +1055,7 @@ export default function CustomersPage() {
                   <Label className="flex items-center gap-1.5 text-destructive font-medium">
                     <AlertTriangle className="w-4 h-4" /> Customer Warning Note
                   </Label>
-                  <Input value={form.warningNote} onChange={(e) => setField("warningNote", e.target.value)} placeholder="e.g. Disputed chargeback, requires ID on collection..." className="rounded-full" />
+                  <Input value={form.warningNote} onChange={(e) => setField("warningNote", e.target.value)} placeholder="e.g. Disputed chargeback, requires ID on collection..." />
                   <p className="text-xs text-muted-foreground pl-1">Displayed as a warning banner at POS and in service forms</p>
                 </div>
                 <label className="flex items-center gap-2.5 text-sm cursor-pointer font-medium">

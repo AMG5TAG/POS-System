@@ -71,7 +71,7 @@ export default function ProductsTagsPage() {
         ) : (
           <div className="flex flex-wrap gap-3">
             {tags.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium" style={{ borderColor: t.color + "55", backgroundColor: t.color + "18", color: t.color }}>
+              <div key={t.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium" style={{ borderColor: t.color + "55", backgroundColor: t.color + "18", color: t.color }}>
                 <Hash className="w-3.5 h-3.5" />
                 {t.name}
                 <button onClick={() => openEdit(t)} className="opacity-60 hover:opacity-100 transition-opacity"><Pencil className="w-3 h-3" /></button>
@@ -98,7 +98,7 @@ export default function ProductsTagsPage() {
                 ))}
               </div>
               <div className="flex items-center gap-2 text-sm">
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ backgroundColor: form.color + "22", color: form.color, border: `1px solid ${form.color}55` }}>
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg" style={{ backgroundColor: form.color + "22", color: form.color, border: `1px solid ${form.color}55` }}>
                   <Hash className="w-3.5 h-3.5" /> {form.name || "Preview"}
                 </div>
               </div>

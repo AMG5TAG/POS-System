@@ -609,14 +609,14 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
       {!result && (
         <div className={cn("flex items-center", step === 0 ? "justify-end" : "justify-between")}>
           {step > 0 && (
-            <Button variant="outline" size="sm" className="gap-1 rounded-full" onClick={() => setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2)}>
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2)}>
               <ChevronLeft className="w-3.5 h-3.5" /> Back
             </Button>
           )}
           {step === 1 && (
             <Button
               size="sm"
-              className="gap-1 rounded-full"
+              className="gap-1"
               disabled={!hasRequiredMapping}
               onClick={() => setStep(2)}
             >
@@ -626,7 +626,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
           {step === 2 && (
             <Button
               size="sm"
-              className="gap-1.5 rounded-full"
+              className="gap-1.5"
               onClick={handleImport}
               disabled={importing}
             >
