@@ -262,52 +262,6 @@ export default function SettingsCustomersPage() {
           </CardContent>
         </Card>
 
-        {/* Loyalty */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Loyalty Programme</CardTitle>
-            <CardDescription>Configure how loyalty points are earned at the POS.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <Checkbox
-                className="mt-0.5"
-                checked={settings.enableLoyalty}
-                onCheckedChange={(v) => save({ enableLoyalty: !!v })}
-              />
-              <div>
-                <p className="text-sm font-medium">Enable loyalty points</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Customers earn points on every completed sale
-                </p>
-              </div>
-            </label>
-
-            {settings.enableLoyalty && (
-              <>
-                <Separator />
-                <div className="space-y-1.5 max-w-xs">
-                  <Label>Points earned per $1 spent</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={settings.loyaltyPointsPerDollar}
-                      onChange={(e) => save({ loyaltyPointsPerDollar: parseFloat(e.target.value) || 0 })}
-                      className="w-28"
-                    />
-                    <span className="text-sm text-muted-foreground">pts / $1</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    e.g. set to 1 to award 1 point per dollar
-                  </p>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
       </div>
 
       {/* Add / Edit Group Dialog */}
