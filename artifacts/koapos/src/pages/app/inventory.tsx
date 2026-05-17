@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import {
   Boxes, AlertTriangle,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, Shuffle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,9 +51,29 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+const SKU_PREFIX_KEY = "koapos_sku_prefix";
+function getSavedSkuPrefix() {
+  try { return localStorage.getItem(SKU_PREFIX_KEY) || "KP"; } catch { return "KP"; }
+}
+function saveSkuPrefix(v: string) {
+  try { localStorage.setItem(SKU_PREFIX_KEY, v); } catch { /* ignore */ }
+}
+function previewSKU(prefix: string) {
+  return `${prefix || "KP"}-${Math.floor(10000 + Math.random() * 90000)}`;
+}
+
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [showLowStock, setShowLowStock] = useState(false);
+  const [skuPrefix, setSkuPrefix]       = useState(getSavedSkuPrefix);
+  const [skuPreview, setSkuPreview]     = useState(() => previewSKU(getSavedSkuPrefix()));
+
+  function handleSkuPrefixChange(v: string) {
+    const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    setSkuPrefix(clean);
+    saveSkuPrefix(clean);
+    setSkuPreview(previewSKU(clean));
+  }
   const [editingItem, setEditingItem]   = useState<InventoryItem | null>(null);
   const [editForm, setEditForm]         = useState({ stockQuantity: "", lowStockThreshold: "" });
   const [sortKey, setSortKey]           = useState<SortKey>("name");
@@ -220,6 +240,37 @@ export default function InventoryPage() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── SKU Generator Settings ──────────────────────────────────────── */}
+      <div className="mx-6 mb-6 md:mx-8 rounded-lg border p-5 space-y-3">
+        <div>
+          <p className="font-semibold text-sm">SKU Generator Settings</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Set the prefix used when auto-generating SKU codes on products.</p>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="w-[180px]">
+            <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
+            <Input
+              value={skuPrefix}
+              onChange={(e) => handleSkuPrefixChange(e.target.value)}
+              placeholder="KP"
+              maxLength={6}
+              className="mt-1.5 font-mono uppercase"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 mb-0.5"
+            onClick={() => setSkuPreview(previewSKU(skuPrefix))}
+          >
+            <Shuffle className="w-3.5 h-3.5" /> Refresh Preview
+          </Button>
+          <span className="text-sm text-muted-foreground mb-1 font-mono">{skuPreview}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">Format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
       </div>
 
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>

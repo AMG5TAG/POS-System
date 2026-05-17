@@ -480,7 +480,7 @@ export default function ProductsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search name, SKU, barcode..."
-              className="pl-9 rounded-full h-9"
+              className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -488,8 +488,7 @@ export default function ProductsPage() {
 
           {/* All Categories */}
           <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 w-auto gap-1.5 rounded-full px-3 text-sm">
-              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -500,7 +499,7 @@ export default function ProductsPage() {
 
           {/* All Types */}
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="h-9 w-auto rounded-full px-3 text-sm">
+            <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
@@ -514,7 +513,7 @@ export default function ProductsPage() {
 
           {/* All Status */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-auto rounded-full px-3 text-sm">
+            <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -525,47 +524,15 @@ export default function ProductsPage() {
           </Select>
 
           {/* Hide / Show Costs */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setHideCosts((v) => !v)}
-            className="h-9 rounded-full gap-1.5 px-3 text-sm"
-          >
+          <Button variant="outline" size="sm" onClick={() => setHideCosts((v) => !v)} className="gap-1.5">
             {hideCosts ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             {hideCosts ? "Show Costs" : "Hide Costs"}
           </Button>
 
-          {/* Pages / Load More toggle */}
-          <div className="flex rounded-full border overflow-hidden text-sm">
-            <button
-              onClick={() => { setPaginationMode("pages"); setPage(1); }}
-              className={cn("px-3 h-9 transition-colors", paginationMode === "pages" ? "bg-muted font-medium" : "hover:bg-muted/50")}
-            >
-              Pages
-            </button>
-            <button
-              onClick={() => { setPaginationMode("loadmore"); setDisplayLimit(50); }}
-              className={cn("px-3 h-9 border-l transition-colors", paginationMode === "loadmore" ? "bg-muted font-medium" : "hover:bg-muted/50")}
-            >
-              Load More
-            </button>
-          </div>
-
           {/* Add Product */}
-          <div className="flex ml-auto">
-            <Button onClick={openCreate} className="h-9 gap-1.5 rounded-l-full pl-4 pr-3">
-              <Plus className="w-4 h-4" /> Add Product
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              className="h-9 rounded-r-full border-l border-primary-foreground/20 px-2"
-              onClick={() => setCategoryDialogOpen(true)}
-              title="Manage Categories"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button onClick={openCreate} className="ml-auto gap-1.5">
+            <Plus className="w-4 h-4" /> Add Product
+          </Button>
         </div>
 
         {/* ── Table ───────────────────────────────────────────────────────── */}
@@ -593,24 +560,24 @@ export default function ProductsPage() {
                         className="rounded border-muted-foreground/40 accent-primary" />
                     </th>
                     <SortTh {...sh("Product / SKU", "name")} />
-                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Type</th>
+                    <th className="p-3 text-left font-medium whitespace-nowrap">Type</th>
                     <SortTh {...sh("Category", "category")} />
-                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Supplier</th>
-                    {!hideCosts && <SortTh {...sh("Cost", "price", "text-muted-foreground text-xs")} />}
+                    <th className="p-3 text-left font-medium whitespace-nowrap">Supplier</th>
+                    {!hideCosts && <SortTh {...sh("Cost", "price")} />}
                     <SortTh {...sh("Sell (inc. GST)", "price")} />
                     {!hideCosts && (
                       <>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">Reseller Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">WL Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Reseller Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">WL Margin</th>
                       </>
                     )}
                     <SortTh {...sh("Stock", "stock")} />
-                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Status</th>
+                    <th className="p-3 text-left font-medium whitespace-nowrap">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {displayed.map((product) => {
+                  {filtered.map((product) => {
                     const isChecked  = checked.has(product.id);
                     const isLowStock = product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
@@ -632,7 +599,7 @@ export default function ProductsPage() {
                         <td className="p-3 text-muted-foreground">Standard</td>
                         <td className="p-3">
                           {product.category
-                            ? <Badge variant="secondary" className="text-xs">{product.category.name}</Badge>
+                            ? <Badge variant="outline" className="text-xs font-normal">{product.category.name}</Badge>
                             : <span className="text-muted-foreground">—</span>}
                         </td>
                         <td className="p-3 text-muted-foreground">—</td>
@@ -670,25 +637,8 @@ export default function ProductsPage() {
               </table>
             </div>
 
-            {/* Pagination controls */}
-            {paginationMode === "loadmore" && displayed.length < filtered.length && (
-              <div className="flex justify-center pt-2">
-                <Button variant="outline" onClick={() => setDisplayLimit((n) => n + 50)}>
-                  Load More ({filtered.length - displayed.length} remaining)
-                </Button>
-              </div>
-            )}
-            {paginationMode === "pages" && totalPages > 1 && (
-              <div className="flex items-center justify-center gap-1 pt-2">
-                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <Button key={p} variant={p === page ? "default" : "outline"} size="sm" className="w-9" onClick={() => setPage(p)}>{p}</Button>
-                ))}
-                <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-              </div>
-            )}
             <p className="text-xs text-muted-foreground text-right">
-              Showing {displayed.length} of {filtered.length} products
+              {filtered.length} product{filtered.length !== 1 ? "s" : ""}
             </p>
           </>
         )}
@@ -1041,30 +991,6 @@ export default function ProductsPage() {
                       onCheckedChange={(v) => setField("isActive", v)}
                     />
                   </div>
-                </div>
-
-                {/* SKU Generator settings */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="SKU Generator" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-3">Set the prefix used when auto-generating SKU codes.</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 max-w-[180px]">
-                      <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
-                      <Input
-                        value={skuPrefix}
-                        onChange={(e) => handleSkuPrefixChange(e.target.value)}
-                        placeholder="KP"
-                        maxLength={6}
-                        className="mt-1.5 font-mono uppercase"
-                      />
-                    </div>
-                    <div className="pt-6">
-                      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={handleGenerateSKU}>
-                        <Shuffle className="w-3.5 h-3.5" /> Preview: {generateSKU(skuPrefix || "KP")}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">Generated format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
                 </div>
 
                 {/* Internal Notes */}
