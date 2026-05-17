@@ -22,7 +22,7 @@ import {
   Search, Plus, Pencil, Trash2, Package,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
-  Shuffle, Video, Weight,
+  Shuffle, Video, Weight, ScanSearch,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -592,12 +592,32 @@ export default function ProductsPage() {
               <div className="py-5 space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <Label className="text-xs text-muted-foreground">Product Name *</Label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Label className="text-xs text-muted-foreground">Product Name *</Label>
+                      <button
+                        type="button"
+                        title={form.barcode ? `Look up barcode "${form.barcode}" on Barcode Lookup` : "Look up barcode on Barcode Lookup (enter a barcode first)"}
+                        onClick={() => {
+                          const url = form.barcode
+                            ? `https://www.barcodelookup.com/${encodeURIComponent(form.barcode.trim())}`
+                            : "https://www.barcodelookup.com/";
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                          form.barcode
+                            ? "text-primary border-primary/30 bg-primary/5 hover:bg-primary/10"
+                            : "text-muted-foreground border-border hover:bg-muted/50",
+                        )}
+                      >
+                        <ScanSearch className="w-3 h-3" />
+                        Barcode Lookup
+                      </button>
+                    </div>
                     <Input
                       value={form.name}
                       onChange={(e) => setField("name", e.target.value)}
                       placeholder='e.g. Laptop Screen 15.6"'
-                      className="mt-1.5"
                       autoFocus
                     />
                   </div>
