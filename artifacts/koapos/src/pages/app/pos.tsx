@@ -405,13 +405,6 @@ export default function POSPage() {
               >
                 <User className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setServiceLinkOpen(true)}
-                title="Link to service or appointment"
-                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", (linkedService || linkedAppointment) && "text-primary")}
-              >
-                <LinkIcon className="w-4 h-4" />
-              </button>
               <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={clearCart} disabled={cart.length === 0} title="Clear cart">
                 <Trash2 className="w-4 h-4 text-destructive" />
               </Button>
@@ -450,6 +443,13 @@ export default function POSPage() {
                   title="Walk-in customer"
                 >
                   <Footprints className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setServiceLinkOpen(true)}
+                  title="Link to service or appointment"
+                  className={cn("p-1.5 border border-dashed rounded-lg transition-colors", (linkedService || linkedAppointment) ? "text-primary border-primary" : "text-muted-foreground hover:text-foreground hover:border-foreground")}
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setNotesOpen(o => !o)}
