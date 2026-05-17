@@ -427,7 +427,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   );
 
   return (
-    <SidebarProvider defaultOpen={!hideSidebar && !isPOSSection}>
+    <SidebarProvider defaultOpen={!hideSidebar}>
       <div className="min-h-[100dvh] w-full flex bg-muted/10">
         <Sidebar className="border-r">
           <SidebarHeader className="h-16 flex items-center px-4 border-b">
