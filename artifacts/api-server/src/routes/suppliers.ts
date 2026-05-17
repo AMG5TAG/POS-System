@@ -14,16 +14,45 @@ router.get("/suppliers", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/suppliers", requireAuth, async (req, res): Promise<void> => {
-  const { name, contactName, email, phone, website, address, notes } = req.body;
+  const {
+    name, accountNumber, website, paymentTerms, notes,
+    logoUrl, street, city, state, postcode, country, address,
+    contacts,
+    raPortalLink, raProcedure,
+    creditAccountNumber, creditLimit, creditTerms, creditContactName,
+    contactName, email, phone,
+  } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
-  const [supplier] = await db.insert(suppliersTable).values({ name, contactName, email, phone, website, address, notes, merchantId: req.session.merchantId! }).returning();
+  const [supplier] = await db.insert(suppliersTable).values({
+    name, accountNumber, website, paymentTerms, notes,
+    logoUrl, street, city, state, postcode, country, address,
+    contacts: contacts ? JSON.stringify(contacts) : null,
+    raPortalLink, raProcedure,
+    creditAccountNumber, creditLimit, creditTerms, creditContactName,
+    contactName, email, phone,
+    merchantId: req.session.merchantId!,
+  }).returning();
   res.status(201).json(supplier);
 });
 
 router.patch("/suppliers/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { name, contactName, email, phone, website, address, notes } = req.body;
-  const [supplier] = await db.update(suppliersTable).set({ name, contactName, email, phone, website, address, notes }).where(and(eq(suppliersTable.id, id), eq(suppliersTable.merchantId, req.session.merchantId!))).returning();
+  const {
+    name, accountNumber, website, paymentTerms, notes,
+    logoUrl, street, city, state, postcode, country, address,
+    contacts,
+    raPortalLink, raProcedure,
+    creditAccountNumber, creditLimit, creditTerms, creditContactName,
+    contactName, email, phone,
+  } = req.body;
+  const [supplier] = await db.update(suppliersTable).set({
+    name, accountNumber, website, paymentTerms, notes,
+    logoUrl, street, city, state, postcode, country, address,
+    contacts: contacts !== undefined ? (contacts ? JSON.stringify(contacts) : null) : undefined,
+    raPortalLink, raProcedure,
+    creditAccountNumber, creditLimit, creditTerms, creditContactName,
+    contactName, email, phone,
+  }).where(and(eq(suppliersTable.id, id), eq(suppliersTable.merchantId, req.session.merchantId!))).returning();
   if (!supplier) { res.status(404).json({ error: "Supplier not found" }); return; }
   res.json(supplier);
 });
