@@ -18,7 +18,7 @@ router.post("/tags", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/tags/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const { name, color } = req.body;
   const [tag] = await db.update(tagsTable).set({ name, color }).where(and(eq(tagsTable.id, id), eq(tagsTable.merchantId, req.session.merchantId!))).returning();
   if (!tag) { res.status(404).json({ error: "Tag not found" }); return; }
@@ -26,7 +26,7 @@ router.patch("/tags/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/tags/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   await db.delete(tagsTable).where(and(eq(tagsTable.id, id), eq(tagsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

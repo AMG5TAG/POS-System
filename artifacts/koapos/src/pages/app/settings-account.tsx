@@ -1,11 +1,14 @@
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, Merchant } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
+type MerchantWithPlan = Merchant & { plan?: string };
+
 export default function SettingsAccountPage() {
-  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const merchant = merchantData as MerchantWithPlan | undefined;
 
   return (
     <AppLayout>

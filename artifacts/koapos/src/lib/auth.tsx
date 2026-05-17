@@ -8,6 +8,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const { data: me, isLoading: meLoading, error } = useGetMe({
     query: {
+      queryKey: ["me"],
       retry: false,
     }
   });

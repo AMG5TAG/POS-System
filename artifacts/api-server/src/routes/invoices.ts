@@ -50,7 +50,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const { status, notes, dueDate } = req.body as { status?: string; notes?: string; dueDate?: string };
   const updates: Record<string, unknown> = {};
   if (status) { updates.status = status; if (status === "paid") updates.paidAt = new Date(); }
@@ -62,7 +62,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   await db.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

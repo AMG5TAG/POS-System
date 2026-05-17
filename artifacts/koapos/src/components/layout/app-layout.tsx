@@ -338,7 +338,7 @@ function NavNestedGroup({
 function SidebarFooterContent({
   user, onLogout, isPending,
 }: {
-  user: { ownerName?: string; email?: string } | null;
+  user: { ownerName?: string | null; email?: string } | null;
   onLogout: () => void;
   isPending: boolean;
 }) {

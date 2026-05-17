@@ -21,7 +21,7 @@ router.post("/brands", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const { name, description, website } = req.body;
   const [brand] = await db.update(brandsTable).set({ name, description, website }).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!))).returning();
   if (!brand) { res.status(404).json({ error: "Brand not found" }); return; }
@@ -29,7 +29,7 @@ router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/brands/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   await db.delete(brandsTable).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

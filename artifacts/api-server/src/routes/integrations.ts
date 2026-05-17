@@ -366,7 +366,7 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
 
 router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { key }    = req.params;
+  const key        = String(req.params.key);
   const existing   = await getRow(merchantId, key);
 
   if (existing) {
@@ -388,8 +388,8 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
 /* ── GET /integrations/oauth/:key/start ─────────────────────────────────── */
 
 router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
-  const { key } = req.params;
-  const url     = buildOAuthStartUrl(key, req);
+  const key = String(req.params.key);
+  const url = buildOAuthStartUrl(key, req);
 
   if (!url) {
     // OAuth not configured — redirect back with error

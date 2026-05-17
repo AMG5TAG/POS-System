@@ -135,7 +135,7 @@ export default function ManagementRegistersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
-  const staffList = staffData?.items ?? [];
+  const staffList = Array.isArray(staffData) ? staffData : [];
 
   useEffect(() => {
     saveRegisters(registers);

@@ -107,7 +107,7 @@ router.delete("/customers/:id", requireAuth, async (req, res): Promise<void> => 
 /* ── History ───────────────────────────────────────────────────────────────── */
 
 router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
+  const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   const merchantId = req.session.merchantId!;
 
@@ -154,7 +154,7 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
 /* ── Notes ─────────────────────────────────────────────────────────────────── */
 
 router.get("/customers/:id/notes", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
+  const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   const merchantId = req.session.merchantId!;
   const notes = await db.select().from(customerNotesTable)
@@ -168,7 +168,7 @@ router.get("/customers/:id/notes", requireAuth, async (req, res): Promise<void> 
 });
 
 router.post("/customers/:id/notes", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
+  const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   const merchantId = req.session.merchantId!;
   const { note, popupOnBooking = false, popupOnSale = false } = req.body as { note?: string; popupOnBooking?: boolean; popupOnSale?: boolean };
@@ -184,8 +184,8 @@ router.post("/customers/:id/notes", requireAuth, async (req, res): Promise<void>
 });
 
 router.delete("/customers/:id/notes/:noteId", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
-  const noteId = parseInt(req.params.noteId, 10);
+  const customerId = parseInt(String(req.params.id), 10);
+  const noteId = parseInt(String(req.params.noteId), 10);
   if (isNaN(customerId) || isNaN(noteId)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(customerNotesTable)
     .where(and(eq(customerNotesTable.id, noteId), eq(customerNotesTable.merchantId, req.session.merchantId!)));
@@ -199,7 +199,7 @@ function fileUrl(fileKey: string): string {
 }
 
 router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
+  const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   const merchantId = req.session.merchantId!;
   const files = await db.select().from(customerFilesTable)
@@ -214,7 +214,7 @@ router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> 
 });
 
 router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
+  const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   const merchantId = req.session.merchantId!;
   const { filename, fileKey, contentType, sizeBytes } = req.body as { filename?: string; fileKey?: string; contentType?: string; sizeBytes?: number };
@@ -231,8 +231,8 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
 });
 
 router.delete("/customers/:id/files/:fileId", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(req.params.id, 10);
-  const fileId = parseInt(req.params.fileId, 10);
+  const customerId = parseInt(String(req.params.id), 10);
+  const fileId = parseInt(String(req.params.fileId), 10);
   if (isNaN(customerId) || isNaN(fileId)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(customerFilesTable)
     .where(and(eq(customerFilesTable.id, fileId), eq(customerFilesTable.merchantId, req.session.merchantId!)));

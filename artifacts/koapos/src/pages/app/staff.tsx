@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff } from "@workspace/api-client-react";
+import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -495,7 +495,7 @@ export default function StaffPage() {
 
     if (editingStaff) {
       updateMutation.mutate(
-        { id: editingStaff.id, data: payload },
+        { id: editingStaff.id, data: payload as unknown as StaffUpdate },
         {
           onSuccess: () => { toast.success("Staff member updated"); setDialogOpen(false); invalidate(); },
           onError:   () => toast.error("Failed to update staff member"),
@@ -503,7 +503,7 @@ export default function StaffPage() {
       );
     } else {
       createMutation.mutate(
-        { data: payload },
+        { data: payload as unknown as StaffInput },
         {
           onSuccess: () => { toast.success("Staff member added"); setDialogOpen(false); invalidate(); },
           onError:   () => toast.error("Failed to add staff member"),

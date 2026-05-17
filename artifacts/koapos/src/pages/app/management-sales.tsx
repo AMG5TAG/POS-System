@@ -187,7 +187,7 @@ export default function ManagementSalesPage() {
                 {recentTx.map((tx) => (
                   <div key={tx.id} className="flex items-center justify-between py-3">
                     <div>
-                      <p className="text-sm font-medium">{tx.customerName || "Walk-in"}</p>
+                      <p className="text-sm font-medium">{tx.customer ? `${tx.customer.firstName ?? ""} ${tx.customer.lastName ?? ""}`.trim() || "Walk-in" : "Walk-in"}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(tx.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>

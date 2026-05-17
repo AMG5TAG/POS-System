@@ -364,7 +364,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     ));
 
   for (const j of jobs) {
-    const localDate = new Date(j.scheduledAt.getTime() + 10 * 60 * 60 * 1000);
+    const localDate = new Date(j.scheduledAt!.getTime() + 10 * 60 * 60 * 1000);
     const key = localDate.toISOString().split("T")[0];
     if (dayMap[key]) dayMap[key].serviceJobs += 1;
   }
