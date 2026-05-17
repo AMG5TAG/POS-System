@@ -22,7 +22,7 @@ import {
   SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
-  Lock, User, Monitor,
+  Lock, User, Monitor, DoorOpen, DoorClosed,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -91,6 +91,8 @@ export default function POSPage() {
     try { return JSON.parse(localStorage.getItem("koapos_pos_staff") || "null"); } catch { return null; }
   });
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(() => localStorage.getItem("koapos_register_open") === "true");
+  const toggleRegister = () => setRegisterOpen(v => { const next = !v; localStorage.setItem("koapos_register_open", String(next)); return next; });
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
 
@@ -340,14 +342,6 @@ export default function POSPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => window.open("/customer-display", "_blank")}
-                title="Open customer-facing display"
-                className="shrink-0 gap-1.5 text-xs"
-              >
-                <Monitor className="w-4 h-4" /> Display
-              </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="flex w-max space-x-2 pb-1">
@@ -407,6 +401,20 @@ export default function POSPage() {
               )}
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+              <button
+                onClick={() => window.open("/customer-display", "_blank")}
+                title="Open customer-facing display"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <Monitor className="w-4 h-4" />
+              </button>
+              <button
+                onClick={toggleRegister}
+                title={registerOpen ? "Close Register" : "Open Register"}
+                className={cn("p-1.5 rounded-lg transition-colors hover:bg-muted", registerOpen ? "text-green-600 hover:text-green-700" : "text-muted-foreground hover:text-foreground")}
+              >
+                {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
+              </button>
               <button
                 onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
                 title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
