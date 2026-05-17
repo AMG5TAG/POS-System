@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/use-auth";
 import { Button } from "@/components/ui/button";
 
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
