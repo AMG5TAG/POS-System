@@ -177,8 +177,20 @@ export default function ServiceJobNewPage() {
 
   const [additionalEquipment, setAdditionalEquipment] = useState("");
   const [workDescription, setWorkDescription] = useState("");
-  const [passwordOrPin, setPasswordOrPin] = useState("");
-  const [accounts, setAccounts] = useState("");
+  const [credentials, setCredentials] = useState<Array<{ passwordOrPin: string; accounts: string }>>([
+    { passwordOrPin: "", accounts: "" },
+  ]);
+
+  function updateCredential(index: number, field: "passwordOrPin" | "accounts", value: string) {
+    setCredentials((prev) => {
+      const next = prev.map((c, i) => (i === index ? { ...c, [field]: value } : c));
+      const last = next[next.length - 1];
+      if (last.passwordOrPin.trim() && last.accounts.trim()) {
+        next.push({ passwordOrPin: "", accounts: "" });
+      }
+      return next;
+    });
+  }
 
   const [signatureSaved, setSignatureSaved] = useState(false);
   const [signature, setSignature] = useState("");
@@ -322,8 +334,8 @@ export default function ServiceJobNewPage() {
           photos: photos.filter(Boolean),
           additionalEquipment: additionalEquipment || null,
           workDescription: workDescription || null,
-          passwordOrPin: passwordOrPin || null,
-          accounts: accounts || null,
+          passwordOrPin: credentials.filter(c => c.passwordOrPin.trim()).map(c => c.passwordOrPin.trim()).join("\n") || null,
+          accounts: credentials.filter(c => c.accounts.trim()).map(c => c.accounts.trim()).join("\n") || null,
           signature: signature || null,
         },
       },
@@ -587,23 +599,27 @@ export default function ServiceJobNewPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Password or PIN</Label>
-              <Input
-                placeholder="Enter password or PIN..."
-                value={passwordOrPin}
-                onChange={(e) => setPasswordOrPin(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Accounts</Label>
-              <Input
-                placeholder="e.g. Google, Microsoft..."
-                value={accounts}
-                onChange={(e) => setAccounts(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            {credentials.map((cred, i) => (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  {i === 0 && <Label>Password or PIN</Label>}
+                  <Input
+                    placeholder="Enter password or PIN..."
+                    value={cred.passwordOrPin}
+                    onChange={(e) => updateCredential(i, "passwordOrPin", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  {i === 0 && <Label>Accounts</Label>}
+                  <Input
+                    placeholder="e.g. Google, Microsoft..."
+                    value={cred.accounts}
+                    onChange={(e) => updateCredential(i, "accounts", e.target.value)}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
