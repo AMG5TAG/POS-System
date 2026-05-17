@@ -22,8 +22,9 @@ import {
   SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
-  Lock, User, Monitor, DoorOpen, DoorClosed,
+  Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
 } from "lucide-react";
+import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -91,6 +92,7 @@ export default function POSPage() {
     try { return JSON.parse(localStorage.getItem("koapos_pos_staff") || "null"); } catch { return null; }
   });
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(() => localStorage.getItem("koapos_register_open") === "true");
   const toggleRegister = () => setRegisterOpen(v => { const next = !v; localStorage.setItem("koapos_register_open", String(next)); return next; });
   const [pinInput, setPinInput] = useState("");
@@ -402,18 +404,18 @@ export default function POSPage() {
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
               <button
+                onClick={toggleRegister}
+                title={registerOpen ? "Close Register" : "Open Register"}
+                className={cn("p-1.5 rounded-lg transition-colors", registerOpen ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30")}
+              >
+                {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
+              </button>
+              <button
                 onClick={() => window.open("/customer-display", "_blank")}
                 title="Open customer-facing display"
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
                 <Monitor className="w-4 h-4" />
-              </button>
-              <button
-                onClick={toggleRegister}
-                title={registerOpen ? "Close Register" : "Open Register"}
-                className={cn("p-1.5 rounded-lg transition-colors hover:bg-muted", registerOpen ? "text-green-600 hover:text-green-700" : "text-muted-foreground hover:text-foreground")}
-              >
-                {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
@@ -490,6 +492,15 @@ export default function POSPage() {
                   />
                 </div>
                 <div className="max-h-52 overflow-y-auto">
+                  {/* Create new customer — always pinned to top */}
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerOpen(false); setQuickAddOpen(true); }}
+                    className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-primary font-medium hover:bg-primary/5 border-b"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                    Create new customer
+                  </button>
                   {filteredCustomers.length === 0 ? (
                     <div className="px-3 py-4 text-sm text-center text-muted-foreground">
                       {customerSearch ? `No customers match "${customerSearch}"` : "Start typing to search customers"}
@@ -828,6 +839,14 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Quick add customer dialog ─── */}
+      <QuickAddCustomerDialog
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onCreated={(c) => { selectCustomer(c); setQuickAddOpen(false); }}
+        prefillName={customerSearch}
+      />
 
       {/* ─── Staff PIN dialog ─── */}
       <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinDialogOpen(false); } }}>
