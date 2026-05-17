@@ -27,6 +27,8 @@ export * from './customerNote';
 export * from './customerNoteInput';
 export * from './customerUpdate';
 export * from './dashboardSummary';
+export * from './digitalCode';
+export * from './digitalCodeInput';
 export * from './errorEnvelope';
 export * from './getDashboardCalendarParams';
 export * from './getDashboardSummaryParams';

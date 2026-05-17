@@ -23,6 +23,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
+  Layers, Briefcase, Download, KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,6 +48,7 @@ type ProductForm = {
   weight: string; weightUnit: string;
   lengthCm: string; widthCm: string; heightCm: string;
   /* stock */
+  productType: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
   /* notes */
@@ -60,6 +62,7 @@ const defaultForm: ProductForm = {
   supplier: "", supplierCode: "",
   weight: "", weightUnit: "kg",
   lengthCm: "", widthCm: "", heightCm: "",
+  productType: "standard",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   internalNotes: "",
@@ -71,6 +74,19 @@ const FORM_TABS: { key: FormTab; label: string }[] = [
   { key: "media",     label: "Media"     },
   { key: "settings",  label: "Settings"  },
 ];
+
+/* ─── Product types ──────────────────────────────────────────────────────── */
+
+const PRODUCT_TYPES = [
+  { value: "standard",     label: "Standard",     icon: Package,   desc: "Regular physical product" },
+  { value: "variant",      label: "Variant",      icon: Layers,    desc: "With size/colour options" },
+  { value: "composite",    label: "Composite",    icon: Boxes,     desc: "Made from other products" },
+  { value: "service",      label: "Service",      icon: Briefcase, desc: "No inventory tracking" },
+  { value: "digital",      label: "Digital",      icon: Download,  desc: "File download, no stock" },
+  { value: "digital_code", label: "Digital Code", icon: KeyRound,  desc: "Code-based delivery" },
+] as const;
+
+const NO_STOCK_TYPES = new Set(["service", "digital", "digital_code"]);
 
 /* ─── SKU helpers ────────────────────────────────────────────────────────── */
 
@@ -317,10 +333,8 @@ export default function ProductsPage() {
   const [checked, setChecked]           = useState<Set<number>>(new Set());
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [hideCosts, setHideCosts]       = useState(false);
-  const [paginationMode, setPaginationMode] = useState<"pages" | "loadmore">("loadmore");
-  const [displayLimit, setDisplayLimit] = useState(50);
-  const [page, setPage]                 = useState(1);
+  const [hideCosts, setHideCosts]       = useState(true);
+  const [showHideCostsBtn]              = useState(() => { try { return localStorage.getItem("koapos_display_show_hide_costs_btn") === "true"; } catch { return false; } });
 
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
@@ -358,14 +372,8 @@ export default function ProductsPage() {
     return true;
   });
 
-  const PAGE_SIZE = 50;
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const displayed = paginationMode === "pages"
-    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : filtered.slice(0, displayLimit);
-
-  const allChecked = displayed.length > 0 && displayed.every((p) => checked.has(p.id));
-  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(displayed.map((p) => p.id)));
+  const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
+  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(filtered.map((p) => p.id)));
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
@@ -384,6 +392,7 @@ export default function ProductsPage() {
       supplier: "", supplierCode: "",
       weight: "", weightUnit: "kg",
       lengthCm: "", widthCm: "", heightCm: "",
+      productType: (p as Product & { productType?: string }).productType ?? "standard",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
       lowStockThreshold: p.lowStockThreshold?.toString() || "5",
       taxRate: p.taxRate?.toString() || "10",
@@ -407,6 +416,7 @@ export default function ProductsPage() {
       barcode: form.barcode || undefined,
       imageUrl: form.imageUrl || undefined,
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
+      productType: form.productType,
       stockQuantity: parseInt(form.stockQuantity) || 0,
       lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
       taxRate: parseFloat(form.taxRate) || 10,
@@ -523,11 +533,13 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
 
-          {/* Hide / Show Costs */}
-          <Button variant="outline" size="sm" onClick={() => setHideCosts((v) => !v)} className="gap-1.5">
-            {hideCosts ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            {hideCosts ? "Show Costs" : "Hide Costs"}
-          </Button>
+          {/* Hide / Show Costs — only visible when enabled in Management > Inventory */}
+          {showHideCostsBtn && (
+            <Button variant="outline" size="sm" onClick={() => setHideCosts((v) => !v)} className="gap-1.5">
+              {hideCosts ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {hideCosts ? "Show Costs" : "Hide Costs"}
+            </Button>
+          )}
 
           {/* Add Product */}
           <Button onClick={openCreate} className="ml-auto gap-1.5">
@@ -657,9 +669,8 @@ export default function ProductsPage() {
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-            <DialogTitle className="flex items-center justify-between">
-              <span>{editingProduct ? "Edit Product" : "New Product"}</span>
-              <Badge variant="outline" className="font-normal text-xs">Standard</Badge>
+            <DialogTitle>
+              {editingProduct ? "Edit Product" : "New Product"}
             </DialogTitle>
           </DialogHeader>
 
@@ -727,6 +738,27 @@ export default function ProductsPage() {
                       rows={3}
                       className="mt-1.5 resize-none"
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Product Type</Label>
+                    <div className="grid grid-cols-3 gap-2 mt-1.5">
+                      {PRODUCT_TYPES.map(({ value, label, icon: Icon }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setField("productType", value)}
+                          className={cn(
+                            "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
+                            form.productType === value
+                              ? "border-primary bg-primary/5 text-primary"
+                              : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="text-[11px] font-medium leading-tight">{label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">SKU Code</Label>
@@ -954,27 +986,47 @@ export default function ProductsPage() {
                 {/* Inventory */}
                 <div>
                   <SectionHeader label="Inventory" />
-                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">No Stock Tracking</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Always shows as in-stock</p>
-                    </div>
-                    <Switch
-                      checked={!form.trackInventory}
-                      onCheckedChange={(v) => setField("trackInventory", !v)}
-                    />
-                  </div>
-                  {form.trackInventory && (
-                    <div className="grid grid-cols-2 gap-4 mt-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Stock Quantity</Label>
-                        <Input type="number" min="0" value={form.stockQuantity} onChange={(e) => setField("stockQuantity", e.target.value)} className="mt-1.5" />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Low Stock Alert (units)</Label>
-                        <Input type="number" min="0" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} className="mt-1.5" />
+                  {NO_STOCK_TYPES.has(form.productType) ? (
+                    <div className="mt-3 flex items-center gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
+                      {form.productType === "digital_code"
+                        ? <KeyRound className="w-4 h-4 shrink-0" />
+                        : <Briefcase className="w-4 h-4 shrink-0" />}
+                      <div className="text-sm">
+                        <p className="font-medium text-foreground">
+                          {form.productType === "digital_code" ? "Code inventory" : "No stock tracking"}
+                        </p>
+                        <p className="text-xs mt-0.5">
+                          {form.productType === "digital_code"
+                            ? "Manage delivery codes in the product's Digital Codes tab after saving."
+                            : "This product type does not use inventory tracking."}
+                        </p>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium">No Stock Tracking</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Always shows as in-stock</p>
+                        </div>
+                        <Switch
+                          checked={!form.trackInventory}
+                          onCheckedChange={(v) => setField("trackInventory", !v)}
+                        />
+                      </div>
+                      {form.trackInventory && (
+                        <div className="grid grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Stock Quantity</Label>
+                            <Input type="number" min="0" value={form.stockQuantity} onChange={(e) => setField("stockQuantity", e.target.value)} className="mt-1.5" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Low Stock Alert (units)</Label>
+                            <Input type="number" min="0" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} className="mt-1.5" />
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

@@ -9,5 +9,8 @@
 export interface CategoryUpdate {
   name?: string;
   color?: string;
+  icon?: string;
+  /** @nullable */
+  parentId?: number | null;
   sortOrder?: number;
 }

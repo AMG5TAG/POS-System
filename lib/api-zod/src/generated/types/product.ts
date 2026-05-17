@@ -34,5 +34,6 @@ export interface Product {
   taxRate?: number | null;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  productType: string;
   createdAt: Date;
 }

@@ -22,4 +22,5 @@ export interface ProductUpdate {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  productType?: string;
 }

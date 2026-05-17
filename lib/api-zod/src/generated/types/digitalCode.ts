@@ -6,16 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Category {
+export interface DigitalCode {
   id: number;
+  productId: number;
   merchantId: number;
-  name: string;
+  code: string;
+  isUsed: boolean;
   /** @nullable */
-  color?: string | null;
-  /** @nullable */
-  icon?: string | null;
-  /** @nullable */
-  parentId?: number | null;
-  sortOrder?: number;
+  usedAt?: Date | null;
   createdAt: Date;
 }

@@ -10,5 +10,7 @@ export interface CategoryInput {
   /** @minLength 1 */
   name: string;
   color?: string;
+  icon?: string;
+  parentId?: number;
   sortOrder?: number;
 }

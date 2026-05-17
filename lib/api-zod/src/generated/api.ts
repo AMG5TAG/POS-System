@@ -280,6 +280,8 @@ export const ListProductsResponse = zod.object({
   "merchantId": zod.number(),
   "name": zod.string(),
   "color": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
@@ -290,6 +292,7 @@ export const ListProductsResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "productType": zod.string(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -318,7 +321,8 @@ export const CreateProductBody = zod.object({
   "lowStockThreshold": zod.number().optional(),
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
-  "excludeFromLoyalty": zod.boolean().optional()
+  "excludeFromLoyalty": zod.boolean().optional(),
+  "productType": zod.string().optional()
 })
 
 
@@ -344,6 +348,8 @@ export const GetProductResponse = zod.object({
   "merchantId": zod.number(),
   "name": zod.string(),
   "color": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
@@ -354,6 +360,7 @@ export const GetProductResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "productType": zod.string(),
   "createdAt": zod.coerce.date()
 })
 
@@ -379,7 +386,8 @@ export const UpdateProductBody = zod.object({
   "lowStockThreshold": zod.number().optional(),
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
-  "excludeFromLoyalty": zod.boolean().optional()
+  "excludeFromLoyalty": zod.boolean().optional(),
+  "productType": zod.string().optional()
 })
 
 export const UpdateProductResponse = zod.object({
@@ -397,6 +405,8 @@ export const UpdateProductResponse = zod.object({
   "merchantId": zod.number(),
   "name": zod.string(),
   "color": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
@@ -407,6 +417,7 @@ export const UpdateProductResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "productType": zod.string(),
   "createdAt": zod.coerce.date()
 })
 
@@ -427,6 +438,8 @@ export const ListCategoriesResponseItem = zod.object({
   "merchantId": zod.number(),
   "name": zod.string(),
   "color": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -442,6 +455,8 @@ export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
 export const CreateCategoryBody = zod.object({
   "name": zod.string().min(1),
   "color": zod.string().optional(),
+  "icon": zod.string().optional(),
+  "parentId": zod.number().optional(),
   "sortOrder": zod.number().optional()
 })
 
@@ -456,6 +471,8 @@ export const UpdateCategoryParams = zod.object({
 export const UpdateCategoryBody = zod.object({
   "name": zod.string().optional(),
   "color": zod.string().optional(),
+  "icon": zod.string().optional(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional()
 })
 
@@ -464,6 +481,8 @@ export const UpdateCategoryResponse = zod.object({
   "merchantId": zod.number(),
   "name": zod.string(),
   "color": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -473,6 +492,45 @@ export const UpdateCategoryResponse = zod.object({
  * @summary Delete a category
  */
 export const DeleteCategoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List digital codes for a product
+ */
+export const ListDigitalCodesParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const ListDigitalCodesResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "merchantId": zod.number(),
+  "code": zod.string(),
+  "isUsed": zod.boolean(),
+  "usedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDigitalCodesResponse = zod.array(ListDigitalCodesResponseItem)
+
+
+/**
+ * @summary Add a digital code to a product
+ */
+export const CreateDigitalCodeParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const CreateDigitalCodeBody = zod.object({
+  "code": zod.string()
+})
+
+
+/**
+ * @summary Delete a digital code
+ */
+export const DeleteDigitalCodeParams = zod.object({
   "id": zod.coerce.number()
 })
 

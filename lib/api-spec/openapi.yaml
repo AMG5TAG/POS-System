@@ -436,6 +436,66 @@ paths:
         "204":
           description: Deleted
 
+  # ── Digital Codes ─────────────────────────────────────────────────────────
+  /products/{productId}/digital-codes:
+    get:
+      operationId: listDigitalCodes
+      tags: [products]
+      summary: List digital codes for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of digital codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DigitalCode"
+    post:
+      operationId: createDigitalCode
+      tags: [products]
+      summary: Add a digital code to a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DigitalCodeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalCode"
+
+  /digital-codes/{id}:
+    delete:
+      operationId: deleteDigitalCode
+      tags: [products]
+      summary: Delete a digital code
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # ── Customers ─────────────────────────────────────────────────────────────
   /customers:
     get:
@@ -1456,7 +1516,7 @@ components:
     # ── Products ─────────────────────────────────────────────────────────────
     Product:
       type: object
-      required: [id, merchantId, name, price, sku, trackInventory, createdAt]
+      required: [id, merchantId, name, price, sku, trackInventory, productType, createdAt]
       properties:
         id:
           type: integer
@@ -1492,6 +1552,8 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        productType:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -1530,6 +1592,8 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        productType:
+          type: string
 
     ProductUpdate:
       type: object
@@ -1562,6 +1626,8 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        productType:
+          type: string
 
     ProductList:
       type: object
@@ -1587,6 +1653,10 @@ components:
           type: string
         color:
           type: ["string", "null"]
+        icon:
+          type: ["string", "null"]
+        parentId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         createdAt:
@@ -1602,6 +1672,10 @@ components:
           minLength: 1
         color:
           type: string
+        icon:
+          type: string
+        parentId:
+          type: integer
         sortOrder:
           type: integer
 
@@ -1612,8 +1686,41 @@ components:
           type: string
         color:
           type: string
+        icon:
+          type: string
+        parentId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
+
+    # ── Digital Codes ─────────────────────────────────────────────────────────
+    DigitalCode:
+      type: object
+      required: [id, productId, merchantId, code, isUsed, createdAt]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        merchantId:
+          type: integer
+        code:
+          type: string
+        isUsed:
+          type: boolean
+        usedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    DigitalCodeInput:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
 
     # ── Customers ────────────────────────────────────────────────────────────
     Customer:

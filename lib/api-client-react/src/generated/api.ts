@@ -36,6 +36,8 @@ import type {
   CustomerNoteInput,
   CustomerUpdate,
   DashboardSummary,
+  DigitalCode,
+  DigitalCodeInput,
   ErrorEnvelope,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
@@ -1791,6 +1793,225 @@ export const useDeleteCategory = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCategoryMutationOptions(options));
+    }
+
+export const getListDigitalCodesUrl = (productId: number,) => {
+
+
+
+
+  return `/api/products/${productId}/digital-codes`
+}
+
+/**
+ * @summary List digital codes for a product
+ */
+export const listDigitalCodes = async (productId: number, options?: RequestInit): Promise<DigitalCode[]> => {
+
+  return customFetch<DigitalCode[]>(getListDigitalCodesUrl(productId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDigitalCodesQueryKey = (productId: number,) => {
+    return [
+    `/api/products/${productId}/digital-codes`
+    ] as const;
+    }
+
+
+export const getListDigitalCodesQueryOptions = <TData = Awaited<ReturnType<typeof listDigitalCodes>>, TError = ErrorType<unknown>>(productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDigitalCodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDigitalCodesQueryKey(productId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDigitalCodes>>> = ({ signal }) => listDigitalCodes(productId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(productId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDigitalCodes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDigitalCodesQueryResult = NonNullable<Awaited<ReturnType<typeof listDigitalCodes>>>
+export type ListDigitalCodesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List digital codes for a product
+ */
+
+export function useListDigitalCodes<TData = Awaited<ReturnType<typeof listDigitalCodes>>, TError = ErrorType<unknown>>(
+ productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDigitalCodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDigitalCodesQueryOptions(productId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateDigitalCodeUrl = (productId: number,) => {
+
+
+
+
+  return `/api/products/${productId}/digital-codes`
+}
+
+/**
+ * @summary Add a digital code to a product
+ */
+export const createDigitalCode = async (productId: number,
+    digitalCodeInput: DigitalCodeInput, options?: RequestInit): Promise<DigitalCode> => {
+
+  return customFetch<DigitalCode>(getCreateDigitalCodeUrl(productId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      digitalCodeInput,)
+  }
+);}
+
+
+
+
+export const getCreateDigitalCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDigitalCode>>, TError,{productId: number;data: BodyType<DigitalCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDigitalCode>>, TError,{productId: number;data: BodyType<DigitalCodeInput>}, TContext> => {
+
+const mutationKey = ['createDigitalCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDigitalCode>>, {productId: number;data: BodyType<DigitalCodeInput>}> = (props) => {
+          const {productId,data} = props ?? {};
+
+          return  createDigitalCode(productId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDigitalCodeMutationResult = NonNullable<Awaited<ReturnType<typeof createDigitalCode>>>
+    export type CreateDigitalCodeMutationBody = BodyType<DigitalCodeInput>
+    export type CreateDigitalCodeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a digital code to a product
+ */
+export const useCreateDigitalCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDigitalCode>>, TError,{productId: number;data: BodyType<DigitalCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDigitalCode>>,
+        TError,
+        {productId: number;data: BodyType<DigitalCodeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDigitalCodeMutationOptions(options));
+    }
+
+export const getDeleteDigitalCodeUrl = (id: number,) => {
+
+
+
+
+  return `/api/digital-codes/${id}`
+}
+
+/**
+ * @summary Delete a digital code
+ */
+export const deleteDigitalCode = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDigitalCodeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDigitalCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDigitalCode>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDigitalCode>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteDigitalCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDigitalCode>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDigitalCode(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDigitalCodeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDigitalCode>>>
+
+    export type DeleteDigitalCodeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a digital code
+ */
+export const useDeleteDigitalCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDigitalCode>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDigitalCode>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteDigitalCodeMutationOptions(options));
     }
 
 export const getListCustomersUrl = (params?: ListCustomersParams,) => {

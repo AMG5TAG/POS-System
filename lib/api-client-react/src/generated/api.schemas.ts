@@ -114,6 +114,10 @@ export interface Category {
   name: string;
   /** @nullable */
   color?: string | null;
+  /** @nullable */
+  icon?: string | null;
+  /** @nullable */
+  parentId?: number | null;
   sortOrder?: number;
   createdAt: string;
 }
@@ -145,6 +149,7 @@ export interface Product {
   taxRate?: number | null;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  productType: string;
   createdAt: string;
 }
 
@@ -165,6 +170,7 @@ export interface ProductInput {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  productType?: string;
 }
 
 export interface ProductUpdate {
@@ -183,6 +189,7 @@ export interface ProductUpdate {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  productType?: string;
 }
 
 export interface ProductList {
@@ -194,13 +201,33 @@ export interface CategoryInput {
   /** @minLength 1 */
   name: string;
   color?: string;
+  icon?: string;
+  parentId?: number;
   sortOrder?: number;
 }
 
 export interface CategoryUpdate {
   name?: string;
   color?: string;
+  icon?: string;
+  /** @nullable */
+  parentId?: number | null;
   sortOrder?: number;
+}
+
+export interface DigitalCode {
+  id: number;
+  productId: number;
+  merchantId: number;
+  code: string;
+  isUsed: boolean;
+  /** @nullable */
+  usedAt?: string | null;
+  createdAt: string;
+}
+
+export interface DigitalCodeInput {
+  code: string;
 }
 
 export interface Customer {

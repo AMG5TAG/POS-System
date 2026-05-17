@@ -73,6 +73,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
+  { name: "Inventory",         href: "/management/inventory",       icon: Boxes          },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
   { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
@@ -112,6 +113,7 @@ const SEARCH_INDEX = [
   { label: "Business Details",      href: "/management/business",    icon: Building2,  group: "Management" },
   { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
   { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
+  { label: "Inventory Settings",   href: "/management/inventory",   icon: Boxes,      group: "Management" },
   { label: "Settings · Customers",  href: "/settings/customers",     icon: Users,      group: "Settings"   },
 ];
 
@@ -160,6 +162,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
   "/management/loyalty":          ["Management", "Loyalty"],
+  "/management/inventory":        ["Management", "Inventory"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
@@ -227,7 +230,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
             if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
           placeholder="Search everything..."
-          className="w-full h-9 pl-9 pr-14 rounded-full border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
+          className="w-full h-9 pl-9 pr-14 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono border rounded px-1 py-0.5">
           ⌘K
