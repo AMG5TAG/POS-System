@@ -395,15 +395,14 @@ export default function POSPage() {
             <h2 className="font-bold flex items-center gap-2 text-sm shrink-0">
               <ShoppingCart className="w-4 h-4" /> Current Sale
             </h2>
-            <button
-              onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-full px-2.5 py-1 transition-colors hover:border-primary shrink-0"
-              title="Switch employee"
-            >
-              <User className="w-3 h-3" />
-              <span className="max-w-[80px] truncate">{currentStaff ? currentStaff.name : "Staff PIN"}</span>
-            </button>
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+              <button
+                onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
+                title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
+                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", currentStaff && "text-primary")}
+              >
+                <User className="w-4 h-4" />
+              </button>
               <button
                 onClick={() => setServiceLinkOpen(true)}
                 title="Link to service or appointment"
