@@ -498,7 +498,7 @@ export default function ProductsPage() {
 
           {/* All Categories */}
           <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[160px] border-0 shadow-none bg-transparent">
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
