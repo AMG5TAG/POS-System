@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
+import { useCustomerSettings } from "@/lib/customer-settings";
 import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
   Plus, Trash2, Info,
@@ -98,6 +98,7 @@ export default function ManagementLoyaltyPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetLoyaltySettings();
   const updateMutation = useUpdateLoyaltySettings();
+  const { settings: customerConfig } = useCustomerSettings();
 
   const [form, setForm] = useState({
     programType:            "cashback" as ProgramType,
@@ -424,7 +425,7 @@ export default function ManagementLoyaltyPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {DEFAULT_CUSTOMER_GROUPS.map((group) => {
+              {customerConfig.groups.map((group) => {
                 const excluded = form.excludedCustomerGroups.includes(group.id);
                 return (
                   <button
