@@ -51,7 +51,6 @@ const INVENTORY_SUBNAV = [
 ];
 
 const SETTINGS_SUBNAV = [
-  { name: "POS",       href: "/settings/pos",       icon: ShoppingCart },
   { name: "Customers", href: "/settings/customers", icon: Users },
 ];
 
@@ -115,7 +114,6 @@ const SEARCH_INDEX = [
   { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
   { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
   { label: "Inventory Settings",   href: "/management/inventory",   icon: Boxes,      group: "Management" },
-  { label: "Settings · POS",         href: "/settings/pos",           icon: ShoppingCart, group: "Settings" },
   { label: "Settings · Customers",  href: "/settings/customers",     icon: Users,      group: "Settings"   },
 ];
 
@@ -155,7 +153,6 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/cost-summary":          ["Staff", "Cost Summary"],
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
-  "/settings/pos":                ["Settings", "POS"],
   "/settings/customers":          ["Settings", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],
   "/management/business":         ["Management", "Business Details"],

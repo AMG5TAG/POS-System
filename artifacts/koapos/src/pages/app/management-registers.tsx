@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -13,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase } from "lucide-react";
+
+export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -99,6 +102,29 @@ function TypeBadge({ type }: { type: RegisterType }) {
 /* ─── Empty form ─────────────────────────────────────────────────────────── */
 
 const EMPTY_FORM = { name: "", type: "Cash" as RegisterType, staffId: "", staffName: "", staffEmail: "" };
+
+/* ─── Force Staff Login toggle ───────────────────────────────────────────── */
+
+function ForceStaffLoginToggle() {
+  const [enabled, setEnabled] = useState(
+    () => localStorage.getItem(FORCE_STAFF_LOGIN_KEY) === "true"
+  );
+  const toggle = (v: boolean) => {
+    setEnabled(v);
+    localStorage.setItem(FORCE_STAFF_LOGIN_KEY, String(v));
+  };
+  return (
+    <div className="flex items-center justify-between p-4">
+      <div>
+        <p className="text-sm font-medium">Force Staff Login</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Require a staff PIN before every sale is processed.
+        </p>
+      </div>
+      <Switch checked={enabled} onCheckedChange={toggle} />
+    </div>
+  );
+}
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
@@ -254,6 +280,15 @@ export default function ManagementRegistersPage() {
             ))}
           </div>
         )}
+
+        {/* POS Settings */}
+        <div className="border-t pt-6 space-y-3">
+          <h2 className="text-base font-semibold">POS Settings</h2>
+          <div className="rounded-xl border divide-y">
+            <ForceStaffLoginToggle />
+          </div>
+        </div>
+
       </div>
 
       {/* Dialog */}
