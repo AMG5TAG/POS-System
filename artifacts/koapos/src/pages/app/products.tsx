@@ -22,7 +22,7 @@ import {
   Search, Plus, Pencil, Trash2, Package,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
-  Shuffle, Video, Weight, ScanSearch,
+  Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -315,6 +315,12 @@ export default function ProductsPage() {
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
+  const [typeFilter, setTypeFilter]     = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [hideCosts, setHideCosts]       = useState(false);
+  const [paginationMode, setPaginationMode] = useState<"pages" | "loadmore">("loadmore");
+  const [displayLimit, setDisplayLimit] = useState(50);
+  const [page, setPage]                 = useState(1);
 
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
@@ -346,8 +352,20 @@ export default function ProductsPage() {
     setSortKey((prev) => { if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; } setSortDir("asc"); return key; });
   }, []);
 
-  const allChecked = sorted.length > 0 && sorted.every((p) => checked.has(p.id));
-  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(sorted.map((p) => p.id)));
+  const filtered = sorted.filter((p) => {
+    if (statusFilter === "active")   return p.isActive !== false;
+    if (statusFilter === "inactive") return p.isActive === false;
+    return true;
+  });
+
+  const PAGE_SIZE = 50;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const displayed = paginationMode === "pages"
+    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filtered.slice(0, displayLimit);
+
+  const allChecked = displayed.length > 0 && displayed.every((p) => checked.has(p.id));
+  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(displayed.map((p) => p.id)));
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
@@ -453,29 +471,104 @@ export default function ProductsPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Products</h1>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setCategoryDialogOpen(true)}>Manage Categories</Button>
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
-          </div>
-        </div>
+      <div className="p-4 md:p-6 space-y-3">
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
+        {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative min-w-[220px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search products..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input
+              placeholder="Search name, SKU, barcode..."
+              className="pl-9 rounded-full h-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+
+          {/* All Categories */}
           <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="All categories" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-auto gap-1.5 rounded-full px-3 text-sm">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+
+          {/* All Types */}
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-9 w-auto rounded-full px-3 text-sm">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="service">Service</SelectItem>
+              <SelectItem value="voucher">Voucher</SelectItem>
+              <SelectItem value="combo">Combo</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* All Status */}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-auto rounded-full px-3 text-sm">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Hide / Show Costs */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setHideCosts((v) => !v)}
+            className="h-9 rounded-full gap-1.5 px-3 text-sm"
+          >
+            {hideCosts ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {hideCosts ? "Show Costs" : "Hide Costs"}
+          </Button>
+
+          {/* Pages / Load More toggle */}
+          <div className="flex rounded-full border overflow-hidden text-sm">
+            <button
+              onClick={() => { setPaginationMode("pages"); setPage(1); }}
+              className={cn("px-3 h-9 transition-colors", paginationMode === "pages" ? "bg-muted font-medium" : "hover:bg-muted/50")}
+            >
+              Pages
+            </button>
+            <button
+              onClick={() => { setPaginationMode("loadmore"); setDisplayLimit(50); }}
+              className={cn("px-3 h-9 border-l transition-colors", paginationMode === "loadmore" ? "bg-muted font-medium" : "hover:bg-muted/50")}
+            >
+              Load More
+            </button>
+          </div>
+
+          {/* Add Product */}
+          <div className="flex ml-auto">
+            <Button onClick={openCreate} className="h-9 gap-1.5 rounded-l-full pl-4 pr-3">
+              <Plus className="w-4 h-4" /> Add Product
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 rounded-r-full border-l border-primary-foreground/20 px-2"
+              onClick={() => setCategoryDialogOpen(true)}
+              title="Manage Categories"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
+        {/* ── Table ───────────────────────────────────────────────────────── */}
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading products...</div>
         ) : products.length === 0 ? (
@@ -490,60 +583,114 @@ export default function ProductsPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="p-3 w-10">
-                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
-                      className="rounded border-muted-foreground/40 accent-primary" />
-                  </th>
-                  <SortTh {...sh("Product", "name")} />
-                  <SortTh {...sh("Category", "category", "hidden md:table-cell")} />
-                  <SortTh {...sh("Price", "price")} />
-                  <SortTh {...sh("Stock", "stock", "hidden sm:table-cell")} />
-                  <th className="p-3 text-left font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {sorted.map((product) => {
-                  const isChecked  = checked.has(product.id);
-                  const isLowStock = product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
-                  return (
-                    <tr key={product.id}
-                      className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
-                      onClick={() => setSelectedProduct(product)}
-                    >
-                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
-                          className="rounded border-muted-foreground/40 accent-primary" />
-                      </td>
-                      <td className="p-3">
-                        <p className="font-medium">{product.name}</p>
-                        {product.sku && <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>}
-                      </td>
-                      <td className="p-3 hidden md:table-cell">
-                        {product.category
-                          ? <Badge variant="secondary">{product.category.name}</Badge>
-                          : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="p-3 font-medium">{formatCurrency(product.price)}</td>
-                      <td className="p-3 hidden sm:table-cell">
-                        {product.trackInventory
-                          ? <span className={isLowStock ? "text-destructive font-medium" : ""}>{product.stockQuantity}</span>
-                          : <span className="text-muted-foreground">∞</span>}
-                      </td>
-                      <td className="p-3 hidden lg:table-cell">
-                        <Badge variant={product.isActive ? "default" : "secondary"}>
-                          {product.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="rounded-lg border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-background border-b">
+                  <tr>
+                    <th className="p-3 w-10">
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                        className="rounded border-muted-foreground/40 accent-primary" />
+                    </th>
+                    <SortTh {...sh("Product / SKU", "name")} />
+                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Type</th>
+                    <SortTh {...sh("Category", "category")} />
+                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Supplier</th>
+                    {!hideCosts && <SortTh {...sh("Cost", "price", "text-muted-foreground text-xs")} />}
+                    <SortTh {...sh("Sell (inc. GST)", "price")} />
+                    {!hideCosts && (
+                      <>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">Reseller Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a] text-xs">WL Margin</th>
+                      </>
+                    )}
+                    <SortTh {...sh("Stock", "stock")} />
+                    <th className="p-3 text-left font-medium whitespace-nowrap text-muted-foreground text-xs">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {displayed.map((product) => {
+                    const isChecked  = checked.has(product.id);
+                    const isLowStock = product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                    const cost = product.costPrice ?? null;
+                    const sell = product.price;
+                    const marginPct = cost && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    return (
+                      <tr key={product.id}
+                        className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
+                        onClick={() => setSelectedProduct(product)}
+                      >
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
+                            className="rounded border-muted-foreground/40 accent-primary" />
+                        </td>
+                        <td className="p-3 min-w-[160px]">
+                          <p className="font-medium leading-tight">{product.name}</p>
+                          {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
+                        </td>
+                        <td className="p-3 text-muted-foreground">Standard</td>
+                        <td className="p-3">
+                          {product.category
+                            ? <Badge variant="secondary" className="text-xs">{product.category.name}</Badge>
+                            : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="p-3 text-muted-foreground">—</td>
+                        {!hideCosts && (
+                          <td className="p-3 text-muted-foreground">
+                            {cost != null ? formatCurrency(cost) : <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                        )}
+                        <td className="p-3 font-medium">{formatCurrency(sell)}</td>
+                        {!hideCosts && (
+                          <>
+                            <td className="p-3 text-right">
+                              {marginPct != null
+                                ? <span className="text-[#16a34a] font-medium">{marginPct}%</span>
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </td>
+                            <td className="p-3 text-right text-muted-foreground/50">—</td>
+                            <td className="p-3 text-right text-muted-foreground/50">—</td>
+                          </>
+                        )}
+                        <td className="p-3">
+                          {product.trackInventory
+                            ? <span className={isLowStock ? "text-destructive font-medium" : ""}>{product.stockQuantity}</span>
+                            : <span className="text-muted-foreground">∞</span>}
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={product.isActive !== false ? "default" : "secondary"} className="text-xs">
+                            {product.isActive !== false ? "Active" : "Inactive"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination controls */}
+            {paginationMode === "loadmore" && displayed.length < filtered.length && (
+              <div className="flex justify-center pt-2">
+                <Button variant="outline" onClick={() => setDisplayLimit((n) => n + 50)}>
+                  Load More ({filtered.length - displayed.length} remaining)
+                </Button>
+              </div>
+            )}
+            {paginationMode === "pages" && totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1 pt-2">
+                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <Button key={p} variant={p === page ? "default" : "outline"} size="sm" className="w-9" onClick={() => setPage(p)}>{p}</Button>
+                ))}
+                <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground text-right">
+              Showing {displayed.length} of {filtered.length} products
+            </p>
+          </>
         )}
       </div>
 
