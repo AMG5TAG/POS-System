@@ -1,369 +1,591 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { 
-  useListProducts, 
-  useListCategories, 
-  useCreateTransaction,
-  useListCustomers,
-  useGetLoyaltySettings,
-  Product,
-  Customer,
+import {
+  useListProducts, useListCategories, useCreateTransaction,
+  useListCustomers, useGetLoyaltySettings, useListStaff,
+  useListServiceJobs, useListAppointments,
+  Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod,
-  TransactionItem
 } from "@workspace/api-client-react";
-import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
-import {
-  Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
-  SplitSquareHorizontal, X, AlertTriangle, UserSearch,
-} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { ShoppingCart } from "lucide-react";
+import {
+  Search, Plus, Minus, Trash2, CreditCard, Banknote, Receipt,
+  SplitSquareHorizontal, X, AlertTriangle, UserSearch, ShoppingCart,
+  Gift, Eye, EyeOff, Briefcase, CalendarDays, UserRound, Percent,
+  Lock, User, Monitor,
+} from "lucide-react";
+
+/* ─── Types ──────────────────────────────────────────────────────────────── */
+
+type CartItem = {
+  product: Product;
+  quantity: number;
+  itemDiscount: number;
+  customPrice?: number;
+  itemNote?: string;
+};
+
+type WalkIn = { firstName: string; lastName: string };
+
+const DISPLAY_KEY = "koapos_pos_display";
+
+function formatKode(profit: number): string {
+  const n = Math.abs(Math.floor(profit));
+  const sign = profit < 0 ? "-" : "";
+  return `KK${sign}${String(n).padStart(3, "0")}`;
+}
+
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function POSPage() {
+  /* product browse */
   const [search, setSearch] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
-  const [cart, setCart] = useState<{product: Product, quantity: number}[]>([]);
+
+  /* cart */
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [overallDiscount, setOverallDiscount] = useState("");
+  const [saleNotes, setSaleNotes] = useState("");
+  const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
+
+  /* payment */
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+
+  /* customer */
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [walkIn, setWalkIn] = useState<WalkIn | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
-  const { data: productsData } = useListProducts({
-    search: search || undefined,
-    categoryId: activeCategoryId || undefined,
-    limit: 100
-  }, {
-    query: { queryKey: ["products", search, activeCategoryId] }
-  });
+  /* kode */
+  const [kodeVisible, setKodeVisible] = useState(false);
 
-  const { data: categoriesData } = useListCategories({
-    query: { queryKey: ["categories"] }
-  });
+  /* $0 price product */
+  const [zeroPricePending, setZeroPricePending] = useState<Product | null>(null);
+  const [zeroPriceForm, setZeroPriceForm] = useState({ price: "", note: "" });
 
+  /* service / appointment link */
+  const [linkedService, setLinkedService] = useState<ServiceJob | null>(null);
+  const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
+  const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
+
+  /* staff PIN */
+  const [currentStaff, setCurrentStaff] = useState<Staff | null>(() => {
+    try { return JSON.parse(localStorage.getItem("koapos_pos_staff") || "null"); } catch { return null; }
+  });
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+
+  /* ── Data fetches ── */
+  const { data: productsData } = useListProducts(
+    { search: search || undefined, categoryId: activeCategoryId || undefined, limit: 100 },
+    { query: { queryKey: ["products", search, activeCategoryId] } }
+  );
+  const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: customersData } = useListCustomers(
     { search: customerSearch || undefined, limit: 50 },
     { query: { queryKey: ["customers-pos", customerSearch], enabled: customerPickerOpen } }
   );
-
-  const createTransactionMutation = useCreateTransaction();
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
+  const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
+  const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
+  const createTransactionMutation = useCreateTransaction();
 
   const products = productsData?.items || [];
-  const categories: import("@workspace/api-client-react").Category[] = categoriesData || [];
+  const categories = categoriesData || [];
   const customers = customersData?.items || [];
 
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) {
-        return prev.map(item => 
-          item.product.id === product.id 
-            ? { ...item, quantity: item.quantity + 1 } 
-            : item
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-  };
-
-  const updateQuantity = (productId: number, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.product.id === productId) {
-        const newQuantity = Math.max(0, item.quantity + delta);
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    }).filter(item => item.quantity > 0));
-  };
-
-  const clearCart = () => setCart([]);
-
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  /* ── Computed totals ── */
+  const cartSubtotal = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
+  const itemDiscountTotal = cart.reduce((s, i) => s + i.itemDiscount, 0);
+  const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
+  const discountTotal = itemDiscountTotal + overallDiscountAmt;
+  const subtotal = cartSubtotal - discountTotal;
   const taxRate = 0.10;
   const taxTotal = subtotal * taxRate;
   const total = subtotal + taxTotal;
 
+  /* Kode (profit) */
+  const kodeProfit = Math.floor(
+    cart.reduce((s, i) => {
+      const price = i.customPrice ?? i.product.price;
+      const cost = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
+      return s + (price - cost) * i.quantity - i.itemDiscount;
+    }, 0) - overallDiscountAmt
+  );
+
+  /* Loyalty */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
-    if (!loyaltySettings?.isEnabled || cart.length === 0) {
+    if (walkIn || !loyaltySettings?.isEnabled || cart.length === 0)
       return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
-    }
     const excluded = (loyaltySettings.excludedCustomerGroups ?? []).map((g: string) => g.toLowerCase());
     const group = (selectedCustomer?.customerGroup ?? "").toLowerCase();
-    if (selectedCustomer && group && excluded.includes(group)) {
+    if (selectedCustomer && group && excluded.includes(group))
       return { loyaltyAmount: 0, loyaltyLabel: "No loyalty (excluded group)", loyaltyUnit: "" };
-    }
-    const eligibleSubtotal = cart.reduce((sum, item) => {
-      if (item.product.excludeFromLoyalty) return sum;
-      return sum + item.product.price * item.quantity;
-    }, 0);
-    if (eligibleSubtotal === 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
-
+    const eligible = cart.reduce((s, i) => {
+      if (i.product.excludeFromLoyalty) return s;
+      return s + (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount;
+    }, 0) - overallDiscountAmt;
+    if (eligible <= 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
     switch (loyaltySettings.programType) {
       case "cashback": {
-        const amt = eligibleSubtotal * (loyaltySettings.cashbackRate ?? 0.01);
-        return { loyaltyAmount: amt, loyaltyLabel: `${((loyaltySettings.cashbackRate ?? 0.01) * 100).toFixed(1)}% cashback`, loyaltyUnit: "$" };
+        const r = loyaltySettings.cashbackRate ?? 0.01;
+        return { loyaltyAmount: eligible * r, loyaltyLabel: `${(r * 100).toFixed(1)}% cashback`, loyaltyUnit: "$" };
       }
       case "points": {
-        const pts = Math.floor(eligibleSubtotal * (loyaltySettings.pointsPerDollar ?? 1));
+        const pts = Math.floor(eligible * (loyaltySettings.pointsPerDollar ?? 1));
         return { loyaltyAmount: pts, loyaltyLabel: `${pts} pts earned`, loyaltyUnit: "pts" };
       }
       case "tiered": {
         const spent = selectedCustomer?.totalSpent ?? 0;
         const tiers = [...(loyaltySettings.tiers ?? [])].sort((a, b) => b.minSpend - a.minSpend);
-        const tier = tiers.find((t) => spent >= t.minSpend) ?? tiers[tiers.length - 1];
-        const rate = tier?.rate ?? 0.01;
-        const amt = eligibleSubtotal * rate;
-        return { loyaltyAmount: amt, loyaltyLabel: `${(rate * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`, loyaltyUnit: "$" };
+        const tier = tiers.find(t => spent >= t.minSpend) ?? tiers[tiers.length - 1];
+        const r = tier?.rate ?? 0.01;
+        return { loyaltyAmount: eligible * r, loyaltyLabel: `${(r * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`, loyaltyUnit: "$" };
       }
-      case "stamp":
-        return { loyaltyAmount: 1, loyaltyLabel: "1 stamp earned", loyaltyUnit: "stamp" };
+      case "stamp": return { loyaltyAmount: 1, loyaltyLabel: "1 stamp earned", loyaltyUnit: "stamp" };
       case "custom": {
-        const amt = eligibleSubtotal * (loyaltySettings.customValue ?? 0.01);
-        return { loyaltyAmount: amt, loyaltyLabel: "reward earned", loyaltyUnit: "$" };
+        const r = loyaltySettings.customValue ?? 0.01;
+        return { loyaltyAmount: eligible * r, loyaltyLabel: "reward earned", loyaltyUnit: "$" };
       }
-      default:
-        return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
+      default: return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
     }
-  }, [cart, loyaltySettings, selectedCustomer]);
+  }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt]);
 
-  const selectCustomer = (c: Customer) => {
-    setSelectedCustomer(c);
-    setCustomerPickerOpen(false);
-    setCustomerSearch("");
-    if (c.warningNote) {
-      setWarningCustomer(c);
+  /* Broadcast to customer display */
+  useEffect(() => {
+    const customerName = walkIn
+      ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
+      : selectedCustomer
+      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ")
+      : null;
+    const payload = {
+      items: cart.map(i => ({
+        name: i.product.name,
+        qty: i.quantity,
+        unitPrice: i.customPrice ?? i.product.price,
+        itemDiscount: i.itemDiscount,
+        lineTotal: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
+      })),
+      cartSubtotal, discountTotal, subtotal, taxTotal, total,
+      loyaltyAmount, loyaltyLabel, loyaltyUnit,
+      customerName,
+      updatedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(DISPLAY_KEY, JSON.stringify(payload));
+      window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: JSON.stringify(payload) }));
+    } catch { /* ignore */ }
+  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn]);
+
+  /* ── Cart operations ── */
+  const addToCart = (product: Product) => {
+    if ((product.price ?? 0) === 0) {
+      setZeroPricePending(product);
+      setZeroPriceForm({ price: "", note: "" });
+      return;
     }
-  };
-
-  const handleCheckout = (paymentMethod: TransactionInputPaymentMethod) => {
-    const items: TransactionItem[] = cart.map(item => ({
-      productId: item.product.id,
-      productName: item.product.name,
-      quantity: item.quantity,
-      unitPrice: item.product.price,
-      totalPrice: item.product.price * item.quantity,
-      taxAmount: (item.product.price * item.quantity) * (item.product.taxRate || taxRate)
-    }));
-
-    const storedLoyalty = loyaltyUnit === "pts" || loyaltyUnit === "stamp" ? loyaltyAmount : loyaltyAmount;
-
-    createTransactionMutation.mutate({
-      data: {
-        items,
-        paymentMethod,
-        subtotal,
-        taxTotal,
-        total,
-        amountTendered: total,
-        customerId: selectedCustomer?.id,
-        loyaltyEarned: loyaltyAmount > 0 ? storedLoyalty : undefined,
-      }
-    }, {
-      onSuccess: () => {
-        toast.success("Transaction completed successfully");
-        setCart([]);
-        setPaymentModalOpen(false);
-        setSelectedCustomer(null);
-      },
-      onError: () => {
-        toast.error("Failed to process transaction");
-      }
+    setCart(prev => {
+      const existing = prev.find(i => i.product.id === product.id);
+      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { product, quantity: 1, itemDiscount: 0 }];
     });
   };
 
+  const addZeroPriceProduct = () => {
+    if (!zeroPricePending) return;
+    const price = parseFloat(zeroPriceForm.price);
+    if (isNaN(price) || price < 0) { toast.error("Please enter a valid price"); return; }
+    setCart(prev => {
+      const existing = prev.find(i => i.product.id === zeroPricePending!.id);
+      if (existing) return prev.map(i => i.product.id === zeroPricePending!.id ? { ...i, quantity: i.quantity + 1, customPrice: price, itemNote: zeroPriceForm.note || i.itemNote } : i);
+      return [...prev, { product: zeroPricePending!, quantity: 1, itemDiscount: 0, customPrice: price, itemNote: zeroPriceForm.note || undefined }];
+    });
+    setZeroPricePending(null);
+  };
+
+  const updateQuantity = (productId: number, delta: number) =>
+    setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0));
+
+  const setItemDiscount = (productId: number, value: string) => {
+    const amt = parseFloat(value) || 0;
+    setCart(prev => prev.map(i => {
+      if (i.product.id !== productId) return i;
+      const max = (i.customPrice ?? i.product.price) * i.quantity;
+      return { ...i, itemDiscount: Math.min(Math.max(0, amt), max) };
+    }));
+  };
+
+  const clearCart = () => {
+    setCart([]); setOverallDiscount(""); setSaleNotes("");
+    setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
+  };
+
+  const selectCustomer = (c: Customer) => {
+    setSelectedCustomer(c); setWalkIn(null);
+    setCustomerPickerOpen(false); setCustomerSearch("");
+    if (c.warningNote) setWarningCustomer(c);
+  };
+
+  const confirmWalkIn = () => {
+    if (!walkInForm.firstName.trim()) { toast.error("Please enter a first name"); return; }
+    setWalkIn({ firstName: walkInForm.firstName.trim(), lastName: walkInForm.lastName.trim() });
+    setSelectedCustomer(null); setWalkInDialogOpen(false); setWalkInForm({ firstName: "", lastName: "" });
+  };
+
+  const handlePinSubmit = () => {
+    const staff = (staffList as Staff[] ?? []).find(s => s.pin && s.pin === pinInput && s.isActive);
+    if (!staff) { setPinError("Incorrect PIN. Try again."); setPinInput(""); return; }
+    setCurrentStaff(staff);
+    try { localStorage.setItem("koapos_pos_staff", JSON.stringify(staff)); } catch { /* ignore */ }
+    setPinDialogOpen(false); setPinInput(""); setPinError("");
+    toast.success(`Signed in as ${staff.name}`);
+  };
+
+  const handleCheckout = (paymentMethod: TransactionInputPaymentMethod) => {
+    const txItems = cart.map(i => ({
+      productId: i.product.id,
+      productName: i.product.name,
+      quantity: i.quantity,
+      unitPrice: i.customPrice ?? i.product.price,
+      totalPrice: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
+      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * (i.product.taxRate || taxRate),
+      discount: i.itemDiscount || undefined,
+    }));
+    const notesParts = [
+      linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
+      linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
+      saleNotes || null,
+    ].filter(Boolean);
+    createTransactionMutation.mutate({
+      data: {
+        items: txItems, paymentMethod, subtotal, taxTotal,
+        discountTotal: discountTotal > 0 ? discountTotal : undefined,
+        total, amountTendered: total,
+        customerId: selectedCustomer?.id,
+        staffId: currentStaff?.id,
+        loyaltyEarned: !walkIn && loyaltyAmount > 0 ? loyaltyAmount : undefined,
+        notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      }
+    }, {
+      onSuccess: () => {
+        toast.success("Transaction completed");
+        clearCart(); setPaymentModalOpen(false);
+        setSelectedCustomer(null); setWalkIn(null);
+      },
+      onError: () => toast.error("Failed to process transaction"),
+    });
+  };
+
+  const activeCustomerName = walkIn
+    ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
+    : selectedCustomer
+    ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Customer"
+    : null;
+
+  /* ── Render ── */
   return (
-    <AppLayout>
+    <AppLayout hideSidebar>
       <div className="flex h-full w-full overflow-hidden">
-        {/* Main POS Area */}
+
+        {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
-          <div className="p-4 border-b space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input 
-                placeholder="Search products by name, SKU, or barcode..." 
-                className="pl-10 h-12 text-lg"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <div className="p-3 border-b space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search products by name, SKU or barcode..."
+                  className="pl-9 h-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => window.open("/customer-display", "_blank")}
+                title="Open customer-facing display"
+                className="shrink-0 gap-1.5 text-xs"
+              >
+                <Monitor className="w-4 h-4" /> Display
+              </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
-              <div className="flex w-max space-x-2 pb-2">
-                <Button 
-                  variant={activeCategoryId === null ? "default" : "outline"} 
-                  onClick={() => setActiveCategoryId(null)}
-                  className="rounded-full"
-                >
-                  All Products
-                </Button>
+              <div className="flex w-max space-x-2 pb-1">
+                <Button variant={activeCategoryId === null ? "default" : "outline"} onClick={() => setActiveCategoryId(null)} size="sm" className="rounded-full h-7 text-xs">All</Button>
                 {categories.map(cat => (
-                  <Button 
-                    key={cat.id}
-                    variant={activeCategoryId === cat.id ? "default" : "outline"} 
-                    onClick={() => setActiveCategoryId(cat.id)}
-                    className="rounded-full"
-                  >
-                    {cat.name}
-                  </Button>
+                  <Button key={cat.id} variant={activeCategoryId === cat.id ? "default" : "outline"} onClick={() => setActiveCategoryId(cat.id)} size="sm" className="rounded-full h-7 text-xs">{cat.name}</Button>
                 ))}
               </div>
             </ScrollArea>
           </div>
 
-          <ScrollArea className="flex-1 p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <ScrollArea className="flex-1 p-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {products.map(product => (
                 <button
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="group relative flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-95 bg-card hover:shadow-md"
+                  className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md"
                 >
                   <div className="aspect-square w-full bg-muted flex items-center justify-center relative">
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-4xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
-                    )}
+                    {product.imageUrl
+                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                      : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
+                    }
                     {product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
-                      <Badge variant="destructive" className="absolute top-2 right-2">Low Stock</Badge>
+                      <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
                     )}
                   </div>
-                  <div className="p-3">
-                    <p className="font-semibold text-sm line-clamp-2 h-10">{product.name}</p>
-                    <p className="font-bold text-primary mt-1">{formatCurrency(product.price)}</p>
+                  <div className="p-2.5">
+                    <p className="font-semibold text-xs line-clamp-2 leading-snug min-h-[2rem]">{product.name}</p>
+                    <p className="font-bold text-primary text-sm mt-1">
+                      {(product.price ?? 0) === 0
+                        ? <span className="text-muted-foreground text-[11px] font-normal">Enter price</span>
+                        : formatCurrency(product.price)}
+                    </p>
                   </div>
                 </button>
               ))}
             </div>
             {products.length === 0 && (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                No products found.
-              </div>
+              <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">No products found.</div>
             )}
           </ScrollArea>
         </div>
 
-        {/* Cart Sidebar */}
-        <div className="w-96 border-l bg-card flex flex-col shrink-0">
-          <div className="h-16 flex items-center justify-between px-4 border-b shrink-0">
-            <h2 className="font-bold text-lg flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5" /> Current Sale
+        {/* ─── Cart sidebar ─── */}
+        <div className="w-[22rem] border-l bg-card flex flex-col shrink-0">
+
+          {/* Header */}
+          <div className="h-12 flex items-center justify-between px-3 border-b shrink-0 gap-2">
+            <h2 className="font-bold flex items-center gap-2 text-sm shrink-0">
+              <ShoppingCart className="w-4 h-4" /> Current Sale
             </h2>
-            <Button variant="ghost" size="icon" onClick={clearCart} disabled={cart.length === 0}>
-              <Trash2 className="w-5 h-5 text-destructive" />
-            </Button>
+            <button
+              onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-full px-2.5 py-1 transition-colors hover:border-primary shrink-0"
+              title="Switch employee"
+            >
+              <User className="w-3 h-3" />
+              <span className="max-w-[80px] truncate">{currentStaff ? currentStaff.name : "Staff PIN"}</span>
+            </button>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                onClick={() => setServiceLinkOpen(true)}
+                title="Link to service or appointment"
+                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", (linkedService || linkedAppointment) && "text-primary")}
+              >
+                <Briefcase className="w-4 h-4" />
+              </button>
+              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={clearCart} disabled={cart.length === 0} title="Clear cart">
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </div>
           </div>
 
-          {/* Customer section */}
-          <div className="border-b px-4 py-3 shrink-0">
-            {selectedCustomer ? (
-              <div className={cn(
-                "flex items-center gap-3 rounded-lg p-2.5",
-                selectedCustomer.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40"
-              )}>
-                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {((selectedCustomer.firstName?.[0] ?? "") + (selectedCustomer.lastName?.[0] ?? "")).toUpperCase() || "?"}
+          {/* Customer row */}
+          <div className="border-b px-3 py-2 shrink-0">
+            {activeCustomerName ? (
+              <div className={cn("flex items-center gap-2 rounded-lg px-2.5 py-2", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
+                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
+                  {walkIn ? "?" : ((selectedCustomer?.firstName?.[0] ?? "") + (selectedCustomer?.lastName?.[0] ?? "")).toUpperCase() || "?"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {[selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Customer"}
-                  </p>
-                  {selectedCustomer.warningNote && (
-                    <p className="text-xs text-destructive flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 shrink-0" /> Warning on file
-                    </p>
-                  )}
+                  <p className="text-xs font-medium truncate">{activeCustomerName}</p>
+                  {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
+                  {!walkIn && selectedCustomer?.warningNote && <p className="text-[10px] text-destructive flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Warning on file</p>}
                 </div>
-                <button
-                  onClick={() => setSelectedCustomer(null)}
-                  className="text-muted-foreground hover:text-foreground shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
-              <button
-                onClick={() => setCustomerPickerOpen(true)}
-                className="w-full flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-3 py-2.5 transition-colors hover:border-primary"
-              >
-                <UserSearch className="w-4 h-4 shrink-0" />
-                Add customer to sale...
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setCustomerPickerOpen(true)}
+                  className="flex-1 flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-2.5 py-1.5 transition-colors hover:border-primary"
+                >
+                  <UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer
+                </button>
+                <button
+                  onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
+                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-lg px-2.5 py-1.5 transition-colors hover:border-amber-400"
+                >
+                  <UserRound className="w-3.5 h-3.5 shrink-0" /> Walk-in
+                </button>
+              </div>
             )}
           </div>
 
+          {/* Service/appointment link indicator */}
+          {(linkedService || linkedAppointment) && (
+            <div className="border-b px-3 py-1.5 bg-primary/5 shrink-0">
+              <div className="flex items-center gap-1.5 text-[11px] text-primary">
+                {linkedService && <><Briefcase className="w-3 h-3 shrink-0" /><span className="truncate">Service {linkedService.jobNumber}: {linkedService.deviceType || linkedService.deviceDescription || "service"}</span></>}
+                {linkedAppointment && <><CalendarDays className="w-3 h-3 shrink-0" /><span className="truncate">Appt #{linkedAppointment.id}: {linkedAppointment.title}</span></>}
+                <button onClick={() => { setLinkedService(null); setLinkedAppointment(null); }} className="ml-auto shrink-0 hover:text-destructive"><X className="w-3 h-3" /></button>
+              </div>
+            </div>
+          )}
+
+          {/* Cart items */}
           <ScrollArea className="flex-1">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                <Receipt className="w-16 h-16 mb-4 opacity-20" />
-                <p>No items in cart</p>
-                <p className="text-sm mt-2">Tap products to add them to the sale.</p>
+                <Receipt className="w-14 h-14 mb-3 opacity-20" />
+                <p className="font-medium text-sm">No items in cart</p>
+                <p className="text-xs mt-1">Tap products to add them to the sale.</p>
               </div>
             ) : (
-              <div className="p-4 space-y-4">
-                {cart.map((item) => (
-                  <div key={item.product.id} className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.product.name}</p>
-                      <p className="text-muted-foreground text-sm">{formatCurrency(item.product.price)}</p>
+              <div className="p-2.5 space-y-1.5">
+                {cart.map((item) => {
+                  const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
+                  const lineTotal = linePrice - item.itemDiscount;
+                  const discExpanded = expandedDiscounts.has(item.product.id);
+                  return (
+                    <div key={item.product.id} className="border rounded-xl overflow-hidden bg-background">
+                      <div className="flex items-center gap-2 px-2.5 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-xs leading-snug truncate">{item.product.name}</p>
+                          <p className="text-muted-foreground text-[11px]">
+                            {formatCurrency(item.customPrice ?? item.product.price)}
+                            {item.itemNote && <span className="ml-1 italic text-muted-foreground/60">· {item.itemNote}</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
+                          <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="w-14 text-right">
+                            <p className="font-bold text-xs">{formatCurrency(lineTotal)}</p>
+                            {item.itemDiscount > 0 && <p className="text-[10px] text-destructive line-through leading-none">{formatCurrency(linePrice)}</p>}
+                          </div>
+                          <button
+                            onClick={() => setExpandedDiscounts(prev => { const n = new Set(prev); if (n.has(item.product.id)) n.delete(item.product.id); else n.add(item.product.id); return n; })}
+                            className={cn("p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors", discExpanded && "text-primary")}
+                            title="Item discount"
+                          >
+                            <Percent className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      {discExpanded && (
+                        <div className="px-2.5 pb-2 pt-1.5 flex items-center gap-2 border-t bg-muted/20">
+                          <Label className="text-[10px] shrink-0 text-muted-foreground">Discount ($)</Label>
+                          <Input
+                            type="number" min="0" step="0.50"
+                            value={item.itemDiscount || ""}
+                            onChange={(e) => setItemDiscount(item.product.id, e.target.value)}
+                            placeholder="0.00"
+                            className="h-6 text-xs"
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, -1)}>
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="w-6 text-center font-medium">{item.quantity}</span>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, 1)}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <div className="w-20 text-right font-bold text-sm shrink-0">
-                      {formatCurrency(item.product.price * item.quantity)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
 
-          <div className="border-t bg-background p-4 shrink-0">
-            <div className="space-y-2 mb-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax (GST 10%)</span>
-                <span>{formatCurrency(taxTotal)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold pt-2 border-t mt-2">
-                <span>Total</span>
-                <span className="text-primary">{formatCurrency(total)}</span>
-              </div>
-              {loyaltyAmount > 0 && loyaltyUnit !== "" && (
-                <div className="flex items-center justify-between pt-2 border-t mt-1 text-emerald-600">
-                  <span className="flex items-center gap-1.5 text-xs font-medium">
-                    <Gift className="w-3.5 h-3.5" />
-                    {loyaltyLabel}
-                  </span>
-                  <span className="text-xs font-semibold">
-                    {loyaltyUnit === "$"
-                      ? `+${formatCurrency(loyaltyAmount)}`
-                      : loyaltyUnit === "pts"
-                      ? `+${loyaltyAmount} pts`
-                      : "+1 stamp"}
-                  </span>
-                </div>
-              )}
+          {/* Sale notes */}
+          {cart.length > 0 && (
+            <div className="border-t px-2.5 py-2 shrink-0">
+              <textarea
+                className="w-full text-xs border rounded-lg px-2.5 py-2 resize-none bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-muted-foreground"
+                rows={2}
+                placeholder="Add a note to this sale... (prints on receipt)"
+                value={saleNotes}
+                onChange={(e) => setSaleNotes(e.target.value)}
+              />
             </div>
-            <Button 
-              className="w-full h-16 text-xl font-bold" 
+          )}
+
+          {/* Totals */}
+          <div className="border-t bg-background px-3 py-2.5 shrink-0 space-y-1.5">
+            {cartSubtotal !== subtotal && (
+              <div className="flex justify-between text-[11px] text-muted-foreground">
+                <span>Before discounts</span><span>{formatCurrency(cartSubtotal)}</span>
+              </div>
+            )}
+            {discountTotal > 0 && (
+              <div className="flex justify-between text-xs text-destructive font-medium">
+                <span>Discount</span><span>−{formatCurrency(discountTotal)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>GST (10%)</span><span>{formatCurrency(taxTotal)}</span>
+            </div>
+            {/* Overall discount */}
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-muted-foreground shrink-0">Sale discount ($)</label>
+              <Input
+                type="number" min="0" step="0.50"
+                value={overallDiscount}
+                onChange={(e) => setOverallDiscount(e.target.value)}
+                placeholder="0.00"
+                className="h-6 text-xs flex-1"
+                disabled={cart.length === 0}
+              />
+            </div>
+
+            <div className="flex justify-between text-base font-bold pt-1 border-t">
+              <span>Total</span>
+              <span className="text-primary">{formatCurrency(total)}</span>
+            </div>
+
+            {/* Loyalty + Kode row */}
+            <div className="flex items-center justify-between">
+              {loyaltyAmount > 0 && loyaltyUnit !== "" ? (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                  <Gift className="w-3 h-3" /> {loyaltyLabel}
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground/50">No loyalty</span>
+              )}
+              <div className="flex items-center gap-2">
+                {loyaltyAmount > 0 && loyaltyUnit !== "" && (
+                  <span className="text-[11px] font-semibold text-emerald-600">
+                    {loyaltyUnit === "$" ? `+${formatCurrency(loyaltyAmount)}` : loyaltyUnit === "pts" ? `+${loyaltyAmount} pts` : "+1 stamp"}
+                  </span>
+                )}
+                {/* Kode */}
+                <div className="flex items-center gap-1 border-l pl-2">
+                  <span className="text-[10px] font-mono text-muted-foreground/50 select-none">Kode</span>
+                  <button
+                    onClick={() => setKodeVisible(v => !v)}
+                    className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
+                    title={kodeVisible ? "Hide" : "Show"}
+                    disabled={cart.length === 0}
+                  >
+                    {kodeVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  </button>
+                  {kodeVisible && cart.length > 0 && (
+                    <span className="text-[11px] font-mono font-bold text-muted-foreground">{formatKode(kodeProfit)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Button
+              className="w-full h-12 text-base font-bold mt-1"
               disabled={cart.length === 0}
               onClick={() => setPaymentModalOpen(true)}
             >
@@ -373,136 +595,182 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Payment modal */}
+      {/* ─── Payment modal ─── */}
       <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl font-bold pt-4">Amount Due: {formatCurrency(total)}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-6">
-            <Button 
-              variant="outline" 
-              className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-              onClick={() => handleCheckout("card")}
-              disabled={createTransactionMutation.isPending}
-            >
-              <CreditCard className="w-8 h-8" />
-              Credit Card
-            </Button>
-            <Button 
-              variant="outline" 
-              className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-              onClick={() => handleCheckout("cash")}
-              disabled={createTransactionMutation.isPending}
-            >
-              <Banknote className="w-8 h-8" />
-              Cash
-            </Button>
-            <Button 
-              variant="outline" 
-              className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-              onClick={() => handleCheckout("split")}
-              disabled={createTransactionMutation.isPending}
-            >
-              <SplitSquareHorizontal className="w-8 h-8" />
-              Split Payment
-            </Button>
-            <Button 
-              variant="outline" 
-              className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
-              onClick={() => handleCheckout("other")}
-              disabled={createTransactionMutation.isPending}
-            >
-              <Receipt className="w-8 h-8" />
-              Other
-            </Button>
+            {([
+              { method: "card" as const, label: "Credit Card", icon: CreditCard },
+              { method: "cash" as const, label: "Cash", icon: Banknote },
+              { method: "split" as const, label: "Split Payment", icon: SplitSquareHorizontal },
+              { method: "other" as const, label: "Other", icon: Receipt },
+            ] as const).map(({ method, label, icon: Icon }) => (
+              <Button
+                key={method} variant="outline"
+                className="h-32 flex flex-col gap-4 text-lg border-2 hover:border-primary hover:bg-primary/5"
+                onClick={() => handleCheckout(method)}
+                disabled={createTransactionMutation.isPending}
+              >
+                <Icon className="w-8 h-8" />{label}
+              </Button>
+            ))}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Customer picker modal */}
-      <Dialog open={customerPickerOpen} onOpenChange={(o) => { setCustomerPickerOpen(o); if (!o) setCustomerSearch(""); }}>
+      {/* ─── Customer picker ─── */}
+      <Dialog open={customerPickerOpen} onOpenChange={o => { setCustomerPickerOpen(o); if (!o) setCustomerSearch(""); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Select Customer</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Select Customer</DialogTitle></DialogHeader>
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search by name, email, or phone..."
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              autoFocus
-            />
+            <Input className="pl-9" placeholder="Search by name, email, or phone..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} autoFocus />
           </div>
           <ScrollArea className="max-h-80">
-            {customers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                {customerSearch ? "No customers found." : "Start typing to search customers."}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {customers.map((c) => {
+            {customers.length === 0
+              ? <div className="text-center py-8 text-muted-foreground text-sm">{customerSearch ? "No customers found." : "Start typing to search customers."}</div>
+              : <div className="space-y-1">{customers.map(c => {
                   const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
                   const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
                   return (
-                    <button
-                      key={c.id}
-                      onClick={() => selectCustomer(c)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left"
-                    >
-                      <div className={cn(
-                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
-                        c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"
-                      )}>
-                        {initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
-                      </div>
-                      {c.warningNote && (
-                        <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                      )}
+                    <button key={c.id} onClick={() => selectCustomer(c)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left">
+                      <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0", c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>{initials}</div>
+                      <div className="flex-1 min-w-0"><p className="text-sm font-medium">{name}</p><p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p></div>
+                      {c.warningNote && <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />}
                     </button>
                   );
-                })}
-              </div>
-            )}
+                })}</div>
+            }
           </ScrollArea>
         </DialogContent>
       </Dialog>
 
-      {/* Customer warning popup */}
-      <Dialog open={!!warningCustomer} onOpenChange={(o) => { if (!o) setWarningCustomer(null); }}>
+      {/* ─── Walk-in dialog ─── */}
+      <Dialog open={walkInDialogOpen} onOpenChange={setWalkInDialogOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="w-4 h-4" /> Walk-in Customer</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Enter the customer's name. They won't be added to the system and won't earn loyalty rewards.</p>
+          <div className="space-y-3">
+            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => setWalkInForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Jane" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => setWalkInForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWalkInDialogOpen(false)}>Cancel</Button>
+            <Button onClick={confirmWalkIn}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Customer warning ─── */}
+      <Dialog open={!!warningCustomer} onOpenChange={o => { if (!o) setWarningCustomer(null); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="w-5 h-5" /> Customer Warning
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="w-5 h-5" /> Customer Warning</DialogTitle></DialogHeader>
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-2">
-            <p className="font-semibold text-sm">
-              {warningCustomer ? [warningCustomer.firstName, warningCustomer.lastName].filter(Boolean).join(" ") : ""}
-            </p>
+            <p className="font-semibold text-sm">{warningCustomer ? [warningCustomer.firstName, warningCustomer.lastName].filter(Boolean).join(" ") : ""}</p>
             <p className="text-sm text-destructive">{warningCustomer?.warningNote}</p>
           </div>
           <p className="text-sm text-muted-foreground">Please review this warning before proceeding with the sale.</p>
           <div className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => { setWarningCustomer(null); setSelectedCustomer(null); }}
-            >
-              Remove Customer
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => setWarningCustomer(null)}
-            >
-              Acknowledge & Continue
-            </Button>
+            <Button variant="outline" onClick={() => { setWarningCustomer(null); setSelectedCustomer(null); }}>Remove Customer</Button>
+            <Button variant="destructive" onClick={() => setWarningCustomer(null)}>Acknowledge & Continue</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── $0 price dialog ─── */}
+      <Dialog open={!!zeroPricePending} onOpenChange={o => { if (!o) setZeroPricePending(null); }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader><DialogTitle>Set Sale Price</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground"><span className="font-semibold">{zeroPricePending?.name}</span> has a $0.00 price. Please enter a price and a reason before adding it to the sale.</p>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Sale Price ($) *</Label><Input type="number" min="0" step="0.01" value={zeroPriceForm.price} onChange={e => setZeroPriceForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" className="mt-1" autoFocus /></div>
+            <div><Label className="text-xs">Reason / Note</Label><Input value={zeroPriceForm.note} onChange={e => setZeroPriceForm(f => ({ ...f, note: e.target.value }))} placeholder="e.g. Staff discount, warranty replacement..." className="mt-1" onKeyDown={e => e.key === "Enter" && addZeroPriceProduct()} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setZeroPricePending(null)}>Cancel</Button>
+            <Button onClick={addZeroPriceProduct}>Add to Cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Service / Appointment link ─── */}
+      <Dialog open={serviceLinkOpen} onOpenChange={setServiceLinkOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Briefcase className="w-4 h-4" /> Link to Service or Appointment</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
+              <ScrollArea className="max-h-44 border rounded-lg">
+                {(serviceJobs as ServiceJob[] ?? []).length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
+                  : <div className="divide-y">{(serviceJobs as ServiceJob[] ?? []).slice(0, 15).map(sj => (
+                      <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
+                        className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
+                        <Briefcase className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">#{sj.jobNumber} · {sj.deviceType || sj.deviceDescription || "Service"}</p>
+                          <p className="text-xs text-muted-foreground">{sj.status} · {sj.customerName || "No customer"}</p>
+                        </div>
+                      </button>
+                    ))}</div>
+                }
+              </ScrollArea>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
+              <ScrollArea className="max-h-44 border rounded-lg">
+                {(appointments as Appointment[] ?? []).length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
+                  : <div className="divide-y">{(appointments as Appointment[] ?? []).slice(0, 15).map(apt => (
+                      <button key={apt.id} onClick={() => { setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false); }}
+                        className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
+                        <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">#{apt.id} · {apt.title}</p>
+                          <p className="text-xs text-muted-foreground">{apt.scheduledAt ? new Date(apt.scheduledAt).toLocaleString() : "—"} · {apt.customerName || "No customer"}</p>
+                        </div>
+                      </button>
+                    ))}</div>
+                }
+              </ScrollArea>
+            </div>
+            {(linkedService || linkedAppointment) && (
+              <Button variant="outline" size="sm" className="w-full" onClick={() => { setLinkedService(null); setLinkedAppointment(null); }}>
+                <X className="w-4 h-4 mr-1.5" /> Remove Link
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Staff PIN dialog ─── */}
+      <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinDialogOpen(false); } }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Staff Login</DialogTitle></DialogHeader>
+          {currentStaff && <p className="text-sm text-muted-foreground text-center">Currently: <span className="font-semibold text-foreground">{currentStaff.name}</span></p>}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Enter PIN</Label>
+              <Input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(""); }} placeholder="••••" className="mt-1 text-center tracking-widest text-lg" autoFocus onKeyDown={e => e.key === "Enter" && handlePinSubmit()} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
+                <button
+                  key={ki} disabled={!k}
+                  onClick={() => { if (k === "⌫") setPinInput(p => p.slice(0, -1)); else if (k) { setPinInput(p => p + k); setPinError(""); } }}
+                  className={cn("h-11 rounded-xl border font-semibold text-base transition-colors", k ? "hover:bg-muted active:bg-muted/80" : "opacity-0 pointer-events-none", k === "⌫" && "text-destructive text-sm")}
+                >{k}</button>
+              ))}
+            </div>
+            {pinError && <p className="text-xs text-destructive text-center">{pinError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(false); }}>Cancel</Button>
+            <Button onClick={handlePinSubmit} disabled={!pinInput}>Sign In</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>

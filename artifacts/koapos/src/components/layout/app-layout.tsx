@@ -331,7 +331,7 @@ function NavNestedGroup({
 
 /* ─── Main layout ────────────────────────────────────────────────────────── */
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -427,7 +427,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={!hideSidebar && !isPOSSection}>
       <div className="min-h-[100dvh] w-full flex bg-muted/10">
         <Sidebar className="border-r">
           <SidebarHeader className="h-16 flex items-center px-4 border-b">
