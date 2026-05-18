@@ -251,7 +251,7 @@ export default function ManagementLoyaltyPage() {
           <CardContent className="space-y-5">
             {form.programType === "cashback" && (
               <div className="space-y-4">
-                <div className="max-w-xs">
+                <div>
                   <Label>Cashback Rate (%)</Label>
                   <p className="text-xs text-muted-foreground mb-2">Percentage of the sale total customers earn back.</p>
                   <div className="flex items-center gap-2">
@@ -275,7 +275,7 @@ export default function ManagementLoyaltyPage() {
 
             {form.programType === "points" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Points Per Dollar Spent</Label>
                     <p className="text-xs text-muted-foreground mb-2">Points earned per $1 of sale value.</p>
@@ -357,7 +357,7 @@ export default function ManagementLoyaltyPage() {
 
             {form.programType === "stamp" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Stamps Required</Label>
                     <p className="text-xs text-muted-foreground mb-2">Number of purchases to earn a reward.</p>
@@ -399,7 +399,7 @@ export default function ManagementLoyaltyPage() {
                     placeholder="e.g. Earn 5% back on all purchases over $50. Rewards are applied automatically on your next visit."
                   />
                 </div>
-                <div className="max-w-xs">
+                <div>
                   <Label>Effective Reward Rate (%)</Label>
                   <p className="text-xs text-muted-foreground mb-2">Used to calculate loyalty preview on the POS screen.</p>
                   <div className="flex items-center gap-2">

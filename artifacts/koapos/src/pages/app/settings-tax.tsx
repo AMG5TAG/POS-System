@@ -71,7 +71,7 @@ export default function SettingsTaxPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="p-6 md:p-8 space-y-6 max-w-2xl">
+        <div className="p-6 md:p-8 space-y-6">
           <Skeleton className="h-8 w-48" />
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-xl" />)}
         </div>
@@ -81,7 +81,7 @@ export default function SettingsTaxPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6 max-w-2xl">
+      <div className="p-6 md:p-8 space-y-6">
         <div className="flex items-center gap-3">
           <Percent className="w-6 h-6 text-primary" />
           <div>
@@ -89,6 +89,8 @@ export default function SettingsTaxPage() {
             <p className="text-sm text-muted-foreground">Configure tax rates, receipt settings, and notification preferences</p>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* GST Settings */}
         <Card>
@@ -174,6 +176,8 @@ export default function SettingsTaxPage() {
           </CardContent>
         </Card>
 
+        </div>{/* end 2-col grid */}
+
         {/* Email & SMS Receipts */}
         <Card>
           <CardHeader>
@@ -233,6 +237,7 @@ export default function SettingsTaxPage() {
             {updateSettings.isPending ? "Saving..." : "Save Settings"}
           </Button>
         </div>
+
       </div>
     </AppLayout>
   );

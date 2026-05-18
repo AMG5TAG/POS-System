@@ -71,6 +71,10 @@ A subscription-based Point of Sale system for Australian retail merchants. Clean
 - CORS is configured with `origin: true, credentials: true` — both are required for session cookies to work.
 - After changing `lib/api-client-react/src/custom-fetch.ts`, rebuild libs with `pnpm run typecheck:libs`.
 
+## User Preferences
+
+- **Full-width layouts**: All app pages must use the full window width — never add `max-w-*` to page-level containers. Where a page has multiple cards/sections, place them in a responsive grid (`grid-cols-1 lg:grid-cols-2 gap-6 items-start`) so they sit side by side on large screens and stack on mobile. Dialog widths (`max-w-md`, `max-w-lg`, etc.) are fine to keep.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

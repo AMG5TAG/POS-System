@@ -244,7 +244,7 @@ export default function SettingsCustomersPage() {
             <CardTitle>Default Values</CardTitle>
             <CardDescription>Values pre-filled when creating a new customer.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 max-w-xs">
+          <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label>Default Customer Group</Label>
               <Select value={settings.defaultGroup} onValueChange={(v) => save({ defaultGroup: v })}>

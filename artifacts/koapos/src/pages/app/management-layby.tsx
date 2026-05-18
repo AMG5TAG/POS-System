@@ -73,7 +73,7 @@ export default function ManagementLaybyPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6 max-w-3xl">
+      <div className="p-6 md:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -93,6 +93,8 @@ export default function ManagementLaybyPage() {
             </Button>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* Duration & Payments */}
         <Card>
@@ -253,6 +255,8 @@ export default function ManagementLaybyPage() {
             </div>
           </CardContent>
         </Card>
+
+        </div>{/* end 2-col grid */}
 
         {/* Save footer */}
         <div className="flex justify-end gap-2 pt-2 pb-8">
