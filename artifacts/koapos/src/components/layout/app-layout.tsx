@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/use-auth";
 import { useTheme } from "@/lib/theme";
@@ -479,22 +480,23 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   isActive: boolean; isOpen: boolean; onToggle: () => void;
   location: string; navigate: (href: string) => void;
 }) {
-  return (
-    <div className="relative">
-      <button
-        onClick={onToggle}
-        className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
-          isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
-        )}
-      >
-        <Icon className="w-3.5 h-3.5 shrink-0" />
-        <span className="hidden sm:inline">{label}</span>
-        <ChevronDown className={cn("w-3 h-3 shrink-0 transition-transform", isOpen && "rotate-180")} />
-      </button>
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 bg-popover border rounded-xl shadow-xl z-[100] py-1.5 min-w-[190px] max-h-80 overflow-y-auto">
+  const handleToggle = () => {
+    if (!isOpen && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ left: r.left, top: r.bottom + 4 });
+    }
+    onToggle();
+  };
+
+  const panel = isOpen && pos
+    ? createPortal(
+        <div
+          className="fixed bg-popover border rounded-xl shadow-xl z-[9999] py-1.5 min-w-[190px] max-h-80 overflow-y-auto"
+          style={{ left: pos.left, top: pos.top }}
+        >
           {items.map((item) => {
             if ("children" in item) {
               return (
@@ -521,8 +523,26 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
               </button>
             );
           })}
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div>
+      <button
+        ref={btnRef}
+        onClick={handleToggle}
+        className={cn(
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+          isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+        )}
+      >
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span className="hidden sm:inline">{label}</span>
+        <ChevronDown className={cn("w-3 h-3 shrink-0 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      {panel}
     </div>
   );
 }
