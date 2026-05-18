@@ -36,6 +36,7 @@ export const customersTable = pgTable("customers", {
   customerGroup: text("customer_group"),
   warningNote: text("warning_note"),
   agreedToMarketing: text("agreed_to_marketing"),
+  portalToken: text("portal_token"),
 });
 
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });

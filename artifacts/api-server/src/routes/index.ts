@@ -18,6 +18,7 @@ import invoicesRouter from "./invoices";
 import integrationsRouter from "./integrations";
 import storageRouter from "./storage";
 import loyaltyRouter from "./loyalty";
+import portalRouter from "./portal";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(invoicesRouter);
 router.use(integrationsRouter);
 router.use(storageRouter);
 router.use(loyaltyRouter);
+router.use(portalRouter);
 
 export default router;

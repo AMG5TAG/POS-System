@@ -580,7 +580,8 @@ export const ListCustomersResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 })),
   "total": zod.number()
 })
@@ -654,7 +655,8 @@ export const GetCustomerResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 })
 
 
@@ -723,7 +725,8 @@ export const UpdateCustomerResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 })
 
 
@@ -777,7 +780,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1026,7 +1030,8 @@ export const ListTransactionsResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1123,7 +1128,8 @@ export const GetTransactionResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1196,7 +1202,8 @@ export const RefundTransactionResponse = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1529,7 +1536,8 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "shippingCountry": zod.string().nullish(),
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
-  "agreedToMarketing": zod.string().nullish()
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),

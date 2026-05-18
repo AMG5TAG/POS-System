@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, customersTable, customerNotesTable, customerFilesTable, transactionsTable, appointmentsTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc } from "drizzle-orm";
+import crypto from "node:crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListCustomersQueryParams,
@@ -47,6 +48,7 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     customerGroup: c.customerGroup ?? null,
     warningNote: c.warningNote ?? null,
     agreedToMarketing: c.agreedToMarketing ?? null,
+    portalToken: c.portalToken ?? null,
   };
 }
 
@@ -75,7 +77,11 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
 router.post("/customers", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateCustomerBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [customer] = await db.insert(customersTable).values({ ...parsed.data, merchantId: req.session.merchantId! }).returning();
+  const [customer] = await db.insert(customersTable).values({
+    ...parsed.data,
+    merchantId: req.session.merchantId!,
+    portalToken: crypto.randomUUID(),
+  }).returning();
   res.status(201).json(formatCustomer(customer));
 });
 
@@ -237,6 +243,23 @@ router.delete("/customers/:id/files/:fileId", requireAuth, async (req, res): Pro
   await db.delete(customerFilesTable)
     .where(and(eq(customerFilesTable.id, fileId), eq(customerFilesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
+});
+
+router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise<void> => {
+  const params = GetCustomerParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, req.session.merchantId!)));
+  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+  let token = customer.portalToken;
+  if (!token) {
+    token = crypto.randomUUID();
+    await db.update(customersTable).set({ portalToken: token }).where(eq(customersTable.id, customer.id));
+  }
+  const origin = `${req.protocol}://${req.get("host")}`;
+  res.json({ token, portalUrl: `${origin}/portal/${token}` });
 });
 
 export default router;

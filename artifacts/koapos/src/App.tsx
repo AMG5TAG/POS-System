@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import CustomerDisplayPage from "@/pages/app/customer-display";
+import PortalPage from "@/pages/portal";
 import LandingPage from "@/pages/marketing/landing";
 import LoginPage from "@/pages/marketing/login";
 import RegisterPage from "@/pages/marketing/register";
@@ -99,6 +100,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/customer-display" component={CustomerDisplayPage} />
+      <Route path="/portal/:token" component={PortalPage} />
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />

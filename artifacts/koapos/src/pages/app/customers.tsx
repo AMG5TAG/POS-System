@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -33,8 +33,9 @@ import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
-  Receipt, Clock, Wrench, ExternalLink, Loader2, X,
+  Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,7 @@ import { cn } from "@/lib/utils";
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account" | "history" | "notes" | "files";
+type DetailTab = "overview" | "address" | "account" | "history" | "notes" | "files" | "qr";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -169,6 +170,75 @@ function CustomerDetailInner({
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const qrSvgRef = useRef<SVGSVGElement>(null);
+
+  /* QR / Portal state */
+  const [qrCopied, setQrCopied] = useState(false);
+  const [qrWalletLoading, setQrWalletLoading] = useState<"apple" | "google" | null>(null);
+  const [localPortalToken, setLocalPortalToken] = useState(customer.portalToken);
+
+  useEffect(() => {
+    if (tab === "qr" && !localPortalToken) {
+      fetch(`/api/customers/${customer.id}/portal-token`, { credentials: "include" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(({ token }: { token: string }) => setLocalPortalToken(token))
+        .catch(() => {});
+    }
+  }, [tab, customer.id, localPortalToken]);
+
+  const handleCopyPortalUrl = async () => {
+    if (!localPortalToken) return;
+    await navigator.clipboard.writeText(`${window.location.origin}/portal/${localPortalToken}`);
+    setQrCopied(true);
+    setTimeout(() => setQrCopied(false), 2000);
+  };
+
+  const handleDownloadQR = () => {
+    const svg = qrSvgRef.current;
+    if (!svg) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 400; canvas.height = 400;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 400, 400);
+      ctx.drawImage(img, 0, 0, 400, 400);
+      URL.revokeObjectURL(url);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `${customer.firstName ?? "customer"}-loyalty-qr.png`;
+      a.click();
+    };
+    img.src = url;
+  };
+
+  const handleAppleWallet = async () => {
+    if (!localPortalToken) return;
+    setQrWalletLoading("apple");
+    try {
+      const r = await fetch(`/api/portal/${localPortalToken}/apple-wallet`, { credentials: "include" });
+      if (r.status === 503) { const j = await r.json(); toast.error("Apple Wallet not configured", { description: j.setup }); return; }
+      const blob = await r.blob();
+      const dl = document.createElement("a");
+      dl.href = URL.createObjectURL(blob); dl.download = "loyalty-card.pkpass"; dl.click();
+    } catch { toast.error("Could not download Apple Wallet pass"); }
+    finally { setQrWalletLoading(null); }
+  };
+
+  const handleGoogleWallet = async () => {
+    if (!localPortalToken) return;
+    setQrWalletLoading("google");
+    try {
+      const r = await fetch(`/api/portal/${localPortalToken}/google-wallet`, { credentials: "include" });
+      if (r.status === 503) { const j = await r.json(); toast.error("Google Wallet not configured", { description: j.setup }); return; }
+      const { saveUrl } = await r.json();
+      window.open(saveUrl, "_blank");
+    } catch { toast.error("Could not open Google Wallet"); }
+    finally { setQrWalletLoading(null); }
+  };
 
   /* Loyalty adjustment state */
   const [loyaltyMode, setLoyaltyMode] = useState<"add" | "deduct" | "set">("add");
@@ -234,6 +304,7 @@ function CustomerDetailInner({
     { key: "history",  label: "History"  },
     { key: "notes",    label: "Notes"    },
     { key: "files",    label: "Files"    },
+    { key: "qr",       label: "QR Code"  },
   ];
 
   const invalidateNotes = () => queryClient.invalidateQueries({ queryKey: [`/customers/${customer.id}/notes`] });
@@ -708,6 +779,81 @@ function CustomerDetailInner({
                   </Button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── QR Code / Portal ── */}
+      {tab === "qr" && (
+        <div className="space-y-3">
+          {/* QR Code card */}
+          <div className="rounded-xl border bg-white p-5 flex flex-col items-center gap-3">
+            {localPortalToken ? (
+              <>
+                <div className="flex items-center gap-2 self-start">
+                  <QrCode className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold">Customer QR Code</p>
+                </div>
+                <div className="p-3 rounded-xl border-2 border-gray-100 bg-white">
+                  <QRCodeSVG
+                    ref={qrSvgRef}
+                    value={`${window.location.origin}/portal/${localPortalToken}`}
+                    size={180}
+                    level="M"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-center break-all max-w-xs">
+                  {`${window.location.origin}/portal/${localPortalToken}`}
+                </p>
+                <div className="flex gap-2 w-full">
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={handleCopyPortalUrl}>
+                    {qrCopied ? <><Check className="w-3.5 h-3.5" />Copied!</> : <><Copy className="w-3.5 h-3.5" />Copy Link</>}
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={handleDownloadQR}>
+                    <QrCode className="w-3.5 h-3.5" /> Download
+                  </Button>
+                </div>
+                <a
+                  href={`/portal/${localPortalToken}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-primary hover:underline self-center"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open Customer Portal
+                </a>
+              </>
+            ) : (
+              <div className="py-4 text-center text-muted-foreground space-y-2">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                <p className="text-sm">Generating QR code…</p>
+              </div>
+            )}
+          </div>
+
+          {/* Wallet buttons */}
+          {localPortalToken && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Save to Wallet</p>
+              <button
+                onClick={handleAppleWallet}
+                disabled={qrWalletLoading !== null}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-black text-white py-2.5 text-sm font-semibold hover:opacity-80 disabled:opacity-50 transition-opacity"
+              >
+                {qrWalletLoading === "apple" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                Add to Apple Wallet
+              </button>
+              <button
+                onClick={handleGoogleWallet}
+                disabled={qrWalletLoading !== null}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-white text-gray-800 border py-2.5 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {qrWalletLoading === "google" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4 text-blue-500" />}
+                Save to Google Wallet
+              </button>
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                Wallet integration requires Apple/Google credentials in your environment secrets.
+              </p>
             </div>
           )}
         </div>

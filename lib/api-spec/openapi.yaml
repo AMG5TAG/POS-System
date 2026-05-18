@@ -1800,6 +1800,8 @@ components:
           type: ["string", "null"]
         agreedToMarketing:
           type: ["string", "null"]
+        portalToken:
+          type: ["string", "null"]
 
     CustomerInput:
       type: object

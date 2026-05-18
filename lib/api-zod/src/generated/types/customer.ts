@@ -61,4 +61,6 @@ export interface Customer {
   warningNote?: string | null;
   /** @nullable */
   agreedToMarketing?: string | null;
+  /** @nullable */
+  portalToken?: string | null;
 }
