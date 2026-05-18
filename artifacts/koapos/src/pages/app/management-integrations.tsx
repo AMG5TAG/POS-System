@@ -56,35 +56,48 @@ type LogoCfg =
   | { type: "img";  src: string; bg: string; pad?: boolean }
   | { type: "text"; bg: string; color: string; label: string; cls?: string };
 
+/* Brand logo helper — Clearbit Logo API returns official square logos by domain */
+const CL = (domain: string) => `https://logo.clearbit.com/${domain}`;
+
 const LOGO_MAP: Record<string, LogoCfg> = {
-  stripe_own:      { type: "img",  bg: "bg-[#635BFF]",   src: SI("stripe",             "ffffff") },
-  commbank_eftpos: { type: "img",  bg: "bg-[#FFD100]",   src: SI("commonwealthbank",    "000000"), pad: true },
-  tyro_eftpos:     { type: "text", bg: "bg-[#00A0DF]",   color: "text-white", label: "tyro", cls: "text-[11px] font-extrabold tracking-tight" },
-  square_terminal: { type: "img",  bg: "bg-black",        src: SI("square",             "ffffff") },
-  paypal:          { type: "img",  bg: "bg-[#003087]",   src: SI("paypal",             "ffffff") },
-  wechat_alipay:   { type: "img",  bg: "bg-[#07C160]",   src: SI("wechat",             "ffffff") },
-  afterpay:        { type: "img",  bg: "bg-[#B2FCE4]",   src: SI("afterpay",           "000000") },
-  zip:             { type: "text", bg: "bg-[#AA8FFF]",   color: "text-white", label: "Zip",  cls: "text-sm font-bold" },
-  klarna:          { type: "img",  bg: "bg-[#FFB3C7]",   src: SI("klarna",             "000000") },
-  apple_wallet:    { type: "img",  bg: "bg-black",        src: SI("apple",              "ffffff") },
-  google_pay:      { type: "img",  bg: "bg-white border", src: SI("googlepay",          "000000") },
-  xero:            { type: "img",  bg: "bg-[#13B5EA]",   src: SI("xero",               "ffffff") },
-  myob:            { type: "text", bg: "bg-[#6A1F70]",   color: "text-white", label: "MYOB", cls: "text-[11px] font-bold tracking-wide" },
-  deputy:          { type: "img",  bg: "bg-[#2D9CDB]",   src: SI("deputy",             "ffffff") },
-  australia_post:  { type: "img",  bg: "bg-[#DC1928]",   src: SI("australiapost",      "ffffff") },
-  sendle:          { type: "text", bg: "bg-[#2DCE89]",   color: "text-white", label: "S",   cls: "text-lg font-black" },
-  google_business: { type: "img",  bg: "bg-white border", src: SI("google",             "4285F4") },
-  mailchimp:       { type: "img",  bg: "bg-[#FFE01B]",   src: SI("mailchimp",          "000000") },
-  meta_business:   { type: "img",  bg: "bg-[#0082FB]",   src: SI("meta",               "ffffff") },
-  openai:          { type: "img",  bg: "bg-black",        src: SI("openai",             "ffffff") },
-  zapier:          { type: "img",  bg: "bg-[#FF4A00]",   src: SI("zapier",             "ffffff") },
-  google_drive:       { type: "img",  bg: "bg-white border", src: SI("googledrive",     "4285F4") },
-  onedrive:           { type: "img",  bg: "bg-[#0078D4]",   src: SI("onedrive",        "ffffff") },
-  dropbox:            { type: "img",  bg: "bg-[#0061FF]",   src: SI("dropbox",         "ffffff") },
-  proton_drive:       { type: "img",  bg: "bg-[#6D4AFF]",   src: SI("proton",          "ffffff") },
-  google_contacts:    { type: "img",  bg: "bg-white border", src: SI("googlecontacts",  "34A853") },
-  microsoft_contacts: { type: "img",  bg: "bg-[#0078D4]",   src: SI("microsoft",       "ffffff") },
-  apple_contacts:     { type: "img",  bg: "bg-black",        src: SI("apple",           "ffffff") },
+  /* Payments & EFTPOS */
+  stripe_own:         { type: "img",  bg: "bg-[#635BFF]",    src: SI("stripe",      "ffffff") },
+  commbank_eftpos:    { type: "img",  bg: "bg-white border",  src: CL("commbank.com.au"),   pad: true },
+  tyro_eftpos:        { type: "img",  bg: "bg-white border",  src: CL("tyro.com"),          pad: true },
+  square_terminal:    { type: "img",  bg: "bg-black",         src: SI("square",      "ffffff") },
+  paypal:             { type: "img",  bg: "bg-[#003087]",    src: SI("paypal",      "ffffff") },
+  wechat_alipay:      { type: "img",  bg: "bg-[#07C160]",    src: SI("wechat",      "ffffff") },
+  /* Buy Now Pay Later */
+  afterpay:           { type: "img",  bg: "bg-[#B2FCE4]",    src: SI("afterpay",    "000000") },
+  zip:                { type: "img",  bg: "bg-white border",  src: CL("zip.co"),            pad: true },
+  klarna:             { type: "img",  bg: "bg-[#FFB3C7]",    src: SI("klarna",      "000000") },
+  /* Digital Wallets */
+  apple_wallet:       { type: "img",  bg: "bg-black",         src: SI("apple",       "ffffff") },
+  google_pay:         { type: "img",  bg: "bg-white border",  src: SI("googlepay",   "000000") },
+  /* Accounting */
+  xero:               { type: "img",  bg: "bg-[#13B5EA]",    src: SI("xero",        "ffffff") },
+  myob:               { type: "img",  bg: "bg-[#6A1F70]",    src: SI("myob",        "ffffff") },
+  /* Payroll */
+  deputy:             { type: "img",  bg: "bg-white border",  src: CL("deputy.com"),        pad: true },
+  /* Shipping */
+  australia_post:     { type: "img",  bg: "bg-white border",  src: CL("auspost.com.au"),    pad: true },
+  sendle:             { type: "img",  bg: "bg-white border",  src: CL("sendle.com"),        pad: true },
+  /* Marketing */
+  google_business:    { type: "img",  bg: "bg-white border",  src: SI("google",      "4285F4") },
+  mailchimp:          { type: "img",  bg: "bg-[#FFE01B]",    src: SI("mailchimp",   "000000") },
+  meta_business:      { type: "img",  bg: "bg-[#0082FB]",    src: SI("meta",        "ffffff") },
+  /* Backup & Storage */
+  google_drive:       { type: "img",  bg: "bg-white border",  src: SI("googledrive", "4285F4") },
+  onedrive:           { type: "img",  bg: "bg-[#0078D4]",    src: SI("onedrive",    "ffffff") },
+  dropbox:            { type: "img",  bg: "bg-[#0061FF]",    src: SI("dropbox",     "ffffff") },
+  proton_drive:       { type: "img",  bg: "bg-[#6D4AFF]",    src: SI("proton",      "ffffff") },
+  /* Contacts & Calendar */
+  google_contacts:    { type: "img",  bg: "bg-white border",  src: SI("google",      "4285F4") },
+  microsoft_contacts: { type: "img",  bg: "bg-[#0078D4]",    src: SI("microsoft",   "ffffff") },
+  apple_contacts:     { type: "img",  bg: "bg-black",         src: SI("apple",       "ffffff") },
+  /* AI & Automation */
+  openai:             { type: "img",  bg: "bg-black",         src: SI("openai",      "ffffff") },
+  zapier:             { type: "img",  bg: "bg-[#FF4A00]",    src: SI("zapier",      "ffffff") },
 };
 
 function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: string; size?: "md" | "lg" }) {
