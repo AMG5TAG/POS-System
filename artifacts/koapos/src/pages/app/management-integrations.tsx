@@ -56,20 +56,17 @@ type LogoCfg =
   | { type: "img";  src: string; bg: string; pad?: boolean }
   | { type: "text"; bg: string; color: string; label: string; cls?: string };
 
-/* Brand logo helper — Clearbit Logo API returns official square logos by domain */
-const CL = (domain: string) => `https://logo.clearbit.com/${domain}`;
-
 const LOGO_MAP: Record<string, LogoCfg> = {
   /* Payments & EFTPOS */
   stripe_own:         { type: "img",  bg: "bg-[#635BFF]",    src: SI("stripe",      "ffffff") },
-  commbank_eftpos:    { type: "img",  bg: "bg-white border",  src: CL("commbank.com.au"),   pad: true },
-  tyro_eftpos:        { type: "img",  bg: "bg-white border",  src: CL("tyro.com"),          pad: true },
+  commbank_eftpos:    { type: "text", bg: "bg-[#FFD200]",    color: "text-black",   label: "CBA",  cls: "text-[11px] font-black tracking-tight" },
+  tyro_eftpos:        { type: "text", bg: "bg-[#00B9E4]",    color: "text-white",   label: "TYRO", cls: "text-[10px] font-black tracking-tight" },
   square_terminal:    { type: "img",  bg: "bg-black",         src: SI("square",      "ffffff") },
   paypal:             { type: "img",  bg: "bg-[#003087]",    src: SI("paypal",      "ffffff") },
   wechat_alipay:      { type: "img",  bg: "bg-[#07C160]",    src: SI("wechat",      "ffffff") },
   /* Buy Now Pay Later */
   afterpay:           { type: "img",  bg: "bg-[#B2FCE4]",    src: SI("afterpay",    "000000") },
-  zip:                { type: "img",  bg: "bg-white border",  src: CL("zip.co"),            pad: true },
+  zip:                { type: "text", bg: "bg-[#AA8FFF]",    color: "text-white",   label: "ZIP",  cls: "text-[11px] font-black tracking-tight" },
   klarna:             { type: "img",  bg: "bg-[#FFB3C7]",    src: SI("klarna",      "000000") },
   /* Digital Wallets */
   apple_wallet:       { type: "img",  bg: "bg-black",         src: SI("apple",       "ffffff") },
@@ -78,10 +75,10 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   xero:               { type: "img",  bg: "bg-[#13B5EA]",    src: SI("xero",        "ffffff") },
   myob:               { type: "img",  bg: "bg-[#6A1F70]",    src: SI("myob",        "ffffff") },
   /* Payroll */
-  deputy:             { type: "img",  bg: "bg-white border",  src: CL("deputy.com"),        pad: true },
+  deputy:             { type: "text", bg: "bg-[#006FEE]",    color: "text-white",   label: "DEP",  cls: "text-[10px] font-black tracking-tight" },
   /* Shipping */
-  australia_post:     { type: "img",  bg: "bg-white border",  src: CL("auspost.com.au"),    pad: true },
-  sendle:             { type: "img",  bg: "bg-white border",  src: CL("sendle.com"),        pad: true },
+  australia_post:     { type: "text", bg: "bg-[#DC1928]",    color: "text-white",   label: "AP",   cls: "text-sm font-black" },
+  sendle:             { type: "text", bg: "bg-[#00BFA5]",    color: "text-white",   label: "SND",  cls: "text-[10px] font-black tracking-tight" },
   /* Marketing */
   google_business:    { type: "img",  bg: "bg-white border",  src: SI("google",      "4285F4") },
   mailchimp:          { type: "img",  bg: "bg-[#FFE01B]",    src: SI("mailchimp",   "000000") },
