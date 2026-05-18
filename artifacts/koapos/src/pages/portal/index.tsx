@@ -107,8 +107,8 @@ const APPT_COLORS: Record<string, string> = {
 
 /* ── Loyalty Tab ────────────────────────────────────────────────────────────── */
 
-function LoyaltyTab({ data, token }: { data: PortalData; token: string }) {
-  const portalUrl = `${window.location.origin}/portal/${token}`;
+function LoyaltyTab({ data, token, businessUsername }: { data: PortalData; token: string; businessUsername: string }) {
+  const portalUrl = `${window.location.origin}/b/${businessUsername}/c/${token}`;
   const [copied, setCopied] = useState(false);
   const [walletLoading, setWalletLoading] = useState<"apple" | "google" | null>(null);
   const qrRef = useRef<SVGSVGElement>(null);
@@ -487,18 +487,18 @@ const TABS = [
 type PortalTab = typeof TABS[number]["id"];
 
 export default function PortalPage() {
-  const { token } = useParams<{ token: string }>();
+  const { businessUsername, token } = useParams<{ businessUsername: string; token: string }>();
   const [tab, setTab] = useState<PortalTab>("loyalty");
 
   const { data, isLoading, error } = usePortalData(token ?? "");
 
-  if (!token) {
+  if (!token || !businessUsername) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
         <div>
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <p className="font-semibold text-gray-800">Invalid portal link</p>
-          <p className="text-sm text-gray-500 mt-1">This link is missing a customer token.</p>
+          <p className="text-sm text-gray-500 mt-1">This link is missing required information.</p>
         </div>
       </div>
     );
@@ -539,7 +539,7 @@ export default function PortalPage() {
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-20 max-w-md mx-auto w-full">
-        {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} />}
+        {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} businessUsername={businessUsername} />}
         {tab === "profile"      && <ProfileTab      data={data} token={token} />}
         {tab === "appointments" && <AppointmentsTab token={token} />}
         {tab === "repairs"      && <ServicesTab     token={token} />}

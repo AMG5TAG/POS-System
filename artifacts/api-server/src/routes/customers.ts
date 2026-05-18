@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, customersTable, customerNotesTable, customerFilesTable, transactionsTable, appointmentsTable, serviceJobsTable } from "@workspace/db";
+import { db, customersTable, customerNotesTable, customerFilesTable, transactionsTable, appointmentsTable, serviceJobsTable, merchantsTable } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -258,8 +258,13 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
     token = crypto.randomUUID();
     await db.update(customersTable).set({ portalToken: token }).where(eq(customersTable.id, customer.id));
   }
+  const [merchant] = await db.select({ username: merchantsTable.username })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, req.session.merchantId!));
   const origin = `${req.protocol}://${req.get("host")}`;
-  res.json({ token, portalUrl: `${origin}/portal/${token}` });
+  const username = merchant?.username;
+  const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
+  res.json({ token, portalUrl: `${origin}${portalPath}` });
 });
 
 export default router;

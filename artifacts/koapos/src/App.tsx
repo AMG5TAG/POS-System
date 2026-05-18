@@ -100,7 +100,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/customer-display" component={CustomerDisplayPage} />
-      <Route path="/portal/:token" component={PortalPage} />
+      <Route path="/b/:businessUsername/c/:token" component={PortalPage} />
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
+  useGetMerchant,
   useListCustomers,
   useCreateCustomer,
   useUpdateCustomer,
@@ -155,13 +156,14 @@ function SortTh({ label, sortKey, active, dir, onSort, className }: {
 /* ─── Customer detail dialog ─────────────────────────────────────────────── */
 
 function CustomerDetailInner({
-  customer, onClose, onEdit, onDelete, deleteIsPending,
+  customer, onClose, onEdit, onDelete, deleteIsPending, merchantUsername,
 }: {
   customer: Customer;
   onClose: () => void;
   onEdit: (c: Customer) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
+  merchantUsername: string | null;
 }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<DetailTab>("overview");
@@ -186,9 +188,15 @@ function CustomerDetailInner({
     }
   }, [tab, customer.id, localPortalToken]);
 
+  const buildPortalUrl = (token: string | null | undefined) =>
+    token && merchantUsername
+      ? `${window.location.origin}/b/${merchantUsername}/c/${token}`
+      : null;
+
   const handleCopyPortalUrl = async () => {
-    if (!localPortalToken) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/portal/${localPortalToken}`);
+    const url = buildPortalUrl(localPortalToken);
+    if (!url) return;
+    await navigator.clipboard.writeText(url);
     setQrCopied(true);
     setTimeout(() => setQrCopied(false), 2000);
   };
@@ -798,13 +806,13 @@ function CustomerDetailInner({
                 <div className="p-3 rounded-xl border-2 border-gray-100 bg-white">
                   <QRCodeSVG
                     ref={qrSvgRef}
-                    value={`${window.location.origin}/portal/${localPortalToken}`}
+                    value={buildPortalUrl(localPortalToken) ?? ""}
                     size={180}
                     level="M"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-center break-all max-w-xs">
-                  {`${window.location.origin}/portal/${localPortalToken}`}
+                  {buildPortalUrl(localPortalToken) ?? ""}
                 </p>
                 <div className="flex gap-2 w-full">
                   <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={handleCopyPortalUrl}>
@@ -815,7 +823,7 @@ function CustomerDetailInner({
                   </Button>
                 </div>
                 <a
-                  href={`/portal/${localPortalToken}`}
+                  href={buildPortalUrl(localPortalToken) ?? "#"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-sm text-primary hover:underline self-center"
@@ -880,13 +888,14 @@ function CustomerDetailInner({
 }
 
 function CustomerDetailDialog({
-  customer, onClose, onEdit, onDelete, deleteIsPending,
+  customer, onClose, onEdit, onDelete, deleteIsPending, merchantUsername,
 }: {
   customer: Customer | null;
   onClose: () => void;
   onEdit: (c: Customer) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
+  merchantUsername: string | null;
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
@@ -898,6 +907,7 @@ function CustomerDetailDialog({
             onEdit={onEdit}
             onDelete={onDelete}
             deleteIsPending={deleteIsPending}
+            merchantUsername={merchantUsername}
           />
         )}
       </DialogContent>
@@ -922,6 +932,9 @@ export default function CustomersPage() {
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
+
+  const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const merchantUsername = (merchantData as any)?.username as string | null ?? null;
 
   const { data: customersData, isLoading } = useListCustomers(
     { search: search || undefined, limit: 1000 },
@@ -1162,6 +1175,7 @@ export default function CustomersPage() {
         onEdit={openEdit}
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
+        merchantUsername={merchantUsername}
       />
 
       {/* Add / Edit Customer — 3-step wizard */}
