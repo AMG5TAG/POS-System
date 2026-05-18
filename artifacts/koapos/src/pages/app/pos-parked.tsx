@@ -1,67 +1,88 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts } from "@workspace/api-client-react";
+import {
+  useListParkedSales,
+  useCreateParkedSale,
+  useDeleteParkedSale,
+  useRestoreParkedSale,
+  useListProducts,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ParkingCircle, Plus, Trash2, ShoppingCart, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "wouter";
 
 type ParkedItem = { productId: number; name: string; quantity: number; price: number };
-type ParkedSale = { id: number; reference: string; note: string; items: ParkedItem[]; total: number; parkedAt: string };
-
-let nextId = 1;
 
 export default function POSParkedPage() {
-  const [sales, setSales] = useState<ParkedSale[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [note, setNote] = useState("");
   const [selectedItems, setSelectedItems] = useState<ParkedItem[]>([]);
 
+  const { data: sales = [], isLoading } = useListParkedSales();
   const { data: productsData } = useListProducts({ limit: 500 });
-  const products = (productsData?.items ?? []).filter((p) => p.name?.toLowerCase().includes(productSearch.toLowerCase()));
+  const createSale = useCreateParkedSale();
+  const deleteSale = useDeleteParkedSale();
+  const restoreSale = useRestoreParkedSale();
+
+  const products = (productsData?.items ?? []).filter(
+    (p) => p.name?.toLowerCase().includes(productSearch.toLowerCase())
+  );
 
   const addProduct = (p: { id: number; name?: string | null; price?: number | null }) => {
     const existing = selectedItems.find((i) => i.productId === p.id);
     if (existing) {
-      setSelectedItems((prev) => prev.map((i) => i.productId === p.id ? { ...i, quantity: i.quantity + 1 } : i));
+      setSelectedItems((prev) => prev.map((i) =>
+        i.productId === p.id ? { ...i, quantity: i.quantity + 1 } : i
+      ));
     } else {
       setSelectedItems((prev) => [...prev, { productId: p.id, name: p.name ?? "", quantity: 1, price: p.price ?? 0 }]);
     }
   };
-  const updateQty = (id: number, qty: number) => setSelectedItems((prev) => prev.map((i) => i.productId === id ? { ...i, quantity: Math.max(1, qty) } : i));
+
+  const updateQty = (id: number, qty: number) =>
+    setSelectedItems((prev) => prev.map((i) => i.productId === id ? { ...i, quantity: Math.max(1, qty) } : i));
+
   const removeItem = (id: number) => setSelectedItems((prev) => prev.filter((i) => i.productId !== id));
 
   const total = selectedItems.reduce((s, i) => s + i.price * i.quantity, 0);
 
   const handlePark = () => {
     if (!selectedItems.length) { toast.error("Add at least one item"); return; }
-    const sale: ParkedSale = {
-      id: nextId,
-      reference: `PRK-${String(nextId++).padStart(3, "0")}`,
-      note,
-      items: selectedItems,
-      total,
-      parkedAt: new Date().toISOString(),
-    };
-    setSales((prev) => [sale, ...prev]);
-    toast.success(`Sale ${sale.reference} parked`);
-    setDialogOpen(false);
-    setNote("");
-    setSelectedItems([]);
+    createSale.mutate(
+      { data: { items: selectedItems, total, note: note || undefined } },
+      {
+        onSuccess: (data) => {
+          toast.success(`Sale ${data.reference} parked`);
+          setDialogOpen(false);
+          setNote("");
+          setSelectedItems([]);
+          setProductSearch("");
+        },
+        onError: () => toast.error("Failed to park sale"),
+      }
+    );
   };
 
-  const resumeSale = (id: number) => {
-    setSales((prev) => prev.filter((s) => s.id !== id));
-    toast.success("Sale resumed — head to POS to complete");
+  const handleResume = (id: number, reference: string) => {
+    restoreSale.mutate({ id }, {
+      onSuccess: () => toast.success(`${reference} restored — head to POS to complete`),
+      onError: () => toast.error("Failed to restore sale"),
+    });
   };
 
-  const deleteSale = (id: number) => { setSales((prev) => prev.filter((s) => s.id !== id)); toast.success("Parked sale discarded"); };
+  const handleDelete = (id: number) => {
+    deleteSale.mutate({ id }, {
+      onSuccess: () => toast.success("Parked sale discarded"),
+      onError: () => toast.error("Failed to discard sale"),
+    });
+  };
 
   return (
     <AppLayout>
@@ -74,18 +95,28 @@ export default function POSParkedPage() {
               <p className="text-sm text-muted-foreground">Hold a sale and resume it later</p>
             </div>
           </div>
-          <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> Park a Sale</Button>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Park a Sale
+          </Button>
         </div>
 
-        {sales.length === 0 ? (
-          <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
-            <ParkingCircle className="w-16 h-16 text-muted-foreground/30" />
-            <div>
-              <p className="font-medium text-lg">No parked sales</p>
-              <p className="text-muted-foreground text-sm">Park a sale to hold it while you assist another customer.</p>
-            </div>
-            <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> Park a Sale</Button>
-          </CardContent></Card>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+          </div>
+        ) : sales.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+              <ParkingCircle className="w-16 h-16 text-muted-foreground/30" />
+              <div>
+                <p className="font-medium text-lg">No parked sales</p>
+                <p className="text-muted-foreground text-sm">Park a sale to hold it while you assist another customer.</p>
+              </div>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Park a Sale
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sales.map((s) => (
@@ -97,18 +128,24 @@ export default function POSParkedPage() {
                       {s.note && <p className="font-medium text-sm">{s.note}</p>}
                     </div>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />{formatDate(s.parkedAt)}
+                      <Clock className="w-3 h-3" />{formatDate(s.createdAt)}
                     </span>
                   </div>
                   <div className="space-y-0.5 text-sm text-muted-foreground">
-                    {s.items.map((i) => <p key={i.productId}>× {i.quantity} {i.name}</p>)}
+                    {(s.items as ParkedItem[]).map((i) => (
+                      <p key={i.productId}>× {i.quantity} {i.name}</p>
+                    ))}
                   </div>
-                  <p className="font-bold text-lg">{formatCurrency(s.total)}</p>
+                  <p className="font-bold text-lg">{formatCurrency(s.total ?? 0)}</p>
                   <div className="flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => resumeSale(s.id)}>
+                    <Button size="sm" className="flex-1" onClick={() => handleResume(s.id, s.reference)}
+                      disabled={restoreSale.isPending}>
                       <ShoppingCart className="w-3.5 h-3.5 mr-1" /> Resume
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive px-2" onClick={() => deleteSale(s.id)}>
+                    <Button size="sm" variant="ghost"
+                      className="text-destructive hover:text-destructive px-2"
+                      onClick={() => handleDelete(s.id)}
+                      disabled={deleteSale.isPending}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -125,16 +162,20 @@ export default function POSParkedPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Note (optional)</Label>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Table 5, Mrs Johnson" />
+              <Input value={note} onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. Table 5, Mrs Johnson" />
             </div>
 
             <div className="border rounded-lg p-3 space-y-2">
               <Label>Add Products</Label>
-              <Input placeholder="Search products..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+              <Input placeholder="Search products..." value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)} />
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {products.slice(0, 10).map((p) => (
-                  <button key={p.id} onClick={() => addProduct(p)} className="w-full text-left px-3 py-1.5 rounded hover:bg-muted text-sm flex justify-between">
-                    <span>{p.name}</span><span className="text-muted-foreground">{formatCurrency(p.price ?? 0)}</span>
+                  <button key={p.id} onClick={() => addProduct(p)}
+                    className="w-full text-left px-3 py-1.5 rounded hover:bg-muted text-sm flex justify-between">
+                    <span>{p.name}</span>
+                    <span className="text-muted-foreground">{formatCurrency(p.price ?? 0)}</span>
                   </button>
                 ))}
               </div>
@@ -145,9 +186,14 @@ export default function POSParkedPage() {
                 {selectedItems.map((i) => (
                   <div key={i.productId} className="flex items-center gap-3 px-3 py-2">
                     <span className="flex-1 text-sm">{i.name}</span>
-                    <Input type="number" min={1} value={i.quantity} onChange={(e) => updateQty(i.productId, parseInt(e.target.value) || 1)} className="w-16 h-7 text-center" />
+                    <Input type="number" min={1} value={i.quantity}
+                      onChange={(e) => updateQty(i.productId, parseInt(e.target.value) || 1)}
+                      className="w-16 h-7 text-center" />
                     <span className="w-20 text-right text-sm">{formatCurrency(i.price * i.quantity)}</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeItem(i.productId)}><Trash2 className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
+                      onClick={() => removeItem(i.productId)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 ))}
                 <div className="flex justify-between px-3 py-2 font-semibold text-sm bg-muted/30">
@@ -158,7 +204,9 @@ export default function POSParkedPage() {
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handlePark}><ParkingCircle className="w-4 h-4 mr-2" /> Park Sale</Button>
+              <Button onClick={handlePark} disabled={createSale.isPending}>
+                <ParkingCircle className="w-4 h-4 mr-2" /> Park Sale
+              </Button>
             </div>
           </div>
         </DialogContent>

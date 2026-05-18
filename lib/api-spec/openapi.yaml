@@ -1345,6 +1345,579 @@ paths:
               schema:
                 $ref: "#/components/schemas/CalendarMonth"
 
+  # ── Cash Drawer ──────────────────────────────────────────────────────────────
+  /cash-drawer:
+    get:
+      operationId: listCashDrawerEntries
+      summary: List cash drawer entries
+      security: [{ session: [] }]
+      parameters:
+        - in: query
+          name: date
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cash drawer entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashDrawerEntry"
+    post:
+      operationId: createCashDrawerEntry
+      summary: Add a cash drawer entry
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashDrawerEntryInput"
+      responses:
+        "201":
+          description: Created entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashDrawerEntry"
+  /cash-drawer/{id}:
+    delete:
+      operationId: deleteCashDrawerEntry
+      summary: Delete a cash drawer entry
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Parked Sales ──────────────────────────────────────────────────────────────
+  /parked-sales:
+    get:
+      operationId: listParkedSales
+      summary: List parked sales
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Parked sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ParkedSale"
+    post:
+      operationId: createParkedSale
+      summary: Park a sale
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParkedSaleInput"
+      responses:
+        "201":
+          description: Parked sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParkedSale"
+  /parked-sales/{id}:
+    delete:
+      operationId: deleteParkedSale
+      summary: Delete a parked sale
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+  /parked-sales/{id}/restore:
+    post:
+      operationId: restoreParkedSale
+      summary: Restore a parked sale (returns items and deletes the record)
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Restored parked sale data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParkedSale"
+
+  # ── Purchase Orders ───────────────────────────────────────────────────────────
+  /purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      summary: List purchase orders
+      security: [{ session: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: Purchase orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+    post:
+      operationId: createPurchaseOrder
+      summary: Create purchase order
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+  /purchase-orders/{id}:
+    get:
+      operationId: getPurchaseOrder
+      summary: Get purchase order with items
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Purchase order with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    put:
+      operationId: updatePurchaseOrder
+      summary: Update purchase order
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    delete:
+      operationId: deletePurchaseOrder
+      summary: Delete purchase order
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Product Bundles ───────────────────────────────────────────────────────────
+  /product-bundles:
+    get:
+      operationId: listProductBundles
+      summary: List product bundles
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Product bundles with items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductBundle"
+    post:
+      operationId: createProductBundle
+      summary: Create product bundle
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductBundleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBundle"
+  /product-bundles/{id}:
+    put:
+      operationId: updateProductBundle
+      summary: Update product bundle
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductBundleInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBundle"
+    delete:
+      operationId: deleteProductBundle
+      summary: Delete product bundle
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Discounts ─────────────────────────────────────────────────────────────────
+  /discounts:
+    get:
+      operationId: listDiscounts
+      summary: List discounts and promotions
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Discounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Discount"
+    post:
+      operationId: createDiscount
+      summary: Create discount
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+  /discounts/validate:
+    post:
+      operationId: validateDiscountCode
+      summary: Validate a discount code
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateDiscountRequest"
+      responses:
+        "200":
+          description: Discount if valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+  /discounts/{id}:
+    put:
+      operationId: updateDiscount
+      summary: Update discount
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+    delete:
+      operationId: deleteDiscount
+      summary: Delete discount
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Wastage ───────────────────────────────────────────────────────────────────
+  /wastage:
+    get:
+      operationId: listWastage
+      summary: List wastage entries
+      security: [{ session: [] }]
+      parameters:
+        - in: query
+          name: productId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Wastage entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WastageEntry"
+    post:
+      operationId: createWastageEntry
+      summary: Record wastage
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WastageEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WastageEntry"
+  /wastage/{id}:
+    delete:
+      operationId: deleteWastageEntry
+      summary: Delete wastage entry
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Price Tiers ───────────────────────────────────────────────────────────────
+  /price-tiers:
+    get:
+      operationId: listPriceTiers
+      summary: List price tiers
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Price tiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceTier"
+    post:
+      operationId: createPriceTier
+      summary: Create price tier
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceTierInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceTier"
+  /price-tiers/{id}:
+    put:
+      operationId: updatePriceTier
+      summary: Update price tier
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceTierInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceTier"
+    delete:
+      operationId: deletePriceTier
+      summary: Delete price tier
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── Tax Settings ──────────────────────────────────────────────────────────────
+  /settings/tax:
+    get:
+      operationId: getTaxSettings
+      summary: Get merchant tax settings
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Tax settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxSettings"
+    put:
+      operationId: updateTaxSettings
+      summary: Update tax settings
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaxSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxSettings"
+
+  # ── Send Receipt ──────────────────────────────────────────────────────────────
+  /transactions/{id}/send-receipt:
+    post:
+      operationId: sendTransactionReceipt
+      summary: Send a receipt via email
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendReceiptRequest"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
 components:
   schemas:
     HealthStatus:
@@ -2682,3 +3255,283 @@ components:
           type: array
           items:
             type: string
+
+    # ── Cash Drawer ──────────────────────────────────────────────────────────
+    CashDrawerEntry:
+      type: object
+      required: [id, type, amount, shiftDate, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        amount: { type: number }
+        note: { type: string, nullable: true }
+        shiftDate: { type: string }
+        createdAt: { type: string }
+    CashDrawerEntryInput:
+      type: object
+      required: [type, amount, shiftDate]
+      properties:
+        type: { type: string }
+        amount: { type: number }
+        note: { type: string }
+        shiftDate: { type: string }
+
+    # ── Parked Sales ─────────────────────────────────────────────────────────
+    ParkedSaleItem:
+      type: object
+      properties:
+        productId: { type: integer }
+        name: { type: string }
+        quantity: { type: number }
+        price: { type: number }
+    ParkedSale:
+      type: object
+      required: [id, reference, items, total, createdAt]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        note: { type: string, nullable: true }
+        customerId: { type: integer, nullable: true }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParkedSaleItem"
+        total: { type: number }
+        createdAt: { type: string }
+    ParkedSaleInput:
+      type: object
+      required: [items, total]
+      properties:
+        reference: { type: string }
+        note: { type: string }
+        customerId: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParkedSaleItem"
+        total: { type: number }
+
+    # ── Purchase Orders ───────────────────────────────────────────────────────
+    PurchaseOrderItem:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer, nullable: true }
+        productName: { type: string }
+        quantity: { type: integer }
+        received: { type: integer }
+        unitCost: { type: number }
+        notes: { type: string, nullable: true }
+    PurchaseOrder:
+      type: object
+      required: [id, poNumber, status, orderDate, totalCost, createdAt]
+      properties:
+        id: { type: integer }
+        supplierId: { type: integer, nullable: true }
+        supplierName: { type: string, nullable: true }
+        poNumber: { type: string }
+        status: { type: string }
+        orderDate: { type: string }
+        expectedDate: { type: string, nullable: true }
+        receivedDate: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        totalCost: { type: number }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderItem"
+        createdAt: { type: string }
+    PurchaseOrderInput:
+      type: object
+      required: [orderDate]
+      properties:
+        supplierId: { type: integer }
+        poNumber: { type: string }
+        status: { type: string }
+        orderDate: { type: string }
+        expectedDate: { type: string }
+        receivedDate: { type: string }
+        notes: { type: string }
+        totalCost: { type: number }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderItem"
+
+    # ── Product Bundles ───────────────────────────────────────────────────────
+    ProductBundleItem:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: integer }
+    ProductBundle:
+      type: object
+      required: [id, name, price, isActive, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        price: { type: number }
+        sku: { type: string, nullable: true }
+        isActive: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductBundleItem"
+        createdAt: { type: string }
+    ProductBundleInput:
+      type: object
+      required: [name, price]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price: { type: number }
+        sku: { type: string }
+        isActive: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductBundleItem"
+
+    # ── Discounts ─────────────────────────────────────────────────────────────
+    Discount:
+      type: object
+      required: [id, name, type, value, isActive, usedCount, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: string, nullable: true }
+        type: { type: string }
+        value: { type: number }
+        minOrderAmount: { type: number, nullable: true }
+        maxUses: { type: integer, nullable: true }
+        usedCount: { type: integer }
+        applicableTo: { type: string }
+        productIds: { type: array, items: { type: integer } }
+        categoryIds: { type: array, items: { type: integer } }
+        startDate: { type: string, nullable: true }
+        endDate: { type: string, nullable: true }
+        isActive: { type: string }
+        createdAt: { type: string }
+    DiscountInput:
+      type: object
+      required: [name, type, value]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        type: { type: string }
+        value: { type: number }
+        minOrderAmount: { type: number }
+        maxUses: { type: integer }
+        applicableTo: { type: string }
+        productIds: { type: array, items: { type: integer } }
+        categoryIds: { type: array, items: { type: integer } }
+        startDate: { type: string }
+        endDate: { type: string }
+        isActive: { type: string }
+
+    # ── Wastage ───────────────────────────────────────────────────────────────
+    WastageEntry:
+      type: object
+      required: [id, productName, quantity, reason, createdAt]
+      properties:
+        id: { type: integer }
+        productId: { type: integer, nullable: true }
+        productName: { type: string }
+        quantity: { type: number }
+        reason: { type: string }
+        cost: { type: number, nullable: true }
+        notes: { type: string, nullable: true }
+        staffId: { type: integer, nullable: true }
+        createdAt: { type: string }
+    WastageEntryInput:
+      type: object
+      required: [productName, quantity, reason]
+      properties:
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: number }
+        reason: { type: string }
+        cost: { type: number }
+        notes: { type: string }
+        staffId: { type: integer }
+
+    # ── Price Tiers ───────────────────────────────────────────────────────────
+    ProductPriceTier:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        price: { type: number }
+    PriceTier:
+      type: object
+      required: [id, name, discountType, discountValue, isActive, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        discountType: { type: string }
+        discountValue: { type: number }
+        isActive: { type: string }
+        productOverrides:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPriceTier"
+        createdAt: { type: string }
+    PriceTierInput:
+      type: object
+      required: [name, discountType, discountValue]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        discountType: { type: string }
+        discountValue: { type: number }
+        isActive: { type: string }
+        productOverrides:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPriceTier"
+
+    # ── Tax Settings ──────────────────────────────────────────────────────────
+    TaxSettings:
+      type: object
+      required: [gstEnabled, gstRate, taxInclusive, showTaxOnReceipt, taxName, emailReceiptsEnabled, smsReceiptsEnabled]
+      properties:
+        gstEnabled: { type: string }
+        gstRate: { type: number }
+        gstNumber: { type: string, nullable: true }
+        taxInclusive: { type: string }
+        showTaxOnReceipt: { type: string }
+        taxName: { type: string }
+        receiptFooter: { type: string, nullable: true }
+        receiptHeader: { type: string, nullable: true }
+        emailReceiptsEnabled: { type: string }
+        smsReceiptsEnabled: { type: string }
+    TaxSettingsInput:
+      type: object
+      properties:
+        gstEnabled: { type: string }
+        gstRate: { type: number }
+        gstNumber: { type: string }
+        taxInclusive: { type: string }
+        showTaxOnReceipt: { type: string }
+        taxName: { type: string }
+        receiptFooter: { type: string }
+        receiptHeader: { type: string }
+        emailReceiptsEnabled: { type: string }
+        smsReceiptsEnabled: { type: string }
+
+    ValidateDiscountRequest:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+        orderAmount: { type: number }
+
+    SendReceiptRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }

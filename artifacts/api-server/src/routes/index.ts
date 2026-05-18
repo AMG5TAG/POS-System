@@ -19,6 +19,14 @@ import integrationsRouter from "./integrations";
 import storageRouter from "./storage";
 import loyaltyRouter from "./loyalty";
 import portalRouter from "./portal";
+import cashDrawerRouter from "./cash-drawer";
+import parkedSalesRouter from "./parked-sales";
+import purchaseOrdersRouter from "./purchase-orders";
+import productBundlesRouter from "./product-bundles";
+import discountsRouter from "./discounts";
+import wastageRouter from "./wastage";
+import priceTiersRouter from "./price-tiers";
+import taxSettingsRouter from "./tax-settings";
 
 const router: IRouter = Router();
 
@@ -42,5 +50,13 @@ router.use(integrationsRouter);
 router.use(storageRouter);
 router.use(loyaltyRouter);
 router.use(portalRouter);
+router.use(cashDrawerRouter);
+router.use(parkedSalesRouter);
+router.use(purchaseOrdersRouter);
+router.use(productBundlesRouter);
+router.use(discountsRouter);
+router.use(wastageRouter);
+router.use(priceTiersRouter);
+router.use(taxSettingsRouter);
 
 export default router;

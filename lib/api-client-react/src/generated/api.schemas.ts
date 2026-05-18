@@ -926,6 +926,227 @@ export interface LoyaltySettingsInput {
   excludedCustomerGroups?: string[];
 }
 
+export interface CashDrawerEntry {
+  id: number;
+  type: string;
+  amount: number;
+  note?: string | null;
+  shiftDate: string;
+  createdAt: string;
+}
+
+export interface CashDrawerEntryInput {
+  type: string;
+  amount: number;
+  note?: string;
+  shiftDate: string;
+}
+
+export interface ParkedSaleItem {
+  productId?: number;
+  name?: string;
+  quantity?: number;
+  price?: number;
+}
+
+export interface ParkedSale {
+  id: number;
+  reference: string;
+  note?: string | null;
+  customerId?: number | null;
+  items: ParkedSaleItem[];
+  total: number;
+  createdAt: string;
+}
+
+export interface ParkedSaleInput {
+  reference?: string;
+  note?: string;
+  customerId?: number;
+  items: ParkedSaleItem[];
+  total: number;
+}
+
+export interface PurchaseOrderItem {
+  id?: number;
+  productId?: number | null;
+  productName?: string;
+  quantity?: number;
+  received?: number;
+  unitCost?: number;
+  notes?: string | null;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  supplierId?: number | null;
+  supplierName?: string | null;
+  poNumber: string;
+  status: string;
+  orderDate: string;
+  expectedDate?: string | null;
+  receivedDate?: string | null;
+  notes?: string | null;
+  totalCost: number;
+  items?: PurchaseOrderItem[];
+  createdAt: string;
+}
+
+export interface PurchaseOrderInput {
+  supplierId?: number;
+  poNumber?: string;
+  status?: string;
+  orderDate: string;
+  expectedDate?: string;
+  receivedDate?: string;
+  notes?: string;
+  totalCost?: number;
+  items?: PurchaseOrderItem[];
+}
+
+export interface ProductBundleItem {
+  id?: number;
+  productId?: number;
+  productName?: string;
+  quantity?: number;
+}
+
+export interface ProductBundle {
+  id: number;
+  name: string;
+  description?: string | null;
+  price: number;
+  sku?: string | null;
+  isActive: string;
+  items?: ProductBundleItem[];
+  createdAt: string;
+}
+
+export interface ProductBundleInput {
+  name: string;
+  description?: string;
+  price: number;
+  sku?: string;
+  isActive?: string;
+  items?: ProductBundleItem[];
+}
+
+export interface Discount {
+  id: number;
+  name: string;
+  code?: string | null;
+  type: string;
+  value: number;
+  minOrderAmount?: number | null;
+  maxUses?: number | null;
+  usedCount: number;
+  applicableTo?: string;
+  productIds?: number[];
+  categoryIds?: number[];
+  startDate?: string | null;
+  endDate?: string | null;
+  isActive: string;
+  createdAt: string;
+}
+
+export interface DiscountInput {
+  name: string;
+  code?: string;
+  type: string;
+  value: number;
+  minOrderAmount?: number;
+  maxUses?: number;
+  applicableTo?: string;
+  productIds?: number[];
+  categoryIds?: number[];
+  startDate?: string;
+  endDate?: string;
+  isActive?: string;
+}
+
+export interface WastageEntry {
+  id: number;
+  productId?: number | null;
+  productName: string;
+  quantity: number;
+  reason: string;
+  cost?: number | null;
+  notes?: string | null;
+  staffId?: number | null;
+  createdAt: string;
+}
+
+export interface WastageEntryInput {
+  productId?: number;
+  productName: string;
+  quantity: number;
+  reason: string;
+  cost?: number;
+  notes?: string;
+  staffId?: number;
+}
+
+export interface ProductPriceTier {
+  id?: number;
+  productId?: number;
+  price?: number;
+}
+
+export interface PriceTier {
+  id: number;
+  name: string;
+  description?: string | null;
+  discountType: string;
+  discountValue: number;
+  isActive: string;
+  productOverrides?: ProductPriceTier[];
+  createdAt: string;
+}
+
+export interface PriceTierInput {
+  name: string;
+  description?: string;
+  discountType: string;
+  discountValue: number;
+  isActive?: string;
+  productOverrides?: ProductPriceTier[];
+}
+
+export interface TaxSettings {
+  gstEnabled: string;
+  gstRate: number;
+  gstNumber?: string | null;
+  taxInclusive: string;
+  showTaxOnReceipt: string;
+  taxName: string;
+  receiptFooter?: string | null;
+  receiptHeader?: string | null;
+  emailReceiptsEnabled: string;
+  smsReceiptsEnabled: string;
+}
+
+export interface TaxSettingsInput {
+  gstEnabled?: string;
+  gstRate?: number;
+  gstNumber?: string;
+  taxInclusive?: string;
+  showTaxOnReceipt?: string;
+  taxName?: string;
+  receiptFooter?: string;
+  receiptHeader?: string;
+  emailReceiptsEnabled?: string;
+  smsReceiptsEnabled?: string;
+}
+
+export interface ValidateDiscountRequest {
+  code: string;
+  orderAmount?: number;
+}
+
+export interface SendReceiptRequest {
+  email: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1007,5 +1228,49 @@ year: number;
  * @maximum 12
  */
 month: number;
+};
+
+export type ListCashDrawerEntriesParams = {
+date?: string;
+};
+
+export type DeleteCashDrawerEntry200 = {
+  success?: boolean;
+};
+
+export type DeleteParkedSale200 = {
+  success?: boolean;
+};
+
+export type ListPurchaseOrdersParams = {
+status?: string;
+};
+
+export type DeletePurchaseOrder200 = {
+  success?: boolean;
+};
+
+export type DeleteProductBundle200 = {
+  success?: boolean;
+};
+
+export type DeleteDiscount200 = {
+  success?: boolean;
+};
+
+export type ListWastageParams = {
+productId?: number;
+};
+
+export type DeleteWastageEntry200 = {
+  success?: boolean;
+};
+
+export type DeletePriceTier200 = {
+  success?: boolean;
+};
+
+export type SendTransactionReceipt200 = {
+  success?: boolean;
 };
 

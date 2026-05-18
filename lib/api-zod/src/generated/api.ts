@@ -1863,3 +1863,672 @@ export const GetDashboardCalendarResponse = zod.object({
 })
 
 
+/**
+ * @summary List cash drawer entries
+ */
+export const ListCashDrawerEntriesQueryParams = zod.object({
+  "date": zod.coerce.string().optional()
+})
+
+export const ListCashDrawerEntriesResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "amount": zod.number(),
+  "note": zod.string().nullish(),
+  "shiftDate": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListCashDrawerEntriesResponse = zod.array(ListCashDrawerEntriesResponseItem)
+
+
+/**
+ * @summary Add a cash drawer entry
+ */
+export const CreateCashDrawerEntryBody = zod.object({
+  "type": zod.string(),
+  "amount": zod.number(),
+  "note": zod.string().optional(),
+  "shiftDate": zod.string()
+})
+
+
+/**
+ * @summary Delete a cash drawer entry
+ */
+export const DeleteCashDrawerEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteCashDrawerEntryResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List parked sales
+ */
+export const ListParkedSalesResponseItem = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "note": zod.string().nullish(),
+  "customerId": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "name": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "total": zod.number(),
+  "createdAt": zod.string()
+})
+export const ListParkedSalesResponse = zod.array(ListParkedSalesResponseItem)
+
+
+/**
+ * @summary Park a sale
+ */
+export const CreateParkedSaleBody = zod.object({
+  "reference": zod.string().optional(),
+  "note": zod.string().optional(),
+  "customerId": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "name": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Delete a parked sale
+ */
+export const DeleteParkedSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteParkedSaleResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Restore a parked sale (returns items and deletes the record)
+ */
+export const RestoreParkedSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreParkedSaleResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "note": zod.string().nullish(),
+  "customerId": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "name": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "total": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List purchase orders
+ */
+export const ListPurchaseOrdersQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListPurchaseOrdersResponseItem = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional(),
+  "createdAt": zod.string()
+})
+export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
+
+
+/**
+ * @summary Create purchase order
+ */
+export const CreatePurchaseOrderBody = zod.object({
+  "supplierId": zod.number().optional(),
+  "poNumber": zod.string().optional(),
+  "status": zod.string().optional(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().optional(),
+  "receivedDate": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "totalCost": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional()
+})
+
+
+/**
+ * @summary Get purchase order with items
+ */
+export const GetPurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update purchase order
+ */
+export const UpdatePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePurchaseOrderBody = zod.object({
+  "supplierId": zod.number().optional(),
+  "poNumber": zod.string().optional(),
+  "status": zod.string().optional(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().optional(),
+  "receivedDate": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "totalCost": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional()
+})
+
+export const UpdatePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete purchase order
+ */
+export const DeletePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePurchaseOrderResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List product bundles
+ */
+export const ListProductBundlesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.number(),
+  "sku": zod.string().nullish(),
+  "isActive": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional()
+})).optional(),
+  "createdAt": zod.string()
+})
+export const ListProductBundlesResponse = zod.array(ListProductBundlesResponseItem)
+
+
+/**
+ * @summary Create product bundle
+ */
+export const CreateProductBundleBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "price": zod.number(),
+  "sku": zod.string().optional(),
+  "isActive": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional()
+})).optional()
+})
+
+
+/**
+ * @summary Update product bundle
+ */
+export const UpdateProductBundleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProductBundleBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "price": zod.number(),
+  "sku": zod.string().optional(),
+  "isActive": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional()
+})).optional()
+})
+
+export const UpdateProductBundleResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.number(),
+  "sku": zod.string().nullish(),
+  "isActive": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete product bundle
+ */
+export const DeleteProductBundleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteProductBundleResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List discounts and promotions
+ */
+export const ListDiscountsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "type": zod.string(),
+  "value": zod.number(),
+  "minOrderAmount": zod.number().nullish(),
+  "maxUses": zod.number().nullish(),
+  "usedCount": zod.number(),
+  "applicableTo": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "categoryIds": zod.array(zod.number()).optional(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListDiscountsResponse = zod.array(ListDiscountsResponseItem)
+
+
+/**
+ * @summary Create discount
+ */
+export const CreateDiscountBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string().optional(),
+  "type": zod.string(),
+  "value": zod.number(),
+  "minOrderAmount": zod.number().optional(),
+  "maxUses": zod.number().optional(),
+  "applicableTo": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "categoryIds": zod.array(zod.number()).optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+
+/**
+ * @summary Validate a discount code
+ */
+export const ValidateDiscountCodeBody = zod.object({
+  "code": zod.string(),
+  "orderAmount": zod.number().optional()
+})
+
+export const ValidateDiscountCodeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "type": zod.string(),
+  "value": zod.number(),
+  "minOrderAmount": zod.number().nullish(),
+  "maxUses": zod.number().nullish(),
+  "usedCount": zod.number(),
+  "applicableTo": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "categoryIds": zod.array(zod.number()).optional(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update discount
+ */
+export const UpdateDiscountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateDiscountBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string().optional(),
+  "type": zod.string(),
+  "value": zod.number(),
+  "minOrderAmount": zod.number().optional(),
+  "maxUses": zod.number().optional(),
+  "applicableTo": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "categoryIds": zod.array(zod.number()).optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+export const UpdateDiscountResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "type": zod.string(),
+  "value": zod.number(),
+  "minOrderAmount": zod.number().nullish(),
+  "maxUses": zod.number().nullish(),
+  "usedCount": zod.number(),
+  "applicableTo": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "categoryIds": zod.array(zod.number()).optional(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete discount
+ */
+export const DeleteDiscountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteDiscountResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List wastage entries
+ */
+export const ListWastageQueryParams = zod.object({
+  "productId": zod.coerce.number().optional()
+})
+
+export const ListWastageResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string(),
+  "cost": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListWastageResponse = zod.array(ListWastageResponseItem)
+
+
+/**
+ * @summary Record wastage
+ */
+export const CreateWastageEntryBody = zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "reason": zod.string(),
+  "cost": zod.number().optional(),
+  "notes": zod.string().optional(),
+  "staffId": zod.number().optional()
+})
+
+
+/**
+ * @summary Delete wastage entry
+ */
+export const DeleteWastageEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteWastageEntryResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List price tiers
+ */
+export const ListPriceTiersResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "discountType": zod.string(),
+  "discountValue": zod.number(),
+  "isActive": zod.string(),
+  "productOverrides": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "price": zod.number().optional()
+})).optional(),
+  "createdAt": zod.string()
+})
+export const ListPriceTiersResponse = zod.array(ListPriceTiersResponseItem)
+
+
+/**
+ * @summary Create price tier
+ */
+export const CreatePriceTierBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "discountType": zod.string(),
+  "discountValue": zod.number(),
+  "isActive": zod.string().optional(),
+  "productOverrides": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "price": zod.number().optional()
+})).optional()
+})
+
+
+/**
+ * @summary Update price tier
+ */
+export const UpdatePriceTierParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePriceTierBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "discountType": zod.string(),
+  "discountValue": zod.number(),
+  "isActive": zod.string().optional(),
+  "productOverrides": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "price": zod.number().optional()
+})).optional()
+})
+
+export const UpdatePriceTierResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "discountType": zod.string(),
+  "discountValue": zod.number(),
+  "isActive": zod.string(),
+  "productOverrides": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "price": zod.number().optional()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete price tier
+ */
+export const DeletePriceTierParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePriceTierResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Get merchant tax settings
+ */
+export const GetTaxSettingsResponse = zod.object({
+  "gstEnabled": zod.string(),
+  "gstRate": zod.number(),
+  "gstNumber": zod.string().nullish(),
+  "taxInclusive": zod.string(),
+  "showTaxOnReceipt": zod.string(),
+  "taxName": zod.string(),
+  "receiptFooter": zod.string().nullish(),
+  "receiptHeader": zod.string().nullish(),
+  "emailReceiptsEnabled": zod.string(),
+  "smsReceiptsEnabled": zod.string()
+})
+
+
+/**
+ * @summary Update tax settings
+ */
+export const UpdateTaxSettingsBody = zod.object({
+  "gstEnabled": zod.string().optional(),
+  "gstRate": zod.number().optional(),
+  "gstNumber": zod.string().optional(),
+  "taxInclusive": zod.string().optional(),
+  "showTaxOnReceipt": zod.string().optional(),
+  "taxName": zod.string().optional(),
+  "receiptFooter": zod.string().optional(),
+  "receiptHeader": zod.string().optional(),
+  "emailReceiptsEnabled": zod.string().optional(),
+  "smsReceiptsEnabled": zod.string().optional()
+})
+
+export const UpdateTaxSettingsResponse = zod.object({
+  "gstEnabled": zod.string(),
+  "gstRate": zod.number(),
+  "gstNumber": zod.string().nullish(),
+  "taxInclusive": zod.string(),
+  "showTaxOnReceipt": zod.string(),
+  "taxName": zod.string(),
+  "receiptFooter": zod.string().nullish(),
+  "receiptHeader": zod.string().nullish(),
+  "emailReceiptsEnabled": zod.string(),
+  "smsReceiptsEnabled": zod.string()
+})
+
+
+/**
+ * @summary Send a receipt via email
+ */
+export const SendTransactionReceiptParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendTransactionReceiptBody = zod.object({
+  "email": zod.string()
+})
+
+export const SendTransactionReceiptResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+

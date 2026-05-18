@@ -132,6 +132,13 @@ export default function POSPage() {
   const categories = categoriesData || [];
   const customers = customersData?.items || [];
 
+  /* All products for barcode lookup (loaded once, unfiltered) */
+  const { data: allProductsBarcodeData } = useListProducts(
+    { limit: 1000 },
+    { query: { queryKey: ["products-barcode-lookup"] } }
+  );
+  const barcodeProducts = allProductsBarcodeData?.items || [];
+
   /* ── Computed totals ── */
   const cartSubtotal = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
   const itemDiscountTotal = cart.reduce((s, i) => s + i.itemDiscount, 0);
@@ -288,6 +295,45 @@ export default function POSPage() {
       return [...prev, { product, quantity: 1, itemDiscount: 0 }];
     });
   };
+
+  /* ── Barcode scanner (USB scanners type fast then press Enter) ── */
+  const barcodeBufferRef = useRef("");
+  const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addToCartRef = useRef(addToCart);
+  addToCartRef.current = addToCart;
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      // Ignore when user is typing in inputs / textareas
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (e.key === "Enter") {
+        const barcode = barcodeBufferRef.current.trim();
+        barcodeBufferRef.current = "";
+        if (barcodeTimerRef.current) { clearTimeout(barcodeTimerRef.current); barcodeTimerRef.current = null; }
+        if (barcode.length >= 4) {
+          const match = barcodeProducts.find((p) => p.barcode === barcode);
+          if (match) {
+            addToCartRef.current(match as unknown as Product);
+            toast.success(`Scanned: ${match.name}`);
+          } else {
+            toast.error(`Barcode not found: ${barcode}`);
+          }
+        }
+        return;
+      }
+      if (e.key.length === 1) {
+        barcodeBufferRef.current += e.key;
+        if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
+        barcodeTimerRef.current = setTimeout(() => {
+          barcodeBufferRef.current = "";
+          barcodeTimerRef.current = null;
+        }, 100);
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [barcodeProducts]);
 
   const addZeroPriceProduct = () => {
     if (!zeroPricePending) return;

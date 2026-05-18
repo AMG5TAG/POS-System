@@ -12,7 +12,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, LayoutDashboard as DashboardIcon,
-  Building2, Globe, UserCircle, Monitor, Gift,
+  Building2, Globe, UserCircle, Monitor, Gift, Percent,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -48,6 +48,7 @@ const INVENTORY_SUBNAV = [
   { name: "Categories",      href: "/products/categories",      icon: Tag },
   { name: "Tags",            href: "/products/tags",            icon: Hash },
   { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
+  { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
 
@@ -69,6 +70,8 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Costs", href: "/staff/cost-summary",     icon: Coins         },
     ],
   },
+  { name: "Discounts",         href: "/management/discounts",       icon: Percent        },
+  { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
   { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
   { name: "Customers",         href: "/management/customers",       icon: Users          },
   { name: "Layby",             href: "/management/layby",           icon: Package2       },
@@ -115,6 +118,10 @@ const SEARCH_INDEX = [
   { label: "Regional Settings",    href: "/management/regional",     icon: Globe,           group: "Management" },
   { label: "Account",              href: "/management/account",      icon: UserCircle,      group: "Management" },
   { label: "Inventory Settings",   href: "/management/inventory",    icon: Boxes,           group: "Management" },
+  { label: "Discounts",            href: "/management/discounts",    icon: Percent,         group: "Management" },
+  { label: "Price Tiers",          href: "/management/price-tiers",  icon: Layers,          group: "Management" },
+  { label: "Wastage / Write-off",  href: "/inventory/wastage",       icon: AlertTriangle,   group: "Inventory"  },
+  { label: "Tax & Receipts",       href: "/settings/tax",            icon: Receipt,         group: "Settings"   },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -164,6 +171,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/import-export":    ["Management", "Import / Export"],
   "/management/loyalty":          ["Management", "Loyalty"],
   "/management/inventory":        ["Management", "Inventory"],
+  "/management/discounts":        ["Management", "Discounts"],
+  "/management/price-tiers":      ["Management", "Price Tiers"],
+  "/inventory/wastage":           ["Inventory", "Wastage"],
+  "/settings/tax":                ["Settings", "Tax & Receipts"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */

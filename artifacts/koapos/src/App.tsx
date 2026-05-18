@@ -62,6 +62,10 @@ import ManagementImportExportPage from "@/pages/app/management-import-export";
 import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
 import ManagementLaybyPage from "@/pages/app/management-layby";
 import ManagementInventoryPage from "@/pages/app/management-inventory";
+import ManagementDiscountsPage from "@/pages/app/management-discounts";
+import ManagementPriceTiersPage from "@/pages/app/management-price-tiers";
+import InventoryWastagePage from "@/pages/app/inventory-wastage";
+import SettingsTaxPage from "@/pages/app/settings-tax";
 
 import NotFound from "@/pages/not-found";
 
@@ -222,6 +226,18 @@ function Router() {
       </Route>
       <Route path="/management/inventory">
         <ProtectedRoute component={ManagementInventoryPage} />
+      </Route>
+      <Route path="/management/discounts">
+        <ProtectedRoute component={ManagementDiscountsPage} />
+      </Route>
+      <Route path="/management/price-tiers">
+        <ProtectedRoute component={ManagementPriceTiersPage} />
+      </Route>
+      <Route path="/inventory/wastage">
+        <ProtectedRoute component={InventoryWastagePage} />
+      </Route>
+      <Route path="/settings/tax">
+        <ProtectedRoute component={SettingsTaxPage} />
       </Route>
 
       <Route path="/modules">
