@@ -13,6 +13,13 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Receipt, Percent, Mail, MessageSquare, Info } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const TAX_TABS = [
+  { href: "#gst-settings", label: "GST Settings", icon: Percent },
+  { href: "#receipt",      label: "Receipt",       icon: Receipt },
+  { href: "#email-sms",    label: "Email & SMS",   icon: Mail },
+];
 import { toast } from "sonner";
 
 export default function SettingsTaxPage() {
@@ -90,10 +97,12 @@ export default function SettingsTaxPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <PageTabsNav tabs={TAX_TABS} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
         {/* GST Settings */}
-        <Card>
+        <Card id="gst-settings">
           <CardHeader>
             <CardTitle className="text-base">GST Settings</CardTitle>
             <CardDescription>Configure how GST/tax is calculated and displayed</CardDescription>
@@ -151,7 +160,7 @@ export default function SettingsTaxPage() {
         </Card>
 
         {/* Receipt Customisation */}
-        <Card>
+        <Card id="receipt">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Receipt className="w-4 h-4" /> Receipt Customisation
@@ -179,7 +188,7 @@ export default function SettingsTaxPage() {
         </div>{/* end 2-col grid */}
 
         {/* Email & SMS Receipts */}
-        <Card>
+        <Card id="email-sms">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Mail className="w-4 h-4" /> Email & SMS Receipts

@@ -13,6 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const CUSTOMER_TABS = [
+  { href: "#customer-groups", label: "Customer Groups", icon: Users },
+  { href: "#required-info",   label: "Required Info" },
+  { href: "#defaults",        label: "Defaults" },
+];
 
 const GROUP_COLORS = [
   { label: "Blue",   value: "#3b82f6" },
@@ -106,6 +113,8 @@ export default function SettingsCustomersPage() {
           </p>
         </div>
 
+        <PageTabsNav tabs={CUSTOMER_TABS} />
+
         {/* Summary tiles */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card>
@@ -129,8 +138,10 @@ export default function SettingsCustomersPage() {
           })}
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
         {/* Customer Groups */}
-        <Card>
+        <Card id="customer-groups">
           <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
             <div>
               <CardTitle>Customer Groups</CardTitle>
@@ -211,7 +222,8 @@ export default function SettingsCustomersPage() {
         </Card>
 
         {/* Required Information */}
-        <Card>
+        <div className="space-y-6">
+        <Card id="required-info">
           <CardHeader>
             <CardTitle>Required Information</CardTitle>
             <CardDescription>
@@ -239,7 +251,7 @@ export default function SettingsCustomersPage() {
         </Card>
 
         {/* Defaults */}
-        <Card>
+        <Card id="defaults">
           <CardHeader>
             <CardTitle>Default Values</CardTitle>
             <CardDescription>Values pre-filled when creating a new customer.</CardDescription>
@@ -261,6 +273,9 @@ export default function SettingsCustomersPage() {
             </div>
           </CardContent>
         </Card>
+
+        </div>{/* end col 2 */}
+        </div>{/* end 2-col grid */}
 
       </div>
 

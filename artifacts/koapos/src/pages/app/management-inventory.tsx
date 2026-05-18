@@ -6,6 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Boxes, Shuffle } from "lucide-react";
 import { toast } from "sonner";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const INVENTORY_TABS = [
+  { href: "#display",       label: "Display",        icon: Boxes },
+  { href: "#group-pricing", label: "Group Pricing" },
+  { href: "#sku-generator", label: "SKU Generator",  icon: Shuffle },
+];
 
 export const DISPLAY_SHOW_HIDE_COSTS_KEY = "koapos_display_show_hide_costs_btn";
 export const GROUP_PRICING_KEY = "koapos_enable_group_pricing";
@@ -67,7 +74,11 @@ export default function ManagementInventoryPage() {
           <h1 className="text-2xl font-bold tracking-tight">Inventory Settings</h1>
         </div>
 
-        <div className="rounded-lg border">
+        <PageTabsNav tabs={INVENTORY_TABS} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
+        <div id="display" className="rounded-lg border">
           <div className="px-5 py-4 border-b">
             <p className="font-semibold">Display</p>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -88,7 +99,7 @@ export default function ManagementInventoryPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border">
+        <div id="group-pricing" className="rounded-lg border">
           <div className="px-5 py-4 border-b">
             <p className="font-semibold">Customer Group Pricing</p>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -109,7 +120,7 @@ export default function ManagementInventoryPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border">
+        <div id="sku-generator" className="rounded-lg border lg:col-span-2">
           <div className="px-5 py-4 border-b">
             <p className="font-semibold">SKU Generator</p>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -144,6 +155,8 @@ export default function ManagementInventoryPage() {
             </p>
           </div>
         </div>
+
+        </div>{/* end 2-col grid */}
       </div>
     </AppLayout>
   );

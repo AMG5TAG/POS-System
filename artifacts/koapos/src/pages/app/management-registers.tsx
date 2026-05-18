@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const REGISTER_TABS = [
+  { href: "#registers",   label: "Registers",    icon: Monitor },
+  { href: "#pos-settings", label: "POS Settings", icon: CreditCard },
+];
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
@@ -352,87 +358,94 @@ export default function ManagementRegistersPage() {
           </Button>
         </div>
 
-        {/* Register type cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {REGISTER_TYPES.map(({ type, description, icon: Icon, bg, text }) => (
-            <div key={type} className={`rounded-xl border border-border p-4 flex items-center gap-3 ${bg}`}>
-              <div className={`p-2 rounded-lg bg-white/60 dark:bg-black/20 ${text}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${text}`}>{type}</p>
-                <p className="text-xs text-muted-foreground">{description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PageTabsNav tabs={REGISTER_TABS} />
 
-        {/* Register list */}
-        {registers.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
-            <Monitor className="h-8 w-8 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No registers yet</p>
-            <p className="text-sm mt-1">Click "+ New Register" to create your first POS terminal.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {registers.map((reg) => (
-              <div
-                key={reg.id}
-                className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-muted">
-                    <Monitor className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{reg.name}</p>
-                    {(reg.staffName || reg.staffEmail) && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {reg.staffName && <span className="mr-1">{reg.staffName}</span>}
-                        {reg.staffEmail && (
-                          <span className="text-muted-foreground/70">({reg.staffEmail})</span>
-                        )}
-                      </p>
-                    )}
-                    <div className="mt-2">
-                      <TypeBadge type={reg.type} />
-                    </div>
-                  </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
+        {/* Left: Registers */}
+        <div id="registers" className="space-y-4">
+          {/* Register type cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {REGISTER_TYPES.map(({ type, description, icon: Icon, bg, text }) => (
+              <div key={type} className={`rounded-xl border border-border p-4 flex items-center gap-3 ${bg}`}>
+                <div className={`p-2 rounded-lg bg-white/60 dark:bg-black/20 ${text}`}>
+                  <Icon className="h-5 w-5" />
                 </div>
-
-                <div className="flex gap-2 pt-1 border-t border-border">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-muted-foreground hover:text-foreground"
-                    onClick={() => openEdit(reg)}
-                  >
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 px-3"
-                    onClick={() => handleDelete(reg.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                <div>
+                  <p className={`font-semibold text-sm ${text}`}>{type}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
               </div>
             ))}
           </div>
-        )}
 
-        {/* Payment Methods */}
-        <div className="border-t pt-6 space-y-3">
-          <h2 className="text-base font-semibold">POS Settings</h2>
+          {/* Register list */}
+          {registers.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
+              <Monitor className="h-8 w-8 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No registers yet</p>
+              <p className="text-sm mt-1">Click "+ New Register" to create your first POS terminal.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {registers.map((reg) => (
+                <div
+                  key={reg.id}
+                  className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-muted">
+                      <Monitor className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{reg.name}</p>
+                      {(reg.staffName || reg.staffEmail) && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {reg.staffName && <span className="mr-1">{reg.staffName}</span>}
+                          {reg.staffEmail && (
+                            <span className="text-muted-foreground/70">({reg.staffEmail})</span>
+                          )}
+                        </p>
+                      )}
+                      <div className="mt-2">
+                        <TypeBadge type={reg.type} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1 border-t border-border">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => openEdit(reg)}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 px-3"
+                      onClick={() => handleDelete(reg.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>{/* end registers col */}
+
+        {/* Right: POS Settings */}
+        <div id="pos-settings" className="space-y-3">
           <PaymentMethodsSection />
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
           </div>
         </div>
 
+        </div>{/* end 2-col grid */}
       </div>
 
       {/* Dialog */}

@@ -15,6 +15,14 @@ import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
   Plus, Trash2, Info,
 } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const LOYALTY_TABS = [
+  { href: "#program-type",     label: "Program Type" },
+  { href: "#program-settings", label: "Settings" },
+  { href: "#excluded-groups",  label: "Excluded Groups" },
+  { href: "#program-summary",  label: "Summary" },
+];
 
 /* ─── Program types ──────────────────────────────────────────────────────── */
 
@@ -199,8 +207,12 @@ export default function ManagementLoyaltyPage() {
           </div>
         </div>
 
+        <PageTabsNav tabs={LOYALTY_TABS} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
         {/* Program selector */}
-        <Card>
+        <Card id="program-type">
           <CardHeader>
             <CardTitle className="text-base">Program Type</CardTitle>
             <CardDescription>Choose how customers earn rewards.</CardDescription>
@@ -239,7 +251,7 @@ export default function ManagementLoyaltyPage() {
         </Card>
 
         {/* Program config */}
-        <Card>
+        <Card id="program-settings">
           <CardHeader>
             <div className="flex items-center gap-2">
               <ProgramIcon className="w-4 h-4 text-primary" />
@@ -418,7 +430,7 @@ export default function ManagementLoyaltyPage() {
         </Card>
 
         {/* Customer group exclusions */}
-        <Card>
+        <Card id="excluded-groups">
           <CardHeader>
             <CardTitle className="text-base">Excluded Customer Groups</CardTitle>
             <CardDescription>Customers in these groups will not earn loyalty rewards.</CardDescription>
@@ -455,7 +467,7 @@ export default function ManagementLoyaltyPage() {
         </Card>
 
         {/* Program summary */}
-        <Card className="border-primary/20 bg-primary/5">
+        <Card id="program-summary" className="border-primary/20 bg-primary/5">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Gift className="w-4 h-4 text-primary" />
@@ -487,6 +499,7 @@ export default function ManagementLoyaltyPage() {
             <p className="text-xs">Loyalty amounts are displayed on the POS screen and printed on receipts.</p>
           </CardContent>
         </Card>
+        </div>{/* end 2-col grid */}
       </div>
     </AppLayout>
   );

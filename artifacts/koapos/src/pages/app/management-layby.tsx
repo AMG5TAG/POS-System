@@ -9,6 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Package2, Save, RotateCcw, Info } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const LAYBY_TABS = [
+  { href: "#duration",      label: "Duration & Payments" },
+  { href: "#deposit",       label: "Minimum Deposit" },
+  { href: "#notifications", label: "Notifications" },
+  { href: "#terms",         label: "Terms & Conditions" },
+];
 import { toast } from "sonner";
 
 const STORAGE_KEY = "koapos_layby_settings";
@@ -94,10 +102,12 @@ export default function ManagementLaybyPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <PageTabsNav tabs={LAYBY_TABS} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
         {/* Duration & Payments */}
-        <Card>
+        <Card id="duration">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Duration & Payments</CardTitle>
             <CardDescription>Set the maximum layby period and payment schedule</CardDescription>
@@ -158,7 +168,7 @@ export default function ManagementLaybyPage() {
         </Card>
 
         {/* Minimum Deposit */}
-        <Card>
+        <Card id="deposit">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Minimum Deposit</CardTitle>
             <CardDescription>The deposit amount required to secure a layby</CardDescription>
@@ -201,7 +211,7 @@ export default function ManagementLaybyPage() {
         </Card>
 
         {/* Notifications */}
-        <Card>
+        <Card id="notifications">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Notifications & Receipt</CardTitle>
             <CardDescription>Control when terms are sent or printed</CardDescription>
@@ -231,7 +241,7 @@ export default function ManagementLaybyPage() {
         </Card>
 
         {/* Terms & Conditions */}
-        <Card>
+        <Card id="terms">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Terms & Conditions</CardTitle>
             <CardDescription>

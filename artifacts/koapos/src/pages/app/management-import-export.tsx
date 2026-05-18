@@ -673,26 +673,27 @@ export default function ManagementImportExportPage() {
         </div>
 
         {/* Entity selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="flex flex-wrap items-center bg-muted rounded-xl p-1 gap-0.5">
           {ENTITIES.map((e) => {
             const Icon     = e.icon;
             const isActive = e.key === activeKey;
             return (
               <button
                 key={e.key}
-                onClick={() => setActiveKey(e.key)}
+                type="button"
+                onClick={() => !e.comingSoon && setActiveKey(e.key)}
                 className={cn(
-                  "flex flex-col items-center gap-2 rounded-xl border px-4 py-4 text-sm font-medium transition-all",
+                  "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap cursor-pointer select-none",
                   isActive
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-background hover:bg-muted/40 border-border",
-                  e.comingSoon && "opacity-60",
+                    ? "bg-background shadow-sm text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                  e.comingSoon && "opacity-50 cursor-default",
                 )}
               >
-                <Icon className="w-5 h-5 shrink-0" />
+                <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span>{e.label}</span>
                 {e.comingSoon && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Soon</Badge>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-0.5">Soon</Badge>
                 )}
               </button>
             );
@@ -700,7 +701,7 @@ export default function ManagementImportExportPage() {
         </div>
 
         {/* Entity description */}
-        <p className="text-sm text-muted-foreground -mt-2">{entity.description}</p>
+        <p className="text-sm text-muted-foreground">{entity.description}</p>
 
         {/* Content area */}
         {entity.comingSoon ? (

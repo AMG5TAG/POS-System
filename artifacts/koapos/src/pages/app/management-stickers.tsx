@@ -230,9 +230,9 @@ export default function ManagementStickersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-6 items-start">
-          {/* Left: sticker type selector */}
-          <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* Left: sticker type selector + field editor */}
+          <div className="space-y-4">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Label Type</p>
             <div className="rounded-xl border overflow-hidden">
               {STICKER_TYPES.map((type) => {
@@ -262,9 +262,8 @@ export default function ManagementStickersPage() {
                 <p>Connect your DYMO LabelWriter via USB. Install DYMO Connect software for direct printing. Click Print to send to your default label printer.</p>
               </div>
             </div>
-          </div>
 
-          {/* Middle: field editor */}
+          {/* Field editor */}
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
@@ -402,6 +401,7 @@ export default function ManagementStickersPage() {
               )}
             </CardContent>
           </Card>
+          </div>{/* end left col */}
 
           {/* Right: preview */}
           <div className="space-y-3">

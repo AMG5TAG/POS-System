@@ -9,6 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign } from "lucide-react";
+import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+const ACCOUNT_TABS = [
+  { href: "#login-details",     label: "Login Details" },
+  { href: "#business-username", label: "Business Username", icon: AtSign },
+];
 import { cn } from "@/lib/utils";
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
@@ -83,10 +89,12 @@ export default function SettingsAccountPage() {
       <div className="p-6 md:p-8 space-y-8">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Account</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <PageTabsNav tabs={ACCOUNT_TABS} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
         {/* Login details */}
-        <Card>
+        <Card id="login-details">
           <CardHeader>
             <CardTitle>Login Details</CardTitle>
             <CardDescription>Your account credentials for KoaPOS.</CardDescription>
@@ -109,7 +117,7 @@ export default function SettingsAccountPage() {
         </Card>
 
         {/* Business username */}
-        <Card>
+        <Card id="business-username">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AtSign className="w-4 h-4" /> Business Username
