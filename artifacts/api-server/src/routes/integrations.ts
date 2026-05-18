@@ -207,6 +207,66 @@ export const INTEGRATIONS = [
     fields: [] as { name: string; label: string; type: string }[],
     comingSoon: true,
   },
+  /* ── Backup & Storage ─────────────────────────────────────────────────── */
+  {
+    key: "google_drive",
+    label: "Google Drive",
+    category: "Backup & Storage",
+    description: "Automatically back up sales reports, receipts, and exports to your Google Drive.",
+    authType: "oauth" as const,
+    oauthProvider: "google" as const,
+  },
+  {
+    key: "onedrive",
+    label: "Microsoft OneDrive",
+    category: "Backup & Storage",
+    description: "Back up your KoaPOS data to Microsoft OneDrive — ideal for businesses in the Microsoft 365 ecosystem.",
+    authType: "oauth" as const,
+    oauthProvider: "microsoft" as const,
+  },
+  {
+    key: "dropbox",
+    label: "Dropbox",
+    category: "Backup & Storage",
+    description: "Send automated backups of reports and exports directly to your Dropbox.",
+    authType: "oauth" as const,
+    oauthProvider: "dropbox" as const,
+  },
+  {
+    key: "proton_drive",
+    label: "Proton Drive",
+    category: "Backup & Storage",
+    description: "Store encrypted backups in Proton Drive for maximum privacy and security.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
+  /* ── Contacts & Calendar ───────────────────────────────────────────────── */
+  {
+    key: "google_contacts",
+    label: "Google Account",
+    category: "Contacts & Calendar",
+    description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",
+    authType: "oauth" as const,
+    oauthProvider: "google" as const,
+  },
+  {
+    key: "microsoft_contacts",
+    label: "Microsoft Account",
+    category: "Contacts & Calendar",
+    description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar / Teams.",
+    authType: "oauth" as const,
+    oauthProvider: "microsoft" as const,
+  },
+  {
+    key: "apple_contacts",
+    label: "Apple Account",
+    category: "Contacts & Calendar",
+    description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar.",
+    authType: "credentials" as const,
+    fields: [] as { name: string; label: string; type: string }[],
+    comingSoon: true,
+  },
   /* ── AI & Automation ──────────────────────────────────────────────────── */
   {
     key: "openai",
@@ -247,20 +307,32 @@ async function getRow(merchantId: number, key: string) {
   return rows[0] ?? null;
 }
 
+const GOOGLE_OAUTH_SCOPES: Record<string, string> = {
+  google_business:  "https://www.googleapis.com/auth/business.manage",
+  google_drive:     "https://www.googleapis.com/auth/drive.file",
+  google_contacts:  "https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/calendar",
+};
+
+const MICROSOFT_OAUTH_SCOPES: Record<string, string> = {
+  onedrive:             "Files.ReadWrite.AppFolder offline_access",
+  microsoft_contacts:   "Contacts.ReadWrite Calendars.ReadWrite offline_access",
+};
+
 function buildOAuthStartUrl(key: string, req: import("express").Request): string | null {
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol ?? "https";
   const host  = req.headers["x-forwarded-host"] ?? req.headers.host ?? "";
   const base  = `${proto}://${host}`;
   const callbackUrl = `${base}/api/integrations/oauth/${key}/callback`;
 
-  if (key === "google_business") {
+  /* ── Google (shared client, different scopes) ── */
+  if (key in GOOGLE_OAUTH_SCOPES) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) return null;
     const params = new URLSearchParams({
       client_id:     clientId,
       redirect_uri:  callbackUrl,
       response_type: "code",
-      scope:         "https://www.googleapis.com/auth/business.manage",
+      scope:         GOOGLE_OAUTH_SCOPES[key] ?? "",
       access_type:   "offline",
       prompt:        "consent",
       state:         String(req.session.merchantId),
@@ -268,6 +340,35 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   }
 
+  /* ── Microsoft (shared client, different scopes) ── */
+  if (key in MICROSOFT_OAUTH_SCOPES) {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    if (!clientId) return null;
+    const params = new URLSearchParams({
+      client_id:     clientId,
+      redirect_uri:  callbackUrl,
+      response_type: "code",
+      scope:         MICROSOFT_OAUTH_SCOPES[key] ?? "",
+      state:         String(req.session.merchantId),
+    });
+    return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
+  }
+
+  /* ── Dropbox ── */
+  if (key === "dropbox") {
+    const appKey = process.env.DROPBOX_APP_KEY;
+    if (!appKey) return null;
+    const params = new URLSearchParams({
+      client_id:         appKey,
+      redirect_uri:      callbackUrl,
+      response_type:     "code",
+      token_access_type: "offline",
+      state:             String(req.session.merchantId),
+    });
+    return `https://www.dropbox.com/oauth2/authorize?${params}`;
+  }
+
+  /* ── Stripe Connect ── */
   if (key === "stripe_own") {
     const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
     if (!clientId) return null;
@@ -311,9 +412,11 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       connectedAt: comingSoon ? null : (row?.connectedAt?.toISOString() ?? null),
       oauthConfigured:
         intg.authType === "oauth"
-          ? intg.oauthProvider === "google"
-            ? !!process.env.GOOGLE_CLIENT_ID
-            : !!process.env.STRIPE_CONNECT_CLIENT_ID
+          ? intg.oauthProvider === "google"     ? !!process.env.GOOGLE_CLIENT_ID
+          : intg.oauthProvider === "microsoft"  ? !!process.env.MICROSOFT_CLIENT_ID
+          : intg.oauthProvider === "dropbox"    ? !!process.env.DROPBOX_APP_KEY
+          : intg.oauthProvider === "stripe"     ? !!process.env.STRIPE_CONNECT_CLIENT_ID
+          : false
           : null,
     };
   });
@@ -426,7 +529,7 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
     const host  = req.headers["x-forwarded-host"] ?? req.headers.host ?? "";
     const callbackUrl = `${proto}://${host}/api/integrations/oauth/${key}/callback`;
 
-    if (key === "google_business") {
+    if (key === "google_business" || key === "google_drive" || key === "google_contacts") {
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -441,9 +544,42 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
       const data = await tokenRes.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
       accessToken  = data.access_token ?? "";
       refreshToken = data.refresh_token ?? "";
-      if (data.expires_in) {
-        expiresAt = new Date(Date.now() + data.expires_in * 1000);
-      }
+      if (data.expires_in) expiresAt = new Date(Date.now() + data.expires_in * 1000);
+    }
+
+    if (key === "onedrive" || key === "microsoft_contacts") {
+      const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id:     process.env.MICROSOFT_CLIENT_ID ?? "",
+          client_secret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
+          redirect_uri:  callbackUrl,
+          grant_type:    "authorization_code",
+        }),
+      });
+      const data = await tokenRes.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
+      accessToken  = data.access_token ?? "";
+      refreshToken = data.refresh_token ?? "";
+      if (data.expires_in) expiresAt = new Date(Date.now() + data.expires_in * 1000);
+    }
+
+    if (key === "dropbox") {
+      const tokenRes = await fetch("https://api.dropboxapi.com/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id:     process.env.DROPBOX_APP_KEY ?? "",
+          client_secret: process.env.DROPBOX_APP_SECRET ?? "",
+          redirect_uri:  callbackUrl,
+          grant_type:    "authorization_code",
+        }),
+      });
+      const data = await tokenRes.json() as { access_token?: string; refresh_token?: string };
+      accessToken  = data.access_token ?? "";
+      refreshToken = data.refresh_token ?? "";
     }
 
     if (key === "stripe_own") {

@@ -78,6 +78,13 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   meta_business:   { type: "img",  bg: "bg-[#0082FB]",   src: SI("meta",               "ffffff") },
   openai:          { type: "img",  bg: "bg-black",        src: SI("openai",             "ffffff") },
   zapier:          { type: "img",  bg: "bg-[#FF4A00]",   src: SI("zapier",             "ffffff") },
+  google_drive:       { type: "img",  bg: "bg-white border", src: SI("googledrive",     "4285F4") },
+  onedrive:           { type: "img",  bg: "bg-[#0078D4]",   src: SI("onedrive",        "ffffff") },
+  dropbox:            { type: "img",  bg: "bg-[#0061FF]",   src: SI("dropbox",         "ffffff") },
+  proton_drive:       { type: "img",  bg: "bg-[#6D4AFF]",   src: SI("proton",          "ffffff") },
+  google_contacts:    { type: "img",  bg: "bg-white border", src: SI("googlecontacts",  "34A853") },
+  microsoft_contacts: { type: "img",  bg: "bg-[#0078D4]",   src: SI("microsoft",       "ffffff") },
+  apple_contacts:     { type: "img",  bg: "bg-black",        src: SI("apple",           "ffffff") },
 };
 
 function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: string; size?: "md" | "lg" }) {
@@ -270,9 +277,13 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: CardP
             Disconnect
           </Button>
         ) : intg.authType === "oauth" ? (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onOAuth} disabled={busy}>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onOAuth} disabled={busy || intg.oauthConfigured === false}>
             <ExternalLink className="w-3.5 h-3.5" />
-            {intg.key === "google_business" ? "Connect with Google" : "Connect with Stripe"}
+            {intg.key.startsWith("google") ? "Link to Google"
+              : intg.key === "onedrive" || intg.key === "microsoft_contacts" ? "Link to Microsoft"
+              : intg.key === "dropbox" ? "Link to Dropbox"
+              : intg.key === "stripe_own" ? "Connect with Stripe"
+              : "Connect"}
           </Button>
         ) : (
           <Button size="sm" variant="outline" className="gap-1.5" onClick={onConnect} disabled={busy}>
@@ -294,6 +305,8 @@ const CATEGORY_ORDER = [
   "Payroll & Staff",
   "Shipping & Fulfilment",
   "Marketing & CRM",
+  "Backup & Storage",
+  "Contacts & Calendar",
   "AI & Automation",
 ];
 
@@ -305,6 +318,8 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Payroll & Staff":       "Sync rosters, timesheets, and pay rates.",
   "Shipping & Fulfilment": "Calculate rates and print labels at checkout.",
   "Marketing & CRM":       "Grow your audience and run targeted campaigns.",
+  "Backup & Storage":      "Automatically back up reports, receipts, and exports to cloud storage.",
+  "Contacts & Calendar":   "Sync customers and appointments with your existing contacts and calendar apps.",
   "AI & Automation":       "Supercharge your workflow with AI and no-code automation.",
 };
 
