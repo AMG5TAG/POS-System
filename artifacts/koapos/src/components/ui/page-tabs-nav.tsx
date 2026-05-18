@@ -10,7 +10,7 @@ export function PageTabsNav({ tabs }: { tabs: TabItem[] }) {
   const [location] = useLocation();
 
   return (
-    <div className="flex items-center bg-muted rounded-xl p-1 gap-0.5 overflow-x-auto flex-nowrap shrink-0">
+    <div className="flex flex-wrap items-center bg-muted rounded-xl p-1 gap-0.5">
       {tabs.map(({ href, label, icon: Icon }) => {
         const isAnchor = href.startsWith("#");
         const active = !isAnchor && location === href;

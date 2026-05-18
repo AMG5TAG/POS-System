@@ -120,7 +120,7 @@ function ServiceJobDialog({ job, onClose }: JobDialogProps) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
             <Wrench className="w-4 h-4 text-primary shrink-0" />

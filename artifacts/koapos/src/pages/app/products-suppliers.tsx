@@ -109,7 +109,7 @@ function StepNav({ current }: { current: number }) {
   }, [current]);
 
   return (
-    <div ref={navRef} className="flex items-center gap-1 overflow-x-auto scrollbar-none pb-0.5">
+    <div ref={navRef} className="flex items-center gap-1 flex-wrap">
       {STEPS.map((step, i) => {
         const Icon   = step.icon;
         const done   = i < current;
@@ -399,7 +399,7 @@ function WizardDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-lg flex flex-col max-h-[90vh]">
+      <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-xl">{editing ? "Edit Supplier" : "New Supplier"}</DialogTitle>
         </DialogHeader>

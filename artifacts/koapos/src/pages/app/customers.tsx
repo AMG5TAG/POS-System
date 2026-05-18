@@ -416,7 +416,7 @@ function CustomerDetailInner({
       </DialogHeader>
 
       {/* Tabs */}
-      <div className="flex border-b -mx-6 px-6 gap-0 overflow-x-auto">
+      <div className="flex flex-wrap border-b -mx-6 px-6 gap-0">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -899,7 +899,7 @@ function CustomerDetailDialog({
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         {customer && (
           <CustomerDetailInner
             customer={customer}

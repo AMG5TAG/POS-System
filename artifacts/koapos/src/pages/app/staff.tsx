@@ -284,7 +284,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="text-lg font-bold">
             {editingStaff ? "Edit Employee" : "Add Employee"}
