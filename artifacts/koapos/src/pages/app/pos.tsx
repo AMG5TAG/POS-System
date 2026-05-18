@@ -12,14 +12,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
-import { ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId } from "@/pages/app/management-registers";
+import {
+  ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
+  getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+} from "@/pages/app/management-registers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  Search, Plus, Minus, Trash2, Receipt,
+  Search, Plus, Minus, Trash2, Receipt, CreditCard,
   X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
@@ -776,12 +779,22 @@ export default function POSPage() {
               {/* Method selector */}
               {(() => {
                 const enabledIds = getEnabledPaymentMethods();
-                const methods = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id));
+                const builtIn = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id));
+                const integrationKeys = getEnabledIntegrationPayments();
+                const integrationMethods = integrationKeys.map(key => ({
+                  id: `__intg__${key}` as PaymentMethodId,
+                  label: INTEGRATION_PAYMENT_LABELS[key] ?? key,
+                  isIntegration: true,
+                }));
+                const allMethods = [
+                  ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
+                  ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
+                ];
                 return (
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Payment Method</p>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {methods.map(({ id, label, icon: Icon }) => (
+                      {allMethods.map(({ id, label, Icon, isIntegration }) => (
                         <button
                           key={id}
                           onClick={() => setPayMethod(id)}
@@ -791,7 +804,7 @@ export default function POSPage() {
                               : "border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
                         >
                           <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate text-xs">{label}</span>
+                          <span className="truncate text-xs">{label}{isIntegration && <span className="ml-1 text-[9px] opacity-60 font-normal">↗</span>}</span>
                         </button>
                       ))}
                     </div>
@@ -887,7 +900,11 @@ export default function POSPage() {
                   createTransactionMutation.isPending ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009)
                 }
-                onClick={() => handleCheckout(payMethod as TransactionInputPaymentMethod, enteredAmount)}
+                onClick={() => {
+                  const apiMethod: TransactionInputPaymentMethod =
+                    String(payMethod).startsWith("__intg__") ? "other" : payMethod as TransactionInputPaymentMethod;
+                  handleCheckout(apiMethod, enteredAmount);
+                }}
               >
                 {createTransactionMutation.isPending ? "Processing…" : "Complete Sale"}
               </Button>

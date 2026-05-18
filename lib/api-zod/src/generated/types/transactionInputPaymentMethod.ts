@@ -15,4 +15,5 @@ export const TransactionInputPaymentMethod = {
   split: 'split',
   voucher: 'voucher',
   other: 'other',
+  direct_deposit: 'direct_deposit',
 } as const;

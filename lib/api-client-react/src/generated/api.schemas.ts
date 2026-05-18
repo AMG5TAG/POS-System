@@ -384,6 +384,7 @@ export const TransactionPaymentMethod = {
   split: 'split',
   voucher: 'voucher',
   other: 'other',
+  direct_deposit: 'direct_deposit',
 } as const;
 
 export interface Transaction {
@@ -422,6 +423,7 @@ export const TransactionInputPaymentMethod = {
   split: 'split',
   voucher: 'voucher',
   other: 'other',
+  direct_deposit: 'direct_deposit',
 } as const;
 
 export interface TransactionInput {

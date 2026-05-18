@@ -13,16 +13,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Receipt } from "lucide-react";
+import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Receipt, Landmark } from "lucide-react";
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
 
 export const ALL_PAYMENT_METHODS = [
-  { id: "card",  label: "Credit / Debit Card", description: "EFTPOS and card payments",           icon: CreditCard },
-  { id: "cash",  label: "Cash",                description: "Physical cash and change",           icon: Banknote },
-  { id: "split", label: "Split Payment",        description: "Divide the total across methods",    icon: SplitSquareHorizontal },
-  { id: "other", label: "Other",               description: "Vouchers, store credit, layby, etc", icon: Receipt },
+  { id: "card",           label: "Credit / Debit Card", description: "EFTPOS and card payments",            icon: CreditCard },
+  { id: "cash",           label: "Cash",                description: "Physical cash and change",            icon: Banknote },
+  { id: "direct_deposit", label: "Direct Deposit",      description: "Bank transfer / direct deposit",      icon: Landmark },
+  { id: "split",          label: "Split Payment",        description: "Divide the total across methods",     icon: SplitSquareHorizontal },
+  { id: "other",          label: "Other",               description: "Vouchers, store credit, layby, etc",  icon: Receipt },
 ] as const;
 
 export type PaymentMethodId = (typeof ALL_PAYMENT_METHODS)[number]["id"];
@@ -33,6 +34,38 @@ export function getEnabledPaymentMethods(): PaymentMethodId[] {
     if (stored) return JSON.parse(stored) as PaymentMethodId[];
   } catch { /* ignore */ }
   return ALL_PAYMENT_METHODS.map((m) => m.id);
+}
+
+/* ─── Integration payment methods ────────────────────────────────────────── */
+
+export const INTEGRATION_PAYMENT_METHODS_KEY = "koapos_enabled_integration_payments";
+
+export const PAYMENT_INTEGRATION_CATEGORIES = [
+  "Payments & EFTPOS",
+  "Buy Now, Pay Later",
+  "Digital Wallets",
+] as const;
+
+export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
+  stripe_own:      "Stripe",
+  commbank_eftpos: "CommBank EFTPOS",
+  tyro_eftpos:     "Tyro",
+  square_terminal: "Square Terminal",
+  paypal:          "PayPal",
+  afterpay:        "Afterpay",
+  zip:             "Zip",
+  klarna:          "Klarna",
+  apple_wallet:    "Apple Wallet",
+  google_pay:      "Google Pay",
+  wechat_alipay:   "WeChat / Alipay",
+};
+
+export function getEnabledIntegrationPayments(): string[] {
+  try {
+    const stored = localStorage.getItem(INTEGRATION_PAYMENT_METHODS_KEY);
+    if (stored) return JSON.parse(stored) as string[];
+  } catch { /* ignore */ }
+  return [];
 }
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -123,8 +156,26 @@ const EMPTY_FORM = { name: "", type: "Cash" as RegisterType, staffId: "", staffN
 
 /* ─── Payment Methods section ────────────────────────────────────────────── */
 
+type ConnectedPayIntegration = { key: string; label: string; category: string };
+
 function PaymentMethodsSection() {
   const [enabled, setEnabled] = useState<PaymentMethodId[]>(getEnabledPaymentMethods);
+  const [enabledIntegrations, setEnabledIntegrations] = useState<string[]>(getEnabledIntegrationPayments);
+  const [payIntegrations, setPayIntegrations] = useState<ConnectedPayIntegration[]>([]);
+
+  useEffect(() => {
+    fetch("/api/integrations", { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: (ConnectedPayIntegration & { status: string })[]) => {
+        setPayIntegrations(
+          data.filter(i =>
+            i.status === "connected" &&
+            (PAYMENT_INTEGRATION_CATEGORIES as readonly string[]).includes(i.category)
+          )
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const toggle = (id: PaymentMethodId, checked: boolean) => {
     const next = checked ? [...enabled, id] : enabled.filter((m) => m !== id);
@@ -132,6 +183,14 @@ function PaymentMethodsSection() {
     setEnabled(next);
     localStorage.setItem(PAYMENT_METHODS_KEY, JSON.stringify(next));
     toast.success(checked ? `${ALL_PAYMENT_METHODS.find(m => m.id === id)?.label} enabled` : `${ALL_PAYMENT_METHODS.find(m => m.id === id)?.label} disabled`);
+  };
+
+  const toggleIntegration = (key: string, checked: boolean) => {
+    const next = checked ? [...enabledIntegrations, key] : enabledIntegrations.filter(k => k !== key);
+    setEnabledIntegrations(next);
+    localStorage.setItem(INTEGRATION_PAYMENT_METHODS_KEY, JSON.stringify(next));
+    const label = INTEGRATION_PAYMENT_LABELS[key] ?? key;
+    toast.success(checked ? `${label} payment enabled` : `${label} payment disabled`);
   };
 
   return (
@@ -156,6 +215,29 @@ function PaymentMethodsSection() {
             </div>
           );
         })}
+
+        {payIntegrations.length > 0 && (
+          <>
+            <div className="px-5 py-2.5 bg-muted/30 flex items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Connected Integrations</p>
+            </div>
+            {payIntegrations.map(({ key, label, category }) => {
+              const isOn = enabledIntegrations.includes(key);
+              return (
+                <div key={key} className="flex items-center gap-4 px-5 py-3.5">
+                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${isOn ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium transition-colors ${!isOn && "text-muted-foreground"}`}>{label}</p>
+                    <p className="text-xs text-muted-foreground">{category}</p>
+                  </div>
+                  <Switch checked={isOn} onCheckedChange={(v) => toggleIntegration(key, v)} />
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );
