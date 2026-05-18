@@ -66,6 +66,7 @@ import ManagementDiscountsPage from "@/pages/app/management-discounts";
 import ManagementPriceTiersPage from "@/pages/app/management-price-tiers";
 import ManagementTemplatesPage from "@/pages/app/management-templates";
 import ManagementStickersPage from "@/pages/app/management-stickers";
+import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
 
@@ -240,6 +241,9 @@ function Router() {
       </Route>
       <Route path="/management/stickers">
         <ProtectedRoute component={ManagementStickersPage} />
+      </Route>
+      <Route path="/management/sticker-templates">
+        <ProtectedRoute component={ManagementStickerTemplatesPage} />
       </Route>
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />

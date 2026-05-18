@@ -12,7 +12,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, LayoutDashboard as DashboardIcon,
-  Building2, Globe, UserCircle, Monitor, Gift, Percent, LayoutTemplate,
+  Building2, Globe, UserCircle, Monitor, Gift, Percent, LayoutTemplate, Printer,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -73,7 +73,14 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Discounts",         href: "/management/discounts",       icon: Percent        },
   { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
   { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
-  { name: "Stickers",          href: "/management/stickers",       icon: Tag            },
+  {
+    name: "Stickers",
+    icon: Tag,
+    children: [
+      { name: "Print Labels", href: "/management/stickers",           icon: Printer       },
+      { name: "Templates",    href: "/management/sticker-templates",  icon: LayoutTemplate },
+    ],
+  },
   { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
   { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
   { name: "Customers",         href: "/management/customers",       icon: Users          },
@@ -125,7 +132,8 @@ const SEARCH_INDEX = [
   { label: "Modules",              href: "/modules",                 icon: Blocks,          group: "Management" },
   { label: "Integrations",         href: "/management/integrations", icon: Receipt,         group: "Management" },
   { label: "Templates",            href: "/management/templates",    icon: LayoutTemplate,  group: "Management" },
-  { label: "Stickers & Labels",    href: "/management/stickers",     icon: Tag,             group: "Management" },
+  { label: "Stickers & Labels",    href: "/management/stickers",           icon: Tag,           group: "Management" },
+  { label: "Sticker Templates",   href: "/management/sticker-templates",  icon: LayoutTemplate, group: "Management" },
   { label: "Wastage / Write-off",  href: "/inventory/wastage",       icon: AlertTriangle,   group: "Inventory"  },
 ];
 
@@ -181,7 +189,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/inventory/wastage":           ["Inventory", "Wastage"],
   "/settings/tax":                ["Management", "Tax & Receipts"],
   "/management/templates":        ["Management", "Templates"],
-  "/management/stickers":         ["Management", "Stickers"],
+  "/management/stickers":           ["Management", "Stickers"],
+  "/management/sticker-templates": ["Management", "Sticker Templates"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
