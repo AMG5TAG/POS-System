@@ -13,17 +13,20 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Receipt, Landmark } from "lucide-react";
+import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star } from "lucide-react";
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
 
 export const ALL_PAYMENT_METHODS = [
-  { id: "card",           label: "Credit / Debit Card", description: "EFTPOS and card payments",            icon: CreditCard },
-  { id: "cash",           label: "Cash",                description: "Physical cash and change",            icon: Banknote },
-  { id: "direct_deposit", label: "Direct Deposit",      description: "Bank transfer / direct deposit",      icon: Landmark },
-  { id: "split",          label: "Split Payment",        description: "Divide the total across methods",     icon: SplitSquareHorizontal },
-  { id: "other",          label: "Other",               description: "Vouchers, store credit, layby, etc",  icon: Receipt },
+  { id: "card",           label: "Credit / Debit Card", description: "EFTPOS and card payments",                icon: CreditCard },
+  { id: "cash",           label: "Cash",                description: "Physical cash and change",                icon: Banknote },
+  { id: "direct_deposit", label: "Direct Deposit",      description: "Bank transfer / direct deposit",          icon: Landmark },
+  { id: "voucher",        label: "Voucher",             description: "Gift vouchers and coupon codes",          icon: Ticket },
+  { id: "store_credit",   label: "Store Credit",        description: "Accumulated store credit balance",        icon: Wallet },
+  { id: "laybuy",         label: "Laybuy",              description: "Deferred payment / instalment plan",      icon: CalendarClock },
+  { id: "loyalty",        label: "Loyalty Dollars",     description: "Redeem earned loyalty rewards",           icon: Star },
+  { id: "split",          label: "Split Payment",        description: "Divide the total across methods",        icon: SplitSquareHorizontal },
 ] as const;
 
 export type PaymentMethodId = (typeof ALL_PAYMENT_METHODS)[number]["id"];

@@ -830,6 +830,57 @@ export default function POSPage() {
                 </div>
               )}
 
+              {/* Loyalty balance — loyalty method only */}
+              {payMethod === "loyalty" && (() => {
+                if (!selectedCustomer && !walkIn) {
+                  return (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 space-y-1">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Customer required</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">Select a customer to see their available loyalty balance.</p>
+                    </div>
+                  );
+                }
+                if (walkIn) {
+                  return (
+                    <div className="rounded-xl border border-muted bg-muted/30 px-4 py-3">
+                      <p className="text-xs text-muted-foreground">Walk-in customers cannot redeem loyalty rewards.</p>
+                    </div>
+                  );
+                }
+                const availablePts = selectedCustomer?.loyaltyPoints ?? 0;
+                const isCashType = loyaltySettings?.programType === "cashback" || loyaltySettings?.programType === "tiered" || loyaltySettings?.programType === "custom";
+                const availableDisplay = isCashType ? formatCurrency(availablePts) : `${availablePts} pts`;
+                const enteredLoyalty = parseFloat(numpadInput) || 0;
+                const isInsufficient = isCashType && enteredLoyalty > availablePts;
+                return (
+                  <div className="rounded-xl border bg-primary/5 border-primary/20 px-4 py-3 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Loyalty Balance</p>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-bold tabular-nums">{availableDisplay}</span>
+                      <span className="text-xs text-muted-foreground">available</span>
+                    </div>
+                    {enteredLoyalty > 0 && (
+                      <p className={`text-xs font-medium tabular-nums ${isInsufficient ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
+                        {isInsufficient
+                          ? `Insufficient — only ${availableDisplay} available`
+                          : `Redeeming ${isCashType ? formatCurrency(enteredLoyalty) : `${enteredLoyalty} pts`}`}
+                      </p>
+                    )}
+                    {enteredLoyalty === 0 && (
+                      <p className="text-xs text-muted-foreground">Use numpad to enter amount to redeem</p>
+                    )}
+                    {isCashType && availablePts > 0 && (
+                      <button
+                        onClick={() => setNumpadInput(Math.min(availablePts, total).toFixed(2))}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Use all available ({formatCurrency(Math.min(availablePts, total))})
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="flex-1" />
               <Button variant="outline" className="w-full" onClick={() => setPaymentModalOpen(false)}>
                 Cancel
@@ -898,7 +949,13 @@ export default function POSPage() {
                 className="w-full h-12 text-base font-semibold"
                 disabled={
                   createTransactionMutation.isPending ||
-                  (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009)
+                  (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
+                  (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
+                  (payMethod === "loyalty" && selectedCustomer != null && (() => {
+                    const isCashType = loyaltySettings?.programType === "cashback" || loyaltySettings?.programType === "tiered" || loyaltySettings?.programType === "custom";
+                    const enteredLoyalty = parseFloat(numpadInput) || 0;
+                    return isCashType && enteredLoyalty > 0 && enteredLoyalty > (selectedCustomer?.loyaltyPoints ?? 0);
+                  })())
                 }
                 onClick={() => {
                   const apiMethod: TransactionInputPaymentMethod =

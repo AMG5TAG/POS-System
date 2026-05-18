@@ -16,4 +16,7 @@ export const TransactionInputPaymentMethod = {
   voucher: 'voucher',
   other: 'other',
   direct_deposit: 'direct_deposit',
+  store_credit: 'store_credit',
+  laybuy: 'laybuy',
+  loyalty: 'loyalty',
 } as const;
