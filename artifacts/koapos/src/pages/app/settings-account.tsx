@@ -80,8 +80,10 @@ export default function SettingsAccountPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-8 max-w-2xl">
+      <div className="p-6 md:p-8 space-y-8">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Account</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* Login details */}
         <Card>
@@ -205,6 +207,8 @@ export default function SettingsAccountPage() {
             )}
           </CardContent>
         </Card>
+
+        </div>
       </div>
     </AppLayout>
   );
