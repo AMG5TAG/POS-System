@@ -14,6 +14,7 @@ import {
   useCreateCustomerFile,
   useDeleteCustomerFile,
   useRequestUploadUrl,
+  useGetLoyaltySettings,
   Customer,
   CustomerNote,
   CustomerFile,
@@ -169,15 +170,49 @@ function CustomerDetailInner({
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /* Loyalty adjustment state */
+  const [loyaltyMode, setLoyaltyMode] = useState<"add" | "deduct" | "set">("add");
+  const [loyaltyAmount, setLoyaltyAmount] = useState("");
+  const [localLoyaltyPts, setLocalLoyaltyPts] = useState(customer.loyaltyPoints ?? 0);
+
   const { data: history, isLoading: histLoading } = useGetCustomerHistory(customer.id);
   const { data: notes = [], isLoading: notesLoading } = useListCustomerNotes(customer.id);
   const { data: files = [], isLoading: filesLoading } = useListCustomerFiles(customer.id);
+  const { data: loyaltySettings } = useGetLoyaltySettings();
 
   const createNoteMutation = useCreateCustomerNote();
   const deleteNoteMutation = useDeleteCustomerNote();
   const createFileMutation = useCreateCustomerFile();
   const deleteFileMutation = useDeleteCustomerFile();
   const requestUploadMutation = useRequestUploadUrl();
+  const loyaltyUpdateMutation = useUpdateCustomer();
+
+  const isPointsProgram = loyaltySettings?.programType === "points";
+  const loyaltyLabel    = isPointsProgram ? "Loyalty Points" : "Loyalty Dollars";
+  const loyaltyIcon     = isPointsProgram ? "⭐" : "$";
+
+  const handleLoyaltySave = () => {
+    const n = parseFloat(loyaltyAmount);
+    if (isNaN(n) || n < 0) return;
+    const amount = Math.round(n);
+    let next: number;
+    if (loyaltyMode === "add")    next = localLoyaltyPts + amount;
+    else if (loyaltyMode === "deduct") next = Math.max(0, localLoyaltyPts - amount);
+    else next = amount;
+
+    loyaltyUpdateMutation.mutate(
+      { id: customer.id, data: { loyaltyPoints: next } },
+      {
+        onSuccess: () => {
+          toast.success(`${loyaltyLabel} updated`);
+          setLocalLoyaltyPts(next);
+          setLoyaltyAmount("");
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+        },
+        onError: () => toast.error("Failed to update loyalty balance"),
+      }
+    );
+  };
 
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
@@ -387,6 +422,76 @@ function CustomerDetailInner({
                 <p className="font-medium">{customer.agreedToMarketing === "true" ? "✓ Agreed" : "Not agreed"}</p>
               </div>
             </div>
+          </div>
+
+          {/* ── Loyalty balance ── */}
+          <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500" />
+                <p className="text-sm font-semibold">{loyaltyLabel}</p>
+              </div>
+              <span className="text-xl font-bold tabular-nums text-amber-600">
+                {isPointsProgram ? `${localLoyaltyPts} pts` : `$${localLoyaltyPts}`}
+              </span>
+            </div>
+
+            {/* Mode buttons */}
+            <div className="flex rounded-lg border overflow-hidden text-sm">
+              {(["add", "deduct", "set"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setLoyaltyMode(m)}
+                  className={cn(
+                    "flex-1 py-1.5 font-medium transition-colors capitalize",
+                    loyaltyMode === m
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {m === "set" ? "Set to" : m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Amount input + save */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                {!isPointsProgram && loyaltyMode !== "deduct" && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                )}
+                <Input
+                  type="number"
+                  min="0"
+                  step={isPointsProgram ? "1" : "1"}
+                  placeholder={loyaltyMode === "set" ? "New balance" : "Amount"}
+                  value={loyaltyAmount}
+                  onChange={(e) => setLoyaltyAmount(e.target.value)}
+                  className={!isPointsProgram && loyaltyMode !== "deduct" ? "pl-7" : ""}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleLoyaltySave(); }}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleLoyaltySave}
+                disabled={!loyaltyAmount || isNaN(parseFloat(loyaltyAmount)) || parseFloat(loyaltyAmount) < 0 || loyaltyUpdateMutation.isPending}
+                className="shrink-0"
+              >
+                {loyaltyUpdateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+              </Button>
+            </div>
+
+            {/* Preview */}
+            {loyaltyAmount && !isNaN(parseFloat(loyaltyAmount)) && (
+              <p className="text-xs text-muted-foreground">
+                {loyaltyMode === "add"
+                  ? `Balance will become ${isPointsProgram ? `${localLoyaltyPts + Math.round(parseFloat(loyaltyAmount))} pts` : `$${localLoyaltyPts + Math.round(parseFloat(loyaltyAmount))}`}`
+                  : loyaltyMode === "deduct"
+                  ? `Balance will become ${isPointsProgram ? `${Math.max(0, localLoyaltyPts - Math.round(parseFloat(loyaltyAmount)))} pts` : `$${Math.max(0, localLoyaltyPts - Math.round(parseFloat(loyaltyAmount)))}`}`
+                  : `Balance will be set to ${isPointsProgram ? `${Math.round(parseFloat(loyaltyAmount))} pts` : `$${Math.round(parseFloat(loyaltyAmount))}`}`
+                }
+              </p>
+            )}
           </div>
         </div>
       )}

@@ -689,7 +689,8 @@ export const UpdateCustomerBody = zod.object({
   "shippingCountry": zod.string().optional(),
   "customerGroup": zod.string().optional(),
   "warningNote": zod.string().optional(),
-  "agreedToMarketing": zod.string().optional()
+  "agreedToMarketing": zod.string().optional(),
+  "loyaltyPoints": zod.number().optional()
 })
 
 export const UpdateCustomerResponse = zod.object({

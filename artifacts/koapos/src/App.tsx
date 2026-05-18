@@ -237,8 +237,11 @@ function Router() {
       <Route path="/settings/pos">
         <ProtectedRoute component={SettingsPOSPage} />
       </Route>
-      <Route path="/settings/customers">
+      <Route path="/management/customers">
         <ProtectedRoute component={SettingsCustomersPage} />
+      </Route>
+      <Route path="/settings/customers">
+        <Redirect to="/management/customers" />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />

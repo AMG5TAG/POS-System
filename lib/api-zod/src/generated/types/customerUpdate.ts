@@ -31,4 +31,5 @@ export interface CustomerUpdate {
   customerGroup?: string;
   warningNote?: string;
   agreedToMarketing?: string;
+  loyaltyPoints?: number;
 }

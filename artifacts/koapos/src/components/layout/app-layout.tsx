@@ -50,9 +50,6 @@ const INVENTORY_SUBNAV = [
   { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
 ];
 
-const SETTINGS_SUBNAV = [
-  { name: "Customers", href: "/settings/customers", icon: Users },
-];
 
 type NavLeaf  = { name: string; href: string;  icon: React.ComponentType<{ className?: string }> };
 type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }> };
@@ -73,6 +70,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
+  { name: "Customers",         href: "/management/customers",       icon: Users          },
   { name: "Layby",             href: "/management/layby",           icon: Package2       },
   { name: "Inventory",         href: "/management/inventory",       icon: Boxes          },
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
@@ -106,17 +104,17 @@ const SEARCH_INDEX = [
   { label: "Staff · Rostering",     href: "/staff/rostering",        icon: CalendarClock, group: "Management"  },
   { label: "Staff · Leave Requests",href: "/staff/leave-requests",   icon: ClipboardList, group: "Management"  },
   { label: "Staff · Cost Summary",  href: "/staff/cost-summary",     icon: Coins,         group: "Management"  },
-  { label: "Loyalty",          href: "/management/loyalty",          icon: Gift,            group: "Management" },
-  { label: "Layby",            href: "/management/layby",            icon: Package2,        group: "Management" },
-  { label: "Modules",          href: "/modules",                     icon: Blocks,          group: "Management" },
-  { label: "Integrations",     href: "/management/integrations",     icon: Receipt,         group: "Management" },
-  { label: "Sales Overview",   href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
-  { label: "POS Registers",         href: "/management/registers",   icon: Monitor,    group: "Management" },
-  { label: "Business Details",      href: "/management/business",    icon: Building2,  group: "Management" },
-  { label: "Regional Settings",     href: "/management/regional",    icon: Globe,      group: "Management" },
-  { label: "Account",               href: "/management/account",     icon: UserCircle, group: "Management" },
-  { label: "Inventory Settings",   href: "/management/inventory",   icon: Boxes,      group: "Management" },
-  { label: "Settings · Customers",  href: "/settings/customers",     icon: Users,      group: "Settings"   },
+  { label: "Loyalty",              href: "/management/loyalty",      icon: Gift,            group: "Management" },
+  { label: "Customers",            href: "/management/customers",    icon: Users,           group: "Management" },
+  { label: "Layby",                href: "/management/layby",        icon: Package2,        group: "Management" },
+  { label: "Modules",              href: "/modules",                 icon: Blocks,          group: "Management" },
+  { label: "Integrations",         href: "/management/integrations", icon: Receipt,         group: "Management" },
+  { label: "Sales Overview",       href: "/management/sales-overview", icon: TrendingUp,    group: "Management" },
+  { label: "POS Registers",        href: "/management/registers",    icon: Monitor,         group: "Management" },
+  { label: "Business Details",     href: "/management/business",     icon: Building2,       group: "Management" },
+  { label: "Regional Settings",    href: "/management/regional",     icon: Globe,           group: "Management" },
+  { label: "Account",              href: "/management/account",      icon: UserCircle,      group: "Management" },
+  { label: "Inventory Settings",   href: "/management/inventory",    icon: Boxes,           group: "Management" },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -156,7 +154,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/cost-summary":          ["Staff", "Cost Summary"],
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
-  "/settings/customers":          ["Settings", "Customers"],
+  "/management/customers":        ["Management", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],
   "/management/business":         ["Management", "Business Details"],
   "/management/regional":         ["Management", "Regional Settings"],
@@ -393,14 +391,12 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     location.startsWith("/management/") ||
     location === "/staff" ||
     location.startsWith("/staff/") ||
-    location === "/modules";
-  const isSettingsSection   = location === "/settings" || location.startsWith("/settings/");
-
-  const [posOpen,      setPosOpen]     = useState(isPOSSection);
-  const [invOpen,      setInvOpen]     = useState(isInventorySection);
-  const [mgmtOpen,     setMgmtOpen]    = useState(isManagementSection);
-  const [settingsOpen, setSettingsOpen] = useState(isSettingsSection);
-  const [searchOpen,   setSearchOpen]  = useState(false);
+    location === "/modules" ||
+    location.startsWith("/settings/");
+  const [posOpen,    setPosOpen]  = useState(isPOSSection);
+  const [invOpen,    setInvOpen]  = useState(isInventorySection);
+  const [mgmtOpen,   setMgmtOpen] = useState(isManagementSection);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const canManage = !!user;
 
@@ -500,7 +496,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               <CollapsibleSection
                 label="POS" icon={ShoppingCart}
                 isActive={isPOSSection} isOpen={posOpen}
-                onToggle={() => { setPosOpen((o) => !o); setInvOpen(false); setMgmtOpen(false); setSettingsOpen(false); }}
+                onToggle={() => { setPosOpen((o) => !o); setInvOpen(false); setMgmtOpen(false); }}
                 items={POS_SUBNAV}
               />
               <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
@@ -508,7 +504,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               <CollapsibleSection
                 label="Inventory" icon={Boxes}
                 isActive={isInventorySection} isOpen={invOpen}
-                onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); setSettingsOpen(false); }}
+                onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
                 items={INVENTORY_SUBNAV}
                 defaultHref="/products/overview"
               />
@@ -517,17 +513,11 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
                 <CollapsibleSection
                   label="Management" icon={BriefcaseBusiness}
                   isActive={isManagementSection} isOpen={mgmtOpen}
-                  onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setSettingsOpen(false); }}
+                  onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); }}
                   items={MANAGEMENT_SUBNAV} accent
                   defaultHref="/management/sales-overview"
                 />
               )}
-              <CollapsibleSection
-                label="Settings" icon={Settings}
-                isActive={isSettingsSection} isOpen={settingsOpen}
-                onToggle={() => { setSettingsOpen((o) => !o); setPosOpen(false); setInvOpen(false); setMgmtOpen(false); }}
-                items={SETTINGS_SUBNAV}
-              />
             </SidebarMenu>
           </SidebarContent>
 

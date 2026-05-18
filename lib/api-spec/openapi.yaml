@@ -1905,6 +1905,8 @@ components:
           type: string
         agreedToMarketing:
           type: string
+        loyaltyPoints:
+          type: integer
 
     CustomerList:
       type: object
