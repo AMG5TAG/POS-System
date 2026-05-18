@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
-  Copy, ChevronDown, ChevronRight, User, ShoppingCart,
-  Percent, Eye, EyeOff,
+  Copy, User, ShoppingCart, Percent, Eye, EyeOff,
+  Settings2,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -25,117 +28,232 @@ interface TemplateOption {
   description: string;
 }
 
+/* ─── Per-template options ─────────────────────────────────────────────────── */
+
+interface TplOpts {
+  // Text fields
+  headerText:      string;
+  footerText:      string;
+  thankYouMsg:     string;
+  customGreeting:  string;
+  customSignOff:   string;
+  paymentTerms:    string;
+  invoiceNotes:    string;
+  customMessage:   string;
+  subjectLine:     string;
+  messageText:     string;
+  // Toggles
+  showLogo:             boolean;
+  showAbn:              boolean;
+  showWebsite:          boolean;
+  showTagline:          boolean;
+  showPaymentMethods:   boolean;
+  showGstBreakdown:     boolean;
+  showSocialLinks:      boolean;
+  sendAfterSale:        boolean;
+  sendForLayby:         boolean;
+  printCustomerCopy:    boolean;
+  showBarcode:          boolean;
+}
+
+const DEFAULT_OPTS: TplOpts = {
+  headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
+  customGreeting: "Hi {{customer.first_name}},", customSignOff: "— The team at {{business.name}}",
+  paymentTerms: "Payment due within 30 days.", invoiceNotes: "",
+  customMessage: "", subjectLine: "Your receipt from {{business.name}} — {{transaction.number}}",
+  messageText: "Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Total: {{transaction.total}} on {{transaction.date}}. {{business.website}}",
+  showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
+  showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false,
+  sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
+};
+
+function useTplOpts(templateId: string) {
+  const key = `koapos_tpl_opts_${templateId}`;
+  const [opts, setOpts] = useState<TplOpts>(() => {
+    try {
+      const s = localStorage.getItem(key);
+      if (s) return { ...DEFAULT_OPTS, ...JSON.parse(s) as Partial<TplOpts> };
+    } catch {}
+    return { ...DEFAULT_OPTS };
+  });
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(key);
+      setOpts(s ? { ...DEFAULT_OPTS, ...JSON.parse(s) as Partial<TplOpts> } : { ...DEFAULT_OPTS });
+    } catch {
+      setOpts({ ...DEFAULT_OPTS });
+    }
+  }, [templateId, key]);
+
+  const update = useCallback(<K extends keyof TplOpts>(k: K, v: TplOpts[K]) => {
+    setOpts((prev) => {
+      const next = { ...prev, [k]: v };
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [key]);
+
+  const reset = useCallback(() => {
+    try { localStorage.removeItem(key); } catch {}
+    setOpts({ ...DEFAULT_OPTS });
+  }, [key]);
+
+  return { opts, update, reset };
+}
+
+/* ─── Options config per category ─────────────────────────────────────────── */
+
+interface FieldDef {
+  key: keyof TplOpts;
+  label: string;
+  type: "text" | "textarea" | "toggle";
+  placeholder?: string;
+  hint?: string;
+  quickCodes?: boolean;
+  section?: string;
+}
+
+function getOptionsConfig(category: Category): FieldDef[] {
+  switch (category) {
+    case "receipts": return [
+      { section: "Header", key: "showLogo",          label: "Show Logo",           type: "toggle" },
+      { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
+      { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
+      { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. Welcome to {{business.name}}", quickCodes: true },
+      { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
+      { section: "Body",   key: "showPaymentMethods", label: "Show Payment Method", type: "toggle" },
+      { section: "Body",   key: "showBarcode",        label: "Show Barcode",        type: "toggle" },
+      { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
+      { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Returns within 30 days", quickCodes: true },
+      { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
+      { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
+    ];
+    case "invoices": return [
+      { section: "Header", key: "showLogo",           label: "Show Logo",           type: "toggle" },
+      { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
+      { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
+      { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
+      { section: "Body",   key: "showPaymentMethods", label: "Show Payment Methods",type: "toggle" },
+      { section: "Terms",  key: "paymentTerms",       label: "Payment Terms",       type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
+      { section: "Terms",  key: "invoiceNotes",       label: "Invoice Notes",       type: "textarea", placeholder: "e.g. Bank: ANZ · BSB: 012-345 · Account: 123456789", quickCodes: true },
+      { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
+    ];
+    case "a4receipts": return [
+      { section: "Header", key: "showLogo",           label: "Show Logo",           type: "toggle" },
+      { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
+      { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
+      { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
+      { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
+      { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Footer", key: "customMessage",      label: "Custom Message",      type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
+      { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Visit us again at {{business.website}}", quickCodes: true },
+      { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
+      { section: "Footer", key: "showSocialLinks",    label: "Show Social Links",   type: "toggle" },
+    ];
+    case "emails": return [
+      { section: "Subject", key: "subjectLine",       label: "Subject Line",        type: "text",     placeholder: "Your receipt from {{business.name}}", quickCodes: true },
+      { section: "Header",  key: "showLogo",          label: "Show Logo",           type: "toggle" },
+      { section: "Header",  key: "showAbn",           label: "Show ABN",            type: "toggle" },
+      { section: "Body",    key: "customGreeting",    label: "Opening Greeting",    type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
+      { section: "Body",    key: "customMessage",     label: "Custom Message Body", type: "textarea", placeholder: "e.g. Thank you for shopping with us…", quickCodes: true },
+      { section: "Body",    key: "showGstBreakdown",  label: "Show GST Breakdown",  type: "toggle" },
+      { section: "Footer",  key: "customSignOff",     label: "Sign-off Text",       type: "text",     placeholder: "— The team at {{business.name}}", quickCodes: true },
+      { section: "Footer",  key: "footerText",        label: "Footer Text",         type: "text",     placeholder: "e.g. Questions? Email {{business.email}}", quickCodes: true },
+      { section: "Footer",  key: "showWebsite",       label: "Show Website",        type: "toggle" },
+      { section: "Footer",  key: "showSocialLinks",   label: "Show Social Links",   type: "toggle" },
+    ];
+    case "sms": return [
+      { section: "Message", key: "messageText",       label: "Message Text",        type: "textarea", placeholder: "Hi {{customer.first_name}}! Thanks for visiting…", quickCodes: true },
+      { section: "Send",    key: "sendAfterSale",     label: "Send After Each Sale",type: "toggle" },
+      { section: "Send",    key: "sendForLayby",      label: "Send for Layby Payments", type: "toggle" },
+    ];
+    default: return [];
+  }
+}
+
 /* ─── Quick Codes ─────────────────────────────────────────────────────────── */
 
-interface QuickCode {
-  code: string;
-  label: string;
-  example: string;
-}
+interface QuickCode   { code: string; label: string; example: string }
+interface QuickCodeGroup { id: string; label: string; icon: React.ElementType; color: string; chipBg: string; codes: QuickCode[] }
 
-interface QuickCodeGroup {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-  codes: QuickCode[];
-}
-
-function buildQuickCodeGroups(
-  businessName: string,
-  abn: string,
-  email: string,
-  website: string,
-  tagline: string,
-  address: string,
-): QuickCodeGroup[] {
+function buildQuickCodeGroups(businessName: string, abn: string, email: string, website: string, tagline: string, address: string): QuickCodeGroup[] {
   return [
     {
-      id: "business",
-      label: "Business Details",
-      icon: Building2,
-      color: "text-blue-600",
-      bg: "bg-blue-50 border-blue-200 hover:bg-blue-100",
+      id: "business", label: "Business Details", icon: Building2,
+      color: "text-blue-700", chipBg: "bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700",
       codes: [
-        { code: "{{business.name}}",    label: "Business Name",  example: businessName || "Your Business"         },
-        { code: "{{business.abn}}",     label: "ABN",            example: abn || "12 345 678 901"                 },
-        { code: "{{business.email}}",   label: "Email",          example: email || "hello@yourbusiness.com.au"    },
-        { code: "{{business.phone}}",   label: "Phone",          example: "(03) 9000 0000"                        },
-        { code: "{{business.website}}", label: "Website",        example: website || "www.yourbusiness.com.au"    },
-        { code: "{{business.tagline}}", label: "Tagline",        example: tagline || "Quality you can trust"      },
-        { code: "{{business.address}}", label: "Address",        example: address || "Melbourne VIC 3000"         },
+        { code: "{{business.name}}",    label: "Business Name", example: businessName || "Your Business"      },
+        { code: "{{business.abn}}",     label: "ABN",           example: abn          || "12 345 678 901"     },
+        { code: "{{business.email}}",   label: "Email",         example: email        || "hello@biz.com.au"   },
+        { code: "{{business.phone}}",   label: "Phone",         example: "(03) 9000 0000"                     },
+        { code: "{{business.website}}", label: "Website",       example: website      || "www.yourbiz.com.au" },
+        { code: "{{business.tagline}}", label: "Tagline",       example: tagline      || "Quality you trust"  },
+        { code: "{{business.address}}", label: "Address",       example: address      || "Melbourne VIC 3000" },
       ],
     },
     {
-      id: "customer",
-      label: "Customer",
-      icon: User,
-      color: "text-violet-600",
-      bg: "bg-violet-50 border-violet-200 hover:bg-violet-100",
+      id: "customer", label: "Customer", icon: User,
+      color: "text-violet-700", chipBg: "bg-violet-50 border-violet-200 hover:bg-violet-100 text-violet-700",
       codes: [
-        { code: "{{customer.name}}",           label: "Full Name",       example: "Sarah Johnson"  },
-        { code: "{{customer.first_name}}",     label: "First Name",      example: "Sarah"          },
-        { code: "{{customer.email}}",          label: "Email",           example: "sarah@email.com"},
-        { code: "{{customer.phone}}",          label: "Phone",           example: "(03) 9000 1111" },
-        { code: "{{customer.loyalty_points}}", label: "Loyalty Points",  example: "420 pts"        },
-        { code: "{{customer.loyalty_tier}}",   label: "Loyalty Tier",    example: "Gold Member"    },
-        { code: "{{customer.id}}",             label: "Customer ID",     example: "#CUS-0042"      },
-        { code: "{{customer.total_spent}}",    label: "Total Spent",     example: "$1,240.00"      },
+        { code: "{{customer.name}}",           label: "Full Name",      example: "Sarah Johnson"   },
+        { code: "{{customer.first_name}}",     label: "First Name",     example: "Sarah"           },
+        { code: "{{customer.email}}",          label: "Email",          example: "sarah@email.com" },
+        { code: "{{customer.phone}}",          label: "Phone",          example: "(03) 9000 1111"  },
+        { code: "{{customer.loyalty_points}}", label: "Loyalty Points", example: "420 pts"         },
+        { code: "{{customer.loyalty_tier}}",   label: "Loyalty Tier",   example: "Gold Member"     },
+        { code: "{{customer.id}}",             label: "Customer ID",    example: "#CUS-0042"       },
+        { code: "{{customer.total_spent}}",    label: "Total Spent",    example: "$1,240.00"       },
       ],
     },
     {
-      id: "transaction",
-      label: "Transaction",
-      icon: ShoppingCart,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
+      id: "transaction", label: "Transaction", icon: ShoppingCart,
+      color: "text-emerald-700", chipBg: "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700",
       codes: [
-        { code: "{{transaction.number}}",         label: "Receipt #",       example: "#TXN-1042"   },
-        { code: "{{transaction.date}}",           label: "Date",            example: "18/05/2026"  },
-        { code: "{{transaction.time}}",           label: "Time",            example: "10:42 AM"    },
-        { code: "{{transaction.total}}",          label: "Total",           example: "$19.50"      },
-        { code: "{{transaction.gst}}",            label: "GST Amount",      example: "$1.77"       },
-        { code: "{{transaction.subtotal}}",       label: "Subtotal",        example: "$17.73"      },
-        { code: "{{transaction.items}}",          label: "Item Count",      example: "3 items"     },
-        { code: "{{transaction.payment_method}}", label: "Payment Method",  example: "EFTPOS"      },
-        { code: "{{transaction.change}}",         label: "Change Given",    example: "$0.50"       },
+        { code: "{{transaction.number}}",         label: "Receipt #",      example: "#TXN-1042"   },
+        { code: "{{transaction.date}}",           label: "Date",           example: "18/05/2026"  },
+        { code: "{{transaction.time}}",           label: "Time",           example: "10:42 AM"    },
+        { code: "{{transaction.total}}",          label: "Total",          example: "$19.50"      },
+        { code: "{{transaction.gst}}",            label: "GST Amount",     example: "$1.77"       },
+        { code: "{{transaction.subtotal}}",       label: "Subtotal",       example: "$17.73"      },
+        { code: "{{transaction.items}}",          label: "Item Count",     example: "3 items"     },
+        { code: "{{transaction.payment_method}}", label: "Payment Method", example: "EFTPOS"      },
+        { code: "{{transaction.change}}",         label: "Change Given",   example: "$0.50"       },
       ],
     },
     {
-      id: "promo",
-      label: "Promo / Discount",
-      icon: Percent,
-      color: "text-amber-600",
-      bg: "bg-amber-50 border-amber-200 hover:bg-amber-100",
+      id: "promo", label: "Promo / Discount", icon: Percent,
+      color: "text-amber-700", chipBg: "bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-700",
       codes: [
-        { code: "{{promo.code}}",        label: "Promo Code",    example: "SAVE10"          },
-        { code: "{{promo.discount}}",    label: "Discount",      example: "10% off"         },
-        { code: "{{promo.expiry}}",      label: "Expiry Date",   example: "30/06/2026"      },
-        { code: "{{promo.min_spend}}",   label: "Min. Spend",    example: "$50.00"          },
-        { code: "{{promo.description}}", label: "Description",   example: "Summer Sale 🎉"  },
-        { code: "{{promo.savings}}",     label: "Amount Saved",  example: "$5.00"           },
+        { code: "{{promo.code}}",        label: "Promo Code",   example: "SAVE10"         },
+        { code: "{{promo.discount}}",    label: "Discount",     example: "10% off"        },
+        { code: "{{promo.expiry}}",      label: "Expiry Date",  example: "30/06/2026"     },
+        { code: "{{promo.min_spend}}",   label: "Min. Spend",   example: "$50.00"         },
+        { code: "{{promo.description}}", label: "Description",  example: "Summer Sale 🎉" },
+        { code: "{{promo.savings}}",     label: "Amount Saved", example: "$5.00"          },
       ],
     },
   ];
 }
 
-/* ─── Quick Codes Panel ───────────────────────────────────────────────────── */
+/* ─── Full-width Quick Codes bar ──────────────────────────────────────────── */
 
-function QuickCodesPanel({
+function QuickCodesBar({
   groups,
+  focusedField,
   onInsert,
 }: {
   groups: QuickCodeGroup[];
-  onInsert?: (code: string) => void;
+  focusedField: string | null;
+  onInsert: (fieldKey: string, code: string) => void;
 }) {
-  const [openGroup, setOpenGroup] = useState<string | null>("business");
   const [copied, setCopied] = useState<string | null>(null);
   const [showValues, setShowValues] = useState(false);
 
   const handleCode = (code: string) => {
-    if (onInsert) {
-      onInsert(code);
+    if (focusedField) {
+      onInsert(focusedField, code);
     } else {
       navigator.clipboard.writeText(code).catch(() => {});
     }
@@ -145,94 +263,64 @@ function QuickCodesPanel({
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
-      {/* Panel header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
+      <div className="flex items-center justify-between px-5 py-2.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Copy className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-sm font-semibold">Quick Codes</span>
           <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Merge Tags</Badge>
+          {focusedField && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-green-600 border-green-300 bg-green-50">
+              Inserting into: {focusedField}
+            </Badge>
+          )}
         </div>
-        <button
-          onClick={() => setShowValues(!showValues)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {showValues ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-          {showValues ? "Hide values" : "Show values"}
-        </button>
+        <div className="flex items-center gap-4">
+          <p className="text-[11px] text-muted-foreground hidden sm:block">
+            {focusedField ? "Click a code to insert at cursor" : "Click any code to copy · Focus a text field to insert directly"}
+          </p>
+          <button
+            onClick={() => setShowValues(!showValues)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showValues ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            {showValues ? "Show codes" : "Show values"}
+          </button>
+        </div>
       </div>
 
-      {/* Helper text */}
-      <div className="px-4 py-2 bg-muted/20 border-b">
-        <p className="text-[11px] text-muted-foreground">
-          {onInsert
-            ? "Click any code to insert it at your cursor position."
-            : "Click any code to copy it. Paste into your template text where you want it to appear."}
-        </p>
-      </div>
-
-      {/* Groups */}
-      <div className="divide-y">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0">
         {groups.map((group) => {
           const Icon = group.icon;
-          const open = openGroup === group.id;
           return (
-            <div key={group.id}>
-              <button
-                onClick={() => setOpenGroup(open ? null : group.id)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted/30 transition-colors"
-              >
-                <Icon className={cn("w-3.5 h-3.5", group.color)} />
-                <span className="flex-1 text-left font-medium">{group.label}</span>
-                <Badge variant="outline" className="text-[10px] h-4 px-1.5">{group.codes.length}</Badge>
-                {open ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
-              </button>
-
-              {open && (
-                <div className="px-3 pb-3 pt-1">
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.codes.map((c) => {
-                      const isCopied = copied === c.code;
-                      return (
-                        <button
-                          key={c.code}
-                          onClick={() => handleCode(c.code)}
-                          title={`${c.label}\nExample: ${c.example}`}
-                          className={cn(
-                            "inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border font-mono transition-all",
-                            isCopied
-                              ? "bg-green-100 border-green-400 text-green-700 scale-95"
-                              : cn(group.bg, group.color)
-                          )}
-                        >
-                          {isCopied ? (
-                            <><Check className="w-2.5 h-2.5" />{onInsert ? "Inserted!" : "Copied!"}</>
-                          ) : (
-                            <>
-                              <Copy className="w-2.5 h-2.5 opacity-60" />
-                              {showValues ? (
-                                <span className="font-sans text-[10px] opacity-80">{c.example}</span>
-                              ) : (
-                                c.code
-                              )}
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {showValues && (
-                    <div className="mt-2 space-y-0.5">
-                      {group.codes.map((c) => (
-                        <div key={c.code} className="flex items-center gap-2 text-[10px]">
-                          <code className={cn("font-mono px-1 py-0.5 rounded text-[10px]", group.bg, group.color)}>{c.code}</code>
-                          <span className="text-muted-foreground">→</span>
-                          <span className="text-foreground font-medium">{c.example}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div key={group.id} className="p-4">
+              <div className={cn("flex items-center gap-1.5 mb-3", group.color)}>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="text-xs font-semibold">{group.label}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.codes.map((c) => {
+                  const isCopied = copied === c.code;
+                  return (
+                    <button
+                      key={c.code}
+                      onClick={() => handleCode(c.code)}
+                      title={`${c.label} · Example: ${c.example}`}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border font-mono transition-all select-none",
+                        isCopied ? "bg-green-100 border-green-400 text-green-700 scale-95" : group.chipBg
+                      )}
+                    >
+                      {isCopied ? (
+                        <><Check className="w-2.5 h-2.5" />{focusedField ? "Inserted!" : "Copied!"}</>
+                      ) : showValues ? (
+                        <span className="font-sans">{c.example}</span>
+                      ) : (
+                        c.code
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -241,112 +329,129 @@ function QuickCodesPanel({
   );
 }
 
-/* ─── SMS / Email message editor with Quick Code insertion ─────────────────── */
+/* ─── Template Options Panel ─────────────────────────────────────────────── */
 
-const DEFAULT_SMS_MESSAGES: Record<string, string> = {
-  "s-receipt": `Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Your receipt: {{transaction.total}} on {{transaction.date}}. See you next time! {{business.website}}`,
-  "s-appt":    `Reminder: You have an appointment at {{business.name}} on {{transaction.date}} at {{transaction.time}}. Reply CANCEL to cancel. Questions? Call {{business.phone}}.`,
-  "s-layby":   `Hi {{customer.first_name}}, your layby at {{business.name}} has a payment due by {{transaction.date}}. Balance remaining: {{transaction.total}}. Pop in or call {{business.phone}} to pay. Thanks!`,
-};
-
-const DEFAULT_EMAIL_SUBJECTS: Record<string, string> = {
-  "e-pro":    `Your receipt from {{business.name}} — {{transaction.number}}`,
-  "e-casual": `Thanks for visiting {{business.name}}! 🎉`,
-  "e-minimal":`Receipt {{transaction.number}} from {{business.name}}`,
-};
-
-function MessageEditor({
-  templateId,
+function OptionsPanel({
   category,
-  quickCodeGroups,
+  templateId,
+  opts,
+  update,
+  reset,
+  onFieldFocus,
+  onFieldInsert,
 }: {
-  templateId: string;
   category: Category;
-  quickCodeGroups: QuickCodeGroup[];
+  templateId: string;
+  opts: TplOpts;
+  update: <K extends keyof TplOpts>(k: K, v: TplOpts[K]) => void;
+  reset: () => void;
+  onFieldFocus: (key: string | null) => void;
+  onFieldInsert: (key: string, insert: (code: string) => void) => void;
 }) {
-  const storageKey = `koapos_tpl_msg_${templateId}`;
-  const [text, setText] = useState(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) return stored;
-    } catch {}
-    if (category === "sms") return DEFAULT_SMS_MESSAGES[templateId] ?? DEFAULT_SMS_MESSAGES["s-receipt"];
-    if (category === "emails") return DEFAULT_EMAIL_SUBJECTS[templateId] ?? DEFAULT_EMAIL_SUBJECTS["e-pro"];
-    return "";
-  });
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fields = getOptionsConfig(category);
+  const sections = [...new Set(fields.map((f) => f.section ?? "General"))];
 
-  useEffect(() => {
-    try { localStorage.setItem(storageKey, text); } catch {}
-  }, [text, storageKey]);
+  // Refs for all text/textarea fields for insert-at-cursor
+  const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
 
-  // When template changes, load the stored (or default) text
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) { setText(stored); return; }
-    } catch {}
-    if (category === "sms") setText(DEFAULT_SMS_MESSAGES[templateId] ?? "");
-    else if (category === "emails") setText(DEFAULT_EMAIL_SUBJECTS[templateId] ?? "");
-  }, [templateId, category, storageKey]);
-
-  const insertAtCursor = useCallback((code: string) => {
-    const el = textareaRef.current;
-    if (!el) {
-      setText((prev) => prev + code);
-      return;
-    }
-    const start = el.selectionStart ?? text.length;
-    const end = el.selectionEnd ?? text.length;
-    const next = text.slice(0, start) + code + text.slice(end);
-    setText(next);
-    // Restore cursor after the inserted code
+  const registerInsert = (key: string) => (code: string) => {
+    const el = inputRefs.current[key];
+    if (!el) return;
+    const val = opts[key as keyof TplOpts] as string ?? "";
+    const start = el.selectionStart ?? val.length;
+    const end = el.selectionEnd ?? val.length;
+    const next = val.slice(0, start) + code + val.slice(end);
+    update(key as keyof TplOpts, next as TplOpts[keyof TplOpts]);
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(start + code.length, start + code.length);
     });
-  }, [text]);
-
-  const label = category === "sms" ? "Message Text" : "Subject Line";
-  const placeholder = category === "sms"
-    ? "Type your SMS message here… use codes from Quick Codes below to personalise it."
-    : "Email subject line — use codes to personalise.";
+  };
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between">
+    <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30 shrink-0">
         <div className="flex items-center gap-2">
-          {category === "sms" ? <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> : <Mail className="w-3.5 h-3.5 text-muted-foreground" />}
-          <span className="text-sm font-semibold">Customise {label}</span>
+          <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-sm font-semibold">Options</span>
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5">{category}</Badge>
         </div>
-        <button
-          onClick={() => {
-            const def = category === "sms"
-              ? (DEFAULT_SMS_MESSAGES[templateId] ?? "")
-              : (DEFAULT_EMAIL_SUBJECTS[templateId] ?? "");
-            setText(def);
-          }}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Reset to default
-        </button>
+        <button onClick={reset} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Reset</button>
       </div>
-      <div className="p-3 space-y-2">
-        <Textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={placeholder}
-          className="font-mono text-xs min-h-[80px] resize-y"
-        />
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>{text.length} characters{category === "sms" && text.length > 160 ? ` · ${Math.ceil(text.length / 160)} SMS parts` : ""}</span>
-          <span>Click a Quick Code below to insert at cursor</span>
-        </div>
-      </div>
-      {/* Inline Quick Codes for insert-at-cursor */}
-      <div className="border-t">
-        <QuickCodesPanel groups={quickCodeGroups} onInsert={insertAtCursor} />
+
+      <div className="overflow-y-auto flex-1 divide-y">
+        {sections.map((section) => {
+          const sectionFields = fields.filter((f) => (f.section ?? "General") === section);
+          const toggles = sectionFields.filter((f) => f.type === "toggle");
+          const texts   = sectionFields.filter((f) => f.type !== "toggle");
+
+          return (
+            <div key={section} className="p-4 space-y-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{section}</p>
+
+              {/* Toggles in a compact grid */}
+              {toggles.length > 0 && (
+                <div className="space-y-2">
+                  {toggles.map((f) => (
+                    <div key={f.key} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <Label className="text-xs cursor-pointer leading-tight">{f.label}</Label>
+                        {f.hint && <p className="text-[10px] text-muted-foreground mt-0.5">{f.hint}</p>}
+                      </div>
+                      <Switch
+                        checked={!!opts[f.key]}
+                        onCheckedChange={(v) => update(f.key, v as TplOpts[typeof f.key])}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Text/textarea fields */}
+              {texts.map((f) => {
+                const val = (opts[f.key] as string) ?? "";
+                return (
+                  <div key={f.key} className="space-y-1.5">
+                    <Label className="text-xs">{f.label}</Label>
+                    {f.type === "textarea" ? (
+                      <Textarea
+                        ref={(el) => { inputRefs.current[f.key] = el; }}
+                        value={val}
+                        onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
+                        onFocus={() => {
+                          onFieldFocus(f.label);
+                          onFieldInsert(f.key, registerInsert(f.key));
+                        }}
+                        onBlur={() => onFieldFocus(null)}
+                        placeholder={f.placeholder}
+                        className="text-xs min-h-[64px] resize-y font-mono"
+                        rows={3}
+                      />
+                    ) : (
+                      <Input
+                        ref={(el) => { inputRefs.current[f.key] = el; }}
+                        value={val}
+                        onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
+                        onFocus={() => {
+                          onFieldFocus(f.label);
+                          onFieldInsert(f.key, registerInsert(f.key));
+                        }}
+                        onBlur={() => onFieldFocus(null)}
+                        placeholder={f.placeholder}
+                        className="text-xs h-8 font-mono"
+                      />
+                    )}
+                    {f.key === "messageText" && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {val.length} chars{val.length > 160 ? ` · ${Math.ceil(val.length / 160)} SMS parts` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -355,45 +460,42 @@ function MessageEditor({
 /* ─── Template catalogue ─────────────────────────────────────────────────── */
 
 const TEMPLATES: Record<Category, TemplateOption[]> = {
-  receipts: [
-    { id: "r-pro",     name: "Professional",  style: "professional", description: "Clean logo header, bold totals, structured layout" },
-    { id: "r-casual",  name: "Casual",        style: "casual",       description: "Friendly tone, rounded feel, softer typography" },
-    { id: "r-minimal", name: "Minimal",       style: "minimal",      description: "Text-only, ultra-compact, fast printing" },
+  receipts:   [
+    { id: "r-pro",     name: "Professional", style: "professional", description: "Clean logo header, bold totals, structured layout"  },
+    { id: "r-casual",  name: "Casual",       style: "casual",       description: "Friendly tone, rounded feel, softer typography"     },
+    { id: "r-minimal", name: "Minimal",      style: "minimal",      description: "Text-only, ultra-compact, fast printing"            },
   ],
-  invoices: [
-    { id: "i-pro",     name: "Professional",  style: "professional", description: "Logo, payment terms, itemised table" },
-    { id: "i-modern",  name: "Modern",        style: "bold",         description: "Bold colour header, two-column layout" },
-    { id: "i-minimal", name: "Minimal",       style: "minimal",      description: "No frills, plain A4 business invoice" },
+  invoices:   [
+    { id: "i-pro",     name: "Professional", style: "professional", description: "Logo, payment terms, itemised table"                },
+    { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"              },
+    { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"              },
   ],
   a4receipts: [
-    { id: "a4-pro",    name: "Professional",  style: "professional", description: "Full-page receipt with logo and business details" },
-    { id: "a4-casual", name: "Casual",        style: "casual",       description: "Friendly A4 with thank you message and socials" },
+    { id: "a4-pro",    name: "Professional", style: "professional", description: "Full-page receipt with logo and business details"   },
+    { id: "a4-casual", name: "Casual",       style: "casual",       description: "Friendly A4 with thank you message and socials"    },
   ],
-  emails: [
-    { id: "e-pro",     name: "Professional",  style: "professional", description: "HTML email with header banner, itemised receipt" },
-    { id: "e-casual",  name: "Casual",        style: "casual",       description: "Warm tone, logo, product summary, return policy" },
-    { id: "e-minimal", name: "Minimal",       style: "minimal",      description: "Plain-text style, fast loading, high deliverability" },
+  emails:     [
+    { id: "e-pro",     name: "Professional", style: "professional", description: "HTML email with header banner, itemised receipt"    },
+    { id: "e-casual",  name: "Casual",       style: "casual",       description: "Warm tone, logo, product summary, return policy"   },
+    { id: "e-minimal", name: "Minimal",      style: "minimal",      description: "Plain-text style, fast loading, high deliverability"},
   ],
-  sms: [
-    { id: "s-receipt", name: "Sale Receipt",         style: "minimal",      description: "Short confirmation with total and thank you" },
-    { id: "s-appt",    name: "Appointment Reminder", style: "professional", description: "Date, time, business name, cancel link" },
-    { id: "s-layby",   name: "Layby Reminder",       style: "casual",       description: "Payment due reminder with balance owed" },
+  sms:        [
+    { id: "s-receipt", name: "Sale Receipt",         style: "minimal",      description: "Short confirmation with total and thank you"    },
+    { id: "s-appt",    name: "Appointment Reminder", style: "professional", description: "Date, time, business name, cancel link"         },
+    { id: "s-layby",   name: "Layby Reminder",       style: "casual",       description: "Payment due reminder with balance owed"         },
   ],
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
-  receipts:   { label: "Receipts",     icon: Receipt,        color: "text-blue-500"   },
-  invoices:   { label: "Invoices",     icon: FileText,       color: "text-violet-500" },
-  a4receipts: { label: "A4 Receipts",  icon: Printer,        color: "text-emerald-500"},
-  emails:     { label: "Emails",       icon: Mail,           color: "text-amber-500"  },
-  sms:        { label: "SMS",          icon: MessageSquare,  color: "text-rose-500"   },
+  receipts:   { label: "Receipts",    icon: Receipt,       color: "text-blue-500"    },
+  invoices:   { label: "Invoices",    icon: FileText,      color: "text-violet-500"  },
+  a4receipts: { label: "A4 Receipts", icon: Printer,       color: "text-emerald-500" },
+  emails:     { label: "Emails",      icon: Mail,          color: "text-amber-500"   },
+  sms:        { label: "SMS",         icon: MessageSquare, color: "text-rose-500"    },
 };
 
 const STYLE_ICONS: Record<string, React.ElementType> = {
-  professional: Star,
-  casual:       Sparkles,
-  minimal:      Minimize2,
-  bold:         Zap,
+  professional: Star, casual: Sparkles, minimal: Minimize2, bold: Zap,
 };
 
 const STYLE_COLORS: Record<string, string> = {
@@ -403,157 +505,146 @@ const STYLE_COLORS: Record<string, string> = {
   bold:         "bg-violet-50 text-violet-700 border-violet-200",
 };
 
-const STORAGE_KEY = "koapos_active_templates";
+const ACTIVE_STORAGE_KEY = "koapos_active_templates";
 
-/* ─── Preview renderers ──────────────────────────────────────────────────── */
+/* ─── Preview components ─────────────────────────────────────────────────── */
 
 interface PreviewProps {
   templateId: string;
-  businessName: string;
-  abn: string;
-  tagline: string;
-  website: string;
-  email: string;
-  phone: string;
-  address: string;
-  logo: string;
-  brandColor: string;
+  businessName: string; abn: string; tagline: string; website: string;
+  email: string; address: string; brandColor: string;
+  opts: TplOpts;
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor }: PreviewProps) {
-  const items = [
-    { name: "Flat White",       qty: 2, price: 8.00  },
-    { name: "Banana Bread",     qty: 1, price: 6.50  },
-    { name: "Orange Juice",     qty: 1, price: 5.00  },
-  ];
+function resolveCode(text: string, businessName: string, abn: string, website: string, email: string): string {
+  return text
+    .replace(/{{business\.name}}/g,    businessName)
+    .replace(/{{business\.abn}}/g,     abn)
+    .replace(/{{business\.email}}/g,   email)
+    .replace(/{{business\.website}}/g, website)
+    .replace(/{{business\.phone}}/g,   "(03) 9000 0000")
+    .replace(/{{customer\.name}}/g,    "Sarah Johnson")
+    .replace(/{{customer\.first_name}}/g, "Sarah")
+    .replace(/{{transaction\.total}}/g, "$19.50")
+    .replace(/{{transaction\.date}}/g,  "18/05/2026")
+    .replace(/{{transaction\.number}}/g,"#TXN-1042")
+    .replace(/{{[^}]+}}/g,             "…");
+}
+
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, opts }: PreviewProps) {
+  const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
-  const total = subtotal;
   const date = "18/05/2026 10:42 AM";
+  const footerMsg = opts.thankYouMsg || "Thank you for your purchase!";
+  const footer    = opts.footerText;
 
   if (templateId === "r-minimal") {
     return (
       <div className="font-mono text-xs text-gray-800 space-y-0.5 leading-snug">
         <p className="text-center font-bold uppercase">{businessName}</p>
-        {abn && <p className="text-center">ABN: {abn}</p>}
+        {opts.showAbn && abn && <p className="text-center">ABN: {abn}</p>}
         <p className="text-center">{date}</p>
         <p className="text-center">─────────────────</p>
-        {items.map((i) => (
-          <div key={i.name} className="flex justify-between">
-            <span>{i.name} ×{i.qty}</span>
-            <span>${(i.qty * i.price).toFixed(2)}</span>
-          </div>
-        ))}
+        {items.map((i) => <div key={i.name} className="flex justify-between"><span>{i.name} ×{i.qty}</span><span>${(i.qty * i.price).toFixed(2)}</span></div>)}
         <p className="text-center">─────────────────</p>
         <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span>GST (10%)</span><span>${gst.toFixed(2)}</span></div>
-        <div className="flex justify-between font-bold"><span>TOTAL</span><span>${total.toFixed(2)}</span></div>
+        {opts.showGstBreakdown && <div className="flex justify-between"><span>GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
+        <div className="flex justify-between font-bold"><span>TOTAL</span><span>${subtotal.toFixed(2)}</span></div>
         <p className="text-center">─────────────────</p>
-        <p className="text-center">EFTPOS — APPROVED</p>
-        <p className="text-center text-gray-500">{website}</p>
+        {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
+        {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
+        {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
       </div>
     );
   }
-
   if (templateId === "r-casual") {
     return (
       <div className="text-xs text-gray-800 font-sans">
         <div className="text-center mb-2">
-          <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          {opts.showLogo && <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
           <p className="font-bold text-base">{businessName} ☕</p>
+          {opts.showTagline && <p className="text-gray-400 text-[10px] italic">Quality you can trust</p>}
           <p className="text-gray-500 text-[10px]">{date}</p>
         </div>
         <div className="bg-gray-50 rounded p-2 space-y-1 text-[10px]">
-          {items.map((i) => (
-            <div key={i.name} className="flex justify-between">
-              <span>{i.name} ×{i.qty}</span>
-              <span>${(i.qty * i.price).toFixed(2)}</span>
-            </div>
-          ))}
+          {items.map((i) => <div key={i.name} className="flex justify-between"><span>{i.name} ×{i.qty}</span><span>${(i.qty * i.price).toFixed(2)}</span></div>)}
         </div>
         <div className="mt-2 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-gray-500">GST incl.</span><span>${gst.toFixed(2)}</span></div>
-          <div className="flex justify-between font-bold text-sm border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>${total.toFixed(2)}</span></div>
+          {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST incl.</span><span>${gst.toFixed(2)}</span></div>}
+          <div className="flex justify-between font-bold text-sm border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>${subtotal.toFixed(2)}</span></div>
         </div>
-        <p className="text-center text-[10px] text-gray-400 mt-2">Thanks for visiting! See you soon 😊</p>
-        {email && <p className="text-center text-[10px] text-blue-500">{email}</p>}
+        <div className="text-center text-[10px] text-gray-400 mt-2 space-y-0.5">
+          {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
+          {footer    && <p className="text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
+          {opts.showWebsite && email && <p className="text-blue-500">{email}</p>}
+        </div>
       </div>
     );
   }
-
   return (
     <div className="text-xs text-gray-800 font-sans">
       <div className="text-center border-b pb-2 mb-2">
-        <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />
+        {opts.showLogo && <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />}
         <p className="font-bold text-sm uppercase tracking-wide">{businessName}</p>
-        {abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
+        {opts.showAbn && abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
         <p className="text-[10px] text-gray-400">{date}</p>
       </div>
       <table className="w-full text-[10px]">
         <thead><tr className="border-b"><th className="text-left pb-0.5">Item</th><th className="text-center">Qty</th><th className="text-right">Amt</th></tr></thead>
-        <tbody>
-          {items.map((i) => (
-            <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-center">{i.qty}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>
-          ))}
-        </tbody>
+        <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-center">{i.qty}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>)}</tbody>
       </table>
       <div className="border-t mt-1 pt-1 space-y-0.5 text-[10px]">
-        <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>
-        <div className="flex justify-between font-bold"><span>TOTAL AUD</span><span>${total.toFixed(2)}</span></div>
-        <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>
+        {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
+        <div className="flex justify-between font-bold"><span>TOTAL AUD</span><span>${subtotal.toFixed(2)}</span></div>
+        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
       </div>
-      {(website || email) && (
-        <p className="text-center text-[10px] text-gray-400 border-t mt-1 pt-1">{website || email}</p>
-      )}
+      <div className="text-center text-[10px] text-gray-400 border-t mt-1 pt-1 space-y-0.5">
+        {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
+        {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
+        {opts.showWebsite && website && <p>{website}</p>}
+      </div>
     </div>
   );
 }
 
-function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor }: PreviewProps) {
-  const items = [
-    { name: "Product Design Services", qty: 3, price: 150 },
-    { name: "Logo Package",             qty: 1, price: 450 },
-  ];
+function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, opts }: PreviewProps) {
+  const items = [{ name: "Product Design Services", qty: 3, price: 150 }, { name: "Logo Package", qty: 1, price: 450 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
+  const terms = opts.paymentTerms || "Payment due within 30 days.";
+  const notes = opts.invoiceNotes;
+  const footer = opts.footerText;
 
   if (templateId === "i-minimal") {
     return (
       <div className="text-[10px] font-mono text-gray-800 space-y-1.5">
-        <div className="flex justify-between font-bold text-xs">
-          <span>{businessName}</span><span>INVOICE #1042</span>
-        </div>
-        {abn && <p className="text-gray-500">ABN: {abn}</p>}
+        <div className="flex justify-between font-bold text-xs"><span>{businessName}</span><span>INVOICE #1042</span></div>
+        {opts.showAbn && abn && <p className="text-gray-500">ABN: {abn}</p>}
         <p className="text-gray-500">Date: 18/05/2026 · Due: 01/06/2026</p>
         <Separator />
         <p className="font-bold">Bill To: Demo Client Pty Ltd</p>
         <Separator />
-        {items.map((i) => (
-          <div key={i.name} className="flex justify-between">
-            <span className="flex-1">{i.name}</span>
-            <span className="w-8 text-right">{i.qty}</span>
-            <span className="w-16 text-right">${(i.qty * i.price).toFixed(2)}</span>
-          </div>
-        ))}
+        {items.map((i) => <div key={i.name} className="flex justify-between"><span className="flex-1">{i.name}</span><span className="w-8 text-right">{i.qty}</span><span className="w-16 text-right">${(i.qty * i.price).toFixed(2)}</span></div>)}
         <Separator />
         <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span>GST 10%</span><span>${gst.toFixed(2)}</span></div>
+        {opts.showGstBreakdown && <div className="flex justify-between"><span>GST 10%</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL DUE</span><span>${total.toFixed(2)}</span></div>
-        <p className="text-gray-400 pt-1">Payment due within 30 days</p>
+        <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>
+        {notes  && <p className="text-gray-400">{resolveCode(notes, businessName, abn, website, email)}</p>}
+        {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
       </div>
     );
   }
-
   if (templateId === "i-modern") {
     return (
       <div className="text-[10px] text-gray-800">
         <div className="p-2 rounded-t text-white text-xs font-bold flex justify-between items-center mb-2" style={{ background: brandColor }}>
-          <span className="text-base">{businessName}</span>
-          <span className="opacity-80">INVOICE #1042</span>
+          <span className="text-base">{businessName}</span><span className="opacity-80">INVOICE #1042</span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
-          <div><p className="text-gray-400">From</p><p className="font-medium">{businessName}</p><p className="text-gray-500">{abn ? `ABN ${abn}` : ""}</p></div>
+          <div><p className="text-gray-400">From</p><p className="font-medium">{businessName}</p>{opts.showAbn && abn && <p className="text-gray-500">ABN {abn}</p>}</div>
           <div><p className="text-gray-400">Bill To</p><p className="font-medium">Demo Client</p><p className="text-gray-500">18/05/2026</p></div>
         </div>
         <table className="w-full text-[10px]">
@@ -561,22 +652,23 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>)}</tbody>
         </table>
         <div className="border-t mt-1 pt-1 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-gray-500">GST</span><span>${gst.toFixed(2)}</span></div>
+          {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST</span><span>${gst.toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-sm" style={{ color: brandColor }}><span>Total Due</span><span>${total.toFixed(2)}</span></div>
         </div>
+        <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>
+        {notes  && <p className="text-gray-400 text-[9px]">{resolveCode(notes, businessName, abn, website, email)}</p>}
       </div>
     );
   }
-
   return (
     <div className="text-[10px] text-gray-800">
       <div className="flex justify-between items-start border-b pb-2 mb-2">
         <div>
-          <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />
+          {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
           <p className="font-bold text-xs">{businessName}</p>
-          {abn && <p className="text-gray-500">ABN {abn}</p>}
+          {opts.showAbn    && abn     && <p className="text-gray-500">ABN {abn}</p>}
           {address && <p className="text-gray-500">{address}</p>}
-          {email && <p className="text-gray-500">{email}</p>}
+          {email   && <p className="text-gray-500">{email}</p>}
         </div>
         <div className="text-right">
           <p className="font-bold text-sm" style={{ color: brandColor }}>INVOICE</p>
@@ -589,51 +681,58 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-center">Qty</th><th className="text-right">Rate</th><th className="text-right">Total</th></tr></thead>
         <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-center">{i.qty}</td><td className="text-right">${i.price.toFixed(2)}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>)}</tbody>
       </table>
-      <div className="border-t pt-1 space-y-0.5 text-right text-[10px]">
-        <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>
+      <div className="border-t pt-1 space-y-0.5 text-[10px]">
+        {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL DUE (AUD)</span><span>${total.toFixed(2)}</span></div>
       </div>
-      <p className="text-gray-400 mt-1 border-t pt-1">Payment terms: 30 days. {website}</p>
+      <div className="text-gray-400 mt-1 border-t pt-1 text-[10px] space-y-0.5">
+        <p>{resolveCode(terms, businessName, abn, website, email)}</p>
+        {notes  && <p>{resolveCode(notes, businessName, abn, website, email)}</p>}
+        {opts.showWebsite && website && <p>{website}</p>}
+        {footer && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
+      </div>
     </div>
   );
 }
 
-function A4ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline }: PreviewProps) {
+function A4ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, opts }: PreviewProps) {
   const items = [{ name: "Flat White ×2", price: 8.00 }, { name: "Banana Bread ×1", price: 6.50 }];
   const total = items.reduce((s, i) => s + i.price, 0);
+  const thankYou = opts.thankYouMsg || "Thank you so much!";
+  const customMsg = opts.customMessage;
+  const footer    = opts.footerText;
 
   if (templateId === "a4-casual") {
     return (
       <div className="text-[10px] text-gray-800">
         <div className="text-center mb-3 p-2 rounded-t" style={{ background: `${brandColor}18` }}>
-          <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          {opts.showLogo && <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
           <p className="font-bold text-sm">{businessName}</p>
-          {tagline && <p className="text-[10px] text-gray-500 italic">{tagline}</p>}
-          {abn && <p className="text-[10px] text-gray-400">ABN {abn}</p>}
+          {opts.showTagline && tagline && <p className="text-[10px] text-gray-500 italic">{tagline}</p>}
+          {opts.showAbn && abn && <p className="text-[10px] text-gray-400">ABN {abn}</p>}
         </div>
         <p className="text-center text-gray-500 mb-2 text-[10px]">18 May 2026 · 10:42 AM · Receipt #0042</p>
         <div className="bg-gray-50 rounded p-2 space-y-1 text-[10px] mb-2">
           {items.map((i) => <div key={i.name} className="flex justify-between"><span>{i.name}</span><span>${i.price.toFixed(2)}</span></div>)}
         </div>
-        <div className="flex justify-between font-bold text-xs mb-3" style={{ color: brandColor }}><span>Total Paid</span><span>${total.toFixed(2)}</span></div>
+        <div className="flex justify-between font-bold text-xs mb-2" style={{ color: brandColor }}><span>Total Paid</span><span>${total.toFixed(2)}</span></div>
         <Separator className="my-2" />
-        <p className="text-center font-bold text-xs mb-1">Thank you so much! 🙏</p>
-        <p className="text-center text-[10px] text-gray-500">We hope to see you again soon.</p>
-        {website && <p className="text-center text-[10px] text-blue-500 mt-1">{website}</p>}
+        <p className="text-center font-bold text-xs mb-1">{resolveCode(thankYou, businessName, abn, website, email)}</p>
+        {customMsg && <p className="text-center text-[10px] text-gray-500 mb-1">{resolveCode(customMsg, businessName, abn, website, email)}</p>}
+        {footer    && <p className="text-center text-[10px] text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
+        {opts.showWebsite && website && <p className="text-center text-[10px] text-blue-500 mt-1">{website}</p>}
       </div>
     );
   }
-
   return (
     <div className="text-[10px] text-gray-800">
       <div className="flex justify-between items-start border-b pb-2 mb-2">
         <div>
-          <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />
+          {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
           <p className="font-bold text-xs">{businessName}</p>
-          {abn && <p className="text-gray-400">ABN {abn}</p>}
-          {email && <p className="text-gray-400">{email}</p>}
-          {website && <p className="text-gray-400">{website}</p>}
+          {opts.showAbn    && abn     && <p className="text-gray-400">ABN {abn}</p>}
+          {email   && <p className="text-gray-400">{email}</p>}
+          {opts.showWebsite && website && <p className="text-gray-400">{website}</p>}
         </div>
         <div className="text-right">
           <p className="font-bold text-xs" style={{ color: brandColor }}>TAX INVOICE / RECEIPT</p>
@@ -644,29 +743,37 @@ function A4ReceiptPreview({ templateId, businessName, abn, website, email, brand
         <thead><tr className="border-b"><th className="text-left">Description</th><th className="text-right">Amount</th></tr></thead>
         <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-right">${i.price.toFixed(2)}</td></tr>)}</tbody>
       </table>
-      <div className="border-t pt-1 text-right space-y-0.5">
-        <div className="flex justify-between text-gray-500"><span>GST Included</span><span>${(total / 11).toFixed(2)}</span></div>
+      <div className="border-t pt-1 space-y-0.5 text-[10px]">
+        {opts.showGstBreakdown && <div className="flex justify-between text-gray-500"><span>GST Included</span><span>${(total / 11).toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL PAID (AUD)</span><span>${total.toFixed(2)}</span></div>
       </div>
-      <p className="text-center text-[10px] text-gray-400 border-t mt-2 pt-1">Thank you for your business — {businessName}</p>
+      <div className="text-center text-[10px] text-gray-400 border-t mt-2 pt-1 space-y-0.5">
+        <p>{resolveCode(thankYou, businessName, abn, website, email)}</p>
+        {customMsg && <p>{resolveCode(customMsg, businessName, abn, website, email)}</p>}
+        {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
+      </div>
     </div>
   );
 }
 
-function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline }: PreviewProps) {
-  const total = "$19.50";
+function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, opts }: PreviewProps) {
+  const greeting = opts.customGreeting || "Hi Sarah,";
+  const signOff  = opts.customSignOff  || `— The team at ${businessName}`;
+  const footer   = opts.footerText;
+  const customMsg= opts.customMessage;
+  const total    = "$19.50";
+
   if (templateId === "e-minimal") {
     return (
       <div className="text-[10px] font-mono text-gray-800 space-y-1">
-        <p>From: {contactEmail || `hello@${businessName.toLowerCase().replace(/\s/g, "")}.com.au`}</p>
-        <p>Subject: Your receipt from {businessName}</p>
+        <p className="font-medium">{opts.subjectLine ? resolveCode(opts.subjectLine, businessName, abn, website, contactEmail) : `Your receipt from ${businessName}`}</p>
         <Separator />
-        <p>Hi Sarah,</p>
-        <p>Thanks for your purchase at {businessName} on 18/05/2026.</p>
-        <p>Total paid: {total} (GST incl.)</p>
-        {abn && <p>ABN: {abn}</p>}
-        <p>Questions? Reply to this email.</p>
-        <p>— {businessName} Team</p>
+        <p>{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+        {customMsg && <p className="text-gray-600">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
+        <p>Thanks for your purchase on 18/05/2026. Total: {total}</p>
+        {opts.showAbn && abn && <p className="text-gray-400">ABN: {abn}</p>}
+        <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
       </div>
     );
   }
@@ -674,57 +781,61 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
     return (
       <div className="text-[10px] text-gray-800">
         <div className="p-2 rounded-t text-center mb-2" style={{ background: `${brandColor}22` }}>
-          <div className="w-7 h-7 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          {opts.showLogo && <div className="w-7 h-7 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
           <p className="font-bold">{businessName}</p>
           {tagline && <p className="text-gray-500 text-[9px] italic">{tagline}</p>}
         </div>
-        <p className="text-[10px] mb-1">Hey Sarah 👋 Thanks for stopping by!</p>
-        <p className="text-[10px] text-gray-500 mb-2">Here&apos;s your receipt for today&apos;s visit.</p>
+        <p className="text-[10px] mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+        {customMsg && <p className="text-[10px] text-gray-600 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
         <div className="bg-gray-50 rounded p-1.5 text-[10px] space-y-0.5 mb-2">
           <div className="flex justify-between"><span>Flat White ×2</span><span>$8.00</span></div>
           <div className="flex justify-between"><span>Banana Bread ×1</span><span>$6.50</span></div>
           <div className="flex justify-between font-bold border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>{total}</span></div>
         </div>
-        <p className="text-[10px] text-gray-500">Returns accepted within 30 days 🛍️</p>
-        {website && <p className="text-[10px] text-blue-500">{website}</p>}
+        <p className="text-[10px] text-gray-500">{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {footer && <p className="text-[10px] text-gray-400 mt-1">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
+        {opts.showWebsite && website && <p className="text-[10px] text-blue-500 mt-1">{website}</p>}
       </div>
     );
   }
   return (
     <div className="text-[10px] text-gray-800">
       <div className="p-2 text-white mb-2 flex items-center gap-2 rounded-t" style={{ background: brandColor }}>
-        <div className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>
-        <div><p className="font-bold text-xs">{businessName}</p>{abn && <p className="opacity-70 text-[9px]">ABN {abn}</p>}</div>
+        {opts.showLogo && <div className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>}
+        <div><p className="font-bold text-xs">{businessName}</p>{opts.showAbn && abn && <p className="opacity-70 text-[9px]">ABN {abn}</p>}</div>
         <span className="ml-auto opacity-70">Receipt</span>
       </div>
-      <p className="text-[10px] px-1 mb-1">Dear Sarah,</p>
-      <p className="text-[10px] text-gray-500 px-1 mb-2">Thank you for your purchase on 18/05/2026.</p>
+      <p className="text-[10px] px-1 mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+      {customMsg && <p className="text-[10px] text-gray-500 px-1 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
       <table className="w-full text-[10px] px-1">
         <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
-        <tbody>
-          <tr><td className="py-0.5">Flat White</td><td className="text-right">2</td><td className="text-right">$8.00</td></tr>
-          <tr><td className="py-0.5">Banana Bread</td><td className="text-right">1</td><td className="text-right">$6.50</td></tr>
-        </tbody>
+        <tbody><tr><td className="py-0.5">Flat White</td><td className="text-right">2</td><td className="text-right">$8.00</td></tr><tr><td className="py-0.5">Banana Bread</td><td className="text-right">1</td><td className="text-right">$6.50</td></tr></tbody>
       </table>
       <div className="border-t mt-1 pt-1 px-1 space-y-0.5">
         <div className="flex justify-between font-bold"><span>Total Paid</span><span>{total}</span></div>
-        <div className="flex justify-between text-gray-400"><span>GST Included</span><span>$1.77</span></div>
+        {opts.showGstBreakdown && <div className="flex justify-between text-gray-400"><span>GST Included</span><span>$1.77</span></div>}
       </div>
-      <div className="border-t mt-2 pt-1 px-1 text-gray-400 text-[9px] text-center">{contactEmail} · {website}</div>
+      <div className="border-t mt-2 pt-1 px-1 space-y-0.5 text-[9px] text-gray-400">
+        <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {footer && <p>{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
+        {opts.showWebsite && website && <p>{website}</p>}
+      </div>
     </div>
   );
 }
 
-function SMSPreview({ templateId, businessName, website }: PreviewProps) {
-  const messages: Record<string, string> = {
-    "s-receipt": `Hi Sarah! Thanks for visiting ${businessName}. Your receipt: $19.50 on 18/05/2026. See you next time! ${website}`,
-    "s-appt":    `Reminder: You have an appointment at ${businessName} on Wed 20 May at 2:00 PM. Reply CANCEL to cancel. Questions? Call us on (03) 9XXX XXXX.`,
-    "s-layby":   `Hi Sarah, your layby at ${businessName} has a payment of $45.00 due by 25/05/2026. Balance remaining: $120.00. Pop in or call us to pay. Thanks!`,
-  };
+function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
+  const raw = opts.messageText || (
+    templateId === "s-appt"
+      ? `Reminder: appointment at ${businessName} on 20 May at 2:00 PM. Reply CANCEL to cancel.`
+      : templateId === "s-layby"
+      ? `Hi Sarah, your layby at ${businessName} has $45.00 due by 25/05/2026. Balance: $120.00. Pop in or call us!`
+      : `Hi Sarah! Thanks for visiting ${businessName}. Total: $19.50 on 18/05/2026. ${website}`
+  );
   return (
     <div className="flex items-end justify-end">
       <div className="bg-green-500 text-white text-[10px] rounded-2xl rounded-br-sm px-3 py-2 max-w-[85%] leading-relaxed shadow">
-        {messages[templateId] || messages["s-receipt"]}
+        {resolveCode(raw, businessName, "", website, "")}
       </div>
     </div>
   );
@@ -735,12 +846,18 @@ function SMSPreview({ templateId, businessName, website }: PreviewProps) {
 export default function ManagementTemplatesPage() {
   const [activeCategory, setActiveCategory] = useState<Category>("receipts");
   const [activeTemplates, setActiveTemplates] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}"); } catch { return {}; }
   });
   const [previewId, setPreviewId] = useState<string>("r-pro");
 
+  // Focused field tracking for QuickCodesBar insert
+  const [focusedFieldLabel, setFocusedFieldLabel] = useState<string | null>(null);
+  const insertFnRef = useRef<((code: string) => void) | null>(null);
+
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
+
+  const { opts, update, reset } = useTplOpts(previewId);
 
   useEffect(() => {
     const defaults: Record<Category, string> = {
@@ -750,180 +867,146 @@ export default function ManagementTemplatesPage() {
   }, [activeCategory, activeTemplates]);
 
   const businessName = merchant?.businessName || "Your Business";
-  const brandColor = profile.brandColors?.[0] || "#efbf04";
+  const brandColor   = profile.brandColors?.[0] || "#efbf04";
 
   const previewProps: PreviewProps = {
-    templateId:   previewId,
-    businessName,
-    abn:          profile.abn || "12 345 678 901",
-    tagline:      profile.tagline || "",
-    website:      profile.website || "www.yourbusiness.com.au",
-    email:        profile.contactEmail || merchant?.email || "",
-    phone:        "",
-    address:      [profile.state, profile.postcode].filter(Boolean).join(" "),
-    logo:         profile.logo || "",
-    brandColor,
+    templateId: previewId, businessName,
+    abn:      profile.abn      || "12 345 678 901",
+    tagline:  profile.tagline  || "",
+    website:  profile.website  || "www.yourbusiness.com.au",
+    email:    profile.contactEmail || merchant?.email || "",
+    address:  [profile.state, profile.postcode].filter(Boolean).join(" "),
+    brandColor, opts,
   };
 
   const quickCodeGroups = buildQuickCodeGroups(
-    businessName,
-    profile.abn || "",
-    profile.contactEmail || merchant?.email || "",
-    profile.website || "",
-    profile.tagline || "",
+    businessName, profile.abn || "", profile.contactEmail || merchant?.email || "",
+    profile.website || "", profile.tagline || "",
     [profile.state, profile.postcode].filter(Boolean).join(" "),
   );
 
   const setActive = (categoryId: Category, templateId: string) => {
     const next = { ...activeTemplates, [categoryId]: templateId };
     setActiveTemplates(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(next));
   };
 
   const currentTemplates = TEMPLATES[activeCategory];
   const StyleIcon = STYLE_ICONS[currentTemplates.find(t => t.id === previewId)?.style ?? "professional"];
-  const showEditor = activeCategory === "sms" || activeCategory === "emails";
 
   const renderPreview = () => {
     switch (activeCategory) {
-      case "receipts":   return <ReceiptPreview {...previewProps} />;
-      case "invoices":   return <InvoicePreview {...previewProps} />;
+      case "receipts":   return <ReceiptPreview   {...previewProps} />;
+      case "invoices":   return <InvoicePreview   {...previewProps} />;
       case "a4receipts": return <A4ReceiptPreview {...previewProps} />;
-      case "emails":     return <EmailPreview {...previewProps} />;
-      case "sms":        return <SMSPreview {...previewProps} />;
+      case "emails":     return <EmailPreview     {...previewProps} />;
+      case "sms":        return <SMSPreview       {...previewProps} />;
     }
   };
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="p-6 md:p-8 space-y-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
-              <p className="text-sm text-muted-foreground">Choose templates for your receipts, invoices, emails and messages. All templates use your Business Details automatically.</p>
+              <p className="text-sm text-muted-foreground">Design and customise your receipts, invoices, emails and messages. All templates use your Business Details automatically.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5 shrink-0">
             <Building2 className="w-3.5 h-3.5" />
             <span>Showing: <strong className="text-foreground">{businessName}</strong></span>
           </div>
         </div>
 
-        <div className="flex gap-6 items-start">
-          {/* Left: category tabs + template cards */}
-          <div className="w-72 shrink-0 space-y-3">
-            {/* Category tabs */}
+        {/* 3-column layout */}
+        <div className="flex gap-4 items-start min-w-0">
+
+          {/* Col 1: category + template selector */}
+          <div className="w-56 shrink-0 space-y-3">
             <div className="rounded-xl border bg-card overflow-hidden">
               {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
                 const { label, icon: Icon, color } = CATEGORY_META[cat];
                 const active = cat === activeCategory;
                 const activeTpl = activeTemplates[cat];
                 return (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors border-b last:border-b-0",
+                  <button key={cat} onClick={() => setActiveCategory(cat)}
+                    className={cn("w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-b last:border-b-0",
                       active ? "bg-primary/5 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
                     )}
                   >
                     <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : color)} />
                     <span className="flex-1 text-left">{label}</span>
-                    {activeTpl && <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                    {activeTpl && <Check className="w-3 h-3 text-green-500 shrink-0" />}
                   </button>
                 );
               })}
             </div>
 
-            {/* Template cards */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground px-1 uppercase tracking-wide">{CATEGORY_META[activeCategory].label} Templates</p>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Templates</p>
               {currentTemplates.map((tpl) => {
-                const selected = activeTemplates[activeCategory] === tpl.id;
+                const selected  = activeTemplates[activeCategory] === tpl.id;
                 const previewing = previewId === tpl.id;
-                const StyleIconComp = STYLE_ICONS[tpl.style];
+                const SIcon     = STYLE_ICONS[tpl.style];
                 return (
-                  <div
-                    key={tpl.id}
-                    onClick={() => setPreviewId(tpl.id)}
-                    className={cn(
-                      "rounded-xl border p-3 cursor-pointer transition-all space-y-2",
+                  <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
+                    className={cn("rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
                       previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{tpl.name}</span>
-                      {selected && <Badge variant="default" className="text-[10px] h-4 px-1.5 gap-0.5"><Check className="w-2.5 h-2.5" /> Active</Badge>}
+                      <span className="font-medium text-xs">{tpl.name}</span>
+                      {selected && <Badge variant="default" className="text-[9px] h-3.5 px-1 gap-0.5"><Check className="w-2 h-2" /> Active</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground">{tpl.description}</p>
-                    <span className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
-                      <StyleIconComp className="w-2.5 h-2.5" />{tpl.style}
+                    <p className="text-[10px] text-muted-foreground leading-snug">{tpl.description}</p>
+                    <span className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
+                      <SIcon className="w-2 h-2" />{tpl.style}
                     </span>
                   </div>
                 );
               })}
             </div>
-
-            {/* Read-only Quick Codes for non-text templates */}
-            {!showEditor && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground px-1 uppercase tracking-wide">Quick Codes Reference</p>
-                <QuickCodesPanel groups={quickCodeGroups} />
-              </div>
-            )}
           </div>
 
-          {/* Right: live preview + set active + editor/quick codes */}
-          <div className="flex-1 space-y-4 min-w-0">
-            {/* Preview header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <StyleIcon className="w-4 h-4 text-muted-foreground" />
-                <span className="font-semibold text-sm">{currentTemplates.find(t => t.id === previewId)?.name} Preview</span>
-                <Badge variant="outline" className="text-xs">{CATEGORY_META[activeCategory].label}</Badge>
+          {/* Col 2: live preview */}
+          <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="font-semibold text-sm truncate">{currentTemplates.find(t => t.id === previewId)?.name} Preview</span>
+                <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
               </div>
-              <Button
-                size="sm"
-                onClick={() => setActive(activeCategory, previewId)}
-                disabled={activeTemplates[activeCategory] === previewId}
-                className="gap-1.5"
+              <Button size="sm" onClick={() => setActive(activeCategory, previewId)}
+                disabled={activeTemplates[activeCategory] === previewId} className="gap-1.5 shrink-0"
               >
-                {activeTemplates[activeCategory] === previewId ? (
-                  <><Check className="w-3.5 h-3.5" /> Active Template</>
-                ) : (
-                  "Set as Active"
-                )}
+                {activeTemplates[activeCategory] === previewId
+                  ? <><Check className="w-3.5 h-3.5" /> Active</>
+                  : "Set Active"}
               </Button>
             </div>
 
-            {/* Preview area */}
-            <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center" style={{ minHeight: showEditor ? 260 : 520 }}>
+            <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
               {(activeCategory === "receipts" || activeCategory === "a4receipts") && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56 mx-auto">
-                  {renderPreview()}
-                </div>
+                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
               )}
               {activeCategory === "invoices" && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80 mx-auto">
-                  {renderPreview()}
-                </div>
+                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
               )}
               {activeCategory === "emails" && (
-                <div className="bg-white shadow rounded-xl border border-gray-200 overflow-hidden w-80 mx-auto">
+                <div className="bg-white shadow rounded-xl border border-gray-200 overflow-hidden w-80">
                   <div className="bg-gray-100 px-3 py-1.5 flex items-center gap-1.5 border-b">
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
-                    <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                    <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
                     <span className="ml-2 text-[10px] text-gray-400">Email Preview</span>
                   </div>
                   <div className="p-3">{renderPreview()}</div>
                 </div>
               )}
               {activeCategory === "sms" && (
-                <div className="bg-gray-900 rounded-3xl p-4 w-56 mx-auto shadow-xl">
+                <div className="bg-gray-900 rounded-3xl p-4 w-56 shadow-xl">
                   <div className="bg-gray-800 h-2 w-12 rounded mx-auto mb-4" />
                   <div className="bg-white rounded-2xl p-3 min-h-40">
                     <p className="text-[9px] text-gray-400 text-center mb-3">{businessName}</p>
@@ -934,22 +1017,33 @@ export default function ManagementTemplatesPage() {
               )}
             </div>
 
-            {/* SMS / Email message editor with embedded Quick Codes */}
-            {showEditor && (
-              <MessageEditor
-                templateId={previewId}
-                category={activeCategory}
-                quickCodeGroups={quickCodeGroups}
-              />
-            )}
-
-            {/* Info strip */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2.5">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
               <Building2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Business details are pulled from <strong>Management → Business Details</strong>. Update your logo, ABN, and contact info there to see them reflected here.</span>
+              <span>Live preview — changes in the Options panel update instantly. Business info comes from <strong>Management → Business Details</strong>.</span>
             </div>
           </div>
+
+          {/* Col 3: options editor */}
+          <div className="w-72 shrink-0">
+            <OptionsPanel
+              key={previewId}
+              category={activeCategory}
+              templateId={previewId}
+              opts={opts}
+              update={update}
+              reset={reset}
+              onFieldFocus={(label) => setFocusedFieldLabel(label)}
+              onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+            />
+          </div>
         </div>
+
+        {/* Full-width Quick Codes bar */}
+        <QuickCodesBar
+          groups={quickCodeGroups}
+          focusedField={focusedFieldLabel}
+          onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
+        />
       </div>
     </AppLayout>
   );
