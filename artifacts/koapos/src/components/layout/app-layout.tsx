@@ -580,8 +580,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
 
         {/* Right actions */}
+        <LayoutPicker />
         <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <LayoutPicker />
           <Link href="/pos">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
@@ -705,8 +705,8 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
           <Breadcrumbs location={location} />
         </div>
         <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+        <LayoutPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <LayoutPicker />
           <Link href="/pos">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
@@ -913,8 +913,8 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
                 {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
-              <LayoutPicker />
             </div>
+            <LayoutPicker />
           </header>
 
           <main className="flex-1 overflow-auto bg-muted/10">{children}</main>
