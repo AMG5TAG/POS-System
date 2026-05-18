@@ -483,10 +483,10 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     <SidebarProvider defaultOpen={!hideSidebar}>
       <div className="min-h-[100dvh] w-full flex bg-muted/10">
         <Sidebar collapsible="icon" className="border-r">
-          <SidebarHeader className="h-16 flex items-center px-4 border-b">
+          <SidebarHeader className="min-h-16 flex items-center px-4 py-3 border-b">
             <Link href="/dashboard" className="flex items-center gap-2 w-full">
               <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain shrink-0" />
-              <span className="font-bold text-lg truncate">{user?.businessName || "KoaPOS"}</span>
+              <span className="font-bold text-sm leading-snug break-words line-clamp-3 min-w-0">{user?.businessName || "KoaPOS"}</span>
             </Link>
           </SidebarHeader>
 
