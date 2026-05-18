@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useLocation } from "wouter";
 import {
   useListProducts,
   useListCategories,
@@ -24,7 +25,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
-  Layers, Briefcase, Download, KeyRound,
+  Layers, Briefcase, Download, KeyRound, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -184,7 +185,20 @@ function ProductDetailDialog({
   deleteIsPending: boolean;
 }) {
   const [tab, setTab] = useState<DetailTab>("details");
+  const [, navigate] = useLocation();
   if (!product) return null;
+
+  const handlePrintSticker = () => {
+    sessionStorage.setItem("koapos_sticker_product", JSON.stringify({
+      name: product.name,
+      sku: product.sku ?? "",
+      price: product.price,
+      barcode: product.barcode ?? "",
+      category: product.category?.name ?? "",
+    }));
+    onClose();
+    navigate("/management/stickers");
+  };
 
   const margin = product.costPrice && product.price > 0
     ? Math.round(((product.price - product.costPrice) / product.price) * 100)
@@ -308,6 +322,9 @@ function ProductDetailDialog({
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrintSticker}>
+              <Printer className="w-3.5 h-3.5" /> Print Sticker
+            </Button>
             <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(product); }}>
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>

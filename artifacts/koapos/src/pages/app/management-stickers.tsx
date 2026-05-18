@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useListProducts, Product } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   Printer, Tag, User, Package, RotateCcw, Wrench, MapPin,
-  DollarSign, LayoutGrid, Info, Barcode,
+  DollarSign, LayoutGrid, Info, Barcode, Search, X, ChevronRight,
 } from "lucide-react";
 
 /* ─── DYMO label sizes ───────────────────────────────────────────────────── */
@@ -322,7 +322,13 @@ export default function ManagementStickersPage() {
   const [quantity, setQuantity] = useState(1);
   const [showBusiness, setShowBusiness] = useState(true);
 
+  // Product search
+  const [productQuery, setProductQuery] = useState("");
+  const [showProdDropdown, setShowProdDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
   const selectedType = STICKER_TYPES.find((t) => t.id === selectedTypeId)!;
+  const hasProductSearch = selectedType.fields.some((f) => f.key === "productName");
 
   const [fields, setFields] = useState<Record<string, Record<string, string>>>(() =>
     Object.fromEntries(
@@ -342,11 +348,61 @@ export default function ManagementStickersPage() {
 
   const selectedSize = DYMO_SIZES.find((s) => s.id === selectedSizeId) ?? DYMO_SIZES[0];
 
+  // Product search query — only runs when relevant sticker type is selected
+  const { data: productSearchData } = useListProducts(
+    { search: productQuery || undefined, limit: 8 },
+    { query: { queryKey: ["sticker-product-search", productQuery], enabled: hasProductSearch } }
+  );
+  const productSearchResults: Product[] = productSearchData?.items ?? [];
+
   const handleTypeChange = (typeId: string) => {
     setSelectedTypeId(typeId);
     const t = STICKER_TYPES.find((x) => x.id === typeId);
     if (t) setSelectedSizeId(t.defaultSize);
+    setProductQuery("");
+    setShowProdDropdown(false);
   };
+
+  // Fill fields from a selected product
+  const fillFromProduct = (p: Product) => {
+    setProductQuery(p.name);
+    setShowProdDropdown(false);
+    const type = STICKER_TYPES.find((t) => t.id === selectedTypeId);
+    if (!type) return;
+    const has = (key: string) => type.fields.some((f) => f.key === key);
+    const updates: Record<string, string> = {};
+    if (has("productName")) updates.productName = p.name;
+    if (has("sku"))         updates.sku         = p.sku         ?? "";
+    if (has("price"))       updates.price       = p.price != null ? `$${Number(p.price).toFixed(2)}` : "";
+    if (has("barcode"))     updates.barcode     = p.barcode     ?? "";
+    if (has("category"))    updates.category    = (p as Product & { category?: { name: string } }).category?.name ?? "";
+    setFields((prev) => ({ ...prev, [selectedTypeId]: { ...prev[selectedTypeId], ...updates } }));
+  };
+
+  // Pre-fill from Products page "Print Sticker" button
+  useEffect(() => {
+    const stored = sessionStorage.getItem("koapos_sticker_product");
+    if (!stored) return;
+    try {
+      const p = JSON.parse(stored) as { name: string; sku: string; price: number; barcode: string; category: string };
+      sessionStorage.removeItem("koapos_sticker_product");
+      setSelectedTypeId("product");
+      setSelectedSizeId("11354");
+      setProductQuery(p.name || "");
+      setFields((prev) => ({
+        ...prev,
+        product: {
+          ...prev.product,
+          productName: p.name        || "",
+          sku:         p.sku         || "",
+          price:       p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
+          barcode:     p.barcode     || "",
+          category:    p.category    || "",
+        },
+      }));
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePrint = () => {
     window.print();
@@ -434,6 +490,71 @@ export default function ManagementStickersPage() {
               <CardDescription>{selectedType.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+
+              {/* Product search — only for types with productName field */}
+              {hasProductSearch && (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                    Search Products to Auto-Fill
+                  </Label>
+                  <div ref={searchRef} className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        value={productQuery}
+                        onChange={(e) => {
+                          setProductQuery(e.target.value);
+                          setShowProdDropdown(true);
+                        }}
+                        onFocus={() => setShowProdDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowProdDropdown(false), 150)}
+                        placeholder="Type a product name, SKU or barcode…"
+                        className="pl-8 pr-8"
+                      />
+                      {productQuery && (
+                        <button
+                          onMouseDown={(e) => { e.preventDefault(); setProductQuery(""); setShowProdDropdown(false); }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {showProdDropdown && productSearchResults.length > 0 && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-xl shadow-lg overflow-hidden">
+                        {productSearchResults.map((p) => (
+                          <button
+                            key={p.id}
+                            onMouseDown={(e) => { e.preventDefault(); fillFromProduct(p); }}
+                            className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-muted/60 text-left border-b last:border-b-0 transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{p.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {[p.sku && `SKU: ${p.sku}`, p.barcode && `Barcode: ${p.barcode}`, (p as Product & { category?: { name: string } }).category?.name].filter(Boolean).join(" · ")}
+                              </p>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                              {p.price != null && (
+                                <span className="text-xs font-semibold text-emerald-600">${Number(p.price).toFixed(2)}</span>
+                              )}
+                              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showProdDropdown && productQuery.length > 0 && productSearchResults.length === 0 && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-xl shadow-lg px-4 py-3 text-sm text-muted-foreground">
+                        No products found for "{productQuery}"
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Select a product to fill Name, SKU, Price, Barcode and Category automatically.</p>
+                </div>
+              )}
+
               {/* Size selector */}
               <div className="space-y-1.5">
                 <Label>DYMO Label Size</Label>
