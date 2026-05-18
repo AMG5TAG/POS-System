@@ -754,7 +754,7 @@ export default function POSPage() {
 
       {/* ─── Payment modal ─── */}
       <Dialog open={paymentModalOpen} onOpenChange={(o) => { setPaymentModalOpen(o); if (!o) setNumpadInput(""); }}>
-        <DialogContent className="max-w-[740px] p-0 overflow-hidden gap-0">
+        <DialogContent className="max-w-[740px] p-0 overflow-hidden gap-0 [&>button.absolute]:hidden">
           <div className="flex flex-col sm:flex-row" style={{ minHeight: 520 }}>
 
             {/* ── Left panel ── */}
