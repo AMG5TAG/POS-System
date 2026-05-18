@@ -481,12 +481,18 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   location: string; navigate: (href: string) => void;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
 
   const handleToggle = () => {
     if (!isOpen && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ left: r.left, top: r.bottom + 4 });
+      const minWidth = 220;
+      const margin = 8;
+      // Keep within right edge of viewport
+      const left = Math.min(r.left, window.innerWidth - minWidth - margin);
+      // Available height below the button, leave 8px gap from bottom edge
+      const maxHeight = Math.max(120, window.innerHeight - r.bottom - margin - 4);
+      setPos({ left, top: r.bottom + 4, maxHeight });
     }
     onToggle();
   };
@@ -494,8 +500,8 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   const panel = isOpen && pos
     ? createPortal(
         <div
-          className="fixed bg-popover border rounded-xl shadow-xl z-[9999] py-1.5 min-w-[190px] max-h-80 overflow-y-auto"
-          style={{ left: pos.left, top: pos.top }}
+          className="fixed bg-popover border rounded-xl shadow-xl z-[9999] py-1.5 min-w-[190px] overflow-y-auto"
+          style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight }}
         >
           {items.map((item) => {
             if ("children" in item) {
