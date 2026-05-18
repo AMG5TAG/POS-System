@@ -309,8 +309,8 @@ export default function POSInvoicesPage() {
                         />
                       </div>
                       {lineDropOpen[i] && (
-                        <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg overflow-hidden">
-                          <div className="max-h-44 overflow-y-auto">
+                        <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
+                          <div>
                             {filteredProducts(lineSearch[i] ?? "").length === 0 ? (
                               <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
                             ) : (

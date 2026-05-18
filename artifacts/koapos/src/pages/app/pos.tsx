@@ -586,8 +586,8 @@ export default function POSPage() {
             )}
             {/* Inline customer dropdown */}
             {customerOpen && !activeCustomerName && (
-              <div className="absolute z-50 left-3 right-3 top-full mt-0.5 bg-popover border rounded-lg shadow-lg">
-                <div className="p-2 border-b">
+              <div className="absolute z-50 left-3 right-3 top-full mt-0.5 bg-popover border rounded-lg shadow-lg flex flex-col max-h-[min(320px,60dvh)]">
+                <div className="p-2 border-b shrink-0">
                   <Input
                     autoFocus
                     placeholder="Search by name, email or phone..."
@@ -596,7 +596,7 @@ export default function POSPage() {
                     className="h-8 text-sm"
                   />
                 </div>
-                <div className="max-h-52 overflow-y-auto">
+                <div className="overflow-y-auto min-h-0">
                   {/* Create new customer — always pinned to top */}
                   <button
                     type="button"

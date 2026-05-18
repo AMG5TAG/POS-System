@@ -302,7 +302,7 @@ export default function ManagementStickersPage() {
                       )}
                     </div>
                     {showProdDropdown && productSearchResults.length > 0 && (
-                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-xl shadow-lg overflow-hidden">
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-xl shadow-lg max-h-[min(280px,50dvh)] overflow-y-auto">
                         {productSearchResults.map((p) => (
                           <button key={p.id}
                             onMouseDown={(e) => { e.preventDefault(); fillFromProduct(p); }}

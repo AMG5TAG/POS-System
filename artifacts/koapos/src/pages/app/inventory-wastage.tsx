@@ -208,7 +208,7 @@ export default function InventoryWastagePage() {
                   placeholder="Search or type product name..."
                 />
                 {productSearch && products.length > 0 && !form.productId && (
-                  <div className="absolute top-full left-0 right-0 z-10 bg-background border rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 z-50 bg-background border rounded-lg shadow-lg mt-1 max-h-[min(200px,50dvh)] overflow-y-auto">
                     {products.slice(0, 8).map((p) => (
                       <button key={p.id} onClick={() => selectProduct(p)}
                         className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center gap-2">

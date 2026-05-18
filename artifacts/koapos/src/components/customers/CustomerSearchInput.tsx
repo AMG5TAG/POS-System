@@ -108,8 +108,8 @@ export function CustomerSearchInput({
       )}
 
       {open && !selected && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-lg shadow-lg">
-          <div className="p-2 border-b">
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-lg shadow-lg flex flex-col max-h-[min(320px,60dvh)]">
+          <div className="p-2 border-b shrink-0">
             <Input
               autoFocus
               placeholder="Search by name, email or phone..."
@@ -118,7 +118,7 @@ export function CustomerSearchInput({
               className="h-8 text-sm"
             />
           </div>
-          <div className="max-h-52 overflow-y-auto">
+          <div className="overflow-y-auto min-h-0">
             <button
               type="button"
               onClick={() => { setOpen(false); setQuickAddOpen(true); }}
