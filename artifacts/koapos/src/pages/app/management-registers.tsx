@@ -24,7 +24,7 @@ export const ALL_PAYMENT_METHODS = [
   { id: "direct_deposit", label: "Direct Deposit",      description: "Bank transfer / direct deposit",          icon: Landmark },
   { id: "voucher",        label: "Voucher",             description: "Gift vouchers and coupon codes",          icon: Ticket },
   { id: "store_credit",   label: "Store Credit",        description: "Accumulated store credit balance",        icon: Wallet },
-  { id: "laybuy",         label: "Laybuy",              description: "Deferred payment / instalment plan",      icon: CalendarClock },
+  { id: "laybuy",         label: "Layby",               description: "Deferred payment / instalment plan",      icon: CalendarClock },
   { id: "loyalty",        label: "Loyalty Dollars",     description: "Redeem earned loyalty rewards",           icon: Star },
   { id: "split",          label: "Split Payment",        description: "Divide the total across methods",        icon: SplitSquareHorizontal },
 ] as const;
