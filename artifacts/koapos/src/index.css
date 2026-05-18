@@ -71,7 +71,8 @@
   --secondary-foreground: 0 0% 8%;
 
   --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  /* Darkened from 46.9% → 38% to pass WCAG AA (4.5:1) on light backgrounds */
+  --muted-foreground: 215 18% 38%;
 
   --accent: 210 40% 96.1%;
   --accent-foreground: 222.2 47.4% 11.2%;
@@ -116,7 +117,7 @@
   --secondary-foreground: 0 0% 8%;
 
   --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted-foreground: 215 20% 68%;
 
   --accent: 217.2 32.6% 17.5%;
   --accent-foreground: 210 40% 98%;
@@ -136,6 +137,71 @@
   --sidebar-accent: 215 28% 17%;
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-ring: 48 97% 47%;
+}
+
+/* ── Accessibility: font scaling ─────────────────────────────────────────── */
+/* Scales all rem-based sizes proportionally */
+html.fs-large { font-size: 112.5%; }
+html.fs-xl    { font-size: 125%; }
+
+/* ── Accessibility: high contrast ────────────────────────────────────────── */
+html.high-contrast {
+  --foreground: 0 0% 3%;
+  --card-foreground: 0 0% 3%;
+  --popover-foreground: 0 0% 3%;
+  --muted-foreground: 0 0% 18%;
+  --accent-foreground: 0 0% 3%;
+  --border: 0 0% 32%;
+  --input: 0 0% 32%;
+  /* Darker amber so yellow text on white meets WCAG AA */
+  --primary: 43 96% 34%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 43 96% 34%;
+}
+
+html.dark.high-contrast {
+  --foreground: 0 0% 97%;
+  --card-foreground: 0 0% 97%;
+  --popover-foreground: 0 0% 97%;
+  --muted-foreground: 0 0% 80%;
+  --accent-foreground: 0 0% 97%;
+  --border: 0 0% 60%;
+  --input: 0 0% 60%;
+  --primary: 48 100% 65%;
+  --primary-foreground: 0 0% 5%;
+  --ring: 48 100% 65%;
+}
+
+/* ── Accessibility: skip-to-content link ─────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0.5rem;
+  z-index: 10000;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  transition: top 0.15s ease;
+  outline: 3px solid transparent;
+}
+.skip-link:focus {
+  top: 0;
+  outline-color: hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* ── Accessibility: respect prefers-reduced-motion ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer base {

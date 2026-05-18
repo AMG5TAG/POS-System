@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
 import { NavLayoutProvider } from "@/lib/nav-layout";
+import { AccessibilityProvider } from "@/lib/accessibility";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
@@ -286,16 +287,19 @@ function Router() {
 function App() {
   return (
     <ThemeProvider>
-      <NavLayoutProvider>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AuthProvider>
-              <Router />
-              <Toaster />
-            </AuthProvider>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </NavLayoutProvider>
+      <AccessibilityProvider>
+        <NavLayoutProvider>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <AuthProvider>
+                <a href="#main-content" className="skip-link">Skip to main content</a>
+                <Router />
+                <Toaster />
+              </AuthProvider>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </NavLayoutProvider>
+      </AccessibilityProvider>
     </ThemeProvider>
   );
 }

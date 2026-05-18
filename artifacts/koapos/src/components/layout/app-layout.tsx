@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/use-auth";
 import { useTheme } from "@/lib/theme";
 import { useNavLayout, type NavLayoutMode } from "@/lib/nav-layout";
+import { useAccessibility } from "@/lib/accessibility";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
@@ -13,7 +14,7 @@ import {
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
-  Percent, LayoutTemplate, Printer, Check, X, Menu,
+  Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -445,6 +446,91 @@ function LayoutPicker() {
   );
 }
 
+/* ─── Accessibility picker ───────────────────────────────────────────────── */
+
+function AccessibilityPicker() {
+  const { fontSize, setFontSize, contrastMode, setContrastMode } = useAccessibility();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const fontOptions = [
+    { key: "normal" as const, label: "A",   title: "Normal text size"   },
+    { key: "large"  as const, label: "A",   title: "Large text size",  cls: "text-base" },
+    { key: "xl"     as const, label: "A",   title: "Extra-large text", cls: "text-lg"   },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        aria-label="Accessibility settings"
+        title="Accessibility settings"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <Accessibility className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-2 bg-popover border rounded-xl shadow-xl z-[200] p-3 w-52"
+          role="dialog"
+          aria-label="Accessibility settings"
+        >
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Text size</p>
+          <div className="flex gap-1 mb-3">
+            {fontOptions.map(({ key, label, title, cls }) => (
+              <button
+                key={key}
+                onClick={() => setFontSize(key)}
+                title={title}
+                aria-pressed={fontSize === key}
+                className={cn(
+                  "flex-1 rounded-lg py-1.5 font-semibold border transition-colors",
+                  cls ?? "text-sm",
+                  fontSize === key
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "border-border hover:bg-muted text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Contrast</p>
+          <div className="flex gap-1">
+            {(["normal", "high"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setContrastMode(mode)}
+                aria-pressed={contrastMode === mode}
+                className={cn(
+                  "flex-1 rounded-lg py-1.5 text-xs font-medium border transition-colors",
+                  contrastMode === mode
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "border-border hover:bg-muted text-foreground"
+                )}
+              >
+                {mode === "normal" ? "Standard" : "High"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Auto-hide sidebar wrapper (must be inside SidebarProvider) ─────────── */
 
 function AutoHideSidebarWrapper({ children }: { children: React.ReactNode }) {
@@ -584,7 +670,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </Link>
 
         {/* Nav items */}
-        <nav className="flex items-center gap-0.5 overflow-x-auto shrink-0" style={{ scrollbarWidth: "none" }}>
+        <nav className="flex items-center gap-0.5 overflow-x-auto shrink-0" aria-label="Main navigation" style={{ scrollbarWidth: "none" }}>
           <TopNavBtn icon={LayoutDashboard} label="Dashboard" isActive={location === "/dashboard"} onClick={() => navigate("/dashboard")} />
           <TopNavDropdown label="POS" icon={ShoppingCart} items={POS_SUBNAV} isActive={isPOSSection}
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
@@ -607,6 +693,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
         {/* Right actions */}
         <LayoutPicker />
+        <AccessibilityPicker />
         <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
           <Link href="/pos">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
@@ -619,7 +706,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto bg-muted/10">{children}</main>
+      <main id="main-content" className="flex-1 overflow-auto bg-muted/10">{children}</main>
     </div>
   );
 }
@@ -655,7 +742,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
             <p className="font-semibold text-sm">{user?.ownerName || "Merchant"}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors" aria-label="Close menu">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -732,6 +819,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         </div>
         <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
         <LayoutPicker />
+        <AccessibilityPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
           <Link href="/pos">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
@@ -744,10 +832,10 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto bg-muted/10 pb-16">{children}</main>
+      <main id="main-content" className="flex-1 overflow-auto bg-muted/10 pb-16">{children}</main>
 
       {/* Fixed bottom bar */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30">
+      <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30" aria-label="Main navigation">
         <BottomTab href="/dashboard"        icon={LayoutDashboard} label="Dashboard" active={location === "/dashboard"} />
         <BottomTab href="/pos"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
         <BottomTab href="/products/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
@@ -941,9 +1029,10 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
               </button>
             </div>
             <LayoutPicker />
+            <AccessibilityPicker />
           </header>
 
-          <main className="flex-1 overflow-auto bg-muted/10">{children}</main>
+          <main id="main-content" className="flex-1 overflow-auto bg-muted/10">{children}</main>
         </div>
       </div>
     </SidebarProvider>
