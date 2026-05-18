@@ -2,6 +2,7 @@ import { Switch, Route, Redirect } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
+import { NavLayoutProvider } from "@/lib/nav-layout";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
@@ -285,14 +286,16 @@ function Router() {
 function App() {
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <AuthProvider>
-            <Router />
-            <Toaster />
-          </AuthProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <NavLayoutProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AuthProvider>
+              <Router />
+              <Toaster />
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </NavLayoutProvider>
     </ThemeProvider>
   );
 }
