@@ -25,5 +25,7 @@ export interface Merchant {
   timezone?: string | null;
   /** @nullable */
   logoUrl?: string | null;
+  /** @nullable */
+  username?: string | null;
   createdAt: Date;
 }

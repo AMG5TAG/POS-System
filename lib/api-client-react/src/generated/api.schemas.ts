@@ -44,6 +44,8 @@ export interface Merchant {
   timezone?: string | null;
   /** @nullable */
   logoUrl?: string | null;
+  /** @nullable */
+  username?: string | null;
   createdAt: string;
 }
 
@@ -57,6 +59,12 @@ export interface MerchantUpdate {
   currency?: string;
   timezone?: string;
   logoUrl?: string;
+  /**
+     * @minLength 3
+     * @maxLength 30
+     * @pattern ^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$
+     */
+  username?: string;
 }
 
 export interface Plan {

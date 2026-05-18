@@ -16,4 +16,10 @@ export interface MerchantUpdate {
   currency?: string;
   timezone?: string;
   logoUrl?: string;
+  /**
+     * @minLength 3
+     * @maxLength 30
+     * @pattern ^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$
+     */
+  username?: string;
 }

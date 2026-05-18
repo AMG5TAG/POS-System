@@ -1412,6 +1412,8 @@ components:
           type: ["string", "null"]
         logoUrl:
           type: ["string", "null"]
+        username:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -1437,6 +1439,11 @@ components:
           type: string
         logoUrl:
           type: string
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+          pattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
 
     # ── Plans ────────────────────────────────────────────────────────────────
     Plan:

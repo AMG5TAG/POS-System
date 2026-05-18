@@ -31,6 +31,7 @@ export const GetMeResponse = zod.object({
   "currency": zod.string().optional(),
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
+  "username": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -73,6 +74,7 @@ export const LoginResponse = zod.object({
   "currency": zod.string().optional(),
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
+  "username": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -92,6 +94,7 @@ export const GetMerchantResponse = zod.object({
   "currency": zod.string().optional(),
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
+  "username": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -99,6 +102,13 @@ export const GetMerchantResponse = zod.object({
 /**
  * @summary Update merchant profile
  */
+export const updateMerchantBodyUsernameMin = 3;
+export const updateMerchantBodyUsernameMax = 30;
+
+
+export const updateMerchantBodyUsernameRegExp = new RegExp('^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$');
+
+
 export const UpdateMerchantBody = zod.object({
   "businessName": zod.string().optional(),
   "ownerName": zod.string().optional(),
@@ -108,7 +118,8 @@ export const UpdateMerchantBody = zod.object({
   "country": zod.string().optional(),
   "currency": zod.string().optional(),
   "timezone": zod.string().optional(),
-  "logoUrl": zod.string().optional()
+  "logoUrl": zod.string().optional(),
+  "username": zod.string().min(updateMerchantBodyUsernameMin).max(updateMerchantBodyUsernameMax).regex(updateMerchantBodyUsernameRegExp).optional()
 })
 
 export const UpdateMerchantResponse = zod.object({
@@ -123,6 +134,7 @@ export const UpdateMerchantResponse = zod.object({
   "currency": zod.string().optional(),
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
+  "username": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
