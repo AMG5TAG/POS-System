@@ -72,6 +72,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   },
   { name: "Discounts",         href: "/management/discounts",       icon: Percent        },
   { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
+  { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
   { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
   { name: "Customers",         href: "/management/customers",       icon: Users          },
   { name: "Layby",             href: "/management/layby",           icon: Package2       },
