@@ -201,19 +201,29 @@ export const RECOMMENDED_SIZES: Record<string, string[]> = {
 
 export function LabelPreview({
   type, fields, size, businessName, brandColor,
+  fillWidth, fillHeight,
 }: {
   type: StickerType;
   fields: Record<string, string>;
   size: DymoSize;
   businessName: string;
   brandColor: string;
+  /** When provided together, scale to fill this container (px) maintaining aspect ratio */
+  fillWidth?: number;
+  fillHeight?: number;
 }) {
-  const PREVIEW_W = 280;
-  const scale = PREVIEW_W / size.widthMm;
-  const previewH = size.heightMm * scale;
-  const cappedH = Math.min(previewH, 320);
-  const cappedScale = cappedH / size.heightMm;
-  const finalScale = Math.min(scale, cappedScale);
+  let finalScale: number;
+  if (fillWidth !== undefined && fillHeight !== undefined && fillWidth > 0 && fillHeight > 0) {
+    const PAD = 48;
+    const scaleW = (fillWidth  - PAD) / size.widthMm;
+    const scaleH = (fillHeight - PAD) / size.heightMm;
+    finalScale = Math.min(scaleW, scaleH);
+  } else {
+    const PREVIEW_W = fillWidth ?? 280;
+    const scale = PREVIEW_W / size.widthMm;
+    const cappedH = Math.min(size.heightMm * scale, 320);
+    finalScale = Math.min(scale, cappedH / size.heightMm);
+  }
   const finalW = size.widthMm * finalScale;
   const finalH = size.heightMm * finalScale;
 
