@@ -37,8 +37,91 @@ export interface StickerTemplate {
   typeId: string;
   sizeId: string;
   fields: Record<string, string>;
+  isDefault?: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+/* ─── Quick Codes ────────────────────────────────────────────────────────── */
+
+export interface QuickCode {
+  code: string;
+  label: string;
+  group: string;
+  example: string;
+}
+
+export const QUICK_CODES: QuickCode[] = [
+  { code: "{{product.name}}",     label: "Product Name",     group: "Product",  example: "Flat White 250g" },
+  { code: "{{product.sku}}",      label: "Product SKU",      group: "Product",  example: "BEV-001" },
+  { code: "{{product.price}}",    label: "Sale Price",       group: "Product",  example: "$5.50" },
+  { code: "{{product.barcode}}",  label: "Barcode",          group: "Product",  example: "9310000123456" },
+  { code: "{{product.category}}", label: "Category",         group: "Product",  example: "Beverages" },
+  { code: "{{customer.name}}",    label: "Customer Name",    group: "Customer", example: "Sarah Johnson" },
+  { code: "{{customer.id}}",      label: "Customer ID",      group: "Customer", example: "#CUS-0042" },
+  { code: "{{customer.loyalty}}", label: "Loyalty Number",   group: "Customer", example: "LYL-20491" },
+  { code: "{{customer.phone}}",   label: "Phone",            group: "Customer", example: "(03) 9000 0000" },
+  { code: "{{customer.email}}",   label: "Email",            group: "Customer", example: "customer@email.com" },
+  { code: "{{customer.group}}",   label: "Membership Group", group: "Customer", example: "VIP Member" },
+  { code: "{{merchant.name}}",    label: "Business Name",    group: "Business", example: "Demo Co" },
+  { code: "{{merchant.abn}}",     label: "ABN",              group: "Business", example: "12 345 678 901" },
+  { code: "{{merchant.phone}}",   label: "Business Phone",   group: "Business", example: "(03) 9000 0000" },
+  { code: "{{date.today}}",       label: "Today's Date",     group: "System",   example: new Date().toLocaleDateString("en-AU") },
+  { code: "{{date.time}}",        label: "Current Time",     group: "System",   example: "09:30 AM" },
+];
+
+export const FIELD_QUICK_CODES: Record<string, string[]> = {
+  productName:  ["{{product.name}}"],
+  sku:          ["{{product.sku}}"],
+  price:        ["{{product.price}}"],
+  wasPrice:     ["{{product.price}}"],
+  barcode:      ["{{product.barcode}}"],
+  category:     ["{{product.category}}"],
+  customerName: ["{{customer.name}}"],
+  customerId:   ["{{customer.id}}"],
+  loyaltyNo:    ["{{customer.loyalty}}"],
+  phone:        ["{{customer.phone}}", "{{merchant.phone}}"],
+  email:        ["{{customer.email}}"],
+  group:        ["{{customer.group}}"],
+  name:         ["{{customer.name}}", "{{merchant.name}}"],
+  date:         ["{{date.today}}"],
+  dueDate:      ["{{date.today}}"],
+  customer:     ["{{customer.name}}"],
+  businessName: ["{{merchant.name}}"],
+  abn:          ["{{merchant.abn}}"],
+};
+
+export interface QuickCodeContext {
+  product?: { name?: string; sku?: string; price?: number | null; barcode?: string; category?: string; };
+  customer?: { name?: string; id?: string; loyalty?: string; phone?: string; email?: string; group?: string; };
+  merchant?: { name?: string; abn?: string; phone?: string; };
+}
+
+export function resolveQuickCodes(
+  fields: Record<string, string>,
+  ctx: QuickCodeContext
+): Record<string, string> {
+  const today = new Date().toLocaleDateString("en-AU");
+  const time  = new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+  const subs: Record<string, string> = {
+    "{{product.name}}":     ctx.product?.name     ?? "",
+    "{{product.sku}}":      ctx.product?.sku       ?? "",
+    "{{product.price}}":    ctx.product?.price != null ? `$${Number(ctx.product.price).toFixed(2)}` : "",
+    "{{product.barcode}}":  ctx.product?.barcode   ?? "",
+    "{{product.category}}": ctx.product?.category  ?? "",
+    "{{customer.name}}":    ctx.customer?.name     ?? "",
+    "{{customer.id}}":      ctx.customer?.id       ?? "",
+    "{{customer.loyalty}}": ctx.customer?.loyalty  ?? "",
+    "{{customer.phone}}":   ctx.customer?.phone    ?? "",
+    "{{customer.email}}":   ctx.customer?.email    ?? "",
+    "{{customer.group}}":   ctx.customer?.group    ?? "",
+    "{{merchant.name}}":    ctx.merchant?.name     ?? "",
+    "{{merchant.abn}}":     ctx.merchant?.abn      ?? "",
+    "{{merchant.phone}}":   ctx.merchant?.phone    ?? "",
+    "{{date.today}}":       today,
+    "{{date.time}}":        time,
+  };
+  return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, subs[v] ?? v]));
 }
 
 /* ─── DYMO label sizes ───────────────────────────────────────────────────── */
@@ -357,5 +440,16 @@ export function useStickerTemplates() {
     persist(templates.filter((t) => t.id !== id));
   };
 
-  return { templates, create, update, remove };
+  const setDefault = (id: string) => {
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    persist(templates.map((t) => ({
+      ...t,
+      isDefault: t.id === id
+        ? !tpl.isDefault
+        : t.typeId === tpl.typeId ? false : t.isDefault,
+    })));
+  };
+
+  return { templates, create, update, remove, setDefault };
 }

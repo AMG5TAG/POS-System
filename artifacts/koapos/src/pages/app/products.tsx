@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import {
@@ -8,8 +8,13 @@ import {
   useUpdateProduct,
   useDeleteProduct,
   useCreateCategory,
+  useGetMerchant,
   Product,
 } from "@workspace/api-client-react";
+import {
+  useStickerTemplates, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
+} from "@/lib/sticker-config";
+import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +30,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
-  Layers, Briefcase, Download, KeyRound, Printer,
+  Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -173,6 +178,158 @@ function ImageSlot({ label, value, onChange }: {
   );
 }
 
+/* ─── Print Sticker dialog ───────────────────────────────────────────────── */
+
+function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setSize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
+
+function PrintStickerDialog({ open, onOpenChange, product }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  product: Product | null;
+}) {
+  const { templates, setDefault } = useStickerTemplates();
+  const { data: merchant }        = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { profile }               = useBusinessProfile();
+  const [quantity, setQuantity]   = useState(1);
+  const previewRef                = useRef<HTMLDivElement>(null);
+  const previewSize               = useContainerSize(previewRef);
+  const [, navigate]              = useLocation();
+
+  if (!product) return null;
+
+  const businessName = merchant?.businessName ?? "Your Business";
+  const brandColor   = profile.brandColors?.[0] ?? "#efbf04";
+
+  const defaultTpl = templates.find((t) => t.typeId === "product" && t.isDefault)
+    ?? templates.find((t) => t.typeId === "product");
+
+  const type = defaultTpl ? (STICKER_TYPES.find((t) => t.id === defaultTpl.typeId) ?? STICKER_TYPES[0]) : STICKER_TYPES[0];
+  const size = defaultTpl ? (DYMO_SIZES.find((s) => s.id === defaultTpl.sizeId) ?? DYMO_SIZES[2]) : DYMO_SIZES[2];
+
+  const resolvedFields = defaultTpl ? resolveQuickCodes(defaultTpl.fields, {
+    product: {
+      name:     product.name,
+      sku:      product.sku      ?? "",
+      price:    product.price,
+      barcode:  product.barcode  ?? "",
+      category: product.category?.name ?? "",
+    },
+    merchant: { name: businessName },
+  }) : {};
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Printer className="w-4 h-4" /> Print Sticker
+          </DialogTitle>
+        </DialogHeader>
+
+        {!defaultTpl ? (
+          <div className="text-center py-8 space-y-3">
+            <LayoutTemplate className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+            <p className="font-medium">No product template found</p>
+            <p className="text-sm text-muted-foreground">
+              Create a product template in Sticker Templates and mark it as the default
+              <Star className="w-3 h-3 text-amber-500 inline mb-0.5 mx-1" />
+              to enable one-click printing here.
+            </p>
+            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
+              Open Sticker Templates
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr] gap-4 items-stretch">
+            {/* Left: info + controls */}
+            <div className="space-y-3">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-1">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Using template</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-sm">{defaultTpl.name}</p>
+                  {defaultTpl.isDefault && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground">{type.label} · {size.widthMm}×{size.heightMm}mm</p>
+                {!defaultTpl.isDefault && (
+                  <p className="text-[10px] text-amber-600 flex items-center gap-1">
+                    <Star className="w-2.5 h-2.5" />First product template — star one to set default
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quantity</Label>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="w-8 h-8 p-0"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</Button>
+                  <Input type="number" min={1} max={999} value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 text-center h-8 text-sm" />
+                  <Button size="sm" variant="outline" className="w-8 h-8 p-0"
+                    onClick={() => setQuantity((q) => Math.min(999, q + 1))}>+</Button>
+                </div>
+              </div>
+
+              <Button className="w-full gap-2" onClick={() => window.print()}>
+                <Printer className="w-4 h-4" />
+                Print {quantity > 1 ? `${quantity} Labels` : "Label"}
+              </Button>
+
+              <Button variant="outline" size="sm" className="w-full gap-1.5"
+                onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
+                <LayoutTemplate className="w-3.5 h-3.5" /> Manage Templates
+              </Button>
+
+              {templates.filter((t) => t.typeId === "product").length > 1 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground">Other product templates:</p>
+                  {templates.filter((t) => t.typeId === "product" && t.id !== defaultTpl.id).map((tpl) => (
+                    <button key={tpl.id}
+                      onClick={() => setDefault(tpl.id)}
+                      className="w-full text-left text-[11px] px-2 py-1 rounded border hover:bg-muted flex items-center gap-1.5"
+                    >
+                      <Star className={cn("w-2.5 h-2.5 shrink-0", tpl.isDefault ? "text-amber-500 fill-amber-500" : "text-muted-foreground")} />
+                      {tpl.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right: live preview */}
+            <div
+              ref={previewRef}
+              className="rounded-xl border bg-[radial-gradient(circle,_#e5e7eb_1px,_transparent_1px)] [background-size:12px_12px] flex items-center justify-center min-h-40"
+            >
+              <LabelPreview
+                type={type}
+                fields={resolvedFields}
+                size={size}
+                businessName={businessName}
+                brandColor={brandColor}
+                fillWidth={previewSize.w}
+                fillHeight={previewSize.h}
+              />
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Product detail dialog ──────────────────────────────────────────────── */
 
 function ProductDetailDialog({
@@ -184,21 +341,9 @@ function ProductDetailDialog({
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
 }) {
-  const [tab, setTab] = useState<DetailTab>("details");
-  const [, navigate] = useLocation();
+  const [tab, setTab]                         = useState<DetailTab>("details");
+  const [printStickerOpen, setPrintStickerOpen] = useState(false);
   if (!product) return null;
-
-  const handlePrintSticker = () => {
-    sessionStorage.setItem("koapos_sticker_product", JSON.stringify({
-      name: product.name,
-      sku: product.sku ?? "",
-      price: product.price,
-      barcode: product.barcode ?? "",
-      category: product.category?.name ?? "",
-    }));
-    onClose();
-    navigate("/management/stickers");
-  };
 
   const margin = product.costPrice && product.price > 0
     ? Math.round(((product.price - product.costPrice) / product.price) * 100)
@@ -322,7 +467,7 @@ function ProductDetailDialog({
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrintSticker}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
             <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(product); }}>
@@ -331,6 +476,7 @@ function ProductDetailDialog({
           </div>
         </div>
       </DialogContent>
+      <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
     </Dialog>
   );
 }

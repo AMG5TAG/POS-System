@@ -14,11 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   Tag, Plus, Pencil, Trash2, Printer, Check, Save,
-  LayoutTemplate, Copy, Clock,
+  LayoutTemplate, Copy, Clock, Zap, Star,
 } from "lucide-react";
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES,
   LabelPreview, useStickerTemplates, StickerTemplate,
+  QuickCode, QUICK_CODES, FIELD_QUICK_CODES, resolveQuickCodes,
 } from "@/lib/sticker-config";
 import { toast } from "sonner";
 
@@ -30,6 +31,94 @@ function timeAgo(ts: number): string {
   if (secs < 3600)  return `${Math.floor(secs / 60)}m ago`;
   if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
   return `${Math.floor(secs / 86400)}d ago`;
+}
+
+function resolveForPreview(fields: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(fields).map(([k, v]) => {
+      const qc = QUICK_CODES.find((q) => q.code === v);
+      return [k, qc ? qc.example : v];
+    })
+  );
+}
+
+function FieldSelector({ fieldKey, label, value, onChange }: {
+  fieldKey: string; label: string; value: string; onChange: (v: string) => void;
+}) {
+  const isQC      = QUICK_CODES.some((q) => q.code === value);
+  const suggested = (FIELD_QUICK_CODES[fieldKey] ?? [])
+    .map((code) => QUICK_CODES.find((q) => q.code === code))
+    .filter((q): q is QuickCode => !!q);
+  const others    = QUICK_CODES.filter((q) => !suggested.find((s) => s.code === q.code));
+  const groups    = others.reduce<Record<string, QuickCode[]>>((acc, qc) => {
+    (acc[qc.group] ??= []).push(qc); return acc;
+  }, {});
+  const activeQC  = QUICK_CODES.find((q) => q.code === value);
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Select value={isQC ? value : "__custom__"} onValueChange={(v) => onChange(v === "__custom__" ? "" : v)}>
+        <SelectTrigger className="text-sm h-9">
+          <SelectValue>
+            {isQC
+              ? <span className="flex items-center gap-1.5 text-amber-600 font-medium">
+                  <Zap className="w-3 h-3 shrink-0" />{activeQC?.label}
+                </span>
+              : <span className="text-muted-foreground">Custom value</span>
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {suggested.length > 0 && (
+            <>
+              <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Suggested</div>
+              {suggested.map((qc) => (
+                <SelectItem key={qc.code} value={qc.code}>
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                    {qc.label}
+                    <span className="ml-2 text-[10px] text-muted-foreground">{qc.example}</span>
+                  </span>
+                </SelectItem>
+              ))}
+              <Separator className="my-1" />
+            </>
+          )}
+          {Object.entries(groups).map(([group, codes]) => (
+            <div key={group}>
+              <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{group}</div>
+              {codes.map((qc) => (
+                <SelectItem key={qc.code} value={qc.code}>
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 text-muted-foreground/60 shrink-0" />{qc.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </div>
+          ))}
+          <Separator className="my-1" />
+          <SelectItem value="__custom__">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Pencil className="w-3 h-3 shrink-0" />Custom value…
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      {isQC ? (
+        <p className="text-[10px] text-amber-600/80 flex items-center gap-1">
+          <Zap className="w-2.5 h-2.5" />Preview example: <em>{activeQC?.example}</em>
+        </p>
+      ) : (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter custom text…"
+          className="text-sm"
+        />
+      )}
+    </div>
+  );
 }
 
 function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
@@ -83,7 +172,7 @@ function formFromTemplate(tpl: StickerTemplate): FormState {
 
 export default function ManagementStickerTemplatesPage() {
   const [, navigate]                           = useLocation();
-  const { templates, create, update, remove }  = useStickerTemplates();
+  const { templates, create, update, remove, setDefault } = useStickerTemplates();
 
   const [editingId,     setEditingId]     = useState<string | null>(null);
   const [form,          setForm]          = useState<FormState>(blankForm);
@@ -244,7 +333,19 @@ export default function ManagementStickerTemplatesPage() {
                     <div className="flex items-start gap-2">
                       <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", type?.color ?? "text-muted-foreground")} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold truncate leading-tight">{tpl.name}</p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-sm font-semibold truncate leading-tight flex-1">{tpl.name}</p>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDefault(tpl.id); }}
+                            title={tpl.isDefault ? "Remove default" : "Set as default"}
+                            className={cn(
+                              "p-0.5 rounded transition-colors shrink-0",
+                              tpl.isDefault ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground/30 hover:text-amber-400"
+                            )}
+                          >
+                            <Star className={cn("w-3 h-3", tpl.isDefault && "fill-amber-500")} />
+                          </button>
+                        </div>
                         {size && <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{size.id} · {size.widthMm}×{size.heightMm}mm</p>}
                         <p className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
                           <Clock className="w-2.5 h-2.5" />{timeAgo(tpl.updatedAt)}
@@ -420,7 +521,12 @@ export default function ManagementStickerTemplatesPage() {
 
               {/* Fields */}
               <div className="px-5 py-4 space-y-3">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Label Fields</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Label Fields</p>
+                  <span className="text-[10px] text-amber-600 flex items-center gap-1">
+                    <Zap className="w-2.5 h-2.5" />Quick Codes auto-fill when printing
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {selectedType.fields.map((field) => {
                     if (field.type === "toggle") {
@@ -435,15 +541,13 @@ export default function ManagementStickerTemplatesPage() {
                       );
                     }
                     return (
-                      <div key={field.key} className="space-y-1.5">
-                        <Label className="text-xs">{field.label}</Label>
-                        <Input
-                          value={form.fields[field.key] ?? ""}
-                          onChange={(e) => setField(field.key, e.target.value)}
-                          placeholder={field.defaultValue}
-                          className="text-sm"
-                        />
-                      </div>
+                      <FieldSelector
+                        key={field.key}
+                        fieldKey={field.key}
+                        label={field.label}
+                        value={form.fields[field.key] ?? ""}
+                        onChange={(v) => setField(field.key, v)}
+                      />
                     );
                   })}
                 </div>
@@ -499,7 +603,7 @@ export default function ManagementStickerTemplatesPage() {
             >
               <LabelPreview
                 type={selectedType}
-                fields={form.fields}
+                fields={resolveForPreview(form.fields)}
                 size={selectedSize}
                 businessName={businessName}
                 brandColor={brandColor}
