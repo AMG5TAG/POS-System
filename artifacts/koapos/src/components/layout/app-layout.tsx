@@ -121,7 +121,7 @@ const SEARCH_INDEX = [
   { label: "Discounts",            href: "/management/discounts",    icon: Percent,         group: "Management" },
   { label: "Price Tiers",          href: "/management/price-tiers",  icon: Layers,          group: "Management" },
   { label: "Wastage / Write-off",  href: "/inventory/wastage",       icon: AlertTriangle,   group: "Inventory"  },
-  { label: "Tax & Receipts",       href: "/settings/tax",            icon: Receipt,         group: "Settings"   },
+  { label: "Tax & Receipts",       href: "/settings/tax",            icon: Receipt,         group: "Management" },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -174,7 +174,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/discounts":        ["Management", "Discounts"],
   "/management/price-tiers":      ["Management", "Price Tiers"],
   "/inventory/wastage":           ["Inventory", "Wastage"],
-  "/settings/tax":                ["Settings", "Tax & Receipts"],
+  "/settings/tax":                ["Management", "Tax & Receipts"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
