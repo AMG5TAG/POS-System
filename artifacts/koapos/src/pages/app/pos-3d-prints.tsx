@@ -285,10 +285,10 @@ export default function POS3DPrintsPage() {
           <span className="text-muted-foreground">Margin: <strong className="text-foreground">{settings.profitMargin}%</strong></span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
           {/* Filament Selection */}
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Package className="w-4 h-4 text-primary" />
@@ -391,7 +391,7 @@ export default function POS3DPrintsPage() {
               </CardContent>
             </Card>
 
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 h-full">
 
             {/* Print Parameters */}
             <Card>
@@ -520,8 +520,8 @@ export default function POS3DPrintsPage() {
             {result && (
               <>
                 {/* Selling price hero */}
-                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
-                  <CardContent className="pt-5 pb-5">
+                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 flex-1 flex flex-col">
+                  <CardContent className="pt-5 pb-5 flex flex-col flex-1 justify-center">
                     <div className="text-center space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recommended Selling Price</p>
                       <p className="text-4xl font-bold text-primary">{fmt(result.sellingPrice)}</p>
