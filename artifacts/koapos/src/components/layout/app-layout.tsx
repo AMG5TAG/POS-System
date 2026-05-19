@@ -649,7 +649,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
 
 function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
   const isPOSSection       = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection = location === "/products" || location.startsWith("/products/");
+  const isInventorySection = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isManagementSection = location.startsWith("/management/") || location === "/staff" || location.startsWith("/staff/") || location === "/modules" || location.startsWith("/settings/");
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -797,7 +797,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
 function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
   const isPOSSection       = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection = location === "/products" || location.startsWith("/products/");
+  const isInventorySection = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isManagementSection = location.startsWith("/management/") || location === "/staff" || location.startsWith("/staff/") || location === "/modules" || location.startsWith("/settings/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
