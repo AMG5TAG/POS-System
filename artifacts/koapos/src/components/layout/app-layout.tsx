@@ -63,7 +63,20 @@ type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
+  { name: "Account",           href: "/management/account",        icon: UserCircle     },
+  { name: "Business Details",  href: "/management/business",       icon: Building2      },
+  { name: "Customers",         href: "/management/customers",      icon: Users          },
+  { name: "Discounts",         href: "/management/discounts",      icon: Percent        },
+  { name: "Forms",             href: "/management/forms",          icon: FileText       },
+  { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
+  { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
+  { name: "Inventory",         href: "/management/inventory",      icon: Boxes          },
+  { name: "Layby",             href: "/management/layby",          icon: Package2       },
+  { name: "Loyalty",           href: "/management/loyalty",        icon: Gift           },
+  { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
+  { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
+  { name: "Regional Settings", href: "/management/regional",       icon: Globe          },
   {
     name: "Staff",
     icon: UserSquare2,
@@ -75,29 +88,16 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Costs",      href: "/staff/cost-summary",    icon: Coins         },
     ],
   },
-  { name: "Discounts",         href: "/management/discounts",       icon: Percent        },
-  { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
-  { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
-  { name: "Forms",             href: "/management/forms",          icon: FileText       },
   {
     name: "Stickers",
     icon: Tag,
     children: [
-      { name: "Labels",        href: "/management/stickers",          icon: Printer       },
-      { name: "Templates",    href: "/management/sticker-templates", icon: LayoutTemplate },
+      { name: "Labels",     href: "/management/stickers",          icon: Printer        },
+      { name: "Templates",  href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
   { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
-  { name: "Loyalty",           href: "/management/loyalty",         icon: Gift           },
-  { name: "Customers",         href: "/management/customers",       icon: Users          },
-  { name: "Layby",             href: "/management/layby",           icon: Package2       },
-  { name: "Inventory",         href: "/management/inventory",       icon: Boxes          },
-  { name: "Modules",           href: "/modules",                   icon: Blocks         },
-  { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
-  { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
-  { name: "Business Details",  href: "/management/business",       icon: Building2      },
-  { name: "Regional Settings", href: "/management/regional",       icon: Globe          },
-  { name: "Account",           href: "/management/account",        icon: UserCircle     },
+  { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
