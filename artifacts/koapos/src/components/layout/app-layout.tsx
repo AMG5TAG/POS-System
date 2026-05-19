@@ -297,14 +297,14 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
 function Breadcrumbs({ location }: { location: string }) {
   const labels = ROUTE_LABEL[location] || [location.split("/").filter(Boolean).join(" / ") || "Home"];
   return (
-    <nav className="flex items-center gap-1.5 text-sm min-w-0 shrink-0">
+    <nav className="flex items-center gap-1.5 text-sm flex-wrap">
       <Link href="/dashboard" className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground">
         <LayoutGrid className="w-4 h-4" />
       </Link>
       {labels.map((label, i) => (
         <span key={i} className="flex items-center gap-1.5 min-w-0">
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
-          <span className={cn("truncate", i === labels.length - 1 ? "font-semibold text-foreground" : "text-muted-foreground")}>
+          <span className={cn(i === labels.length - 1 ? "font-semibold text-foreground" : "text-muted-foreground")}>
             {label}
           </span>
         </span>
@@ -835,10 +835,11 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
       <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
-        <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
+        <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
           <Breadcrumbs location={location} />
         </div>
-        <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+        <div className="flex-1 min-w-0" />
+        <div className="w-48 shrink-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
@@ -1044,11 +1045,12 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
             <SidebarTrigger className="md:hidden shrink-0" />
 
-            <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
+            <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
               <Breadcrumbs location={location} />
             </div>
 
-            <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+            <div className="flex-1 min-w-0" />
+            <div className="w-48 shrink-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
 
             <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
               <Link href="/pos">
