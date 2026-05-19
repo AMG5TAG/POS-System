@@ -30,13 +30,13 @@ import { cn } from "@/lib/utils";
 
 const POS_SUBNAV = [
   { name: "Sell",      href: "/pos",            icon: ShoppingCart },
+  { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
   { name: "History",   href: "/pos/history",    icon: History },
   { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
   { name: "Laybys",    href: "/pos/laybuys",    icon: Package2 },
   { name: "Parked",    href: "/pos/parked",     icon: ParkingCircle },
   { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
   { name: "Cash",      href: "/pos/cash",       icon: Coins },
-  { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
 ];
 
 const CUSTOMERS_SUBNAV = [
@@ -67,6 +67,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
   { name: "Account",           href: "/management/account",        icon: UserCircle     },
   { name: "Business Details",  href: "/management/business",       icon: Building2      },
+  {
+    name: "Calculators",
+    icon: Calculator,
+    children: [
+      { name: "3D Printing", href: "/management/calculators/3d-printing", icon: Cpu },
+    ],
+  },
   { name: "Customers",         href: "/management/customers",      icon: Users          },
   { name: "Discounts",         href: "/management/discounts",      icon: Percent        },
   { name: "Forms",             href: "/management/forms",          icon: FileText       },
@@ -100,13 +107,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   },
   { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
   { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
-  {
-    name: "Calculators",
-    icon: Calculator,
-    children: [
-      { name: "3D Printing", href: "/management/calculators/3d-printing", icon: Cpu },
-    ],
-  },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
