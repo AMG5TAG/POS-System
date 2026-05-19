@@ -15,7 +15,7 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
-  Cpu, Calculator, HardDrive,
+  Cpu, Calculator, HardDrive, Target,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -78,6 +78,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   },
   { name: "Customers",         href: "/management/customers",      icon: Users          },
   { name: "Discounts",         href: "/management/discounts",      icon: Percent        },
+  { name: "KPIs & Targets",   href: "/management/kpis",           icon: Target         },
   { name: "Forms",             href: "/management/forms",          icon: FileText       },
   { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
   { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
@@ -136,6 +137,7 @@ const SEARCH_INDEX = [
   { label: "Staff · Leave",      href: "/staff/leave-requests",        icon: ClipboardList,   group: "Management" },
   { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Management" },
   { label: "Sales Overview",     href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
+  { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
   { label: "Tax & Receipts",     href: "/settings/tax",                          icon: Receipt,      group: "Management" },
@@ -205,6 +207,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/regional":         ["Management", "Regional Settings"],
   "/management/account":          ["Management", "Account"],
   "/management/sales-overview":   ["Management", "Sales Overview"],
+  "/management/kpis":             ["Management", "KPIs & Targets"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
   "/management/loyalty":          ["Management", "Loyalty"],

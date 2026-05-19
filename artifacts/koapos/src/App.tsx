@@ -77,6 +77,7 @@ import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
 import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
+import ManagementKpisPage from "@/pages/app/management-kpis";
 
 import NotFound from "@/pages/not-found";
 
@@ -226,6 +227,9 @@ function Router() {
       </Route>
 
       {/* Management section */}
+      <Route path="/management/kpis">
+        <ProtectedRoute component={ManagementKpisPage} />
+      </Route>
       <Route path="/management/registers">
         <ProtectedRoute component={ManagementRegistersPage} />
       </Route>
