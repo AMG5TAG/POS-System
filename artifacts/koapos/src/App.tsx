@@ -67,6 +67,7 @@ import ManagementInventoryPage from "@/pages/app/management-inventory";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
 import ManagementPriceTiersPage from "@/pages/app/management-price-tiers";
 import ManagementTemplatesPage from "@/pages/app/management-templates";
+import ManagementFormsPage from "@/pages/app/management-forms";
 import ManagementStickersPage from "@/pages/app/management-stickers";
 import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
@@ -240,6 +241,9 @@ function Router() {
       </Route>
       <Route path="/management/templates">
         <ProtectedRoute component={ManagementTemplatesPage} />
+      </Route>
+      <Route path="/management/forms">
+        <ProtectedRoute component={ManagementFormsPage} />
       </Route>
       <Route path="/management/stickers">
         <ProtectedRoute component={ManagementStickersPage} />

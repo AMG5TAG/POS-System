@@ -74,6 +74,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Discounts",         href: "/management/discounts",       icon: Percent        },
   { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
   { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
+  { name: "Forms",             href: "/management/forms",          icon: FileText       },
   {
     name: "Stickers",
     icon: Tag,
@@ -133,6 +134,7 @@ const SEARCH_INDEX = [
   { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Templates",          href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
   { label: "Wastage / Write-off",href: "/inventory/wastage",           icon: AlertTriangle,   group: "Inventory"  },

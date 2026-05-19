@@ -27,6 +27,8 @@ import discountsRouter from "./discounts";
 import wastageRouter from "./wastage";
 import priceTiersRouter from "./price-tiers";
 import taxSettingsRouter from "./tax-settings";
+import formsRouter from "./forms";
+import formSubmissionsRouter from "./form-submissions";
 
 const router: IRouter = Router();
 
@@ -58,5 +60,7 @@ router.use(discountsRouter);
 router.use(wastageRouter);
 router.use(priceTiersRouter);
 router.use(taxSettingsRouter);
+router.use(formsRouter);
+router.use(formSubmissionsRouter);
 
 export default router;

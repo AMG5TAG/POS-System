@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import {
   useListAppointments,
   useCreateAppointment,
@@ -158,7 +159,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 
   return (
     <Dialog open={!!appt} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary shrink-0" />
@@ -224,6 +225,13 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
               </div>
             </div>
           )}
+
+          <FormsAttachmentPanel
+            sourceType="appointment"
+            sourceId={appt.id}
+            customerId={appt.customerId ?? undefined}
+            customerName={appt.customerName ?? undefined}
+          />
         </div>
 
         <DialogFooter className="gap-2 flex-row justify-between sm:justify-between">

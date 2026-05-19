@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
+import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListServiceJobs,
@@ -261,6 +262,13 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending }: DetailDialogP
               </div>
             </div>
           )}
+
+          <FormsAttachmentPanel
+            sourceType="service_job"
+            sourceId={job.id}
+            customerId={job.customerId ?? undefined}
+            customerName={job.customerName ?? undefined}
+          />
         </div>
 
         <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
