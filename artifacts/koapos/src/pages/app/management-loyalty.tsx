@@ -7,19 +7,54 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
-  Plus, Trash2, Info,
+  Plus, Trash2, Info, Pen,
 } from "lucide-react";
 import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+
+/* ─── Loyalty naming (localStorage) ─────────────────────────────────────── */
+
+const LOYALTY_NAMING_KEY = "koapos_loyalty_naming";
+
+interface LoyaltyNaming {
+  programName:      string;
+  cashbackUnit:     string;
+  pointsUnit:       string;
+  stampUnit:        string;
+  tieredUnit:       string;
+  customUnit:       string;
+}
+
+const NAMING_DEFAULTS: LoyaltyNaming = {
+  programName:  "",
+  cashbackUnit: "Credits",
+  pointsUnit:   "Points",
+  stampUnit:    "Stamps",
+  tieredUnit:   "Credits",
+  customUnit:   "Rewards",
+};
+
+function loadLoyaltyNaming(): LoyaltyNaming {
+  try {
+    const raw = localStorage.getItem(LOYALTY_NAMING_KEY);
+    return raw ? { ...NAMING_DEFAULTS, ...JSON.parse(raw) } : NAMING_DEFAULTS;
+  } catch { return NAMING_DEFAULTS; }
+}
+
+function saveLoyaltyNaming(s: LoyaltyNaming) {
+  localStorage.setItem(LOYALTY_NAMING_KEY, JSON.stringify(s));
+}
 
 const LOYALTY_TABS = [
   { href: "#program-type",     label: "Program Type" },
   { href: "#program-settings", label: "Settings" },
+  { href: "#program-identity", label: "Naming" },
   { href: "#excluded-groups",  label: "Excluded Groups" },
   { href: "#program-summary",  label: "Summary" },
 ];
@@ -102,11 +137,24 @@ function toForm(s: LoyaltySettings) {
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+/* Export so other pages can read the naming */
+export { loadLoyaltyNaming, type LoyaltyNaming };
+
 export default function ManagementLoyaltyPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetLoyaltySettings();
   const updateMutation = useUpdateLoyaltySettings();
   const { settings: customerConfig } = useCustomerSettings();
+
+  const [naming, setNaming] = useState<LoyaltyNaming>(() => loadLoyaltyNaming());
+
+  const setNamingField = <K extends keyof LoyaltyNaming>(key: K, value: string) =>
+    setNaming((prev) => ({ ...prev, [key]: value }));
+
+  const handleSaveNaming = () => {
+    saveLoyaltyNaming(naming);
+    toast.success("Loyalty program naming saved");
+  };
 
   const [form, setForm] = useState({
     programType:            "cashback" as ProgramType,
@@ -426,6 +474,60 @@ export default function ManagementLoyaltyPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Program Identity / Naming */}
+        <Card id="program-identity">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Pen className="w-4 h-4 text-primary" />
+              <CardTitle className="text-base">Program Identity</CardTitle>
+            </div>
+            <CardDescription>Customise the name of your loyalty program and what your reward currency is called.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label>Program Name</Label>
+              <Input
+                value={naming.programName}
+                onChange={(e) => setNamingField("programName", e.target.value)}
+                placeholder="e.g. Koala Rewards, VIP Club, Star Points"
+              />
+              <p className="text-xs text-muted-foreground">Shown on receipts and customer screens. Leave blank to use the default program type label.</p>
+            </div>
+
+            <Separator />
+
+            <div>
+              <p className="text-sm font-medium mb-3">Reward Unit Names</p>
+              <p className="text-xs text-muted-foreground mb-4">Rename what the earned currency is called for each program type. E.g. rename "Points" to "Stars" or "Credits" to "Coins".</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(
+                  [
+                    { key: "cashbackUnit" as keyof LoyaltyNaming, label: "Cash Back",         placeholder: "Credits"  },
+                    { key: "pointsUnit"   as keyof LoyaltyNaming, label: "Points",             placeholder: "Points"   },
+                    { key: "tieredUnit"   as keyof LoyaltyNaming, label: "Tiered Cash Back",   placeholder: "Credits"  },
+                    { key: "stampUnit"    as keyof LoyaltyNaming, label: "Stamp Card",         placeholder: "Stamps"   },
+                    { key: "customUnit"   as keyof LoyaltyNaming, label: "Custom",             placeholder: "Rewards"  },
+                  ]
+                ).map(({ key, label, placeholder }) => (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{label}</Label>
+                    <Input
+                      value={naming[key]}
+                      onChange={(e) => setNamingField(key, e.target.value)}
+                      placeholder={placeholder}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleSaveNaming}>Save Naming</Button>
+            </div>
           </CardContent>
         </Card>
 
