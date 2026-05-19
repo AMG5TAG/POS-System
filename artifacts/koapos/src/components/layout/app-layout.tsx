@@ -884,6 +884,11 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   const { navLayout } = useNavLayout();
   const logoutMutation = useLogout();
 
+  // Scroll only the main content area to the top on navigation — sidebar keeps its position
+  useEffect(() => {
+    document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "instant" });
+  }, [location]);
+
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
   const isManagementSection =
