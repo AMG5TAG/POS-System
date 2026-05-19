@@ -63,6 +63,7 @@ export function savePCCompat(map: PCCompatMap) {
 /* ─── Builder settings ───────────────────────────────────────────────────── */
 
 export interface PCBuilderSettings {
+  applyDefaultMarkup: boolean;
   defaultMarkup: number;
   laborRate: number;
   assemblyTimeMinutes: number;
@@ -76,6 +77,7 @@ const PC_BUILDER_SETTINGS_KEY = "koapos_pc_builder_settings";
 const ALL_SLOT_IDS = PC_PART_SLOTS.map((s) => s.id);
 
 const DEFAULTS: PCBuilderSettings = {
+  applyDefaultMarkup: false,
   defaultMarkup: 20,
   laborRate: 75,
   assemblyTimeMinutes: 90,
@@ -172,19 +174,33 @@ export default function ManagementCalculatorsPCBuilderPage() {
             <CardContent className="space-y-5">
 
               <div>
-                <Label className="text-xs text-muted-foreground">Default Markup (%)</Label>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <Input
-                    type="number" min="0" max="500" step="1"
-                    value={settings.defaultMarkup}
-                    onChange={(e) => update("defaultMarkup", parseFloat(e.target.value) || 0)}
-                    className="w-28"
+                <div className="flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors mb-3">
+                  <div>
+                    <p className="text-sm font-medium">Apply Default Markup</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Pre-fill a markup % on every new build</p>
+                  </div>
+                  <Switch
+                    checked={settings.applyDefaultMarkup}
+                    onCheckedChange={(v) => update("applyDefaultMarkup", v)}
                   />
-                  <span className="text-sm text-muted-foreground">% above cost price</span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Applied on top of the sum of all component prices.
-                </p>
+                {settings.applyDefaultMarkup && (
+                  <>
+                    <Label className="text-xs text-muted-foreground">Default Markup (%)</Label>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Input
+                        type="number" min="0" max="500" step="1"
+                        value={settings.defaultMarkup}
+                        onChange={(e) => update("defaultMarkup", parseFloat(e.target.value) || 0)}
+                        className="w-28"
+                      />
+                      <span className="text-sm text-muted-foreground">% above cost price</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Applied on top of parts + assembly cost.
+                    </p>
+                  </>
+                )}
               </div>
 
               <Separator />

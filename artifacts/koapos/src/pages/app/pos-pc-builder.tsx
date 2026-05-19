@@ -190,8 +190,9 @@ export default function POSPCBuilderPage() {
   const [buildName, setBuildName]       = useState("Custom PC Build");
   const [build, setBuild]               = useState<Build>({});
   const [showAllSlots, setShowAllSlots] = useState(false);
+  const [assemblyMinutes, setAssemblyMinutes] = useState(() => loadPCBuilderSettings().assemblyTimeMinutes);
 
-  const markupNum = settings.defaultMarkup;
+  const markupNum = settings.applyDefaultMarkup ? settings.defaultMarkup : 0;
 
   const visibleSlots = useMemo(() => {
     return PC_PART_SLOTS.filter((s) =>
@@ -217,7 +218,7 @@ export default function POSPCBuilderPage() {
   }, [build, products]);
 
   const partsTotal     = selectedProducts.reduce((s, { product }) => s + product.price, 0);
-  const laborCost      = (settings.laborRate / 60) * settings.assemblyTimeMinutes;
+  const laborCost      = (settings.laborRate / 60) * assemblyMinutes;
   const markupAmount   = (partsTotal + laborCost) * (markupNum / 100);
   const subtotal       = partsTotal + laborCost + markupAmount;
   const gstAmount      = settings.includeGST ? subtotal * 0.1 : 0;
@@ -424,14 +425,28 @@ export default function POSPCBuilderPage() {
                     <span>Parts ({componentCount})</span>
                     <span>{formatCurrency(partsTotal)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Assembly ({settings.assemblyTimeMinutes} min)</span>
-                    <span>{formatCurrency(laborCost)}</span>
+                  <div className="flex items-center justify-between text-muted-foreground gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-sm">Assembly</span>
+                    </div>
+                    <div className="flex items-center gap-1 ml-auto">
+                      <input
+                        type="number" min="0" step="15"
+                        value={assemblyMinutes}
+                        onChange={(e) => setAssemblyMinutes(parseInt(e.target.value) || 0)}
+                        className="w-14 h-6 text-xs text-center rounded border border-input bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <span className="text-xs text-muted-foreground">min</span>
+                    </div>
+                    <span className="text-sm shrink-0">{formatCurrency(laborCost)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Markup ({markupNum}%)</span>
-                    <span>{formatCurrency(markupAmount)}</span>
-                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">@ ${settings.laborRate}/hr</p>
+                  {markupNum > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Markup ({markupNum}%)</span>
+                      <span>{formatCurrency(markupAmount)}</span>
+                    </div>
+                  )}
                   {settings.includeGST && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>GST (10%)</span>
