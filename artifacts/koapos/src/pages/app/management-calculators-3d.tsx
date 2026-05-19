@@ -34,6 +34,8 @@ export interface Settings3D {
   filamentWastePercent: number;
   postProcessingMinutes: number;
   coolingFactor: number;
+  roundingMode: "none" | "dollar" | "custom";
+  roundingValue: number;
 }
 
 const DEFAULTS: Settings3D = {
@@ -51,6 +53,8 @@ const DEFAULTS: Settings3D = {
   filamentWastePercent: 3,
   postProcessingMinutes: 10,
   coolingFactor: 0.7,
+  roundingMode: "none",
+  roundingValue: 0.5,
 };
 
 export function load3DSettings(): Settings3D {
@@ -446,16 +450,41 @@ export default function ManagementCalculators3DPage() {
           <div className="space-y-5">
 
             {/* Profit & Pricing */}
-            <Section icon={TrendingUp} title="Profit & Pricing" description="Default margin applied in the 3D Prints POS calculator">
+            <Section icon={TrendingUp} title="Profit & Pricing" description="Default margin and rounding applied in the 3D Prints POS calculator">
               <FieldRow label="Default Profit Margin" hint="Applied as markup on total cost price">
                 <NumInput value={settings.profitMargin} onChange={(v) => update("profitMargin", v)} suffix="%" step="1" />
               </FieldRow>
 
+              <FieldRow label="Price Rounding" hint="Round the selling price for cleaner quotes">
+                <Select
+                  value={settings.roundingMode}
+                  onValueChange={(v) => update("roundingMode", v as Settings3D["roundingMode"])}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No rounding (exact)</SelectItem>
+                    <SelectItem value="dollar">Round to nearest $1</SelectItem>
+                    <SelectItem value="custom">Round to nearest…</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+
+              {settings.roundingMode === "custom" && (
+                <FieldRow label="Round to nearest" hint="e.g. 0.50, 1, 5, 10">
+                  <NumInput value={settings.roundingValue} onChange={(v) => update("roundingValue", v)} prefix="$" step="0.5" min="0.1" />
+                </FieldRow>
+              )}
+
               <div className="rounded-xl border bg-primary/5 border-primary/20 p-4 flex items-start gap-3">
                 <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Selling price is calculated as <strong>Cost × (1 + margin%)</strong>.
-                  This margin is read-only in the POS calculator — update it here to change all future quotes.
+                  Selling price = <strong>Cost × (1 + margin%)</strong>
+                  {settings.roundingMode !== "none" && (
+                    <>, then rounded to the nearest <strong>{settings.roundingMode === "dollar" ? "$1" : `$${settings.roundingValue}`}</strong></>
+                  )}.
+                  {" "}This is read-only in the POS calculator — update here to change all future quotes.
                 </p>
               </div>
             </Section>
@@ -521,6 +550,7 @@ export default function ManagementCalculators3DPage() {
                     ["Failure Rate", `${settings.failureRate}%`],
                     ["Filament Waste", `${settings.filamentWastePercent}%`],
                     ["Profit Margin", `${settings.profitMargin}%`],
+                    ["Rounding", settings.roundingMode === "none" ? "None" : settings.roundingMode === "dollar" ? "Nearest $1" : `Nearest $${settings.roundingValue}`],
                   ].map(([k, v]) => (
                     <div key={k} className="contents">
                       <span className="text-muted-foreground">{k}</span>

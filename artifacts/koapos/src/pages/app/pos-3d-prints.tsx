@@ -11,8 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  Cpu, Zap, DollarSign, Clock, Wrench, AlertTriangle,
-  TrendingUp, RotateCcw, Info, ChevronRight, Settings,
+  Cpu, Clock, RotateCcw, Info, ChevronRight, Settings,
   Package, Weight, Printer, Calculator,
 } from "lucide-react";
 import { load3DSettings, PRINTER_PRESETS, type Settings3D } from "./management-calculators-3d";
@@ -122,7 +121,13 @@ function calculate(inputs: CalcInputs, settings: Settings3D): CalcResult {
   const failureBuffer = variableCost * (settings.failureRate / 100);
 
   const totalCost = wasteAdjustedMaterialCost + electricityCost + depreciationCost + laborCost + overheadCost + failureBuffer;
-  const sellingPrice = totalCost * (1 + settings.profitMargin / 100);
+  const rawSellingPrice = totalCost * (1 + settings.profitMargin / 100);
+  let sellingPrice = rawSellingPrice;
+  if (settings.roundingMode === "dollar") {
+    sellingPrice = Math.round(rawSellingPrice);
+  } else if (settings.roundingMode === "custom" && settings.roundingValue > 0) {
+    sellingPrice = Math.round(rawSellingPrice / settings.roundingValue) * settings.roundingValue;
+  }
 
   return {
     printTimeHours,
@@ -282,10 +287,7 @@ export default function POS3DPrintsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-          {/* ── Left: Inputs ── */}
-          <div className="space-y-5">
-
-            {/* Filament Selection */}
+          {/* Filament Selection */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -512,21 +514,21 @@ export default function POS3DPrintsPage() {
 
               </CardContent>
             </Card>
-          </div>
+        </div>
 
-          {/* ── Right: Results ── */}
-          <div className="space-y-5">
-
-            {result && (
-              <>
-                {/* Selling price hero */}
-                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
+        {result && (
+          <div className="space-y-4">
+            {/* Selling price hero */}
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
                   <CardContent className="pt-5 pb-5">
                     <div className="text-center space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recommended Selling Price</p>
                       <p className="text-4xl font-bold text-primary">{fmt(result.sellingPrice)}</p>
                       <p className="text-xs text-muted-foreground">
                         Cost {fmt(result.totalCost)} + {settings.profitMargin}% margin
+                        {settings.roundingMode !== "none" && (
+                          <span> · rounded to nearest {settings.roundingMode === "dollar" ? "$1" : `$${settings.roundingValue}`}</span>
+                        )}
                       </p>
                     </div>
 
@@ -549,136 +551,21 @@ export default function POS3DPrintsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Cost breakdown */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-primary" />
-                      Cost Breakdown
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-1">
-                    <CostRow
-                      icon={Package}
-                      label="Filament (net weight)"
-                      sublabel={`${printWeightGrams}g × $${result.pricePerGram.toFixed(4)}/g`}
-                      value={result.materialCost}
-                    />
-                    <CostRow
-                      icon={AlertTriangle}
-                      label="Filament + Waste"
-                      sublabel={`+${settings.filamentWastePercent}% waste (supports, purge, brim)`}
-                      value={result.wasteAdjustedMaterialCost}
-                    />
-                    <CostRow
-                      icon={Zap}
-                      label="Electricity"
-                      sublabel={`${(settings.printerWattage * settings.coolingFactor).toFixed(0)} W × ${result.printTimeHours.toFixed(2)} hrs × $${settings.electricityRate}/kWh`}
-                      value={result.electricityCost}
-                    />
-                    <CostRow
-                      icon={Wrench}
-                      label="Machine Depreciation"
-                      sublabel={`$${(settings.purchasePrice / settings.lifetimeHours).toFixed(4)}/hr × ${result.printTimeHours.toFixed(2)} hrs`}
-                      value={result.depreciationCost}
-                    />
-                    <CostRow
-                      icon={Clock}
-                      label="Labour"
-                      sublabel={`${settings.setupTimeMinutes + settings.postProcessingMinutes} min setup + post @ $${settings.laborRate}/hr`}
-                      value={result.laborCost}
-                    />
-                    <CostRow
-                      icon={TrendingUp}
-                      label="Overhead"
-                      sublabel={`$${settings.overheadPerHour}/hr × ${(result.printTimeHours + (settings.setupTimeMinutes + settings.postProcessingMinutes) / 60).toFixed(2)} hrs`}
-                      value={result.overheadCost}
-                    />
-                    <CostRow
-                      icon={AlertTriangle}
-                      label="Failure Buffer"
-                      sublabel={`${settings.failureRate}% of variable costs — accounts for failed prints`}
-                      value={result.failureBuffer}
-                    />
-
-                    <Separator className="my-2" />
-
-                    <CostRow
-                      icon={DollarSign}
-                      label="Total Cost Price"
-                      sublabel="Sum of all costs above"
-                      value={result.totalCost}
-                      highlight
-                    />
-
-                    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-muted/20">
-                      <div className="flex items-center gap-2.5">
-                        <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm">Profit Margin</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Set in Management → Calculators — not editable here
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="font-semibold">{settings.profitMargin}%</Badge>
-                    </div>
-
-                    <CostRow
-                      icon={DollarSign}
-                      label="Selling Price"
-                      sublabel={`Cost × (1 + ${settings.profitMargin}%)`}
-                      value={result.sellingPrice}
-                      highlight
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Profit analysis */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                      Profit Analysis
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: "Gross Profit", value: fmt(result.sellingPrice - result.totalCost), sub: "Selling − Cost" },
-                        { label: "Profit Margin", value: `${settings.profitMargin}%`, sub: "Applied markup" },
-                        { label: "Material %", value: `${result.totalCost > 0 ? ((result.wasteAdjustedMaterialCost / result.totalCost) * 100).toFixed(1) : "0"}%`, sub: "Of total cost" },
-                        { label: "Energy %", value: `${result.totalCost > 0 ? ((result.electricityCost / result.totalCost) * 100).toFixed(1) : "0"}%`, sub: "Of total cost" },
-                        { label: "Labour %", value: `${result.totalCost > 0 ? ((result.laborCost / result.totalCost) * 100).toFixed(1) : "0"}%`, sub: "Of total cost" },
-                        { label: "Price/gram", value: `$${(result.sellingPrice / Math.max(printWeightGrams, 1)).toFixed(3)}`, sub: "Selling price" },
-                      ].map(({ label, value, sub }) => (
-                        <div key={label} className="rounded-xl border bg-muted/20 p-3 text-center">
-                          <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                          <p className="text-base font-bold">{value}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Info note */}
-                <div className="flex items-start gap-3 rounded-xl border bg-muted/20 px-4 py-3">
-                  <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <div className="text-xs text-muted-foreground space-y-0.5">
-                    <p>Costs are estimates. Actual energy usage varies by print type, room temperature, and slicer settings.</p>
-                    <button
-                      onClick={() => navigate("/management/calculators/3d-printing")}
-                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium mt-1"
-                    >
-                      Adjust printer settings &amp; margin <ChevronRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Info note */}
+            <div className="flex items-start gap-3 rounded-xl border bg-muted/20 px-4 py-3">
+              <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                <p>Costs are estimates. Actual energy usage varies by print type, room temperature, and slicer settings.</p>
+                <button
+                  onClick={() => navigate("/management/calculators/3d-printing")}
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium mt-1"
+                >
+                  Adjust printer settings &amp; margin <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </AppLayout>
   );
