@@ -607,12 +607,12 @@ export default function ManagementRegistersPage() {
               ))}
             </div>
           )}
+          <PaymentMethodsSection />
         </div>{/* end registers col */}
 
         {/* Right: POS Settings */}
         <div id="pos-settings" className="space-y-3">
           <GridLayoutSection />
-          <PaymentMethodsSection />
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
           </div>
