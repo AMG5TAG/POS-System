@@ -210,6 +210,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/inventory/wastage":           ["Inventory", "Wastage"],
   "/settings/tax":                ["Management", "Tax & Receipts"],
   "/management/templates":        ["Management", "Templates"],
+  "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
   "/management/stickers":         ["Management", "Stickers"],
   "/management/sticker-templates":["Management", "Sticker Templates"],
 };
