@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useCreateProduct } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Cpu, Clock, RotateCcw, Info, ChevronRight, Settings,
-  Package, Weight, Printer, Calculator,
+  Package, Weight, Printer, Calculator, ShoppingCart,
 } from "lucide-react";
 import { load3DSettings, PRINTER_PRESETS, type Settings3D } from "./management-calculators-3d";
 
@@ -197,6 +198,8 @@ export default function POS3DPrintsPage() {
   const [printMinutes, setPrintMinutes] = useState(30);
   const [customPricePerKg, setCustomPricePerKg] = useState(26.99);
 
+  const createProductMutation = useCreateProduct();
+
   useEffect(() => {
     setSettings(load3DSettings());
   }, []);
@@ -228,6 +231,34 @@ export default function POS3DPrintsPage() {
     setPrintMinutes(30);
     setFilterType("All");
     toast.success("Calculator reset");
+  }
+
+  function handleAddToSale() {
+    if (!result) return;
+    const filament = ELEGOO_FILAMENTS.find((f) => f.id === filamentId) ?? ELEGOO_FILAMENTS[0];
+    const name = `3D Print — ${filament.type} ${printWeightGrams}g`;
+    createProductMutation.mutate(
+      {
+        data: {
+          name,
+          price: parseFloat(result.sellingPrice.toFixed(2)),
+          costPrice: parseFloat(result.totalCost.toFixed(2)),
+          trackInventory: false,
+          stockQuantity: 1,
+          isActive: true,
+          productType: "3d_print",
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(`"${name}" added to products`, {
+            description: "Find it in Products or search on the POS register.",
+            action: { label: "Go to POS", onClick: () => navigate("/pos") },
+          });
+        },
+        onError: () => toast.error("Failed to create product"),
+      }
+    );
   }
 
   if (!settings) {
@@ -548,6 +579,17 @@ export default function POS3DPrintsPage() {
                         <p className="font-semibold">${(result.sellingPrice / printWeightGrams).toFixed(3)}</p>
                       </div>
                     </div>
+
+                    <Separator className="mt-4" />
+
+                    <Button
+                      className="w-full gap-2 mt-4"
+                      onClick={handleAddToSale}
+                      disabled={createProductMutation.isPending}
+                    >
+                      <ShoppingCart className="w-4 h-4" />
+                      {createProductMutation.isPending ? "Adding…" : `Add to Sale — ${fmt(result.sellingPrice)}`}
+                    </Button>
                   </CardContent>
                 </Card>
 

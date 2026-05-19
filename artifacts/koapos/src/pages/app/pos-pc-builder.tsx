@@ -1,18 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, type Product } from "@workspace/api-client-react";
+import { useListProducts, useCreateProduct, type Product } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import {
   Search, X, Plus, ChevronRight, AlertTriangle, Settings,
-  ShoppingCart, Save, RotateCcw, Check, Package,
+  ShoppingCart, Save, RotateCcw, Check, Package, Layers,
 } from "lucide-react";
 import {
   PC_PART_SLOTS, loadPCCompat, loadPCBuilderSettings,
@@ -191,6 +193,10 @@ export default function POSPCBuilderPage() {
   const [build, setBuild]               = useState<Build>({});
   const [showAllSlots, setShowAllSlots] = useState(false);
   const [assemblyHours, setAssemblyHours] = useState(() => Math.round(loadPCBuilderSettings().assemblyTimeMinutes / 60));
+  const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
+  const [bundleName, setBundleName] = useState("");
+
+  const createProductMutation = useCreateProduct();
 
   const markupNum = settings.applyDefaultMarkup ? settings.defaultMarkup : 0;
 
@@ -250,6 +256,42 @@ export default function POSPCBuilderPage() {
 
   const handleAddToCart = () => {
     toast.success(`${selectedProducts.length} component(s) added to cart`);
+  };
+
+  const handleOpenBundleDialog = () => {
+    setBundleName(buildName);
+    setBundleDialogOpen(true);
+  };
+
+  const handleSaveBundle = () => {
+    if (!bundleName.trim()) { toast.error("Bundle name is required"); return; }
+    const componentList = selectedProducts
+      .map(({ slotId, product }) => {
+        const slot = PC_PART_SLOTS.find((s) => s.id === slotId);
+        return `${slot?.label ?? slotId}: ${product.name}`;
+      })
+      .join("\n");
+    createProductMutation.mutate(
+      {
+        data: {
+          name: bundleName.trim(),
+          price: parseFloat(total.toFixed(2)),
+          costPrice: parseFloat((partsTotal + laborCost).toFixed(2)),
+          description: `PC Bundle — ${componentCount} component${componentCount !== 1 ? "s" : ""}\n\n${componentList}`,
+          trackInventory: false,
+          stockQuantity: 1,
+          isActive: true,
+          productType: "bundle",
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Bundle "${bundleName.trim()}" saved to Products`);
+          setBundleDialogOpen(false);
+        },
+        onError: () => toast.error("Failed to save bundle"),
+      }
+    );
   };
 
   const componentCount = selectedProducts.length;
@@ -481,6 +523,15 @@ export default function POSPCBuilderPage() {
                     variant="outline"
                     className="w-full gap-1.5"
                     disabled={componentCount === 0}
+                    onClick={handleOpenBundleDialog}
+                  >
+                    <Layers className="w-4 h-4" />
+                    Save as Bundle
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full gap-1.5 text-muted-foreground"
+                    disabled={componentCount === 0}
                     onClick={handleSaveQuote}
                   >
                     <Save className="w-4 h-4" />
@@ -515,6 +566,54 @@ export default function POSPCBuilderPage() {
 
         </div>
       </div>
+
+      {/* Save as Bundle dialog */}
+      <Dialog open={bundleDialogOpen} onOpenChange={setBundleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save as Bundle Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm">Bundle Name</Label>
+              <Input
+                className="mt-1.5"
+                value={bundleName}
+                onChange={(e) => setBundleName(e.target.value)}
+                placeholder="e.g. Gaming PC Build — RTX 4080"
+                onKeyDown={(e) => e.key === "Enter" && handleSaveBundle()}
+              />
+            </div>
+            <div className="rounded-lg bg-muted/50 border p-3 space-y-1 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Cost price</span>
+                <span>{formatCurrency(partsTotal + laborCost)}</span>
+              </div>
+              <div className="flex justify-between font-medium">
+                <span>Sell price</span>
+                <span>{formatCurrency(total)}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t mt-1">
+                <span>Components</span>
+                <span>{componentCount} part{componentCount !== 1 ? "s" : ""}</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The bundle will be saved to your Products catalog and can be sold from the POS register.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBundleDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleSaveBundle}
+              disabled={!bundleName.trim() || createProductMutation.isPending}
+            >
+              <Layers className="w-4 h-4 mr-1.5" />
+              {createProductMutation.isPending ? "Saving…" : "Save Bundle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
