@@ -40,6 +40,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import {
+  useListFormSubmissions,
+  useListForms,
+  useDeleteFormSubmission,
+  type FormSubmission,
+} from "@/lib/forms-api";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -170,7 +176,8 @@ function CustomerDetailInner({
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadingFile, setUploadingFile]       = useState(false);
+  const [viewingSub, setViewingSub]             = useState<FormSubmission | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const qrSvgRef = useRef<SVGSVGElement>(null);
 
@@ -257,6 +264,9 @@ function CustomerDetailInner({
   const { data: notes = [], isLoading: notesLoading } = useListCustomerNotes(customer.id);
   const { data: files = [], isLoading: filesLoading } = useListCustomerFiles(customer.id);
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  const { data: formSubmissions = [] } = useListFormSubmissions({ customerId: customer.id });
+  const { data: allForms = [] }        = useListForms();
+  const deleteSubMutation              = useDeleteFormSubmission();
 
   const createNoteMutation = useCreateCustomerNote();
   const deleteNoteMutation = useDeleteCustomerNote();
@@ -789,6 +799,38 @@ function CustomerDetailInner({
               ))}
             </div>
           )}
+
+          {/* Submitted Forms */}
+          <div className="space-y-3 pt-4 border-t">
+            <h3 className="text-sm font-semibold">Submitted Forms</h3>
+            {!(formSubmissions as FormSubmission[]).length ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No form submissions yet.</p>
+            ) : (
+              <div className="rounded-xl border divide-y bg-muted/20">
+                {(formSubmissions as FormSubmission[]).map(sub => {
+                  const form = (allForms as Array<{ id: number; name: string }>)
+                    .find(f => f.id === sub.formId);
+                  return (
+                    <div key={sub.id} className="flex items-center gap-3 px-4 py-3">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{form?.name ?? "Form"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(sub.createdAt).toLocaleDateString("en-AU")}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost" size="sm" className="h-7 px-2.5 text-xs shrink-0"
+                        onClick={() => setViewingSub(sub)}
+                      >
+                        View
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -883,6 +925,51 @@ function CustomerDetailInner({
           </Button>
         </div>
       </DialogFooter>
+
+      {/* ── View form submission ── */}
+      {viewingSub && (() => {
+        const viewForm = (allForms as Array<{ id: number; name: string; fields: Array<{ id: string; label: string }> }>)
+          .find(f => f.id === viewingSub.formId);
+        return (
+          <Dialog open onOpenChange={() => setViewingSub(null)}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{viewForm?.name ?? "Form Submission"}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 max-h-[55vh] overflow-y-auto">
+                <p className="text-xs text-muted-foreground">
+                  {new Date(viewingSub.createdAt).toLocaleString("en-AU")}
+                </p>
+                <div className="rounded-xl border divide-y">
+                  {Object.entries(viewingSub.data).map(([key, value]) => {
+                    const field = viewForm?.fields.find(f => f.id === key || f.label === key);
+                    const label = field?.label ?? key;
+                    return (
+                      <div key={key} className="px-4 py-3 flex gap-3">
+                        <span className="text-xs text-muted-foreground w-32 shrink-0 pt-0.5">{label}</span>
+                        <span className="text-sm flex-1 min-w-0 break-words">{String(value ?? "—")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex justify-between gap-2 pt-2 border-t">
+                <Button
+                  variant="destructive" size="sm" className="gap-1.5"
+                  disabled={deleteSubMutation.isPending}
+                  onClick={() => deleteSubMutation.mutate(viewingSub.id, {
+                    onSuccess: () => setViewingSub(null),
+                    onError:   () => toast.error("Failed to delete"),
+                  })}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </Button>
+                <Button size="sm" onClick={() => setViewingSub(null)}>Close</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </>
   );
 }

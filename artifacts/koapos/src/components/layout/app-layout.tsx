@@ -37,6 +37,10 @@ const POS_SUBNAV = [
   { name: "Cash",     href: "/pos/cash",      icon: Coins },
 ];
 
+const CUSTOMERS_SUBNAV = [
+  { name: "Forms", href: "/customers/forms", icon: FileText },
+];
+
 const INVENTORY_SUBNAV = [
   { name: "Overview",        href: "/products/overview",        icon: LayoutGrid },
   { name: "Products",        href: "/products",                 icon: Package },
@@ -109,6 +113,7 @@ const SEARCH_INDEX = [
   { label: "Services",           href: "/service-jobs",                icon: Wrench,          group: "Pages" },
   { label: "Appointments",       href: "/appointments",                icon: CalendarClock,   group: "Pages" },
   { label: "Customers",          href: "/customers",                   icon: Users,           group: "Pages" },
+  { label: "Customers · Forms", href: "/customers/forms",             icon: FileText,        group: "Customers" },
   { label: "Products",           href: "/products",                    icon: Package,         group: "Inventory" },
   { label: "Inventory Overview", href: "/products/overview",           icon: LayoutGrid,      group: "Inventory" },
   { label: "Stocktake",          href: "/products/stocktake",          icon: ClipboardList,   group: "Inventory" },
@@ -156,6 +161,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/service-jobs/new":            ["Services", "New Job"],
   "/appointments":                ["Appointments"],
   "/customers":                   ["Customers"],
+  "/customers/forms":            ["Customers", "Forms"],
   "/transactions":                ["Transactions"],
   "/inventory":                   ["Inventory"],
   "/products":                    ["Inventory", "Products"],
@@ -884,10 +890,12 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     location.startsWith("/management/") ||
     location === "/staff" || location.startsWith("/staff/") ||
     location === "/modules" || location.startsWith("/settings/");
+  const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
 
   const [posOpen,    setPosOpen]    = useState(isPOSSection);
   const [invOpen,    setInvOpen]    = useState(isInventorySection);
   const [mgmtOpen,   setMgmtOpen]   = useState(isManagementSection);
+  const [custsOpen,  setCustsOpen]  = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const canManage = !!user;
@@ -987,7 +995,11 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
             items={INVENTORY_SUBNAV} defaultHref="/products/overview"
           />
-          <NavLink href="/customers" icon={Users} name="Customers" />
+          <CollapsibleSection
+            label="Customers" icon={Users} isActive={isCustomersSection} isOpen={custsOpen}
+            onToggle={() => { setCustsOpen((o) => !o); setPosOpen(false); setInvOpen(false); setMgmtOpen(false); }}
+            items={CUSTOMERS_SUBNAV} defaultHref="/customers"
+          />
           {canManage && (
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}

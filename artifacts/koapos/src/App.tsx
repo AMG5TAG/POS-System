@@ -40,6 +40,7 @@ import ProductsTagsPage from "@/pages/app/products-tags";
 import ProductsRecallsPage from "@/pages/app/products-recalls";
 
 import CustomersPage from "@/pages/app/customers";
+import CustomersFormsPage from "@/pages/app/customers-forms";
 import TransactionsPage from "@/pages/app/transactions";
 import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
@@ -177,6 +178,9 @@ function Router() {
         <ProtectedRoute component={ProductsPage} />
       </Route>
 
+      <Route path="/customers/forms">
+        <ProtectedRoute component={CustomersFormsPage} />
+      </Route>
       <Route path="/customers">
         <ProtectedRoute component={CustomersPage} />
       </Route>
