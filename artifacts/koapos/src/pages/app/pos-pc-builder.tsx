@@ -189,14 +189,9 @@ export default function POSPCBuilderPage() {
   const [settings, setSettings]         = useState<PCBuilderSettings>(() => loadPCBuilderSettings());
   const [buildName, setBuildName]       = useState("Custom PC Build");
   const [build, setBuild]               = useState<Build>({});
-  const [markup, setMarkup]             = useState<string>("");
   const [showAllSlots, setShowAllSlots] = useState(false);
 
-  useEffect(() => {
-    setMarkup(settings.defaultMarkup.toString());
-  }, [settings.defaultMarkup]);
-
-  const markupNum = parseFloat(markup) || 0;
+  const markupNum = settings.defaultMarkup;
 
   const visibleSlots = useMemo(() => {
     return PC_PART_SLOTS.filter((s) =>
@@ -433,24 +428,10 @@ export default function POSPCBuilderPage() {
                     <span>Assembly ({settings.assemblyTimeMinutes} min)</span>
                     <span>{formatCurrency(laborCost)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                    <span>Markup (%)</span>
-                    <div className="flex items-center gap-1">
-                      <Input
-                        type="number" min="0" max="500" step="1"
-                        value={markup}
-                        onChange={(e) => setMarkup(e.target.value)}
-                        className="h-7 w-16 text-xs text-right px-2"
-                      />
-                      <span className="text-xs">%</span>
-                    </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Markup ({markupNum}%)</span>
+                    <span>{formatCurrency(markupAmount)}</span>
                   </div>
-                  {markupAmount > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span className="pl-3 text-xs">↳ Markup amount</span>
-                      <span>{formatCurrency(markupAmount)}</span>
-                    </div>
-                  )}
                   {settings.includeGST && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>GST (10%)</span>
