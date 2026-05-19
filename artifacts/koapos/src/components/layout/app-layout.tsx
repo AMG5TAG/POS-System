@@ -15,6 +15,7 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
+  Cpu, Calculator,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -28,13 +29,14 @@ import { cn } from "@/lib/utils";
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
 const POS_SUBNAV = [
-  { name: "Sell",     href: "/pos",           icon: ShoppingCart },
-  { name: "History",  href: "/pos/history",   icon: History },
-  { name: "Invoices", href: "/pos/invoices",  icon: FileText },
-  { name: "Laybys",   href: "/pos/laybuys",   icon: Package2 },
-  { name: "Parked",   href: "/pos/parked",    icon: ParkingCircle },
-  { name: "Refund",   href: "/pos/refund",    icon: RotateCcw },
-  { name: "Cash",     href: "/pos/cash",      icon: Coins },
+  { name: "Sell",      href: "/pos",            icon: ShoppingCart },
+  { name: "History",   href: "/pos/history",    icon: History },
+  { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
+  { name: "Laybys",    href: "/pos/laybuys",    icon: Package2 },
+  { name: "Parked",    href: "/pos/parked",     icon: ParkingCircle },
+  { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
+  { name: "Cash",      href: "/pos/cash",       icon: Coins },
+  { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
 ];
 
 const CUSTOMERS_SUBNAV = [
@@ -98,6 +100,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   },
   { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
   { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
+  {
+    name: "Calculators",
+    icon: Calculator,
+    children: [
+      { name: "3D Printing", href: "/management/calculators/3d-printing", icon: Cpu },
+    ],
+  },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -127,7 +136,9 @@ const SEARCH_INDEX = [
   { label: "Sales Overview",     href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
-  { label: "Tax & Receipts",     href: "/settings/tax",                icon: Receipt,         group: "Management" },
+  { label: "Tax & Receipts",     href: "/settings/tax",                          icon: Receipt,      group: "Management" },
+  { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
+  { label: "Calculators · 3D",  href: "/management/calculators/3d-printing",     icon: Calculator,   group: "Management" },
   { label: "Customers",          href: "/management/customers",        icon: Users,           group: "Management" },
   { label: "Loyalty",            href: "/management/loyalty",          icon: Gift,            group: "Management" },
   { label: "Layby",              href: "/management/layby",            icon: Package2,        group: "Management" },
