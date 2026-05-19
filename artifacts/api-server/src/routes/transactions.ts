@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -154,6 +154,37 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           loyaltyPoints: customer.loyaltyPoints + Math.floor(total),
         })
         .where(eq(customersTable.id, customerId));
+    }
+  }
+
+  // Auto-complete linked service job or appointment
+  if (notes) {
+    const serviceMatch = notes.match(/\[Service #([^:]+):/);
+    if (serviceMatch) {
+      const jobNumber = serviceMatch[1].trim();
+      await db
+        .update(serviceJobsTable)
+        .set({ status: "completed" })
+        .where(
+          and(
+            eq(serviceJobsTable.jobNumber, jobNumber),
+            eq(serviceJobsTable.merchantId, req.session.merchantId!),
+          ),
+        );
+    }
+
+    const apptMatch = notes.match(/\[Appt #(\d+):/);
+    if (apptMatch) {
+      const apptId = parseInt(apptMatch[1], 10);
+      await db
+        .update(appointmentsTable)
+        .set({ status: "completed" })
+        .where(
+          and(
+            eq(appointmentsTable.id, apptId),
+            eq(appointmentsTable.merchantId, req.session.merchantId!),
+          ),
+        );
     }
   }
 
