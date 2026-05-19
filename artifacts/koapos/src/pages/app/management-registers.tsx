@@ -13,7 +13,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star, ArrowRight, ArrowLeft } from "lucide-react";
 import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 const REGISTER_TABS = [
@@ -252,6 +253,177 @@ function PaymentMethodsSection() {
   );
 }
 
+/* ─── POS Grid Layout settings ───────────────────────────────────────────── */
+
+export const POS_GRID_SETTINGS_KEY = "koapos_pos_grid_settings";
+
+export interface PosGridSettings {
+  columns:        2 | 3 | 4 | 5;
+  tileSize:       "compact" | "normal" | "large";
+  showPrices:     boolean;
+  showStockBadges: boolean;
+  cartPosition:   "right" | "left";
+}
+
+export const POS_GRID_DEFAULTS: PosGridSettings = {
+  columns: 3,
+  tileSize: "normal",
+  showPrices: true,
+  showStockBadges: false,
+  cartPosition: "right",
+};
+
+export function loadPosGridSettings(): PosGridSettings {
+  try {
+    const raw = localStorage.getItem(POS_GRID_SETTINGS_KEY);
+    return raw ? { ...POS_GRID_DEFAULTS, ...JSON.parse(raw) } : POS_GRID_DEFAULTS;
+  } catch { return POS_GRID_DEFAULTS; }
+}
+
+/* Dot-grid icon for column selector */
+function ColDots({ cols }: { cols: number }) {
+  const rows = 2;
+  return (
+    <div className="flex flex-col items-center gap-1 mb-1">
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="flex gap-1">
+          {Array.from({ length: cols }).map((_, c) => (
+            <div key={c} className="w-2 h-2 rounded-full bg-current opacity-60" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GridLayoutSection() {
+  const [s, setS] = useState<PosGridSettings>(loadPosGridSettings);
+
+  const update = <K extends keyof PosGridSettings>(key: K, value: PosGridSettings[K]) => {
+    const next = { ...s, [key]: value };
+    setS(next);
+    localStorage.setItem(POS_GRID_SETTINGS_KEY, JSON.stringify(next));
+  };
+
+  const summary = [
+    `${s.columns} columns`,
+    `${s.tileSize} tiles`,
+    `cart ${s.cartPosition}`,
+    s.showPrices ? "prices visible" : "prices hidden",
+    s.showStockBadges ? "stock badges on" : "stock badges off",
+  ].join(" · ");
+
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b bg-muted/20">
+        <p className="font-semibold text-sm">Product Grid Layout</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Configure how products are displayed on the POS register screen.</p>
+      </div>
+
+      <div className="p-5 space-y-6">
+        {/* Columns */}
+        <div>
+          <p className="text-sm font-medium mb-2">Product Grid Columns</p>
+          <div className="grid grid-cols-4 gap-2">
+            {([2, 3, 4, 5] as const).map((n) => {
+              const active = s.columns === n;
+              return (
+                <button
+                  key={n}
+                  onClick={() => update("columns", n)}
+                  className={cn(
+                    "flex flex-col items-center justify-center py-3 rounded-xl border-2 text-xs font-medium transition-all",
+                    active
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  )}
+                >
+                  <ColDots cols={n} />
+                  {n} cols
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tile size */}
+        <div>
+          <p className="text-sm font-medium mb-2">Tile Size</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(["compact", "normal", "large"] as const).map((size) => {
+              const active = s.tileSize === size;
+              const emoji = size === "compact" ? "▪️" : size === "normal" ? "🔲" : "⬛";
+              return (
+                <button
+                  key={size}
+                  onClick={() => update("tileSize", size)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 text-sm font-medium transition-all capitalize",
+                    active
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  )}
+                >
+                  <span>{emoji}</span> {size.charAt(0).toUpperCase() + size.slice(1)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Toggles */}
+        <div className="space-y-0 divide-y border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <div>
+              <p className="text-sm font-medium">Show Prices on Grid</p>
+              <p className="text-xs text-muted-foreground">Display product price on each tile</p>
+            </div>
+            <Switch checked={s.showPrices} onCheckedChange={(v) => update("showPrices", v)} />
+          </div>
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <div>
+              <p className="text-sm font-medium">Show Stock Badges</p>
+              <p className="text-xs text-muted-foreground">Show stock level on each product tile</p>
+            </div>
+            <Switch checked={s.showStockBadges} onCheckedChange={(v) => update("showStockBadges", v)} />
+          </div>
+        </div>
+
+        {/* Cart position */}
+        <div>
+          <p className="text-sm font-medium mb-2">Cart Position</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["right", "left"] as const).map((pos) => {
+              const active = s.cartPosition === pos;
+              return (
+                <button
+                  key={pos}
+                  onClick={() => update("cartPosition", pos)}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all",
+                    active
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  )}
+                >
+                  {pos === "right" ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+                  {pos === "right" ? "→ Right" : "← Left"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Preview summary */}
+        <div className="rounded-xl border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Current Layout Preview</p>
+          <p className="text-xs text-primary font-medium">{summary}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Force Staff Login toggle ───────────────────────────────────────────── */
 
 function ForceStaffLoginToggle() {
@@ -439,6 +611,7 @@ export default function ManagementRegistersPage() {
 
         {/* Right: POS Settings */}
         <div id="pos-settings" className="space-y-3">
+          <GridLayoutSection />
           <PaymentMethodsSection />
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
