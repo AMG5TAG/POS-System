@@ -391,6 +391,8 @@ export default function POS3DPrintsPage() {
               </CardContent>
             </Card>
 
+          <div className="space-y-4">
+
             {/* Print Parameters */}
             <Card>
               <CardHeader className="pb-3">
@@ -514,12 +516,11 @@ export default function POS3DPrintsPage() {
 
               </CardContent>
             </Card>
-        </div>
 
-        {result && (
-          <div className="space-y-4">
-            {/* Selling price hero */}
-            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
+            {result && (
+              <>
+                {/* Selling price hero */}
+                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
                   <CardContent className="pt-5 pb-5">
                     <div className="text-center space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recommended Selling Price</p>
@@ -564,8 +565,10 @@ export default function POS3DPrintsPage() {
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </AppLayout>
   );
