@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
+import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import {
   useListAppointments,
   useCreateAppointment,
@@ -263,11 +264,12 @@ type FormState = {
   endTime: string;
   status: AppointmentInputStatus;
   notes: string;
+  selectedFormIds: number[];
 };
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "" };
+  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [] };
 }
 
 interface BookingDialogProps {
@@ -292,6 +294,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
         endTime:    toLocalDatetimeValue(new Date(editing.endAt!)),
         status:     editing.status as AppointmentInputStatus,
         notes:      editing.notes ?? "",
+        selectedFormIds: [],
       } : makeDefaultForm());
     }
   }, [open, editing]);
@@ -404,6 +407,13 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
               </Select>
             </div>
           </div>
+
+          {/* Form Selector */}
+          <FormSelectorField
+            value={form.selectedFormIds}
+            onChange={(ids) => setForm((f) => ({ ...f, selectedFormIds: ids }))}
+            label="Attach Forms"
+          />
 
           {/* Notes */}
           <div className="space-y-1.5">

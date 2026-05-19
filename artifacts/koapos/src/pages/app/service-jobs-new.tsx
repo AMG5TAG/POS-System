@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
+import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
@@ -184,6 +185,7 @@ export default function ServiceJobNewPage() {
 
   const [signatureSaved, setSignatureSaved] = useState(false);
   const [signature, setSignature] = useState("");
+  const [selectedFormIds, setSelectedFormIds] = useState<number[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
@@ -596,6 +598,13 @@ export default function ServiceJobNewPage() {
             </Button>
           </div>
         </div>
+
+        {/* Form Selector */}
+        <FormSelectorField
+          value={selectedFormIds}
+          onChange={setSelectedFormIds}
+          label="Attach Forms"
+        />
 
         {/* Submit */}
         <div className="flex justify-end">
