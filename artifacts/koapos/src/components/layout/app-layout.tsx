@@ -15,7 +15,7 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
-  Cpu, Calculator,
+  Cpu, Calculator, HardDrive,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 const POS_SUBNAV = [
   { name: "Sell",      href: "/pos",            icon: ShoppingCart },
   { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
+  { name: "PC Builder", href: "/pos/pc-builder", icon: HardDrive },
   { name: "History",   href: "/pos/history",    icon: History },
   { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
   { name: "Laybys",    href: "/pos/laybuys",    icon: Package2 },
@@ -72,6 +73,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     icon: Calculator,
     children: [
       { name: "3D Printing", href: "/management/calculators/3d-printing", icon: Cpu },
+      { name: "PC Builder",  href: "/management/calculators/pc-builder",  icon: HardDrive },
     ],
   },
   { name: "Customers",         href: "/management/customers",      icon: Users          },
@@ -138,7 +140,9 @@ const SEARCH_INDEX = [
   { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
   { label: "Tax & Receipts",     href: "/settings/tax",                          icon: Receipt,      group: "Management" },
   { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
-  { label: "Calculators · 3D",  href: "/management/calculators/3d-printing",     icon: Calculator,   group: "Management" },
+  { label: "Calculators · 3D",       href: "/management/calculators/3d-printing",  icon: Calculator,  group: "Management" },
+  { label: "Calculators · PC Builder", href: "/management/calculators/pc-builder", icon: HardDrive,   group: "Management" },
+  { label: "PC Builder",             href: "/pos/pc-builder",                      icon: HardDrive,   group: "POS" },
   { label: "Customers",          href: "/management/customers",        icon: Users,           group: "Management" },
   { label: "Loyalty",            href: "/management/loyalty",          icon: Gift,            group: "Management" },
   { label: "Layby",              href: "/management/layby",            icon: Package2,        group: "Management" },
@@ -211,6 +215,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/settings/tax":                ["Management", "Tax & Receipts"],
   "/management/templates":        ["Management", "Templates"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
+  "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
+  "/pos/pc-builder":                     ["POS", "PC Builder"],
   "/management/stickers":         ["Management", "Stickers"],
   "/management/sticker-templates":["Management", "Sticker Templates"],
 };

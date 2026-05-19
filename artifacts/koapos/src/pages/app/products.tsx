@@ -35,13 +35,16 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import {
+  loadPCCompat, savePCCompat, PC_PART_SLOTS, type PCPartCompat,
+} from "./management-calculators-pc-builder";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
-type FormTab   = "details" | "pricing" | "media" | "settings";
+type FormTab   = "details" | "pricing" | "media" | "settings" | "compatibility";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
@@ -79,10 +82,11 @@ const defaultForm: ProductForm = {
 };
 
 const FORM_TABS: { key: FormTab; label: string }[] = [
-  { key: "details",   label: "Details"   },
-  { key: "pricing",   label: "Pricing"   },
-  { key: "media",     label: "Media"     },
-  { key: "settings",  label: "Settings"  },
+  { key: "details",       label: "Details"       },
+  { key: "pricing",       label: "Pricing"       },
+  { key: "media",         label: "Media"         },
+  { key: "settings",      label: "Settings"      },
+  { key: "compatibility", label: "Compatibility" },
 ];
 
 /* ─── Product types ──────────────────────────────────────────────────────── */
@@ -492,6 +496,9 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
   const [formTab, setFormTab]           = useState<FormTab>("details");
+  const [pcPartType, setPcPartType]     = useState("");
+  const [pcSocket, setPcSocket]         = useState("");
+  const [pcCompatNotes, setPcCompatNotes] = useState("");
   const [skuPrefix, setSkuPrefix]       = useState(getSavedPrefix);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -547,7 +554,7 @@ export default function ProductsPage() {
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
-    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setDialogOpen(true);
+    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
@@ -575,6 +582,10 @@ export default function ProductsPage() {
           .map(([k, v]) => [k, v.toString()])
       ),
     });
+    const _c = loadPCCompat()[p.id.toString()] || ({} as PCPartCompat);
+    setPcPartType(_c.partType || "");
+    setPcSocket(_c.socket || "");
+    setPcCompatNotes(_c.specs || "");
     setFormTab("details");
     setDialogOpen(true);
   };
@@ -605,12 +616,22 @@ export default function ProductsPage() {
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
       updateMutation.mutate({ id: editingProduct.id, data: payload }, {
-        onSuccess: () => { toast.success("Product updated"); setDialogOpen(false); inv(); },
+        onSuccess: () => {
+          const _m = loadPCCompat();
+          if (pcPartType) { _m[editingProduct.id.toString()] = { partType: pcPartType, socket: pcSocket, specs: pcCompatNotes }; }
+          else { delete _m[editingProduct.id.toString()]; }
+          savePCCompat(_m);
+          toast.success("Product updated"); setDialogOpen(false); inv();
+        },
         onError: () => toast.error("Failed to update product"),
       });
     } else {
       createMutation.mutate({ data: payload }, {
-        onSuccess: () => { toast.success("Product created"); setDialogOpen(false); inv(); },
+        onSuccess: (created) => {
+          const cid = (created as { id?: number })?.id;
+          if (pcPartType && cid) savePCCompat({ ...loadPCCompat(), [cid.toString()]: { partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } });
+          toast.success("Product created"); setDialogOpen(false); inv();
+        },
         onError: () => toast.error("Failed to create product"),
       });
     }
@@ -1275,6 +1296,86 @@ export default function ProductsPage() {
                     className="mt-3 resize-none"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* ── Compatibility ── */}
+            {formTab === "compatibility" && (
+              <div className="py-5 space-y-5">
+                <div>
+                  <SectionHeader label="PC Part Type" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">
+                    Tag this product as a PC component so it appears as a selectable part in POS → PC Builder.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); }}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
+                        !pcPartType
+                          ? "border-primary bg-primary/5 text-primary font-medium"
+                          : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                      )}
+                    >
+                      <Package className="w-3.5 h-3.5 shrink-0" />
+                      Not a PC part
+                    </button>
+                    {PC_PART_SLOTS.map(({ id, label, icon: Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setPcPartType(id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
+                          pcPartType === id
+                            ? "border-primary bg-primary/5 text-primary font-medium"
+                            : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                        )}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {pcPartType && (
+                  <div className="border-t pt-5 grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Socket / Interface</Label>
+                      <Input
+                        value={pcSocket}
+                        onChange={(e) => setPcSocket(e.target.value)}
+                        placeholder={
+                          pcPartType === "cpu" || pcPartType === "motherboard" ? "e.g. AM5, LGA1700"
+                          : pcPartType === "memory" ? "e.g. DDR5, DDR4"
+                          : pcPartType === "storage" ? "e.g. M.2 NVMe, SATA III"
+                          : pcPartType === "psu" ? "e.g. ATX, SFX"
+                          : "e.g. socket, interface"
+                        }
+                        className="mt-1.5"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Used for compatibility matching in PC Builder.</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Additional Specs</Label>
+                      <Input
+                        value={pcCompatNotes}
+                        onChange={(e) => setPcCompatNotes(e.target.value)}
+                        placeholder="e.g. 32GB, 3200MHz, 850W, 6-core"
+                        className="mt-1.5"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Shown as extra info in the PC Builder slot picker.</p>
+                    </div>
+                  </div>
+                )}
+
+                {!pcPartType && (
+                  <div className="border rounded-xl p-4 bg-muted/20 text-sm text-muted-foreground">
+                    Select a PC part type above to tag this product. Once tagged, it will appear in the relevant slot when building a custom PC in POS → PC Builder.
+                  </div>
+                )}
               </div>
             )}
 

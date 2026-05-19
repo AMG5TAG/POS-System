@@ -75,6 +75,8 @@ import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
 import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
+import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
+import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
 
 import NotFound from "@/pages/not-found";
 
@@ -140,6 +142,9 @@ function Router() {
       </Route>
       <Route path="/pos/3d-prints">
         <ProtectedRoute component={POS3DPrintsPage} />
+      </Route>
+      <Route path="/pos/pc-builder">
+        <ProtectedRoute component={POSPCBuilderPage} />
       </Route>
       <Route path="/pos">
         <ProtectedRoute component={POSPage} />
@@ -290,6 +295,9 @@ function Router() {
       </Route>
       <Route path="/management/calculators/3d-printing">
         <ProtectedRoute component={ManagementCalculators3DPage} />
+      </Route>
+      <Route path="/management/calculators/pc-builder">
+        <ProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
