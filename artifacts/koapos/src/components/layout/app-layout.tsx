@@ -44,6 +44,17 @@ const CUSTOMERS_SUBNAV = [
   { name: "Forms", href: "/customers/forms", icon: FileText },
 ];
 
+const STAFF_SUBNAV: NavItem[] = [
+  { name: "Employees",  href: "/staff",                icon: UserSquare2   },
+  { name: "Timesheet",  href: "/staff/timesheet",      icon: Clock         },
+  { name: "Rostering",  href: "/staff/rostering",      icon: CalendarClock },
+  { name: "Leave",      href: "/staff/leave-requests", icon: ClipboardList },
+  { name: "Costs",      href: "/staff/cost-summary",   icon: Coins         },
+  { name: "Notes",      href: "/staff/notes",          icon: StickyNote    },
+  { name: "KPIs",       href: "/staff/kpis",           icon: Target        },
+  { name: "Links",      href: "/staff/links",          icon: Link2         },
+];
+
 const INVENTORY_SUBNAV = [
   { name: "Overview",        href: "/products/overview",        icon: LayoutGrid },
   { name: "Products",        href: "/products",                 icon: Package },
@@ -90,20 +101,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
   { name: "Regional Settings", href: "/management/regional",       icon: Globe          },
   {
-    name: "Staff",
-    icon: UserSquare2,
-    children: [
-      { name: "Employees",  href: "/staff",                 icon: UserSquare2   },
-      { name: "Timesheet",  href: "/staff/timesheet",       icon: Clock         },
-      { name: "Rostering",  href: "/staff/rostering",       icon: CalendarClock },
-      { name: "Leave",      href: "/staff/leave-requests",  icon: ClipboardList },
-      { name: "Costs",      href: "/staff/cost-summary",    icon: Coins         },
-      { name: "Notes",      href: "/staff/notes",           icon: StickyNote    },
-      { name: "KPIs",       href: "/staff/kpis",            icon: Target        },
-      { name: "Links",      href: "/staff/links",           icon: Link2         },
-    ],
-  },
-  {
     name: "Stickers",
     icon: Tag,
     children: [
@@ -134,14 +131,14 @@ const SEARCH_INDEX = [
   { label: "Stocktake",          href: "/products/stocktake",          icon: ClipboardList,   group: "Inventory" },
   { label: "Suppliers",          href: "/products/suppliers",          icon: Truck,           group: "Inventory" },
   { label: "Categories",         href: "/products/categories",         icon: Tag,             group: "Inventory" },
-  { label: "Staff · Employees",  href: "/staff",                       icon: UserSquare2,     group: "Management" },
-  { label: "Staff · Timesheet",  href: "/staff/timesheet",             icon: Clock,           group: "Management" },
-  { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Management" },
-  { label: "Staff · Leave",      href: "/staff/leave-requests",        icon: ClipboardList,   group: "Management" },
-  { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Management" },
-  { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Management" },
-  { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Management" },
-  { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Management" },
+  { label: "Staff · Employees",  href: "/staff",                       icon: UserSquare2,     group: "Staff" },
+  { label: "Staff · Timesheet",  href: "/staff/timesheet",             icon: Clock,           group: "Staff" },
+  { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Staff" },
+  { label: "Staff · Leave",      href: "/staff/leave-requests",        icon: ClipboardList,   group: "Staff" },
+  { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Staff" },
+  { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
+  { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
+  { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Staff" },
   { label: "Sales Overview",     href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
@@ -679,9 +676,10 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
 }
 
 function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
-  const isPOSSection       = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
-  const isManagementSection = location.startsWith("/management/") || location === "/staff" || location.startsWith("/staff/") || location === "/modules" || location.startsWith("/settings/");
+  const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
+  const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
+  const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
+  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -718,6 +716,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
           <TopNavBtn icon={Users} label="Customers" isActive={location === "/customers"} onClick={() => navigate("/customers")} />
+          <TopNavDropdown label="Staff" icon={UserSquare2} items={STAFF_SUBNAV} isActive={isStaffSection}
+            isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
             isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
         </nav>
@@ -764,6 +764,12 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
   const sections: { label: string; items: NavLeaf[] }[] = [
     { label: "POS",        items: POS_SUBNAV },
     { label: "Inventory",  items: INVENTORY_SUBNAV },
+    {
+      label: "Staff",
+      items: STAFF_SUBNAV.flatMap((item) =>
+        "children" in item ? item.children : [item as NavLeaf]
+      ),
+    },
     {
       label: "Management",
       items: MANAGEMENT_SUBNAV.flatMap((item) =>
@@ -827,9 +833,10 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 }
 
 function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
-  const isPOSSection       = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
-  const isManagementSection = location.startsWith("/management/") || location === "/staff" || location.startsWith("/staff/") || location === "/modules" || location.startsWith("/settings/");
+  const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
+  const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
+  const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
+  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -922,14 +929,15 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
+  const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection =
     location.startsWith("/management/") ||
-    location === "/staff" || location.startsWith("/staff/") ||
     location === "/modules" || location.startsWith("/settings/");
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
 
   const [posOpen,    setPosOpen]    = useState(isPOSSection);
   const [invOpen,    setInvOpen]    = useState(isInventorySection);
+  const [staffOpen,  setStaffOpen]  = useState(isStaffSection);
   const [mgmtOpen,   setMgmtOpen]   = useState(isManagementSection);
   const [custsOpen,  setCustsOpen]  = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1033,13 +1041,18 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           />
           <CollapsibleSection
             label="Customers" icon={Users} isActive={isCustomersSection} isOpen={custsOpen}
-            onToggle={() => { setCustsOpen((o) => !o); setPosOpen(false); setInvOpen(false); setMgmtOpen(false); }}
+            onToggle={() => { setCustsOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setMgmtOpen(false); }}
             items={CUSTOMERS_SUBNAV} defaultHref="/customers"
+          />
+          <CollapsibleSection
+            label="Staff" icon={UserSquare2} isActive={isStaffSection} isOpen={staffOpen}
+            onToggle={() => { setStaffOpen((o) => !o); setPosOpen(false); setInvOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
+            items={STAFF_SUBNAV} defaultHref="/staff"
           />
           {canManage && (
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
-              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); }}
+              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); }}
               items={MANAGEMENT_SUBNAV} accent defaultHref="/management/sales-overview"
             />
           )}

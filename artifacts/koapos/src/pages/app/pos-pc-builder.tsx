@@ -227,8 +227,8 @@ export default function POSPCBuilderPage() {
   const laborCost      = settings.laborRate * assemblyHours;
   const markupAmount   = (partsTotal + laborCost) * (markupNum / 100);
   const subtotal       = partsTotal + laborCost + markupAmount;
-  const gstAmount      = settings.includeGST ? subtotal * 0.1 : 0;
-  const total          = subtotal + gstAmount;
+  const gstAmount      = settings.includeGST ? subtotal / 11 : 0;
+  const total          = subtotal;
 
   /* ── Compatibility ── */
   const warnings = useMemo(() => {
