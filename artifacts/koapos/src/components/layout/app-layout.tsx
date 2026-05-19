@@ -835,11 +835,10 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
       <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
-        <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
+        <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
           <Breadcrumbs location={location} />
         </div>
-        <div className="flex-1 min-w-0" />
-        <div className="w-48 shrink-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+        <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
@@ -1045,12 +1044,11 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
             <SidebarTrigger className="md:hidden shrink-0" />
 
-            <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
+            <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
               <Breadcrumbs location={location} />
             </div>
 
-            <div className="flex-1 min-w-0" />
-            <div className="w-48 shrink-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+            <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
 
             <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
               <Link href="/pos">
