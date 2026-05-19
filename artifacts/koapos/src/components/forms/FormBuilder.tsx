@@ -10,10 +10,11 @@ import {
   AlignLeft, AlignJustify, ToggleLeft, Calendar, Clock, Mail, Phone,
   Hash, PenLine, Upload, ListOrdered, ChevronDown, Minus, SeparatorHorizontal,
   ChevronUp, ChevronDown as ChevronDownIcon, Trash2, Eye, EyeOff, Save,
-  Plus, X, Copy, Check, Zap,
+  Plus, X, Copy, Check, Zap, FileUp,
 } from "lucide-react";
 import type { FormField, FieldType } from "@/lib/forms-api";
 import { QUICK_CODES } from "@/lib/forms-api";
+import { DocumentImportModal } from "./DocumentImportModal";
 
 // ── Field type palette config ────────────────────────────────────────────
 
@@ -342,6 +343,7 @@ export function FormBuilder({
   const [fields, setFields] = useState<FormField[]>(initialFields);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const selectedField = fields.find(f => f.id === selectedId) ?? null;
@@ -391,6 +393,10 @@ export function FormBuilder({
           placeholder="Form name…"
           className="flex-1 text-lg font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground"
         />
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+          <FileUp className="h-4 w-4 mr-1.5" />
+          Import
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setPreview(v => !v)}>
           {preview ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
           {preview ? "Edit" : "Preview"}
@@ -479,6 +485,17 @@ export function FormBuilder({
           </div>
         )}
       </div>
+
+      {/* ── Document import modal ── */}
+      <DocumentImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={imported => {
+          setFields(prev => [...prev, ...imported]);
+          setSelectedId(imported[0]?.id ?? null);
+          setTimeout(() => canvasRef.current?.scrollTo({ top: canvasRef.current.scrollHeight, behavior: "smooth" }), 50);
+        }}
+      />
     </div>
   );
 }

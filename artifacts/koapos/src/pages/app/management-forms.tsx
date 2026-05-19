@@ -14,7 +14,7 @@ import {
   Plus, FileText, Edit2, Trash2, MoreVertical, Eye, Copy, ClipboardList,
   AlignLeft, AlignJustify, ToggleLeft, Calendar, Clock, Mail, Phone,
   Hash, PenLine, Upload, ListOrdered, ChevronDown, Minus, SeparatorHorizontal,
-  Zap,
+  Zap, Download,
 } from "lucide-react";
 import {
   useListForms, useCreateForm, useUpdateForm, useDeleteForm,
@@ -24,6 +24,153 @@ import { FormBuilder } from "@/components/forms/FormBuilder";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+
+// ── Save form as PDF ──────────────────────────────────────────────────────
+
+async function saveFormAsPdf(
+  form: FormTemplate,
+  businessName: string,
+) {
+  const { default: jsPDF } = await import("jspdf");
+  const doc        = new jsPDF();
+  const pageWidth  = doc.internal.pageSize.getWidth();
+  const margin     = 20;
+  const usableW    = pageWidth - margin * 2;
+  let y            = 20;
+
+  const checkPage = (needed = 20) => {
+    if (y + needed > 270) { doc.addPage(); y = 20; }
+  };
+
+  // ── Header ──
+  doc.setFontSize(20);
+  doc.setFont("helvetica", "bold");
+  doc.text(form.name, margin, y);
+  y += 8;
+
+  if (businessName) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(businessName, margin, y);
+    doc.setTextColor(0);
+    y += 6;
+  }
+
+  doc.setDrawColor(200);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // ── Description ──
+  if (form.description) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(80);
+    const descLines = doc.splitTextToSize(form.description, usableW) as string[];
+    doc.text(descLines, margin, y);
+    doc.setTextColor(0);
+    y += descLines.length * 5 + 8;
+  }
+
+  // ── Fields ──
+  for (const field of form.fields as FormField[]) {
+    if (field.type === "divider") {
+      checkPage(10);
+      doc.setDrawColor(220);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 8;
+      continue;
+    }
+
+    if (field.type === "section_header") {
+      checkPage(14);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(40);
+      doc.text(field.label, margin, y);
+      doc.setTextColor(0);
+      y += 10;
+      continue;
+    }
+
+    checkPage(24);
+
+    // Label
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    const labelText = field.required ? `${field.label}  *` : field.label;
+    const labelLines = doc.splitTextToSize(labelText, usableW) as string[];
+    doc.text(labelLines, margin, y);
+    y += labelLines.length * 5 + 2;
+
+    // Help text
+    if (field.helpText) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(130);
+      doc.text(field.helpText, margin, y);
+      doc.setTextColor(0);
+      y += 5;
+    }
+
+    // Input area
+    doc.setDrawColor(180);
+    doc.setLineWidth(0.4);
+    doc.setFont("helvetica", "normal");
+
+    if (field.type === "long_answer") {
+      checkPage(36);
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(margin, y, usableW, 28, 1, 1, "FD");
+      y += 34;
+    } else if (field.type === "yes_no") {
+      doc.setFontSize(10);
+      doc.text("☐  Yes          ☐  No", margin + 2, y + 5);
+      y += 12;
+    } else if ((field.type === "multiple_choice" || field.type === "dropdown") && field.options?.length) {
+      doc.setFontSize(9);
+      for (const opt of field.options) {
+        checkPage(7);
+        doc.text(`☐  ${opt}`, margin + 4, y);
+        y += 6;
+      }
+      y += 2;
+    } else if (field.type === "signature") {
+      checkPage(22);
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(margin, y, usableW * 0.6, 18, 1, 1, "FD");
+      doc.setFontSize(8);
+      doc.setTextColor(160);
+      doc.text("Signature", margin + 3, y + 12);
+      doc.setTextColor(0);
+      y += 24;
+    } else {
+      // Single-line input
+      doc.line(margin, y + 6, pageWidth - margin, y + 6);
+      y += 12;
+    }
+
+    y += 4;
+  }
+
+  // ── Footer ──
+  const pageCount = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(160);
+    doc.text(
+      `${form.name}  ·  Page ${i} of ${pageCount}`,
+      margin,
+      doc.internal.pageSize.getHeight() - 8,
+    );
+    doc.setTextColor(0);
+  }
+
+  doc.save(`${form.name.replace(/[^a-z0-9]/gi, "_")}.pdf`);
+}
 
 // ── Field type icons (for card summary) ─────────────────────────────────
 
@@ -375,7 +522,22 @@ export default function ManagementFormsPage() {
       <Dialog open={!!previewForm} onOpenChange={() => setPreviewForm(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Preview: {previewForm?.name}</DialogTitle>
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle>Preview: {previewForm?.name}</DialogTitle>
+              {previewForm && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void saveFormAsPdf(previewForm, businessProfile.name)
+                      .catch(() => toast.error("Failed to generate PDF"));
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Save as PDF
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           {previewForm && (
             <FormRenderer
