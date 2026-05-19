@@ -525,12 +525,11 @@ export default function POS3DPrintsPage() {
                     <div className="text-center space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recommended Selling Price</p>
                       <p className="text-4xl font-bold text-primary">{fmt(result.sellingPrice)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Cost {fmt(result.totalCost)} + {settings.profitMargin}% margin
-                        {settings.roundingMode !== "none" && (
-                          <span> · rounded to nearest {settings.roundingMode === "dollar" ? "$1" : `$${settings.roundingValue}`}</span>
-                        )}
-                      </p>
+                      {settings.roundingMode !== "none" && (
+                        <p className="text-xs text-muted-foreground">
+                          Rounded to nearest {settings.roundingMode === "dollar" ? "$1" : `$${settings.roundingValue}`}
+                        </p>
+                      )}
                     </div>
 
                     <Separator className="my-4" />
