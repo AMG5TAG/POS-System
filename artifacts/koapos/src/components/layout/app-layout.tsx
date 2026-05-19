@@ -15,7 +15,7 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
-  Cpu, Calculator, HardDrive, Target,
+  Cpu, Calculator, HardDrive, Target, StickyNote, Link2,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -98,6 +98,9 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Rostering",  href: "/staff/rostering",       icon: CalendarClock },
       { name: "Leave",      href: "/staff/leave-requests",  icon: ClipboardList },
       { name: "Costs",      href: "/staff/cost-summary",    icon: Coins         },
+      { name: "Notes",      href: "/staff/notes",           icon: StickyNote    },
+      { name: "KPIs",       href: "/staff/kpis",            icon: Target        },
+      { name: "Links",      href: "/staff/links",           icon: Link2         },
     ],
   },
   {
@@ -136,6 +139,9 @@ const SEARCH_INDEX = [
   { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Management" },
   { label: "Staff · Leave",      href: "/staff/leave-requests",        icon: ClipboardList,   group: "Management" },
   { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Management" },
+  { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Management" },
+  { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Management" },
+  { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Management" },
   { label: "Sales Overview",     href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
@@ -199,6 +205,9 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/rostering":             ["Staff", "Rostering"],
   "/staff/leave-requests":        ["Staff", "Leave"],
   "/staff/cost-summary":          ["Staff", "Costs"],
+  "/staff/notes":                 ["Staff", "Notes"],
+  "/staff/kpis":                  ["Staff", "KPIs"],
+  "/staff/links":                 ["Staff", "Links"],
   "/modules":                     ["Management", "Modules"],
   "/settings":                    ["Settings"],
   "/management/customers":        ["Management", "Customers"],

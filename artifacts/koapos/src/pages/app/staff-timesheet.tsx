@@ -1,13 +1,16 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { PageTabsNav } from "@/components/ui/page-tabs-nav";
-import { Clock, UserSquare2, CalendarClock, ClipboardList, Coins } from "lucide-react";
+import { Clock, UserSquare2, CalendarClock, ClipboardList, Coins, StickyNote, Target, Link2 } from "lucide-react";
 
 const STAFF_TABS = [
-  { href: "/staff",                label: "Employees",      icon: UserSquare2  },
-  { href: "/staff/timesheet",      label: "Timesheet",      icon: Clock        },
-  { href: "/staff/rostering",      label: "Rostering",      icon: CalendarClock },
-  { href: "/staff/leave-requests", label: "Leave Requests", icon: ClipboardList },
-  { href: "/staff/cost-summary",   label: "Cost Summary",   icon: Coins        },
+  { href: "/staff",                label: "Employees", icon: UserSquare2  },
+  { href: "/staff/timesheet",      label: "Timesheet", icon: Clock        },
+  { href: "/staff/rostering",      label: "Rostering", icon: CalendarClock },
+  { href: "/staff/leave-requests", label: "Leave",     icon: ClipboardList },
+  { href: "/staff/cost-summary",   label: "Costs",     icon: Coins        },
+  { href: "/staff/notes",          label: "Notes",     icon: StickyNote   },
+  { href: "/staff/kpis",           label: "KPIs",      icon: Target       },
+  { href: "/staff/links",          label: "Links",     icon: Link2        },
 ];
 
 export default function StaffTimesheetPage() {

@@ -78,6 +78,9 @@ import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
 import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
 import ManagementKpisPage from "@/pages/app/management-kpis";
+import StaffNotesPage from "@/pages/app/staff-notes";
+import StaffKpisPage from "@/pages/app/staff-kpis";
+import StaffLinksPage from "@/pages/app/staff-links";
 
 import NotFound from "@/pages/not-found";
 
@@ -221,6 +224,15 @@ function Router() {
       </Route>
       <Route path="/staff/cost-summary">
         <ProtectedRoute component={StaffCostSummaryPage} />
+      </Route>
+      <Route path="/staff/notes">
+        <ProtectedRoute component={StaffNotesPage} />
+      </Route>
+      <Route path="/staff/kpis">
+        <ProtectedRoute component={StaffKpisPage} />
+      </Route>
+      <Route path="/staff/links">
+        <ProtectedRoute component={StaffLinksPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} />
