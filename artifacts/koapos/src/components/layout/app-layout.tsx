@@ -168,6 +168,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/pos/parked":                  ["POS", "Parked"],
   "/pos/refund":                  ["POS", "Refund"],
   "/pos/cash":                    ["POS", "Cash"],
+  "/pos/3d-prints":               ["POS", "3D Prints"],
   "/service-jobs":                ["Services"],
   "/service-jobs/new":            ["Services", "New Job"],
   "/appointments":                ["Appointments"],
