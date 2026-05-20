@@ -874,10 +874,37 @@ export default function ServiceJobsPage() {
                 </div>
               </div>
 
-              {pj.workDescription && (
+              {(pj.workDescription || pj.additionalEquipment || pj.passwordOrPin || pj.accounts) && (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Work Description</div>
-                  <div style={{ whiteSpace: "pre-wrap" }}>{pj.workDescription}</div>
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Work Details</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <tbody>
+                      {pj.workDescription && (
+                        <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Work Description</td>
+                          <td style={{ padding: "5px 0", whiteSpace: "pre-wrap", verticalAlign: "top" }}>{pj.workDescription}</td>
+                        </tr>
+                      )}
+                      {pj.additionalEquipment && (
+                        <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Additional Equipment</td>
+                          <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.additionalEquipment}</td>
+                        </tr>
+                      )}
+                      {pj.passwordOrPin && (
+                        <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Password / PIN</td>
+                          <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.passwordOrPin}</td>
+                        </tr>
+                      )}
+                      {pj.accounts && (
+                        <tr>
+                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Accounts</td>
+                          <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.accounts}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
