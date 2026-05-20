@@ -334,8 +334,18 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
                 </div>
                 <DetailRow icon={ClipboardList} label="Work Description"     value={job.workDescription} />
                 <DetailRow icon={Package}       label="Additional Equipment" value={job.additionalEquipment} />
-                <DetailRow icon={KeyRound}      label="Password / PIN"       value={job.passwordOrPin} />
-                <DetailRow icon={StickyNote}    label="Accounts"             value={job.accounts} />
+                {(job.passwordOrPin || job.accounts) && (() => {
+                  const pins  = (job.passwordOrPin ?? "").split("\n").map(s => s.trim());
+                  const accts = (job.accounts ?? "").split("\n").map(s => s.trim());
+                  const max   = Math.max(pins.length, accts.length);
+                  const combined = Array.from({ length: max }, (_, i) => {
+                    const a = accts[i] || "";
+                    const p = pins[i]  || "";
+                    if (a && p) return `${a} — ${p}`;
+                    return a || p;
+                  }).filter(Boolean).join("\n");
+                  return <DetailRow icon={KeyRound} label="Logins / Accounts" value={combined} />;
+                })()}
               </div>
             )}
 
@@ -891,18 +901,25 @@ export default function ServiceJobsPage() {
                           <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.additionalEquipment}</td>
                         </tr>
                       )}
-                      {pj.passwordOrPin && (
-                        <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Password / PIN</td>
-                          <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.passwordOrPin}</td>
-                        </tr>
-                      )}
-                      {pj.accounts && (
-                        <tr>
-                          <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Accounts</td>
-                          <td style={{ padding: "5px 0", verticalAlign: "top" }}>{pj.accounts}</td>
-                        </tr>
-                      )}
+                      {(pj.passwordOrPin || pj.accounts) && (() => {
+                        const pins  = (pj.passwordOrPin ?? "").split("\n").map((s: string) => s.trim());
+                        const accts = (pj.accounts ?? "").split("\n").map((s: string) => s.trim());
+                        const max   = Math.max(pins.length, accts.length);
+                        const lines = Array.from({ length: max }, (_, i) => {
+                          const a = accts[i] || "";
+                          const p = pins[i]  || "";
+                          if (a && p) return `${a} — ${p}`;
+                          return a || p;
+                        }).filter(Boolean);
+                        return (
+                          <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "5px 8px 5px 0", width: "28%", color: "#666", fontSize: 11, fontWeight: "bold", verticalAlign: "top" }}>Logins / Accounts</td>
+                            <td style={{ padding: "5px 0", verticalAlign: "top" }}>
+                              {lines.map((line, li) => <div key={li}>{line}</div>)}
+                            </td>
+                          </tr>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>

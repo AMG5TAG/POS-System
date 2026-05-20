@@ -612,24 +612,21 @@ export default function ServiceJobNewPage() {
           </div>
 
           <div className="space-y-2">
+            <Label>Logins / Accounts</Label>
             {credentials.map((cred, i) => (
-              <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  {i === 0 && <Label>Password or PIN</Label>}
-                  <Input
-                    placeholder="Enter password or PIN..."
-                    value={cred.passwordOrPin}
-                    onChange={(e) => updateCredential(i, "passwordOrPin", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  {i === 0 && <Label>Accounts</Label>}
-                  <Input
-                    placeholder="e.g. Google, Microsoft..."
-                    value={cred.accounts}
-                    onChange={(e) => updateCredential(i, "accounts", e.target.value)}
-                  />
-                </div>
+              <div key={i} className="flex gap-0">
+                <Input
+                  placeholder="Account (e.g. Steam, Google)"
+                  value={cred.accounts}
+                  onChange={(e) => updateCredential(i, "accounts", e.target.value)}
+                  className="rounded-r-none border-r-0 flex-1"
+                />
+                <Input
+                  placeholder="Password / PIN"
+                  value={cred.passwordOrPin}
+                  onChange={(e) => updateCredential(i, "passwordOrPin", e.target.value)}
+                  className="rounded-l-none flex-1"
+                />
               </div>
             ))}
           </div>
