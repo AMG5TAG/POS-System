@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import {
   Search, Plus, Pencil, Trash2, Package,
@@ -250,15 +251,8 @@ function ImageSlot({ label, value, onChange }: {
   label: string; value: string; onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="aspect-square rounded-xl border-2 border-dashed bg-muted/20 flex flex-col items-center justify-center overflow-hidden relative group cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={() => { const v = prompt("Paste image URL:", value); if (v !== null) onChange(v); }}>
-        {value ? (
-          <img src={value} alt={label} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
-        ) : (
-          <ImageIcon className="w-8 h-8 text-muted-foreground/30" />
-        )}
-      </div>
+    <div className="flex flex-col gap-1">
+      <ImageUploader value={value} onChange={onChange} aspectRatio="square" />
       <p className="text-xs text-center text-muted-foreground">{label}</p>
     </div>
   );
@@ -1294,7 +1288,7 @@ export default function ProductsPage() {
               <div className="py-5 space-y-6">
                 <div>
                   <SectionHeader label="Product Images" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">Click any slot to set an image URL. Images: JPG, PNG, WebP · Min 800×800px</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Upload images or paste a URL. JPG, PNG, WebP · Min 800×800px recommended.</p>
                   <div className="grid grid-cols-4 gap-3">
                     <ImageSlot label="Primary"  value={form.imageUrl}  onChange={(v) => setField("imageUrl", v)}  />
                     <ImageSlot label="Image 2"  value={form.imageUrl2} onChange={(v) => setField("imageUrl2", v)} />

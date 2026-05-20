@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Plus, Truck, Pencil, Trash2, Search, Globe, Mail, Phone,
   Check, ChevronRight, ChevronLeft, Building2, MapPin, Users,
-  FileText, CreditCard, ImageIcon, X,
+  FileText, CreditCard, ImageIcon, X, LayoutGrid, Table2, BarChart3,
+  Download, ChevronUp, ChevronDown, ChevronsUpDown, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -172,36 +173,94 @@ function PillTextarea({ label, ...props }: React.TextareaHTMLAttributes<HTMLText
 
 /* ─── Step 1: Basic Info ─────────────────────────────────────────────────── */
 
+function LogoUploaderInline({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [urlMode, setUrlMode] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+
+  const upload = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    setUploading(true);
+    try {
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+        credentials: "include",
+      });
+      if (!urlRes.ok) throw new Error("Could not get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+      const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      if (!putRes.ok) throw new Error("Upload to storage failed");
+      onChange(`/api/storage${objectPath}`);
+      toast.success("Logo uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }, [onChange]);
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-foreground/80">Logo</Label>
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            "w-14 h-14 rounded-xl border-2 border-dashed flex items-center justify-center shrink-0 overflow-hidden transition-colors cursor-pointer",
+            value ? "border-border" : "bg-muted/20 hover:bg-muted/30",
+          )}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? (
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          ) : value ? (
+            <img src={value} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+          ) : (
+            <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Button type="button" variant="outline" size="sm" className="rounded-full gap-1.5 h-7 text-xs" disabled={uploading} onClick={() => inputRef.current?.click()}>
+            <Upload className="w-3 h-3" /> {value ? "Replace" : "Upload Logo"}
+          </Button>
+          {!urlMode && (
+            <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors" onClick={() => { setUrlMode(true); setUrlInput(value); }}>
+              <Globe className="w-3 h-3" /> Use URL instead
+            </button>
+          )}
+          {value && (
+            <button type="button" className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors" onClick={() => onChange("")}>
+              <X className="w-3 h-3" /> Remove
+            </button>
+          )}
+        </div>
+      </div>
+      {urlMode && (
+        <div className="flex gap-2 mt-2">
+          <Input
+            placeholder="https://example.com/logo.png"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && urlInput.trim()) { onChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); } }}
+            className="text-sm rounded-full"
+            autoFocus
+          />
+          <Button type="button" size="sm" className="rounded-full shrink-0" onClick={() => { if (urlInput.trim()) { onChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); } }}>Apply</Button>
+          <Button type="button" size="sm" variant="ghost" className="rounded-full shrink-0" onClick={() => setUrlMode(false)}>Cancel</Button>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) upload(e.target.files[0]); }} />
+    </div>
+  );
+}
+
 function Step1({ form, set }: { form: SupplierForm; set: <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => void }) {
   return (
     <div className="space-y-4">
       {/* Logo */}
-      <div className="flex items-center gap-3">
-        {form.logoUrl ? (
-          <div className="relative shrink-0">
-            <img src={form.logoUrl} alt="Logo" className="h-14 w-14 rounded-xl object-contain border bg-muted" />
-            <button
-              type="button"
-              onClick={() => set("logoUrl", "")}
-              className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center"
-            >
-              <X className="w-2.5 h-2.5" />
-            </button>
-          </div>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="rounded-full gap-2"
-          onClick={() => {
-            const url = window.prompt("Paste logo URL:");
-            if (url) set("logoUrl", url);
-          }}
-        >
-          <ImageIcon className="w-3.5 h-3.5" /> {form.logoUrl ? "Change Logo" : "Upload Logo"}
-        </Button>
-      </div>
+      <LogoUploaderInline value={form.logoUrl} onChange={(url) => set("logoUrl", url)} />
 
       <PillInput label="Supplier Name" required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Supplier / wholesaler name" />
       <PillInput label="Account Number" value={form.accountNumber} onChange={(e) => set("accountNumber", e.target.value)} placeholder="Your account number" />
@@ -428,6 +487,10 @@ function WizardDialog({
   );
 }
 
+type ViewMode = "cards" | "table" | "performance";
+type SortKey = "name" | "paymentTerms" | "creditAccountNumber" | "city" | "contact";
+type SortDir = "asc" | "desc";
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ProductsSuppliersPage() {
@@ -436,6 +499,9 @@ export default function ProductsSuppliersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<ViewMode>("table");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const load = async () => {
     const res = await fetch(`${API}${search ? `?search=${encodeURIComponent(search)}` : ""}`, { credentials: "include" });
@@ -484,32 +550,209 @@ export default function ProductsSuppliersPage() {
     return contacts[0] ?? null;
   };
 
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const sorted = [...suppliers].sort((a, b) => {
+    let av = "", bv = "";
+    if (sortKey === "name") { av = a.name; bv = b.name; }
+    else if (sortKey === "paymentTerms") { av = a.paymentTerms ?? ""; bv = b.paymentTerms ?? ""; }
+    else if (sortKey === "creditAccountNumber") { av = a.creditAccountNumber ?? ""; bv = b.creditAccountNumber ?? ""; }
+    else if (sortKey === "city") { av = a.city ?? ""; bv = b.city ?? ""; }
+    else if (sortKey === "contact") {
+      av = primaryContact(a)?.name ?? "";
+      bv = primaryContact(b)?.name ?? "";
+    }
+    return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground/40" />;
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3.5 h-3.5 text-foreground" />
+      : <ChevronDown className="w-3.5 h-3.5 text-foreground" />;
+  };
+
+  const PAYMENT_TERM_COLORS: Record<string, string> = {
+    "Cash": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    "Account": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    "Credit Card": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    "COD": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    "Other": "bg-muted text-muted-foreground",
+  };
+  const termColor = (term: string | null) =>
+    term ? (PAYMENT_TERM_COLORS[term] ?? "bg-muted text-muted-foreground") : "";
+
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Truck className="w-6 h-6 text-primary" />
+      <div className="p-6 md:p-8 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
             <h1 className="text-2xl font-bold">Suppliers</h1>
             <p className="text-sm text-muted-foreground">Manage supplier contacts, pricing terms, and purchase order history.</p>
           </div>
-          <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Supplier</Button>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search suppliers..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          {/* Left: search + view tabs */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search suppliers..." className="pl-9 w-56" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView("cards")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "cards" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" /> Cards
+              </button>
+              <button
+                onClick={() => setView("table")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-r", view === "table" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              >
+                <Table2 className="w-3.5 h-3.5" /> Table
+              </button>
+              <button
+                onClick={() => setView("performance")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "performance" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              >
+                <BarChart3 className="w-3.5 h-3.5" /> Performance
+              </button>
+            </div>
+          </div>
+
+          {/* Right: count + export + add */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-sm text-muted-foreground">{suppliers.length} supplier{suppliers.length !== 1 ? "s" : ""}</span>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Download className="w-3.5 h-3.5" /> Export
+            </Button>
+            <Button size="sm" onClick={openCreate} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Add Supplier
+            </Button>
+          </div>
         </div>
 
-        {suppliers.length === 0 ? (
+        {/* Empty state */}
+        {suppliers.length === 0 && (
           <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
             <Truck className="w-16 h-16 text-muted-foreground/30" />
             <div><p className="font-medium text-lg">No suppliers yet</p><p className="text-muted-foreground text-sm">Add suppliers to link them to purchase orders.</p></div>
             <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Supplier</Button>
           </CardContent></Card>
-        ) : (
+        )}
+
+        {/* ── Table view ── */}
+        {suppliers.length > 0 && view === "table" && (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort("name")}>
+                        Name <SortIcon k="name" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort("paymentTerms")}>
+                        Payment Terms <SortIcon k="paymentTerms" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort("creditAccountNumber")}>
+                        Account No. <SortIcon k="creditAccountNumber" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort("city")}>
+                        City <SortIcon k="city" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort("contact")}>
+                        Contact <SortIcon k="contact" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((s, idx) => {
+                    const pc = primaryContact(s);
+                    return (
+                      <tr key={s.id} className={cn("border-b last:border-0 hover:bg-muted/20 transition-colors", idx % 2 === 0 ? "" : "bg-muted/5")}>
+                        {/* Name */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {s.logoUrl ? (
+                              <img src={s.logoUrl} alt={s.name} className="h-7 w-7 rounded-lg object-contain border bg-muted shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                            ) : (
+                              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                <Truck className="w-3.5 h-3.5 text-primary" />
+                              </div>
+                            )}
+                            <button
+                              className="font-medium text-primary hover:underline text-left truncate"
+                              onClick={() => openEdit(s)}
+                            >
+                              {s.name}
+                            </button>
+                          </div>
+                        </td>
+                        {/* Payment Terms */}
+                        <td className="px-4 py-3">
+                          {s.paymentTerms ? (
+                            <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", termColor(s.paymentTerms))}>
+                              {s.paymentTerms}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        {/* Account No. */}
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {s.creditAccountNumber || <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        {/* City */}
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {s.city || <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        {/* Contact */}
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {pc?.name || <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        {/* Actions */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-0.5 justify-end">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2 border-t text-xs text-muted-foreground bg-muted/10">
+              {suppliers.length} supplier{suppliers.length !== 1 ? "s" : ""}
+            </div>
+          </Card>
+        )}
+
+        {/* ── Cards view ── */}
+        {suppliers.length > 0 && view === "cards" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {suppliers.map((s) => {
+            {sorted.map((s) => {
               const pc = primaryContact(s);
               const allContacts = getContacts(s);
               return (
@@ -545,7 +788,9 @@ export default function ProductsSuppliersPage() {
                     {(s.paymentTerms || s.creditAccountNumber) && (
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {s.paymentTerms && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">{s.paymentTerms}</span>
+                          <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", termColor(s.paymentTerms))}>
+                            {s.paymentTerms}
+                          </span>
                         )}
                         {s.creditAccountNumber && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary">
@@ -559,6 +804,19 @@ export default function ProductsSuppliersPage() {
               );
             })}
           </div>
+        )}
+
+        {/* ── Performance view ── */}
+        {suppliers.length > 0 && view === "performance" && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-3">
+              <BarChart3 className="w-14 h-14 text-muted-foreground/30" />
+              <div>
+                <p className="font-medium">Supplier Performance</p>
+                <p className="text-sm text-muted-foreground mt-1">Purchase order history and performance metrics will appear here once purchase orders are recorded.</p>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 

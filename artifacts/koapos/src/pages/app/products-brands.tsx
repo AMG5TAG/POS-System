@@ -50,6 +50,8 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [urlMode, setUrlMode] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
@@ -109,9 +111,28 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
               <X className="w-3 h-3" /> Remove
             </Button>
           )}
+          {!urlMode ? (
+            <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors" onClick={() => { setUrlMode(true); setUrlInput(value); }}>
+              <Globe className="w-3 h-3" /> Use URL instead
+            </button>
+          ) : null}
           <p className="text-[11px] text-muted-foreground leading-tight">PNG, JPG, SVG<br />Drag & drop or click</p>
         </div>
       </div>
+      {urlMode && (
+        <div className="flex gap-2 mt-1">
+          <Input
+            placeholder="https://example.com/logo.png"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && urlInput.trim()) { onChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); } }}
+            autoFocus
+            className="text-sm"
+          />
+          <Button type="button" size="sm" onClick={() => { if (urlInput.trim()) { onChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); } }}>Apply</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setUrlMode(false)}>Cancel</Button>
+        </div>
+      )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files)} />
     </div>
   );

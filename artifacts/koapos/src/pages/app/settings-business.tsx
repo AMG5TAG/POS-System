@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetMerchant, useUpdateMerchant } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
@@ -510,32 +510,7 @@ export default function SettingsBusinessPage() {
         <Card id="logo">
           <CardHeader><CardTitle className="text-base">Logo</CardTitle></CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              {ext.logo ? (
-                <div className="relative w-20 h-20 rounded-lg border border-border overflow-hidden">
-                  <img src={ext.logo} alt="Logo" className="w-full h-full object-contain" />
-                  <button
-                    onClick={() => setExtField("logo", "")}
-                    className="absolute top-0.5 right-0.5 bg-background rounded-full p-0.5 shadow"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground">
-                  <Upload className="h-6 w-6" />
-                </div>
-              )}
-              <div>
-                <label>
-                  <Button type="button" variant="outline" size="sm" asChild>
-                    <span className="cursor-pointer"><Upload className="h-3.5 w-3.5 mr-1" />Upload Logo</span>
-                  </Button>
-                  <input type="file" accept="image/*" className="sr-only" onChange={handleLogoUpload} />
-                </label>
-                <p className="text-xs text-muted-foreground mt-1">PNG or SVG recommended. Max 2 MB.</p>
-              </div>
-            </div>
+            <LogoSection logo={ext.logo} onLogoChange={(val) => setExtField("logo", val)} onFileUpload={handleLogoUpload} />
           </CardContent>
         </Card>
 
@@ -828,5 +803,80 @@ export default function SettingsBusinessPage() {
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</p>
+  );
+}
+
+function LogoSection({
+  logo,
+  onLogoChange,
+  onFileUpload,
+}: {
+  logo: string;
+  onLogoChange: (val: string) => void;
+  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [urlMode, setUrlMode] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-4">
+        <div
+          className="relative w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer hover:bg-muted/20 transition-colors shrink-0"
+          onClick={() => inputRef.current?.click()}
+        >
+          {logo ? (
+            <img src={logo} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+          ) : (
+            <Upload className="h-6 w-6 text-muted-foreground/40" />
+          )}
+          {logo && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onLogoChange(""); }}
+              className="absolute top-0.5 right-0.5 bg-background rounded-full p-0.5 shadow hover:bg-destructive hover:text-white transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label>
+            <Button type="button" variant="outline" size="sm" asChild>
+              <span className="cursor-pointer"><Upload className="h-3.5 w-3.5 mr-1" />{logo ? "Replace Logo" : "Upload Logo"}</span>
+            </Button>
+            <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={onFileUpload} />
+          </label>
+          {!urlMode && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+              onClick={() => { setUrlMode(true); setUrlInput(logo); }}
+            >
+              <Globe className="w-3 h-3" /> Use URL instead
+            </button>
+          )}
+          <p className="text-xs text-muted-foreground">PNG or SVG recommended. Max 2 MB.</p>
+        </div>
+      </div>
+      {urlMode && (
+        <div className="flex gap-2">
+          <input
+            type="url"
+            placeholder="https://example.com/logo.png"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && urlInput.trim()) { onLogoChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); }
+            }}
+            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+            autoFocus
+          />
+          <Button type="button" size="sm" onClick={() => { if (urlInput.trim()) { onLogoChange(urlInput.trim()); setUrlMode(false); setUrlInput(""); } }}>Apply</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setUrlMode(false)}>Cancel</Button>
+        </div>
+      )}
+    </div>
   );
 }

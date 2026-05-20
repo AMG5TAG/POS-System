@@ -293,11 +293,17 @@ function Router() {
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />
       </Route>
-      <Route path="/settings/tax">
+      <Route path="/management/tax">
         <ProtectedRoute component={SettingsTaxPage} />
       </Route>
-      <Route path="/settings/email">
+      <Route path="/management/email">
         <ProtectedRoute component={SettingsEmailPage} />
+      </Route>
+      <Route path="/settings/tax">
+        <Redirect to="/management/tax" />
+      </Route>
+      <Route path="/settings/email">
+        <Redirect to="/management/email" />
       </Route>
 
       <Route path="/modules">
