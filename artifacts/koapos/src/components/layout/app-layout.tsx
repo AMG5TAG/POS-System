@@ -103,7 +103,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
   { name: "Modules",        href: "/modules",                   icon: Blocks         },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
-  { name: "Price Tiers",    href: "/management/price-tiers",    icon: Layers         },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
     name: "Staff",
@@ -156,7 +155,6 @@ const SEARCH_INDEX = [
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
-  { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
   { label: "Email Settings",      href: "/management/email",                      icon: Mail,         group: "Management" },
   { label: "Tax & Receipts",     href: "/management/tax",                        icon: Receipt,      group: "Management" },
   { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
@@ -250,7 +248,6 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/loyalty":          ["Management", "Loyalty"],
   "/management/inventory":        ["Management", "Inventory"],
   "/management/discounts":        ["Management", "Discounts"],
-  "/management/price-tiers":      ["Management", "Price Tiers"],
   "/inventory/wastage":           ["Inventory", "Wastage"],
   "/settings/tax":                ["Management", "Tax & Receipts"],
   "/management/tax":              ["Management", "Tax & Receipts"],

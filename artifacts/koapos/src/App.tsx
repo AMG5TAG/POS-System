@@ -68,7 +68,6 @@ import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
 import ManagementLaybyPage from "@/pages/app/management-layby";
 import ManagementInventoryPage from "@/pages/app/management-inventory";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
-import ManagementPriceTiersPage from "@/pages/app/management-price-tiers";
 import ManagementTemplatesPage from "@/pages/app/management-templates";
 import ManagementFormsPage from "@/pages/app/management-forms";
 import ManagementStickersPage from "@/pages/app/management-stickers";
@@ -278,9 +277,6 @@ function Router() {
       </Route>
       <Route path="/management/discounts">
         <ProtectedRoute component={ManagementDiscountsPage} />
-      </Route>
-      <Route path="/management/price-tiers">
-        <ProtectedRoute component={ManagementPriceTiersPage} />
       </Route>
       <Route path="/management/templates">
         <ProtectedRoute component={ManagementTemplatesPage} />

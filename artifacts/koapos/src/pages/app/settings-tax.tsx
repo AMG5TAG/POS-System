@@ -233,32 +233,6 @@ export default function SettingsTaxPage() {
           </CardContent>
         </Card>
 
-        {/* Receipt Customisation */}
-        <Card id="receipt">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Receipt className="w-4 h-4" /> Receipt Customisation
-            </CardTitle>
-            <CardDescription>Customise what appears at the top and bottom of customer receipts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Receipt Header</Label>
-              <Textarea value={form.receiptHeader}
-                onChange={(e) => setForm({ ...form, receiptHeader: e.target.value })}
-                placeholder="e.g. Welcome to our store! Thank you for shopping with us."
-                rows={2} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Receipt Footer</Label>
-              <Textarea value={form.receiptFooter}
-                onChange={(e) => setForm({ ...form, receiptFooter: e.target.value })}
-                placeholder="e.g. Thank you! Returns accepted within 30 days with receipt."
-                rows={2} />
-            </div>
-          </CardContent>
-        </Card>
-
         </div>{/* end 2-col grid */}
 
         {/* Document Code Prefixes */}
