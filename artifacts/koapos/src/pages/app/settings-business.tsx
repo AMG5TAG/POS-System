@@ -9,13 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, X, Plus, Trash2, Globe, Facebook, Instagram, Youtube, Linkedin, Twitter,
   Building2, Tag, Image, Palette, Phone, MapPin, Clock, Umbrella, CreditCard, Share2,
+  Hash, DollarSign, Calendar,
 } from "lucide-react";
 import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
@@ -29,6 +32,7 @@ const BUSINESS_TABS = [
   { href: "#hours",          label: "Hours",          icon: Clock       },
   { href: "#payments",       label: "Payments",       icon: CreditCard  },
   { href: "#social",         label: "Social",         icon: Share2      },
+  { href: "#regional",       label: "Regional",       icon: Globe       },
 ];
 
 /* ─── Colour swatch ──────────────────────────────────────────────────────── */
@@ -51,6 +55,144 @@ function ColourSwatch({ value, onChange }: { value: string; onChange: (v: string
         className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
       />
     </button>
+  );
+}
+
+/* ─── Regional locale data ───────────────────────────────────────────────── */
+
+const REG_LANGUAGES = [
+  { value: "en-AU", label: "🇦🇺  English (Australia)" }, { value: "en-US", label: "🇺🇸  English (United States)" },
+  { value: "en-GB", label: "🇬🇧  English (United Kingdom)" }, { value: "en-NZ", label: "🇳🇿  English (New Zealand)" },
+  { value: "en-SG", label: "🇸🇬  English (Singapore)" }, { value: "fr", label: "🇫🇷  French" },
+  { value: "de", label: "🇩🇪  German" }, { value: "es", label: "🇪🇸  Spanish" },
+  { value: "ja", label: "🇯🇵  Japanese" }, { value: "zh-CN", label: "🇨🇳  Chinese (Simplified)" },
+  { value: "ar", label: "🇸🇦  Arabic" }, { value: "id", label: "🇮🇩  Indonesian" },
+];
+
+const REG_CURRENCIES = [
+  { value: "AUD", label: "AUD — Australian Dollar ($)" }, { value: "NZD", label: "NZD — New Zealand Dollar ($)" },
+  { value: "USD", label: "USD — US Dollar ($)" }, { value: "GBP", label: "GBP — British Pound (£)" },
+  { value: "EUR", label: "EUR — Euro (€)" }, { value: "CAD", label: "CAD — Canadian Dollar ($)" },
+  { value: "SGD", label: "SGD — Singapore Dollar ($)" }, { value: "JPY", label: "JPY — Japanese Yen (¥)" },
+  { value: "CNY", label: "CNY — Chinese Yuan (¥)" }, { value: "INR", label: "INR — Indian Rupee (₹)" },
+  { value: "MYR", label: "MYR — Malaysian Ringgit (RM)" }, { value: "IDR", label: "IDR — Indonesian Rupiah (Rp)" },
+  { value: "THB", label: "THB — Thai Baht (฿)" }, { value: "VND", label: "VND — Vietnamese Dong (₫)" },
+  { value: "AED", label: "AED — UAE Dirham (د.إ)" }, { value: "SAR", label: "SAR — Saudi Riyal (﷼)" },
+  { value: "ZAR", label: "ZAR — South African Rand (R)" }, { value: "BRL", label: "BRL — Brazilian Real (R$)" },
+  { value: "MXN", label: "MXN — Mexican Peso ($)" },
+];
+
+const REG_DATE_FORMATS = [
+  { value: "DD/MM/YYYY", label: "DD/MM/YYYY — Australian / European" },
+  { value: "MM/DD/YYYY", label: "MM/DD/YYYY — US / Philippines" },
+  { value: "YYYY-MM-DD", label: "YYYY-MM-DD — ISO 8601" },
+  { value: "DD-MM-YYYY", label: "DD-MM-YYYY — Dashes" },
+  { value: "D MMMM YYYY", label: "D MMMM YYYY — 25 December 2025" },
+];
+
+const REG_TIMEZONES: { group: string; zones: { value: string; label: string }[] }[] = [
+  { group: "Australia & Pacific", zones: [
+    { value: "Australia/Sydney",    label: "AEST — Sydney / Melbourne / Canberra" },
+    { value: "Australia/Brisbane",  label: "AEST — Brisbane / Queensland" },
+    { value: "Australia/Adelaide",  label: "ACST — Adelaide / South Australia" },
+    { value: "Australia/Perth",     label: "AWST — Perth / Western Australia" },
+    { value: "Australia/Darwin",    label: "ACST — Darwin / Northern Territory" },
+    { value: "Australia/Hobart",    label: "AEST — Hobart / Tasmania" },
+    { value: "Pacific/Auckland",    label: "NZST — Auckland / Wellington" },
+    { value: "Pacific/Honolulu",    label: "HST — Hawaii" },
+  ]},
+  { group: "Americas", zones: [
+    { value: "America/New_York",    label: "EST — New York / Miami" },
+    { value: "America/Chicago",     label: "CST — Chicago / Houston" },
+    { value: "America/Los_Angeles", label: "PST — Los Angeles / Seattle" },
+    { value: "America/Toronto",     label: "EST — Toronto / Ottawa" },
+    { value: "America/Sao_Paulo",   label: "BRT — São Paulo / Rio" },
+  ]},
+  { group: "Europe", zones: [
+    { value: "Europe/London",       label: "GMT/BST — London" },
+    { value: "Europe/Paris",        label: "CET — Paris / Berlin" },
+    { value: "Europe/Berlin",       label: "CET — Berlin / Frankfurt" },
+    { value: "Europe/Moscow",       label: "MSK — Moscow" },
+  ]},
+  { group: "Asia & Middle East", zones: [
+    { value: "Asia/Dubai",          label: "GST — Dubai / Abu Dhabi" },
+    { value: "Asia/Kolkata",        label: "IST — Mumbai / Delhi" },
+    { value: "Asia/Singapore",      label: "SGT — Singapore / Kuala Lumpur" },
+    { value: "Asia/Shanghai",       label: "CST — Shanghai / Beijing" },
+    { value: "Asia/Tokyo",          label: "JST — Tokyo / Osaka" },
+    { value: "Asia/Seoul",          label: "KST — Seoul" },
+  ]},
+  { group: "Africa", zones: [
+    { value: "Africa/Johannesburg", label: "SAST — Johannesburg / Cape Town" },
+    { value: "Africa/Nairobi",      label: "EAT — Nairobi / Kampala" },
+    { value: "Africa/Lagos",        label: "WAT — Lagos / Accra" },
+  ]},
+];
+
+const REG_TAX_LABELS = [
+  { value: "GST", label: "GST — Goods & Services Tax (AU, NZ, SG, IN)" },
+  { value: "VAT", label: "VAT — Value Added Tax (EU, UAE, UK)" },
+  { value: "HST", label: "HST — Harmonised Sales Tax (Canada)" },
+  { value: "Sales Tax", label: "Sales Tax (United States)" },
+  { value: "Custom", label: "Custom — Enter your own" },
+];
+
+const REG_TAX_NUMBER_LABELS = [
+  { value: "ABN", label: "ABN — Australian Business Number" },
+  { value: "NZBN", label: "NZBN — New Zealand Business Number" },
+  { value: "VAT No.", label: "VAT No. (Europe / UK)" },
+  { value: "GST No.", label: "GST No. (Canada / Singapore)" },
+  { value: "TIN", label: "TIN — Taxpayer Identification Number (US)" },
+  { value: "GSTIN", label: "GSTIN — GST Identification Number (India)" },
+  { value: "Business No.", label: "Business No. (Generic)" },
+];
+
+const REG_MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+
+const REG_LS_KEY = "koapos_regional_ext";
+
+interface RegExtSettings {
+  language: string; dateFormat: string; timeFormat: "12" | "24";
+  decimalSeparator: "." | ","; thousandsSeparator: "," | "." | " " | "'";
+  measurementSystem: "metric" | "imperial"; paperSize: "A4" | "letter";
+  firstDayOfWeek: "monday" | "sunday" | "saturday"; fiscalYearStart: number;
+  taxLabel: string; customTaxLabel: string; taxNumberLabel: string;
+  receiptPaperSize: "a4" | "80mm" | "58mm";
+}
+
+const REG_DEFAULT: RegExtSettings = {
+  language: "en-AU", dateFormat: "DD/MM/YYYY", timeFormat: "12",
+  decimalSeparator: ".", thousandsSeparator: ",",
+  measurementSystem: "metric", paperSize: "A4", firstDayOfWeek: "monday",
+  fiscalYearStart: 7, taxLabel: "GST", customTaxLabel: "", taxNumberLabel: "ABN",
+  receiptPaperSize: "80mm",
+};
+
+function loadRegExt(): RegExtSettings {
+  try {
+    const raw = localStorage.getItem(REG_LS_KEY);
+    if (raw) return { ...REG_DEFAULT, ...(JSON.parse(raw) as Partial<RegExtSettings>) };
+  } catch { /* ignore */ }
+  return { ...REG_DEFAULT };
+}
+
+function saveRegExt(s: RegExtSettings) { localStorage.setItem(REG_LS_KEY, JSON.stringify(s)); }
+
+function RegSegmentToggle<T extends string>({ options, value, onChange }: {
+  options: { value: T; label: string }[]; value: T; onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex rounded-lg border overflow-hidden">
+      {options.map(opt => (
+        <button key={opt.value} type="button" onClick={() => onChange(opt.value)}
+          className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
+            value === opt.value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
+          }`}>{opt.label}</button>
+      ))}
+    </div>
   );
 }
 
@@ -167,6 +309,12 @@ export default function SettingsBusinessPage() {
   /* Extended localStorage-backed fields */
   const [ext, setExt] = useState<BusinessProfile>(profile);
 
+  /* Regional settings */
+  const [regCurrency, setRegCurrency] = useState("AUD");
+  const [regTimezone, setRegTimezone] = useState("Australia/Sydney");
+  const [regExt, setRegExt] = useState<RegExtSettings>(() => loadRegExt());
+  const patchRegExt = (patch: Partial<RegExtSettings>) => setRegExt(prev => ({ ...prev, ...patch }));
+
   /* Category input */
   const [catInput, setCatInput] = useState("");
 
@@ -183,6 +331,8 @@ export default function SettingsBusinessPage() {
         city:         merchant.city         || "",
         country:      merchant.country      || "AU",
       });
+      setRegCurrency(merchant.currency || "AUD");
+      setRegTimezone(merchant.timezone || "Australia/Sydney");
     }
   }, [merchant]);
 
@@ -253,6 +403,22 @@ export default function SettingsBusinessPage() {
     const next = [...ext.textColors];
     next[idx] = val;
     setExtField("textColors", next);
+  };
+
+  /* Save regional */
+  const handleRegionalSave = () => {
+    updateMutation.mutate(
+      { data: { currency: regCurrency || undefined, timezone: regTimezone || undefined } },
+      {
+        onSuccess: (updated) => {
+          saveRegExt(regExt);
+          login(updated);
+          queryClient.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success("Regional settings saved");
+        },
+        onError: () => toast.error("Failed to save regional settings"),
+      }
+    );
   };
 
   /* Save */
@@ -661,6 +827,169 @@ export default function SettingsBusinessPage() {
                 <Button type="button" variant="outline" size="sm" onClick={addCustomLink}><Plus className="h-4 w-4" /></Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Regional Settings ─────────────────────────────────────────────── */}
+        <Card id="regional">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Globe className="w-4 h-4" /> Regional Settings
+            </CardTitle>
+            <CardDescription>Language, currency, timezone, date formats, and other regional preferences</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+
+            {/* Localisation */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Localisation</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>App Language</Label>
+                  <Select value={regExt.language} onValueChange={v => patchRegExt({ language: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {REG_LANGUAGES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Currency</Label>
+                  <Select value={regCurrency} onValueChange={setRegCurrency}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {REG_CURRENCIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Date Format</Label>
+                  <Select value={regExt.dateFormat} onValueChange={v => patchRegExt({ dateFormat: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {REG_DATE_FORMATS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Time Format</Label>
+                  <RegSegmentToggle
+                    options={[{ value: "12", label: "12-hour (AM/PM)" }, { value: "24", label: "24-hour" }]}
+                    value={regExt.timeFormat}
+                    onChange={v => patchRegExt({ timeFormat: v })}
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label>Timezone</Label>
+                  <Select value={regTimezone} onValueChange={setRegTimezone}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {REG_TIMEZONES.map(group => (
+                        <SelectGroup key={group.group}>
+                          <SelectLabel>{group.group}</SelectLabel>
+                          {group.zones.map(z => <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>)}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Numbers & Units */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Numbers &amp; Units</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Decimal Separator</Label>
+                  <RegSegmentToggle
+                    options={[{ value: ".", label: "Period  1,234.56" }, { value: ",", label: "Comma  1.234,56" }]}
+                    value={regExt.decimalSeparator}
+                    onChange={v => patchRegExt({ decimalSeparator: v })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Measurement System</Label>
+                  <RegSegmentToggle
+                    options={[{ value: "metric", label: "Metric (kg, cm)" }, { value: "imperial", label: "Imperial (lb, in)" }]}
+                    value={regExt.measurementSystem}
+                    onChange={v => patchRegExt({ measurementSystem: v })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>First Day of Week</Label>
+                  <RegSegmentToggle
+                    options={[{ value: "monday", label: "Mon" }, { value: "sunday", label: "Sun" }, { value: "saturday", label: "Sat" }]}
+                    value={regExt.firstDayOfWeek}
+                    onChange={v => patchRegExt({ firstDayOfWeek: v })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Receipt Paper Size</Label>
+                  <RegSegmentToggle
+                    options={[{ value: "80mm", label: "80mm" }, { value: "58mm", label: "58mm" }, { value: "a4", label: "A4" }]}
+                    value={regExt.receiptPaperSize}
+                    onChange={v => patchRegExt({ receiptPaperSize: v })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Fiscal & Tax */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Fiscal &amp; Tax</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Fiscal Year Start Month</Label>
+                  <Select value={String(regExt.fiscalYearStart)} onValueChange={v => patchRegExt({ fiscalYearStart: parseInt(v) })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {REG_MONTHS.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Fiscal year ends in {REG_MONTHS[((regExt.fiscalYearStart - 1 + 11) % 12)]}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tax Number Label</Label>
+                  <Select value={regExt.taxNumberLabel} onValueChange={v => patchRegExt({ taxNumberLabel: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {REG_TAX_NUMBER_LABELS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label>Tax Label</Label>
+                  <Select value={regExt.taxLabel} onValueChange={v => patchRegExt({ taxLabel: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {REG_TAX_LABELS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {regExt.taxLabel === "Custom" && (
+                    <Input
+                      value={regExt.customTaxLabel}
+                      onChange={e => patchRegExt({ customTaxLabel: e.target.value })}
+                      placeholder="Enter your tax label"
+                      className="mt-2"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={handleRegionalSave} disabled={updateMutation.isPending} size="sm" className="min-w-40">
+                {updateMutation.isPending ? "Saving…" : "Save Regional Settings"}
+              </Button>
+            </div>
+
           </CardContent>
         </Card>
 

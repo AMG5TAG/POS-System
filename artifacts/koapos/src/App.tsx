@@ -303,7 +303,7 @@ function Router() {
         <ProtectedRoute component={SettingsBusinessPage} />
       </Route>
       <Route path="/management/regional">
-        <ProtectedRoute component={SettingsRegionalPage} />
+        <Redirect to="/management/business" />
       </Route>
       <Route path="/management/account">
         <ProtectedRoute component={SettingsAccountPage} />

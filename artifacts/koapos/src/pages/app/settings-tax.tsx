@@ -183,13 +183,44 @@ export default function SettingsTaxPage() {
                     onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
                     placeholder="e.g. 12 345 678 901" />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="space-y-2">
                   <div>
-                    <p className="font-medium text-sm">Tax Inclusive Pricing</p>
-                    <p className="text-xs text-muted-foreground">Prices already include GST (standard in Australia)</p>
+                    <p className="font-medium text-sm">Default Pricing</p>
+                    <p className="text-xs text-muted-foreground">How product prices are entered and stored in the system</p>
                   </div>
-                  <Switch checked={bool(form.taxInclusive)}
-                    onCheckedChange={() => setForm({ ...form, taxInclusive: toggleStr(form.taxInclusive) })} />
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, taxInclusive: "true" })}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                        form.taxInclusive === "true"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      Inc Tax
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, taxInclusive: "false" })}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                        form.taxInclusive === "false"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      Ex Tax
+                    </button>
+                  </div>
+                  <p className={`text-xs rounded-lg px-3 py-2 ${
+                    form.taxInclusive === "true"
+                      ? "bg-blue-50 border border-blue-200 text-blue-700"
+                      : "bg-amber-50 border border-amber-200 text-amber-700"
+                  }`}>
+                    {form.taxInclusive === "true"
+                      ? `Inc Tax: Prices entered for products already include ${form.taxName || "GST"}. Tax is extracted from the total at checkout. (Standard in Australia)`
+                      : `Ex Tax: Prices entered for products are exclusive of ${form.taxName || "GST"}. Tax is added on top at checkout.`}
+                  </p>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
