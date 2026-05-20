@@ -4,6 +4,7 @@ import { db, merchantsTable, plansTable, subscriptionsTable } from "@workspace/d
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -111,6 +112,27 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   req.session.merchantId = merchant.id;
   res.json(formatMerchant(merchant));
+});
+
+router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {
+  const { currentPassword, newPassword } = req.body as Record<string, unknown>;
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  if (!merchant || !(await verifyPassword(currentPassword, merchant.passwordHash))) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+  const passwordHash = await hashPassword(newPassword);
+  await db.update(merchantsTable).set({ passwordHash }).where(eq(merchantsTable.id, merchantId));
+  res.json({ ok: true });
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
