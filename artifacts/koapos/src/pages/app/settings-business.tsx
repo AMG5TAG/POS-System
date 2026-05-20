@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -62,6 +63,42 @@ const ALL_PAYMENT_TYPES = [
   "PayPal", "Google Pay", "Apple Pay", "Bank Transfer",
   "Afterpay", "Zip", "Cryptocurrency", "Cheque",
 ];
+
+/* ─── Country code ↔ full name ───────────────────────────────────────────── */
+
+const COUNTRY_CODE_TO_NAME: Record<string, string> = {
+  AU: "Australia",  NZ: "New Zealand",  US: "United States",  GB: "United Kingdom",
+  CA: "Canada",     SG: "Singapore",    IN: "India",          ZA: "South Africa",
+  FR: "France",     DE: "Germany",      IT: "Italy",          ES: "Spain",
+  NL: "Netherlands",PT: "Portugal",     JP: "Japan",          KR: "South Korea",
+  CN: "China",      TW: "Taiwan",       HK: "Hong Kong",      MY: "Malaysia",
+  ID: "Indonesia",  TH: "Thailand",     VN: "Vietnam",        PH: "Philippines",
+  AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar",
+  BR: "Brazil",     MX: "Mexico",       AR: "Argentina",      CL: "Chile",
+  SE: "Sweden",     NO: "Norway",       DK: "Denmark",        FI: "Finland",
+  CH: "Switzerland",AT: "Austria",      BE: "Belgium",        IE: "Ireland",
+  PL: "Poland",     TR: "Turkey",       NG: "Nigeria",        KE: "Kenya",
+  EG: "Egypt",      GH: "Ghana",        PK: "Pakistan",       BD: "Bangladesh",
+  LK: "Sri Lanka",  NP: "Nepal",
+};
+
+const COUNTRY_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(COUNTRY_CODE_TO_NAME).map(([code, name]) => [name.toLowerCase(), code])
+);
+
+function expandCountryCode(value: string): string {
+  const trimmed = value.trim();
+  return COUNTRY_CODE_TO_NAME[trimmed.toUpperCase()] ?? trimmed;
+}
+
+function collapseCountryName(value: string): string {
+  const trimmed = value.trim();
+  return COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()] ?? trimmed;
+}
+
+function looksLikeCode(value: string): boolean {
+  return /^[A-Z]{2,3}$/.test(value.trim().toUpperCase()) && value.trim().length <= 3;
+}
 
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
@@ -408,9 +445,21 @@ export default function SettingsBusinessPage() {
                 <Label>Postcode</Label>
                 <Input value={ext.postcode} onChange={(e) => setExtField("postcode", e.target.value)} placeholder="2000" />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label>Country</Label>
                 <Input value={apiForm.country} onChange={(e) => setApiForm({ ...apiForm, country: e.target.value })} placeholder="Australia" />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={!looksLikeCode(apiForm.country)}
+                    onCheckedChange={(checked) => {
+                      setApiForm((prev) => ({
+                        ...prev,
+                        country: checked ? expandCountryCode(prev.country) : collapseCountryName(prev.country),
+                      }));
+                    }}
+                  />
+                  Use full country name (e.g. AU → Australia)
+                </label>
               </div>
             </div>
           </CardContent>
