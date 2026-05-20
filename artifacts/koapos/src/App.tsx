@@ -95,9 +95,13 @@ const queryClient = new QueryClient({
   },
 });
 
+const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register"];
+
 setOnUnauthorized(() => {
   queryClient.clear();
-  if (!window.location.pathname.endsWith("/login") && !window.location.pathname.endsWith("/register")) {
+  const path = window.location.pathname;
+  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/"));
+  if (!isPublic) {
     window.location.replace("/login");
   }
 });
