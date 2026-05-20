@@ -4,9 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocalisationDefaults } from "@/lib/localisation";
 
 interface QuickAddCustomerDialogProps {
   open: boolean;
@@ -15,18 +17,21 @@ interface QuickAddCustomerDialogProps {
   prefillName?: string;
 }
 
-const empty = {
-  firstName: "", lastName: "", email: "", phone: "",
-  billingStreet: "", billingCity: "", billingState: "", billingPostcode: "",
-};
-
 export function QuickAddCustomerDialog({
   open,
   onClose,
   onCreated,
   prefillName = "",
 }: QuickAddCustomerDialogProps) {
-  const [form, setForm] = useState(empty);
+  const { countryName, stateOptions } = useLocalisationDefaults();
+
+  const emptyForm = () => ({
+    firstName: "", lastName: "", email: "", phone: "",
+    billingStreet: "", billingCity: "", billingState: "", billingPostcode: "",
+    billingCountry: countryName,
+  });
+
+  const [form, setForm] = useState(emptyForm);
   const createMutation = useCreateCustomer();
   const queryClient = useQueryClient();
 
@@ -34,12 +39,13 @@ export function QuickAddCustomerDialog({
     if (open) {
       const parts = prefillName.trim().split(/\s+/);
       setForm({
-        ...empty,
+        ...emptyForm(),
         firstName: parts[0] ?? "",
         lastName:  parts.slice(1).join(" "),
       });
     }
-  }, [open, prefillName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillName, countryName]);
 
   const set = (key: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -61,7 +67,7 @@ export function QuickAddCustomerDialog({
           billingCity:     form.billingCity.trim()     || undefined,
           billingState:    form.billingState.trim()    || undefined,
           billingPostcode: form.billingPostcode.trim() || undefined,
-          billingCountry:  "Australia",
+          billingCountry:  form.billingCountry.trim()  || undefined,
           customerGroup: "Standard",
           agreedToMarketing: "false",
           whatsappSameAsPhone: "false",
@@ -127,12 +133,36 @@ export function QuickAddCustomerDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>State</Label>
-                <Input value={form.billingState} onChange={set("billingState")} placeholder="NSW" />
+                {stateOptions.length > 0 ? (
+                  <Select
+                    value={form.billingState}
+                    onValueChange={(v) => setForm((f) => ({ ...f, billingState: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stateOptions.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.code} — {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={form.billingState} onChange={set("billingState")} placeholder="State" />
+                )}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Postcode</Label>
-              <Input value={form.billingPostcode} onChange={set("billingPostcode")} placeholder="2000" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Postcode</Label>
+                <Input value={form.billingPostcode} onChange={set("billingPostcode")} placeholder="2000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Country</Label>
+                <Input value={form.billingCountry} onChange={set("billingCountry")} placeholder="Australia" />
+              </div>
             </div>
           </div>
         </div>

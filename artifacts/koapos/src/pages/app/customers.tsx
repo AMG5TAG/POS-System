@@ -30,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
+import { COUNTRY_STATES, COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
@@ -1026,6 +1027,9 @@ export default function CustomersPage() {
 
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
+  const merchantCountryCode = (merchantData as any)?.country ?? "AU";
+  const defaultCountryName  = COUNTRY_CODE_TO_NAME[merchantCountryCode] ?? "Australia";
+  const stateOptions        = COUNTRY_STATES[merchantCountryCode] ?? [];
 
   const { data: customersData, isLoading } = useListCustomers(
     { search: search || undefined, limit: 1000 },
@@ -1113,7 +1117,10 @@ export default function CustomersPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const openCreate = () => {
-    setEditingCustomer(null); setForm(defaultForm); setStep("personal"); setDialogOpen(true);
+    setEditingCustomer(null);
+    setForm({ ...defaultForm, billingCountry: defaultCountryName, shippingCountry: defaultCountryName });
+    setStep("personal");
+    setDialogOpen(true);
   };
 
   const openEdit = (c: Customer) => {
@@ -1521,7 +1528,25 @@ export default function CustomersPage() {
                     <Input value={form.billingCity} onChange={(e) => setField("billingCity", e.target.value)} placeholder="Sydney" />
                   </Field>
                   <Field label="State">
-                    <Input value={form.billingState} onChange={(e) => setField("billingState", e.target.value)} placeholder="NSW" />
+                    {stateOptions.length > 0 ? (
+                      <Select
+                        value={form.billingState}
+                        onValueChange={(v) => setField("billingState", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stateOptions.map((s) => (
+                            <SelectItem key={s.code} value={s.code}>
+                              {s.code} — {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input value={form.billingState} onChange={(e) => setField("billingState", e.target.value)} placeholder="State" />
+                    )}
                   </Field>
                 </FieldRow>
                 <FieldRow>
@@ -1556,7 +1581,25 @@ export default function CustomersPage() {
                             <Input value={form.shippingCity} onChange={(e) => setField("shippingCity", e.target.value)} placeholder="Sydney" />
                           </Field>
                           <Field label="State">
-                            <Input value={form.shippingState} onChange={(e) => setField("shippingState", e.target.value)} placeholder="NSW" />
+                            {stateOptions.length > 0 ? (
+                              <Select
+                                value={form.shippingState}
+                                onValueChange={(v) => setField("shippingState", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select state" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {stateOptions.map((s) => (
+                                    <SelectItem key={s.code} value={s.code}>
+                                      {s.code} — {s.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input value={form.shippingState} onChange={(e) => setField("shippingState", e.target.value)} placeholder="State" />
+                            )}
                           </Field>
                         </FieldRow>
                         <FieldRow>
