@@ -495,7 +495,7 @@ export default function POSPage() {
         </div>
 
         {/* ─── Cart sidebar ─── */}
-        <div className="w-[22rem] border-l bg-card flex flex-col shrink-0">
+        <div className="w-[22rem] border-l bg-card flex flex-col shrink-0 overflow-x-hidden">
 
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-3 border-b shrink-0 gap-2">
