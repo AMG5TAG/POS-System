@@ -9,10 +9,14 @@ const router: IRouter = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 15,
   message: { error: "Too many attempts — please try again in 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const ip = req.ip ?? "";
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  },
 });
 
 function formatMerchant(m: typeof merchantsTable.$inferSelect) {
