@@ -5,9 +5,16 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
   useCreateServiceJob,
+  useGetMerchant,
   type ServiceJob,
   type Customer,
 } from "@workspace/api-client-react";
+import {
+  LabelPreview, useStickerTemplates,
+  STICKER_TYPES, DYMO_SIZES,
+} from "@/lib/sticker-config";
+import { useBusinessProfile } from "@/lib/business-profile";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +45,7 @@ import {
   CheckCircle2,
   Mail,
   Printer,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -162,9 +170,33 @@ export default function ServiceJobNewPage() {
   const queryClient = useQueryClient();
   const createMutation = useCreateServiceJob();
 
+  const { data: merchant } = useGetMerchant();
+  const { templates: stickerTemplates } = useStickerTemplates();
+  const { profile: bizProfile } = useBusinessProfile();
+
   const [customerId, setCustomerId] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [successJob, setSuccessJob] = useState<ServiceJob | null>(null);
+  const [showStickerDialog, setShowStickerDialog] = useState(false);
+  const [selectedStickerTplId, setSelectedStickerTplId] = useState("");
+
+  const repairStickerType = STICKER_TYPES.find((t) => t.id === "repair")!;
+  const repairTemplates = stickerTemplates.filter((t) => t.typeId === "repair");
+  const activeStickerTpl = repairTemplates.find((t) => t.id === selectedStickerTplId) ?? null;
+  const stickerSize = DYMO_SIZES.find((s) => s.id === (activeStickerTpl?.sizeId ?? repairStickerType.defaultSize)) ?? DYMO_SIZES.find((s) => s.id === "30256")!;
+  const stickerBaseFields = activeStickerTpl?.fields ?? Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue]));
+  const stickerFields = {
+    ...stickerBaseFields,
+    jobNo: successJob?.jobNumber ?? `SVC-${successJob?.id ?? 0}`,
+    customer: selectedCustomer
+      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Walk-in"
+      : (successJob?.customerName ?? "Walk-in"),
+    device: successJob?.deviceDescription ?? successJob?.deviceType ?? stickerBaseFields.device ?? "",
+    fault: successJob?.workDescription ?? stickerBaseFields.fault ?? "",
+    dueDate: new Date().toLocaleDateString("en-AU"),
+  };
+  const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
+  const businessName = merchant?.businessName ?? "";
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -673,6 +705,14 @@ export default function ServiceJobNewPage() {
             Print Job Sheet
           </Button>
           <Button
+            className="w-full gap-2"
+            variant="outline"
+            onClick={() => setShowStickerDialog(true)}
+          >
+            <Tag className="w-4 h-4" />
+            Print Service Sticker
+          </Button>
+          <Button
             className="w-full"
             onClick={() => { setSuccessJob(null); navigate(`/service-jobs/${successJob?.id}`); }}
           >
@@ -688,6 +728,90 @@ export default function ServiceJobNewPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Sticker sub-dialog */}
+    <Dialog open={showStickerDialog} onOpenChange={setShowStickerDialog}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Print Service Sticker</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {repairTemplates.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Template</Label>
+              <div className="grid gap-1">
+                <button
+                  onClick={() => setSelectedStickerTplId("")}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
+                    !selectedStickerTplId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                  )}
+                >
+                  <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />
+                  Default (pre-filled with job data)
+                </button>
+                {repairTemplates.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setSelectedStickerTplId(tpl.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
+                      selectedStickerTplId === tpl.id ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                    )}
+                  >
+                    <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />
+                    {tpl.name}
+                    {tpl.isDefault && <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1">Default</Badge>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview</Label>
+            <div className="border rounded-lg p-4 flex items-center justify-center bg-muted/20 min-h-[120px]">
+              <LabelPreview
+                type={repairStickerType}
+                fields={stickerFields}
+                size={stickerSize}
+                businessName={businessName}
+                brandColor={brandColor}
+                fillWidth={380}
+                fillHeight={140}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Sticker size: {stickerSize.name}</p>
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" className="flex-1" onClick={() => setShowStickerDialog(false)}>Cancel</Button>
+          <Button
+            className="flex-1 gap-2"
+            onClick={() => {
+              setShowStickerDialog(false);
+              setTimeout(() => window.print(), 50);
+            }}
+          >
+            <Printer className="w-4 h-4" />
+            Print Sticker
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Hidden print area — visible only during window.print() */}
+    <style dangerouslySetInnerHTML={{ __html:
+      `@media print { body { visibility: hidden; } #svc-sticker-print-area { visibility: visible !important; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; } #svc-sticker-print-area * { visibility: visible !important; } }`
+    }} />
+    <div id="svc-sticker-print-area" aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: 0 }}>
+      <LabelPreview
+        type={repairStickerType}
+        fields={stickerFields}
+        size={stickerSize}
+        businessName={businessName}
+        brandColor={brandColor}
+      />
+    </div>
     </>
   );
 }
