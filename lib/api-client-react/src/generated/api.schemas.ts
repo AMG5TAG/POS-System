@@ -648,6 +648,10 @@ export interface ServiceJob {
   jobNumber: string;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  customerPhone?: string | null;
+  /** @nullable */
+  customerEmail?: string | null;
   status: ServiceJobStatus;
   bookInDate: string;
   /** @nullable */

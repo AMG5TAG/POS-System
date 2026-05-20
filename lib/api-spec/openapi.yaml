@@ -2913,6 +2913,10 @@ components:
           type: string
         customerName:
           type: ["string", "null"]
+        customerPhone:
+          type: ["string", "null"]
+        customerEmail:
+          type: ["string", "null"]
         status:
           type: string
           enum: [pending, in-progress, completed, cancelled]

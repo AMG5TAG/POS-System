@@ -304,7 +304,9 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
             )}
 
             <div className="rounded-xl border bg-muted/20 divide-y">
-              <DetailRow icon={User}     label="Customer"     value={job.customerName} />
+              <DetailRow icon={User}     label="Customer"      value={job.customerName} />
+              {job.customerPhone && <DetailRow icon={User} label="Phone"  value={job.customerPhone} />}
+              {job.customerEmail && <DetailRow icon={User} label="Email"  value={job.customerEmail} />}
               <DetailRow icon={Calendar} label="Book-In Date" value={formatDate(job.bookInDate)} />
               {job.partnerRepairCode && (
                 <DetailRow icon={Hash} label="Partner Repair Code" value={job.partnerRepairCode} />
@@ -860,6 +862,8 @@ export default function ServiceJobsPage() {
                 <div>
                   <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Customer</div>
                   <div style={{ fontWeight: "bold" }}>{pj.customerName || "—"}</div>
+                  {pj.customerPhone && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>📞 {pj.customerPhone}</div>}
+                  {pj.customerEmail && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>✉ {pj.customerEmail}</div>}
                 </div>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Device</div>

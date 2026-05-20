@@ -5,14 +5,18 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-function formatJob(job: typeof serviceJobsTable.$inferSelect, customerName: string | null) {
+interface CustomerInfo { name: string | null; phone: string | null; email: string | null; }
+
+function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: CustomerInfo | null) {
   return {
     id: job.id,
     merchantId: job.merchantId,
     customerId: job.customerId ?? null,
     staffId: job.staffId ?? null,
     jobNumber: job.jobNumber,
-    customerName,
+    customerName:  customer?.name  ?? null,
+    customerPhone: customer?.phone ?? null,
+    customerEmail: customer?.email ?? null,
     status: job.status,
     bookInDate: job.bookInDate,
     deviceType: job.deviceType ?? null,
@@ -58,8 +62,12 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
     customerIds.length > 0
       ? await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId))
       : [];
-  const customerMap = new Map(
-    customers.map((c) => [c.id, `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null])
+  const customerMap = new Map<number, CustomerInfo>(
+    customers.map((c) => [c.id, {
+      name:  `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+    }])
   );
 
   res.json(jobs.map((j) => formatJob(j, j.customerId ? (customerMap.get(j.customerId) ?? null) : null)));
@@ -105,15 +113,15 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
 
-  const customerName = job.customerId
+  const customer: CustomerInfo | null = job.customerId
     ? await db
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => (c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null : null))
+        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null } : null)
     : null;
 
-  res.status(201).json(formatJob(job, customerName));
+  res.status(201).json(formatJob(job, customer));
 });
 
 router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
@@ -158,15 +166,15 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  const customerName = job.customerId
+  const customer: CustomerInfo | null = job.customerId
     ? await db
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => (c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null : null))
+        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null } : null)
     : null;
 
-  res.json(formatJob(job, customerName));
+  res.json(formatJob(job, customer));
 });
 
 router.delete("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
