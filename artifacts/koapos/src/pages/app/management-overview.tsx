@@ -140,7 +140,7 @@ export default function ManagementOverviewPage() {
               href="/management/sales-overview"
             />
             <KpiCard
-              title="Gross Profit (ex-GST)"
+              title="Gross Profit (excl.)"
               icon={TrendingUp}
               iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600"
               value={isLoading ? "—" : formatCurrency(totalSales * 0.91)}
