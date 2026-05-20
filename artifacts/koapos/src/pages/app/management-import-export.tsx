@@ -521,12 +521,15 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     if (res.failed  > 0) toast.error(`${res.failed} rows failed — see details below`);
   };
 
-  /* Derive preview rows (first 5 mapped) */
+  /* Derive preview rows (first 5 mapped), honouring expansion toggles */
   const previewRows = rows.slice(0, 5).map((row) => {
     const out: Record<string, string> = {};
     for (const field of entity.fields) {
       const col = mapping[field.key];
-      out[field.key] = col ? (row[col] ?? "") : "";
+      let val = col ? (row[col] ?? "") : "";
+      if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) val = expandCountryValue(val);
+      if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   val = expandStateValue(val);
+      out[field.key] = val;
     }
     return out;
   });
