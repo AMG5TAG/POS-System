@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, DragEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
@@ -34,6 +35,31 @@ interface EntityConfig {
   /* Convert an API response item into a flat CSV row object */
   toExportRow: (item: Record<string, unknown>) => Record<string, string>;
 }
+
+/* ─── Country code expansion ─────────────────────────────────────────────── */
+
+const COUNTRY_CODE_TO_NAME: Record<string, string> = {
+  AU: "Australia",  NZ: "New Zealand",  US: "United States",  GB: "United Kingdom",
+  CA: "Canada",     SG: "Singapore",    IN: "India",          ZA: "South Africa",
+  FR: "France",     DE: "Germany",      IT: "Italy",          ES: "Spain",
+  NL: "Netherlands",PT: "Portugal",     JP: "Japan",          KR: "South Korea",
+  CN: "China",      TW: "Taiwan",       HK: "Hong Kong",      MY: "Malaysia",
+  ID: "Indonesia",  TH: "Thailand",     VN: "Vietnam",        PH: "Philippines",
+  AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar",
+  BR: "Brazil",     MX: "Mexico",       AR: "Argentina",      CL: "Chile",
+  SE: "Sweden",     NO: "Norway",       DK: "Denmark",        FI: "Finland",
+  CH: "Switzerland",AT: "Austria",      BE: "Belgium",        IE: "Ireland",
+  PL: "Poland",     TR: "Turkey",       NG: "Nigeria",        KE: "Kenya",
+  EG: "Egypt",      GH: "Ghana",        PK: "Pakistan",       BD: "Bangladesh",
+  LK: "Sri Lanka",  NP: "Nepal",
+};
+
+function expandCountryValue(value: string): string {
+  const trimmed = value.trim();
+  return COUNTRY_CODE_TO_NAME[trimmed.toUpperCase()] ?? trimmed;
+}
+
+const COUNTRY_FIELD_KEYS = new Set(["billingCountry", "country"]);
 
 /* ─── Entity configs ─────────────────────────────────────────────────────── */
 
@@ -376,9 +402,12 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress]   = useState(0);
   const [result, setResult]       = useState<ImportResult | null>(null);
+  const [expandCountryCodes, setExpandCountryCodes] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const reset = () => { setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0); };
+  const hasCountryField = entity.fields.some((f) => COUNTRY_FIELD_KEYS.has(f.key));
+
+  const reset = () => { setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0); setExpandCountryCodes(false); };
 
   const processFile = (file: File) => {
     const reader = new FileReader();
@@ -421,7 +450,11 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
       for (const field of entity.fields) {
         const csvCol = mapping[field.key];
         if (csvCol) {
-          const val = coerce(row[csvCol] ?? "", field.type);
+          let rawVal = row[csvCol] ?? "";
+          if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) {
+            rawVal = expandCountryValue(rawVal);
+          }
+          const val = coerce(rawVal, field.type);
           if (val !== undefined) payload[field.key] = val;
         }
       }
@@ -579,6 +612,15 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
               </div>
             ))}
           </div>
+          {hasCountryField && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none pt-1">
+              <Checkbox
+                checked={expandCountryCodes}
+                onCheckedChange={(v) => setExpandCountryCodes(!!v)}
+              />
+              Expand country codes to full names on import (e.g. AU → Australia)
+            </label>
+          )}
           {!hasRequiredMapping && (
             <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
