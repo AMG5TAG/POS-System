@@ -35,6 +35,7 @@ import {
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
+  Download, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
@@ -1018,7 +1019,10 @@ export default function CustomersPage() {
   const [step, setStep]                 = useState<Step>("personal");
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
-  const [checked, setChecked]           = useState<Set<number>>(new Set());
+  const [checked, setChecked]               = useState<Set<number>>(new Set());
+  const [page, setPage]                     = useState(1);
+  const [pageSize, setPageSize]             = useState<number | "all">(25);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
@@ -1048,6 +1052,14 @@ export default function CustomersPage() {
     return sortDir === "asc" ? r : -r;
   });
 
+  /* Pagination */
+  const totalPages  = pageSize === "all" ? 1 : Math.max(1, Math.ceil(sorted.length / (pageSize as number)));
+  const safePage    = Math.min(page, totalPages);
+  const paginated   = pageSize === "all" ? sorted : sorted.slice((safePage - 1) * (pageSize as number), safePage * (pageSize as number));
+
+  /* Reset to page 1 when search or sort changes */
+  useEffect(() => { setPage(1); }, [search, sortKey, sortDir]);
+
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
       if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; }
@@ -1055,10 +1067,47 @@ export default function CustomersPage() {
     });
   }, []);
 
-  /* Checkboxes */
-  const allChecked = sorted.length > 0 && sorted.every((c) => checked.has(c.id));
-  const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(sorted.map((c) => c.id)));
+  /* Checkboxes — operate on current page */
+  const allChecked = paginated.length > 0 && paginated.every((c) => checked.has(c.id));
+  const toggleAll  = () => setChecked((prev) => {
+    const n = new Set(prev);
+    if (allChecked) { paginated.forEach((c) => n.delete(c.id)); }
+    else            { paginated.forEach((c) => n.add(c.id)); }
+    return n;
+  });
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  /* Bulk actions */
+  const handleBulkExport = () => {
+    const selected = sorted.filter((c) => checked.has(c.id));
+    const escape   = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const headers  = ["firstName","lastName","email","phone","company","abn","billingStreet","billingCity","billingState","billingPostcode","billingCountry","customerGroup","loyaltyPoints","visitCount","notes"];
+    const rows     = selected.map((c) => [
+      c.firstName, c.lastName, c.email, c.phone, c.company, c.abn,
+      c.billingStreet, c.billingCity, c.billingState, c.billingPostcode, c.billingCountry,
+      c.customerGroup, String(c.loyaltyPoints ?? 0), String(c.visitCount ?? 0), c.notes,
+    ].map((v) => escape(String(v ?? ""))).join(","));
+    const csv      = [headers.join(","), ...rows].join("\n");
+    const a        = document.createElement("a");
+    a.href         = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download     = `customers_${selected.length}.csv`;
+    a.click();
+    toast.success(`${selected.length} customer${selected.length === 1 ? "" : "s"} exported`);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...checked];
+    let success = 0;
+    await Promise.all(ids.map((id) =>
+      fetch(`/api/customers/${id}`, { method: "DELETE", credentials: "include" })
+        .then((r) => { if (r.ok) success++; })
+        .catch(() => {})
+    ));
+    setChecked(new Set());
+    setBulkDeleteConfirm(false);
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
+    toast.success(`${success} customer${success === 1 ? "" : "s"} deleted`);
+  };
 
   const setField = <K extends keyof CustomerForm>(key: K, value: CustomerForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -1178,79 +1227,193 @@ export default function CustomersPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="p-3 w-10">
-                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
-                      className="rounded border-muted-foreground/40 accent-primary" />
-                  </th>
-                  <SortTh {...sh("Name", "name")} />
-                  <SortTh {...sh("Email", "email", "hidden sm:table-cell")} />
-                  <th className="p-3 text-left font-medium whitespace-nowrap hidden md:table-cell">Phone</th>
-                  <SortTh {...sh("Company", "company", "hidden lg:table-cell")} />
-                  <th className="p-3 text-left font-medium whitespace-nowrap hidden xl:table-cell">Address</th>
-                  <th className="p-3 text-left font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
-                  <SortTh {...sh("Loyalty", "loyaltyPoints", "hidden md:table-cell")} />
-                  <SortTh {...sh("Activity", "visitCount", "hidden lg:table-cell")} />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {sorted.map((customer) => {
-                  const address = [customer.billingStreet, customer.billingCity, customer.billingState, customer.billingPostcode, customer.billingCountry]
-                    .filter(Boolean).join(", ") || customer.address || "—";
-                  const isChecked = checked.has(customer.id);
-                  return (
-                    <tr
-                      key={customer.id}
-                      className={cn(
-                        "bg-background hover:bg-muted/30 transition-colors cursor-pointer",
-                        isChecked && "bg-primary/5",
-                      )}
-                      onClick={() => setSelectedCustomer(customer)}
+          <div className="space-y-3">
+            {/* ── Bulk action bar ── */}
+            {checked.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-primary/5 border-primary/20 px-4 py-2.5">
+                <span className="text-sm font-medium text-primary mr-1">
+                  {checked.size} selected
+                </span>
+                <div className="flex items-center gap-2 ml-auto flex-wrap">
+                  {checked.size === 1 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 h-8"
+                      onClick={() => {
+                        const c = sorted.find((x) => checked.has(x.id));
+                        if (c) openEdit(c);
+                      }}
                     >
-                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(customer.id)}
-                          className="rounded border-muted-foreground/40 accent-primary" />
-                      </td>
-                      <td className="p-3 font-medium">
-                        <div className="flex items-center gap-2">
-                          {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
-                          {customer.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
-                        </div>
-                      </td>
-                      <td className="p-3 hidden sm:table-cell text-muted-foreground">
-                        {customer.email || "—"}
-                      </td>
-                      <td className="p-3 hidden md:table-cell text-muted-foreground">
-                        {customer.phone || "—"}
-                      </td>
-                      <td className="p-3 hidden lg:table-cell text-muted-foreground">
-                        {customer.company || "—"}
-                      </td>
-                      <td className="p-3 hidden xl:table-cell text-muted-foreground max-w-[180px] truncate">
-                        {address}
-                      </td>
-                      <td className="p-3 hidden lg:table-cell">
-                        {customer.customerGroup
-                          ? <Badge variant="outline" className="text-xs">{customer.customerGroup}</Badge>
-                          : "—"}
-                      </td>
-                      <td className="p-3 hidden md:table-cell">
-                        <span className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-amber-500 shrink-0" />
-                          {customer.loyaltyPoints ?? 0}
-                        </span>
-                      </td>
-                      <td className="p-3 hidden lg:table-cell text-muted-foreground">
-                        {customer.visitCount ?? 0} visits
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 h-8"
+                    onClick={handleBulkExport}
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="gap-1.5 h-8"
+                    onClick={() => setBulkDeleteConfirm(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </Button>
+                  <button
+                    onClick={() => setChecked(new Set())}
+                    className="text-muted-foreground hover:text-foreground transition-colors ml-1"
+                    title="Clear selection"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Table ── */}
+            <div className="rounded-lg border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b">
+                  <tr>
+                    <th className="p-3 w-10">
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                        className="rounded border-muted-foreground/40 accent-primary" />
+                    </th>
+                    <SortTh {...sh("Name", "name")} />
+                    <SortTh {...sh("Email", "email", "hidden sm:table-cell")} />
+                    <th className="p-3 text-left font-medium whitespace-nowrap hidden md:table-cell">Phone</th>
+                    <SortTh {...sh("Company", "company", "hidden lg:table-cell")} />
+                    <th className="p-3 text-left font-medium whitespace-nowrap hidden xl:table-cell">Address</th>
+                    <th className="p-3 text-left font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
+                    <SortTh {...sh("Loyalty", "loyaltyPoints", "hidden md:table-cell")} />
+                    <SortTh {...sh("Activity", "visitCount", "hidden lg:table-cell")} />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {paginated.map((customer) => {
+                    const address = [customer.billingStreet, customer.billingCity, customer.billingState, customer.billingPostcode, customer.billingCountry]
+                      .filter(Boolean).join(", ") || customer.address || "—";
+                    const isChecked = checked.has(customer.id);
+                    return (
+                      <tr
+                        key={customer.id}
+                        className={cn(
+                          "bg-background hover:bg-muted/30 transition-colors cursor-pointer",
+                          isChecked && "bg-primary/5",
+                        )}
+                        onClick={() => setSelectedCustomer(customer)}
+                      >
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleOne(customer.id)}
+                            className="rounded border-muted-foreground/40 accent-primary" />
+                        </td>
+                        <td className="p-3 font-medium">
+                          <div className="flex items-center gap-2">
+                            {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
+                            {customer.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                          </div>
+                        </td>
+                        <td className="p-3 hidden sm:table-cell text-muted-foreground">
+                          {customer.email || "—"}
+                        </td>
+                        <td className="p-3 hidden md:table-cell text-muted-foreground">
+                          {customer.phone || "—"}
+                        </td>
+                        <td className="p-3 hidden lg:table-cell text-muted-foreground">
+                          {customer.company || "—"}
+                        </td>
+                        <td className="p-3 hidden xl:table-cell text-muted-foreground max-w-[180px] truncate">
+                          {address}
+                        </td>
+                        <td className="p-3 hidden lg:table-cell">
+                          {customer.customerGroup
+                            ? <Badge variant="outline" className="text-xs">{customer.customerGroup}</Badge>
+                            : "—"}
+                        </td>
+                        <td className="p-3 hidden md:table-cell">
+                          <span className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-amber-500 shrink-0" />
+                            {customer.loyaltyPoints ?? 0}
+                          </span>
+                        </td>
+                        <td className="p-3 hidden lg:table-cell text-muted-foreground">
+                          {customer.visitCount ?? 0} visits
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Pagination controls ── */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Rows per page:</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) => { setPageSize(v === "all" ? "all" : Number(v)); setPage(1); }}
+                >
+                  <SelectTrigger className="h-8 w-20 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                {pageSize !== "all" && (
+                  <>
+                    <span>
+                      {(safePage - 1) * (pageSize as number) + 1}–{Math.min(safePage * (pageSize as number), sorted.length)} of {sorted.length}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors ml-2"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      const start = Math.max(1, Math.min(safePage - 2, totalPages - 4));
+                      const p = start + i;
+                      return p <= totalPages ? (
+                        <button
+                          key={p}
+                          onClick={() => setPage(p)}
+                          className={cn(
+                            "w-7 h-7 rounded text-xs font-medium transition-colors",
+                            p === safePage ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          {p}
+                        </button>
+                      ) : null;
+                    })}
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safePage >= totalPages}
+                      className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                {pageSize === "all" && (
+                  <span>{sorted.length} customers</span>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1264,6 +1427,24 @@ export default function CustomersPage() {
         deleteIsPending={deleteMutation.isPending}
         merchantUsername={merchantUsername}
       />
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {checked.size} customer{checked.size === 1 ? "" : "s"}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete {checked.size === 1 ? "this customer" : `these ${checked.size} customers`} and all their data. This cannot be undone.
+          </p>
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={deleteMutation.isPending}>
+              Delete {checked.size === 1 ? "Customer" : `${checked.size} Customers`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add / Edit Customer — 3-step wizard */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
