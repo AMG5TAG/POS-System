@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Globe, Hash, Calendar, Receipt, DollarSign, Clock4 } from "lucide-react";
+import { Globe, Hash, Clock4 } from "lucide-react";
 
 // ── Locale data ────────────────────────────────────────────────────────────
 
@@ -206,42 +206,6 @@ const TIMEZONES: { group: string; zones: { value: string; label: string }[] }[] 
   ]},
 ];
 
-const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
-
-const TAX_LABELS = [
-  { value: "GST",       label: "GST — Goods & Services Tax (Australia, NZ, Singapore, India)" },
-  { value: "VAT",       label: "VAT — Value Added Tax (Europe, UAE, UK)" },
-  { value: "HST",       label: "HST — Harmonised Sales Tax (Canada)" },
-  { value: "PST",       label: "PST — Provincial Sales Tax (Canada)" },
-  { value: "SST",       label: "SST — Sales & Service Tax (Malaysia)" },
-  { value: "Sales Tax", label: "Sales Tax (United States)" },
-  { value: "JCT",       label: "JCT — Japan Consumption Tax" },
-  { value: "TVA",       label: "TVA — Taxe sur la Valeur Ajoutée (France)" },
-  { value: "IVA",       label: "IVA — Impuesto al Valor Agregado (Spain / Latin America)" },
-  { value: "BTW",       label: "BTW — Belasting over de Toegevoegde Waarde (Netherlands)" },
-  { value: "Custom",    label: "Custom — Enter your own" },
-];
-
-const TAX_NUMBER_LABELS = [
-  { value: "ABN",     label: "ABN — Australian Business Number" },
-  { value: "ACN",     label: "ACN — Australian Company Number" },
-  { value: "NZBN",    label: "NZBN — New Zealand Business Number" },
-  { value: "VAT No.", label: "VAT No. (Europe / UK)" },
-  { value: "GST No.", label: "GST No. (Canada / Singapore)" },
-  { value: "TIN",     label: "TIN — Taxpayer Identification Number (US)" },
-  { value: "EIN",     label: "EIN — Employer Identification Number (US)" },
-  { value: "GSTIN",   label: "GSTIN — GST Identification Number (India)" },
-  { value: "CRN",     label: "CRN — Company Registration Number (UK)" },
-  { value: "SIRET",   label: "SIRET / SIREN (France)" },
-  { value: "NIF",     label: "NIF / CIF (Spain)" },
-  { value: "SSM No.", label: "SSM No. (Malaysia)" },
-  { value: "TRN",     label: "TRN — Tax Registration Number (UAE)" },
-  { value: "Business No.", label: "Business No. (Generic)" },
-];
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const LS_KEY = "koapos_regional_ext";
@@ -255,11 +219,6 @@ interface ExtSettings {
   measurementSystem: "metric" | "imperial";
   paperSize: "A4" | "letter";
   firstDayOfWeek: "monday" | "sunday" | "saturday";
-  fiscalYearStart: number;
-  taxLabel: string;
-  customTaxLabel: string;
-  taxNumberLabel: string;
-  receiptPaperSize: "a4" | "80mm" | "58mm";
 }
 
 const DEFAULT_EXT: ExtSettings = {
@@ -271,11 +230,6 @@ const DEFAULT_EXT: ExtSettings = {
   measurementSystem: "metric",
   paperSize: "A4",
   firstDayOfWeek: "monday",
-  fiscalYearStart: 7,
-  taxLabel: "GST",
-  customTaxLabel: "",
-  taxNumberLabel: "ABN",
-  receiptPaperSize: "80mm",
 };
 
 function loadExt(): ExtSettings {
@@ -389,8 +343,6 @@ export default function SettingsRegionalPage() {
     );
   };
 
-  const activeTaxLabel = ext.taxLabel === "Custom" ? ext.customTaxLabel || "Tax" : ext.taxLabel;
-  const fiscalEnd      = MONTHS[((ext.fiscalYearStart - 1 + 11) % 12)];
 
   return (
     <AppLayout>
@@ -573,163 +525,7 @@ export default function SettingsRegionalPage() {
           </CardContent>
         </Card>
 
-        {/* ── Section 3: Fiscal Year ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              Fiscal Year
-            </CardTitle>
-            <CardDescription>
-              Sets the financial reporting period for your business. Affects sales reports and analytics.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Fiscal Year Start</Label>
-                <Select
-                  value={String(ext.fiscalYearStart)}
-                  onValueChange={v => patchExt({ fiscalYearStart: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((m, i) => (
-                      <SelectItem key={i + 1} value={String(i + 1)}>
-                        {m}  ({i === 0 ? "Jan" : i === 6 ? "Jul (AU/NZ standard)" : i === 3 ? "Apr (UK standard)" : m.slice(0,3)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fiscal Year End</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
-                  {fiscalEnd}  (auto-calculated)
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Your fiscal year runs from <strong>{MONTHS[ext.fiscalYearStart - 1]}</strong> to <strong>{fiscalEnd}</strong>.
-              Australia &amp; NZ standard is 1 July — 30 June. US standard is January — December.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* ── Section 4: Tax & Compliance ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Tax &amp; Compliance
-            </CardTitle>
-            <CardDescription>
-              Customise tax terminology for your region. These labels appear on receipts, invoices, and reports.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Tax Label</Label>
-                <Select value={ext.taxLabel} onValueChange={v => patchExt({ taxLabel: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {TAX_LABELS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {ext.taxLabel === "Custom" && (
-                <div className="space-y-1.5">
-                  <Label>Custom Tax Name</Label>
-                  <Input
-                    value={ext.customTaxLabel}
-                    onChange={e => patchExt({ customTaxLabel: e.target.value })}
-                    placeholder="e.g. Consumption Tax"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Business Registration Number Label</Label>
-                <Select value={ext.taxNumberLabel} onValueChange={v => patchExt({ taxNumberLabel: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {TAX_NUMBER_LABELS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Preview</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-mono text-muted-foreground">
-                  {activeTaxLabel} incl. · {ext.taxNumberLabel}: 12 345 678 901
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Section 5: Receipt & Print ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-primary" />
-              Receipt &amp; Print Settings
-            </CardTitle>
-            <CardDescription>
-              Choose the default paper size for receipts and printed documents.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-1.5">
-              <Label>Receipt / Thermal Printer Paper Width</Label>
-              <SegmentToggle
-                options={[
-                  { value: "58mm", label: "58 mm  (small thermal)" },
-                  { value: "80mm", label: "80 mm  (standard thermal)" },
-                  { value: "a4",   label: "A4 / Full page" },
-                ]}
-                value={ext.receiptPaperSize}
-                onChange={v => patchExt({ receiptPaperSize: v })}
-              />
-            </div>
-            <Separator />
-            <div className="grid grid-cols-3 gap-3 text-center">
-              {[
-                { w: "58mm",  h: "100mm+", label: "58 mm",  desc: "Small handheld printers" },
-                { w: "80mm",  h: "100mm+", label: "80 mm",  desc: "Most counter-top thermal printers" },
-                { w: "210mm", h: "297mm",  label: "A4",     desc: "Full invoices & detailed receipts" },
-              ].map(p => (
-                <div
-                  key={p.label}
-                  onClick={() => patchExt({ receiptPaperSize: (p.w === "210mm" ? "a4" : p.w) as ExtSettings["receiptPaperSize"] })}
-                  className={`rounded-lg border-2 p-3 cursor-pointer transition-colors ${
-                    (p.w === "210mm" ? "a4" : p.w) === ext.receiptPaperSize
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <div
-                    className="mx-auto mb-2 rounded border-2 border-current bg-white"
-                    style={{
-                      width:  p.w === "58mm" ? 24 : p.w === "80mm" ? 30 : 40,
-                      height: p.w === "210mm" ? 56 : 36,
-                    }}
-                  />
-                  <p className="text-xs font-semibold">{p.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{p.desc}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Section 6: Clock & Calendar ── */}
+        {/* ── Section 3: Clock & Calendar ── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -751,10 +547,6 @@ export default function SettingsRegionalPage() {
                 { label: "Measurement",       value: ext.measurementSystem === "metric" ? "Metric" : "Imperial" },
                 { label: "Paper size",        value: ext.paperSize },
                 { label: "Week starts",       value: ext.firstDayOfWeek.charAt(0).toUpperCase() + ext.firstDayOfWeek.slice(1) },
-                { label: "Fiscal year",       value: `${MONTHS[ext.fiscalYearStart - 1]!.slice(0,3)} – ${fiscalEnd!.slice(0,3)}` },
-                { label: "Tax label",         value: activeTaxLabel },
-                { label: "Reg. No. label",    value: ext.taxNumberLabel },
-                { label: "Receipt width",     value: ext.receiptPaperSize.toUpperCase() },
               ].map(row => (
                 <div key={row.label}>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{row.label}</p>
