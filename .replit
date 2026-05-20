@@ -45,4 +45,3 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
-ADMIN_RESET_TOKEN = "koapos-reset-2026"
