@@ -648,22 +648,27 @@ export default function ManagementKpisPage() {
     persist({ ...store, targets: [...store.targets, ...newTargets] });
   };
 
-  /* Actual metrics from transaction data (this period = all available data) */
-  const completedTx = txList.filter((t) => t.status === "completed");
-  const totalRevenue    = completedTx.reduce((s, t) => s + (t.total ?? 0), 0);
-  const txCount         = completedTx.length;
-  const avgTransaction  = txCount > 0 ? totalRevenue / txCount : 0;
+  /* Actual metrics — memoised so large transaction lists don't recompute on every render */
+  const { completedTx, totalRevenue, txCount, avgTransaction, actualValues } = useMemo(() => {
+    const completedTx    = txList.filter((t) => t.status === "completed");
+    const totalRevenue   = completedTx.reduce((s, t) => s + (t.total ?? 0), 0);
+    const txCount        = completedTx.length;
+    const avgTransaction = txCount > 0 ? totalRevenue / txCount : 0;
+    const actualValues: Partial<Record<KpiMetric, number>> = {
+      revenue:         totalRevenue,
+      transactions:    txCount,
+      avg_transaction: avgTransaction,
+    };
+    return { completedTx, totalRevenue, txCount, avgTransaction, actualValues };
+  }, [txList]);
 
-  const actualValues: Partial<Record<KpiMetric, number>> = {
-    revenue:         totalRevenue,
-    transactions:    txCount,
-    avg_transaction: avgTransaction,
-  };
-
-  const storeWide = store.targets.filter((t) => t.staffIds.length === 0 && t.isActive);
-  const staffTargets = store.targets.filter((t) => t.staffIds.length > 0 && t.isActive);
-  const allWithRewards = store.targets.filter((t) => t.isActive && t.reward);
-  const inactiveTargets = store.targets.filter((t) => !t.isActive);
+  /* Target bucketing — memoised so filtering doesn't repeat on every store-unrelated re-render */
+  const { storeWide, staffTargets, allWithRewards, inactiveTargets } = useMemo(() => ({
+    storeWide:      store.targets.filter((t) => t.staffIds.length === 0 && t.isActive),
+    staffTargets:   store.targets.filter((t) => t.staffIds.length > 0  && t.isActive),
+    allWithRewards: store.targets.filter((t) => t.isActive && t.reward),
+    inactiveTargets:store.targets.filter((t) => !t.isActive),
+  }), [store.targets]);
 
   /* Group staff targets by staff member */
   const staffGroups = useMemo(() => {

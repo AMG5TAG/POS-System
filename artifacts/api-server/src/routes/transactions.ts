@@ -128,33 +128,35 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Update inventory for tracked products
-  for (const item of items) {
-    const [product] = await db
+  // Update inventory for tracked products — one SELECT for all items, then targeted UPDATEs
+  if (items.length > 0) {
+    const productIds = items.map((i) => i.productId);
+    const inventoryProducts = await db
       .select()
       .from(productsTable)
-      .where(and(eq(productsTable.id, item.productId), eq(productsTable.merchantId, req.session.merchantId!)));
-    if (product && product.trackInventory === "true") {
-      await db
-        .update(productsTable)
-        .set({ stockQuantity: Math.max(0, product.stockQuantity - item.quantity) })
-        .where(eq(productsTable.id, item.productId));
+      .where(and(inArray(productsTable.id, productIds), eq(productsTable.merchantId, req.session.merchantId!)));
+    const productMap = new Map(inventoryProducts.map((p) => [p.id, p]));
+    for (const item of items) {
+      const product = productMap.get(item.productId);
+      if (product?.trackInventory === "true") {
+        await db
+          .update(productsTable)
+          .set({ stockQuantity: Math.max(0, product.stockQuantity - item.quantity) })
+          .where(eq(productsTable.id, item.productId));
+      }
     }
   }
 
-  // Update customer stats
+  // Update customer stats atomically — no pre-fetch needed
   if (customerId) {
-    const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId));
-    if (customer) {
-      await db
-        .update(customersTable)
-        .set({
-          totalSpent: (parseFloat(customer.totalSpent) + total).toString(),
-          visitCount: customer.visitCount + 1,
-          loyaltyPoints: customer.loyaltyPoints + Math.floor(total),
-        })
-        .where(eq(customersTable.id, customerId));
-    }
+    await db
+      .update(customersTable)
+      .set({
+        totalSpent:    sql`(${customersTable.totalSpent}::numeric + ${total})::text`,
+        visitCount:    sql`${customersTable.visitCount} + 1`,
+        loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${Math.floor(total)}`,
+      })
+      .where(eq(customersTable.id, customerId));
   }
 
   // Auto-complete linked service job or appointment

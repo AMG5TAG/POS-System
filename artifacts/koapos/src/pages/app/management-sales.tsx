@@ -31,6 +31,15 @@ import {
   Tooltip, XAxis, YAxis, CartesianGrid, Pie, PieChart, Legend,
 } from "recharts";
 
+/* ─── Shared chart styles (module-level constants — never recreated) ─────── */
+
+const TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: "hsl(var(--popover))",
+  borderColor:     "hsl(var(--border))",
+  borderRadius:    "var(--radius)",
+} as const;
+const TOOLTIP_ITEM_STYLE = { color: "hsl(var(--foreground))" } as const;
+
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 
 type Preset = "today" | "7" | "30" | "90" | "year" | "custom";
@@ -150,7 +159,7 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "var(--radius)" }} itemStyle={{ color: "hsl(var(--foreground))" }} />
+                  <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
                   <Area type="monotone" dataKey="sales" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorReportSales)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -263,7 +272,7 @@ function PaymentsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod }) {
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={2}>
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "var(--radius)" }} />
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_CONTENT_STYLE} />
                   <Legend formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
                 </PieChart>
               </ResponsiveContainer>

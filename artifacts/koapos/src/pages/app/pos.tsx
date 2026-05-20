@@ -139,24 +139,27 @@ export default function POSPage() {
   );
   const barcodeProducts = allProductsBarcodeData?.items || [];
 
-  /* ── Computed totals ── */
-  const cartSubtotal = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
-  const itemDiscountTotal = cart.reduce((s, i) => s + i.itemDiscount, 0);
-  const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
-  const discountTotal = itemDiscountTotal + overallDiscountAmt;
-  const subtotal = cartSubtotal - discountTotal;
-  const taxRate = 0.10;
-  const taxTotal = subtotal * taxRate;
-  const total = subtotal + taxTotal;
-
-  /* Kode (profit) */
-  const kodeProfit = Math.floor(
-    cart.reduce((s, i) => {
-      const price = i.customPrice ?? i.product.price;
-      const cost = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
-      return s + (price - cost) * i.quantity - i.itemDiscount;
-    }, 0) - overallDiscountAmt
-  );
+  /* ── Computed totals (memoised — only recalculate when cart or discount changes) ── */
+  const {
+    cartSubtotal, itemDiscountTotal, overallDiscountAmt,
+    discountTotal, subtotal, taxTotal, total, kodeProfit,
+  } = useMemo(() => {
+    const cartSubtotal       = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
+    const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount, 0);
+    const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
+    const discountTotal      = itemDiscountTotal + overallDiscountAmt;
+    const subtotal           = cartSubtotal - discountTotal;
+    const taxTotal           = subtotal * 0.10;
+    const total              = subtotal + taxTotal;
+    const kodeProfit         = Math.floor(
+      cart.reduce((s, i) => {
+        const price = i.customPrice ?? i.product.price;
+        const cost  = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
+        return s + (price - cost) * i.quantity - i.itemDiscount;
+      }, 0) - overallDiscountAmt,
+    );
+    return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit };
+  }, [cart, overallDiscount]);
 
   /* Loyalty */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
@@ -393,7 +396,7 @@ export default function POSPage() {
       quantity: i.quantity,
       unitPrice: i.customPrice ?? i.product.price,
       totalPrice: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
-      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * (i.product.taxRate || taxRate),
+      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * (i.product.taxRate || 0.10),
       discount: i.itemDiscount || undefined,
     }));
     const notesParts = [
