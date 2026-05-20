@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetMerchant, useUpdateMerchant } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
@@ -20,7 +20,7 @@ import {
   Building2, Tag, Image, Palette, Phone, MapPin, Clock, Umbrella, CreditCard, Share2,
   Hash, DollarSign, Calendar,
 } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+import { ColourPicker } from "@/components/ui/colour-picker";
 
 const BUSINESS_TABS = [
   { href: "#business-info",  label: "Business Info",  icon: Building2   },
@@ -32,30 +32,17 @@ const BUSINESS_TABS = [
   { href: "#hours",          label: "Hours",          icon: Clock       },
   { href: "#payments",       label: "Payments",       icon: CreditCard  },
   { href: "#social",         label: "Social",         icon: Share2      },
-  { href: "#regional",       label: "Regional",       icon: Globe       },
 ];
 
-/* ─── Colour swatch ──────────────────────────────────────────────────────── */
+/* ─── Social handle helper ───────────────────────────────────────────────── */
 
-function ColourSwatch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  return (
-    <button
-      type="button"
-      onClick={() => ref.current?.click()}
-      className="relative w-12 h-10 rounded border border-border overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring"
-      style={{ backgroundColor: value }}
-      title={value}
-    >
-      <input
-        ref={ref}
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-      />
-    </button>
-  );
+function stripSocialHandle(value: string): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^(?:www\.)?/, "")
+    .replace(/^[a-z0-9-]+\.[a-z]{2,}\/(?:in\/|@)?/i, "")
+    .replace(/\/$/, "");
 }
 
 /* ─── Regional locale data ───────────────────────────────────────────────── */
@@ -457,8 +444,6 @@ export default function SettingsBusinessPage() {
           </Button>
         </div>
 
-        <PageTabsNav tabs={BUSINESS_TABS} />
-
         {/* ── Business Details ──────────────────────────────────────────────── */}
         <Card id="business-info">
           <CardHeader><CardTitle className="text-base">Business Details</CardTitle></CardHeader>
@@ -577,12 +562,9 @@ export default function SettingsBusinessPage() {
             <div>
               <Label className="block mb-2">Brand Colours</Label>
               <p className="text-xs text-muted-foreground mb-2">These are applied as the default colours throughout the app.</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {ext.brandColors.map((c, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1">
-                    <ColourSwatch value={c} onChange={(v) => setBrandColor(i, v)} />
-                    <span className="text-[10px] text-muted-foreground font-mono">{c.toUpperCase()}</span>
-                  </div>
+                  <ColourPicker key={i} value={c} onChange={(v) => setBrandColor(i, v)} />
                 ))}
               </div>
             </div>
@@ -590,12 +572,9 @@ export default function SettingsBusinessPage() {
             {/* Background & UI Colours */}
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Background &amp; UI Colours</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {ext.bgColors.map((c, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1">
-                    <ColourSwatch value={c} onChange={(v) => setBgColor(i, v)} />
-                    <span className="text-[10px] text-muted-foreground font-mono">{c.toUpperCase()}</span>
-                  </div>
+                  <ColourPicker key={i} value={c} onChange={(v) => setBgColor(i, v)} />
                 ))}
               </div>
             </div>
@@ -603,12 +582,9 @@ export default function SettingsBusinessPage() {
             {/* Text Colours */}
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Text Colours</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {ext.textColors.map((c, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1">
-                    <ColourSwatch value={c} onChange={(v) => setTextColor(i, v)} />
-                    <span className="text-[10px] text-muted-foreground font-mono">{c.toUpperCase()}</span>
-                  </div>
+                  <ColourPicker key={i} value={c} onChange={(v) => setTextColor(i, v)} />
                 ))}
               </div>
             </div>
@@ -766,28 +742,33 @@ export default function SettingsBusinessPage() {
 
         {/* ── Social Media Links ────────────────────────────────────────────── */}
         <Card id="social">
-          <CardHeader><CardTitle className="text-base">Social Media Links</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Social Media Links</CardTitle>
+            <p className="text-xs text-muted-foreground">Enter your username or handle only — no need for the full URL.</p>
+          </CardHeader>
           <CardContent className="space-y-3">
             {(
               [
-                { key: "facebook",  label: "Facebook",  icon: Facebook,  placeholder: "facebook.com/yourbusiness"  },
-                { key: "instagram", label: "Instagram", icon: Instagram, placeholder: "instagram.com/yourbusiness" },
-                { key: "twitter",   label: "X / Twitter", icon: Twitter, placeholder: "x.com/yourhandle"          },
-                { key: "linkedin",  label: "LinkedIn",  icon: Linkedin,  placeholder: "linkedin.com/company/…"    },
-                { key: "youtube",   label: "YouTube",   icon: Youtube,   placeholder: "youtube.com/@yourchannel"  },
-                { key: "tiktok",    label: "TikTok",    icon: Globe,     placeholder: "tiktok.com/@yourhandle"    },
-              ] as { key: keyof typeof ext.socialLinks; label: string; icon: React.ElementType; placeholder: string }[]
-            ).map(({ key, label, icon: Icon, placeholder }) => (
+                { key: "facebook",  label: "Facebook",   icon: Facebook,  baseUrl: "facebook.com/",    placeholder: "yourbusiness" },
+                { key: "instagram", label: "Instagram",  icon: Instagram, baseUrl: "instagram.com/",   placeholder: "yourbusiness" },
+                { key: "twitter",   label: "X / Twitter",icon: Twitter,   baseUrl: "x.com/",           placeholder: "yourhandle"   },
+                { key: "linkedin",  label: "LinkedIn",   icon: Linkedin,  baseUrl: "linkedin.com/in/", placeholder: "yourhandle"   },
+                { key: "youtube",   label: "YouTube",    icon: Youtube,   baseUrl: "youtube.com/@",    placeholder: "yourchannel"  },
+                { key: "tiktok",    label: "TikTok",     icon: Globe,     baseUrl: "tiktok.com/@",     placeholder: "yourhandle"   },
+              ] as { key: keyof typeof ext.socialLinks; label: string; icon: React.ElementType; baseUrl: string; placeholder: string }[]
+            ).map(({ key, label, icon: Icon, baseUrl, placeholder }) => (
               <div key={key} className="flex items-center gap-3">
-                <div className="w-8 flex justify-center text-muted-foreground">
+                <div className="w-8 flex justify-center text-muted-foreground shrink-0">
                   <Icon className="h-4 w-4" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 flex items-center rounded-md border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
+                  <span className="text-xs text-muted-foreground bg-muted px-2.5 py-2 border-r border-input whitespace-nowrap select-none shrink-0">{baseUrl}</span>
                   <Input
-                    value={ext.socialLinks[key]}
-                    onChange={(e) => setSocial(key, e.target.value)}
+                    value={stripSocialHandle(ext.socialLinks[key])}
+                    onChange={(e) => setSocial(key, stripSocialHandle(e.target.value))}
                     placeholder={placeholder}
-                    className="text-sm"
+                    className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm rounded-none"
+                    aria-label={label}
                   />
                 </div>
               </div>
@@ -830,168 +811,6 @@ export default function SettingsBusinessPage() {
           </CardContent>
         </Card>
 
-        {/* ── Regional Settings ─────────────────────────────────────────────── */}
-        <Card id="regional">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Globe className="w-4 h-4" /> Regional Settings
-            </CardTitle>
-            <CardDescription>Language, currency, timezone, date formats, and other regional preferences</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-
-            {/* Localisation */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Localisation</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>App Language</Label>
-                  <Select value={regExt.language} onValueChange={v => patchRegExt({ language: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      {REG_LANGUAGES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Currency</Label>
-                  <Select value={regCurrency} onValueChange={setRegCurrency}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      {REG_CURRENCIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Date Format</Label>
-                  <Select value={regExt.dateFormat} onValueChange={v => patchRegExt({ dateFormat: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {REG_DATE_FORMATS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Time Format</Label>
-                  <RegSegmentToggle
-                    options={[{ value: "12", label: "12-hour (AM/PM)" }, { value: "24", label: "24-hour" }]}
-                    value={regExt.timeFormat}
-                    onChange={v => patchRegExt({ timeFormat: v })}
-                  />
-                </div>
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label>Timezone</Label>
-                  <Select value={regTimezone} onValueChange={setRegTimezone}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {REG_TIMEZONES.map(group => (
-                        <SelectGroup key={group.group}>
-                          <SelectLabel>{group.group}</SelectLabel>
-                          {group.zones.map(z => <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>)}
-                        </SelectGroup>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Numbers & Units */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Numbers &amp; Units</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Decimal Separator</Label>
-                  <RegSegmentToggle
-                    options={[{ value: ".", label: "Period  1,234.56" }, { value: ",", label: "Comma  1.234,56" }]}
-                    value={regExt.decimalSeparator}
-                    onChange={v => patchRegExt({ decimalSeparator: v })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Measurement System</Label>
-                  <RegSegmentToggle
-                    options={[{ value: "metric", label: "Metric (kg, cm)" }, { value: "imperial", label: "Imperial (lb, in)" }]}
-                    value={regExt.measurementSystem}
-                    onChange={v => patchRegExt({ measurementSystem: v })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>First Day of Week</Label>
-                  <RegSegmentToggle
-                    options={[{ value: "monday", label: "Mon" }, { value: "sunday", label: "Sun" }, { value: "saturday", label: "Sat" }]}
-                    value={regExt.firstDayOfWeek}
-                    onChange={v => patchRegExt({ firstDayOfWeek: v })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Receipt Paper Size</Label>
-                  <RegSegmentToggle
-                    options={[{ value: "80mm", label: "80mm" }, { value: "58mm", label: "58mm" }, { value: "a4", label: "A4" }]}
-                    value={regExt.receiptPaperSize}
-                    onChange={v => patchRegExt({ receiptPaperSize: v })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Fiscal & Tax */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Fiscal &amp; Tax</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Fiscal Year Start Month</Label>
-                  <Select value={String(regExt.fiscalYearStart)} onValueChange={v => patchRegExt({ fiscalYearStart: parseInt(v) })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {REG_MONTHS.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Fiscal year ends in {REG_MONTHS[((regExt.fiscalYearStart - 1 + 11) % 12)]}
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Tax Number Label</Label>
-                  <Select value={regExt.taxNumberLabel} onValueChange={v => patchRegExt({ taxNumberLabel: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {REG_TAX_NUMBER_LABELS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label>Tax Label</Label>
-                  <Select value={regExt.taxLabel} onValueChange={v => patchRegExt({ taxLabel: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {REG_TAX_LABELS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {regExt.taxLabel === "Custom" && (
-                    <Input
-                      value={regExt.customTaxLabel}
-                      onChange={e => patchRegExt({ customTaxLabel: e.target.value })}
-                      placeholder="Enter your tax label"
-                      className="mt-2"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button onClick={handleRegionalSave} disabled={updateMutation.isPending} size="sm" className="min-w-40">
-                {updateMutation.isPending ? "Saving…" : "Save Regional Settings"}
-              </Button>
-            </div>
-
-          </CardContent>
-        </Card>
 
         {/* Save */}
         <div className="pb-8 flex justify-end">

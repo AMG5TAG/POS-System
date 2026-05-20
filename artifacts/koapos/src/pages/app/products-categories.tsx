@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
@@ -478,6 +479,7 @@ export default function ProductsCategoriesPage() {
                   />
                 ))}
               </div>
+              <ColourPicker value={form.color} onChange={(v) => setForm((f) => ({ ...f, color: v }))} />
             </div>
 
             <div className="space-y-1.5">

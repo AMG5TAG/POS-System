@@ -45,11 +45,7 @@ const CUSTOMERS_SUBNAV = [
 ];
 
 const STAFF_SUBNAV: NavItem[] = [
-  { name: "Employees",  href: "/staff",                icon: UserSquare2   },
-  { name: "Timesheet",  href: "/staff/timesheet",      icon: Clock         },
   { name: "Rostering",  href: "/staff/rostering",      icon: CalendarClock },
-  { name: "Leave",      href: "/staff/leave-requests", icon: ClipboardList },
-  { name: "Costs",      href: "/staff/cost-summary",   icon: Coins         },
   { name: "Notes",      href: "/staff/notes",          icon: StickyNote    },
   { name: "KPIs",       href: "/staff/kpis",           icon: Target        },
   { name: "Links",      href: "/staff/links",          icon: Link2         },
@@ -78,7 +74,14 @@ type NavItem  = NavLeaf | NavGroup;
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
   { name: "Account",           href: "/management/account",        icon: UserCircle     },
-  { name: "Business Details",  href: "/management/business",       icon: Building2      },
+  {
+    name: "Business Details",
+    icon: Building2,
+    children: [
+      { name: "Details",  href: "/management/business",  icon: Building2 },
+      { name: "Regional", href: "/management/regional",  icon: Globe     },
+    ],
+  },
   {
     name: "Calculators",
     icon: Calculator,
@@ -99,6 +102,16 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Modules",           href: "/modules",                   icon: Blocks         },
   { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
   { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
+  {
+    name: "Staff",
+    icon: UserSquare2,
+    children: [
+      { name: "Employees", href: "/staff",                 icon: UserSquare2   },
+      { name: "Timesheet", href: "/staff/timesheet",       icon: Clock         },
+      { name: "Leave",     href: "/staff/leave-requests",  icon: ClipboardList },
+      { name: "Costs",     href: "/staff/cost-summary",    icon: Coins         },
+    ],
+  },
   {
     name: "Stickers",
     icon: Tag,
@@ -155,7 +168,7 @@ const SEARCH_INDEX = [
   { label: "POS Registers",      href: "/management/registers",        icon: Monitor,         group: "Management" },
   { label: "Inventory Settings", href: "/management/inventory",        icon: Boxes,           group: "Management" },
   { label: "Business Details",   href: "/management/business",         icon: Building2,       group: "Management" },
-  { label: "Regional Settings",  href: "/management/business",         icon: Globe,           group: "Management" },
+  { label: "Regional Settings",  href: "/management/regional",         icon: Globe,           group: "Management" },
   { label: "Account",            href: "/management/account",          icon: UserCircle,      group: "Management" },
   { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
@@ -211,7 +224,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/customers":        ["Management", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],
   "/management/business":         ["Management", "Business Details"],
-  "/management/regional":         ["Management", "Business Details"],
+  "/management/regional":         ["Management", "Regional Settings"],
   "/management/account":          ["Management", "Account"],
   "/management/sales-overview":   ["Management", "Sales Overview"],
   "/management/kpis":             ["Management", "KPIs & Targets"],

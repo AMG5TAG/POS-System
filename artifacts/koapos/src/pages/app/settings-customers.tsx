@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields } from "@/lib/customer-settings";
 import { useListCustomers } from "@workspace/api-client-react";
@@ -321,6 +322,7 @@ export default function SettingsCustomersPage() {
                   />
                 ))}
               </div>
+              <ColourPicker value={groupForm.color} onChange={(v) => setGroupForm(f => ({ ...f, color: v }))} />
               <div className="flex items-center gap-2 pt-1">
                 <div
                   className="w-5 h-5 rounded-full border shrink-0"

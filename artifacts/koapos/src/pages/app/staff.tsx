@@ -15,21 +15,9 @@ import {
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
   Clock, CalendarClock, ClipboardList, Coins, StickyNote, Target, Link2,
 } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-
-const STAFF_TABS = [
-  { href: "/staff",                label: "Employees", icon: UserSquare2  },
-  { href: "/staff/timesheet",      label: "Timesheet", icon: Clock        },
-  { href: "/staff/rostering",      label: "Rostering", icon: CalendarClock },
-  { href: "/staff/leave-requests", label: "Leave",     icon: ClipboardList },
-  { href: "/staff/cost-summary",   label: "Costs",     icon: Coins        },
-  { href: "/staff/notes",          label: "Notes",     icon: StickyNote   },
-  { href: "/staff/kpis",           label: "KPIs",      icon: Target       },
-  { href: "/staff/links",          label: "Links",     icon: Link2        },
-];
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 

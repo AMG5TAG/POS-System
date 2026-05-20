@@ -16,24 +16,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, Clock, UserSquare2, CalendarClock,
   ClipboardList, Coins, StickyNote, Target, Link2, Users, Send,
 } from "lucide-react";
 
-/* ─── Tabs ───────────────────────────────────────────────────────────────── */
-
-const STAFF_TABS = [
-  { href: "/staff",                label: "Employees", icon: UserSquare2  },
-  { href: "/staff/timesheet",      label: "Timesheet", icon: Clock        },
-  { href: "/staff/rostering",      label: "Rostering", icon: CalendarClock },
-  { href: "/staff/leave-requests", label: "Leave",     icon: ClipboardList },
-  { href: "/staff/cost-summary",   label: "Costs",     icon: Coins        },
-  { href: "/staff/notes",          label: "Notes",     icon: StickyNote   },
-  { href: "/staff/kpis",           label: "KPIs",      icon: Target       },
-  { href: "/staff/links",          label: "Links",     icon: Link2        },
-];
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -265,8 +252,6 @@ export default function StaffRosteringPage() {
             <p className="text-sm text-muted-foreground mt-1">Roster calendar and leave management.</p>
           </div>
         </div>
-
-        <PageTabsNav tabs={STAFF_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 

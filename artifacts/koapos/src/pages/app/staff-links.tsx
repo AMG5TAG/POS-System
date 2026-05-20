@@ -12,24 +12,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import {
   Plus, Pencil, Trash2, Link2, ExternalLink, ShieldCheck,
   UserSquare2, Clock, CalendarClock, ClipboardList, Coins, StickyNote, Target, Globe,
 } from "lucide-react";
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
-
-const STAFF_TABS = [
-  { href: "/staff",                label: "Employees", icon: UserSquare2  },
-  { href: "/staff/timesheet",      label: "Timesheet", icon: Clock        },
-  { href: "/staff/rostering",      label: "Rostering", icon: CalendarClock },
-  { href: "/staff/leave-requests", label: "Leave",     icon: ClipboardList },
-  { href: "/staff/cost-summary",   label: "Costs",     icon: Coins        },
-  { href: "/staff/notes",          label: "Notes",     icon: StickyNote   },
-  { href: "/staff/kpis",           label: "KPIs",      icon: Target       },
-  { href: "/staff/links",          label: "Links",     icon: Link2        },
-];
 
 /* ─── Role simulation ────────────────────────────────────────────────────── */
 
@@ -195,7 +183,6 @@ export default function StaffLinksPage() {
           </div>
         </div>
 
-        <PageTabsNav tabs={STAFF_TABS} />
 
         {!canManage && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2.5">

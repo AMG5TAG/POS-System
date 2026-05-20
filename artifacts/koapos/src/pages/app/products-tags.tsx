@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,7 @@ export default function ProductsTagsPage() {
                   <button key={c} onClick={() => setForm({ ...form, color: c })} className={`w-7 h-7 rounded-full border-2 transition-all ${form.color === c ? "border-foreground scale-110" : "border-transparent"}`} style={{ backgroundColor: c }} />
                 ))}
               </div>
+              <ColourPicker value={form.color} onChange={(v) => setForm({ ...form, color: v })} />
               <div className="flex items-center gap-2 text-sm">
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg" style={{ backgroundColor: form.color + "22", color: form.color, border: `1px solid ${form.color}55` }}>
                   <Hash className="w-3.5 h-3.5" /> {form.name || "Preview"}

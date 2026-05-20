@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import {
   Pin, Star, Trash2, Pencil, Plus, StickyNote,
   ShieldCheck, AlertCircle, Eye, UserSquare2, Clock,
@@ -23,17 +22,6 @@ import {
 } from "lucide-react";
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
-
-const STAFF_TABS = [
-  { href: "/staff",                label: "Employees", icon: UserSquare2  },
-  { href: "/staff/timesheet",      label: "Timesheet", icon: Clock        },
-  { href: "/staff/rostering",      label: "Rostering", icon: CalendarClock },
-  { href: "/staff/leave-requests", label: "Leave",     icon: ClipboardList },
-  { href: "/staff/cost-summary",   label: "Costs",     icon: Coins        },
-  { href: "/staff/notes",          label: "Notes",     icon: StickyNote   },
-  { href: "/staff/kpis",           label: "KPIs",      icon: Target       },
-  { href: "/staff/links",          label: "Links",     icon: Link2        },
-];
 
 /* ─── Role simulation ────────────────────────────────────────────────────── */
 
@@ -337,7 +325,6 @@ export default function StaffNotesPage() {
           </div>
         </div>
 
-        <PageTabsNav tabs={STAFF_TABS} />
 
         <div className="flex items-center gap-3">
           <Button
