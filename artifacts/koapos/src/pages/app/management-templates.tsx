@@ -14,12 +14,12 @@ import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
-  Settings2,
+  Settings2, ClipboardList,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "receipts" | "invoices" | "a4receipts" | "emails" | "sms";
+type Category = "receipts" | "invoices" | "a4receipts" | "emails" | "sms" | "service";
 
 interface TemplateOption {
   id: string;
@@ -54,6 +54,15 @@ interface TplOpts {
   sendForLayby:         boolean;
   printCustomerCopy:    boolean;
   showBarcode:          boolean;
+  // Service Sheet
+  showCustomerDetails:  boolean;
+  showDeviceDetails:    boolean;
+  showWorkDescription:  boolean;
+  showPhotos:           boolean;
+  showSignature:        boolean;
+  showCallHistory:      boolean;
+  callHistoryRows:      string;
+  warrantyText:         string;
 }
 
 const DEFAULT_OPTS: TplOpts = {
@@ -65,6 +74,9 @@ const DEFAULT_OPTS: TplOpts = {
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false,
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
+  showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
+  showPhotos: true, showSignature: true, showCallHistory: true,
+  callHistoryRows: "6", warrantyText: "",
 };
 
 function useTplOpts(templateId: string) {
@@ -168,6 +180,20 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Message", key: "messageText",       label: "Message Text",        type: "textarea", placeholder: "Hi {{customer.first_name}}! Thanks for visiting…", quickCodes: true },
       { section: "Send",    key: "sendAfterSale",     label: "Send After Each Sale",type: "toggle" },
       { section: "Send",    key: "sendForLayby",      label: "Send for Layby Payments", type: "toggle" },
+    ];
+    case "service": return [
+      { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
+      { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
+      { section: "Header",   key: "headerText",           label: "Sheet Title",              type: "text",     placeholder: "SERVICE JOB SHEET" },
+      { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
+      { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
+      { section: "Sections", key: "showWorkDescription",  label: "Show Fault / Work Req.",   type: "toggle" },
+      { section: "Sections", key: "showPhotos",           label: "Show Device Photos",       type: "toggle" },
+      { section: "Sections", key: "showSignature",        label: "Show Signature Area",      type: "toggle" },
+      { section: "Sections", key: "showCallHistory",      label: "Show Call History",        type: "toggle" },
+      { section: "Sections", key: "callHistoryRows",      label: "Call History Rows",        type: "text",     placeholder: "6", hint: "Number of blank rows for manual notes" },
+      { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
+      { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
     ];
     default: return [];
   }
@@ -484,6 +510,10 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "s-appt",    name: "Appointment Reminder", style: "professional", description: "Date, time, business name, cancel link"         },
     { id: "s-layby",   name: "Layby Reminder",       style: "casual",       description: "Payment due reminder with balance owed"         },
   ],
+  service:    [
+    { id: "ss-standard", name: "Standard", style: "professional", description: "Full A4 sheet — all sections, grid layout, call history" },
+    { id: "ss-compact",  name: "Compact",  style: "minimal",      description: "Condensed layout, fewer rows, fits more on one page"     },
+  ],
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
@@ -491,7 +521,8 @@ const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; 
   invoices:   { label: "Invoices",    icon: FileText,      color: "text-violet-500"  },
   a4receipts: { label: "A4 Receipts", icon: Printer,       color: "text-emerald-500" },
   emails:     { label: "Emails",      icon: Mail,          color: "text-amber-500"   },
-  sms:        { label: "SMS",         icon: MessageSquare, color: "text-rose-500"    },
+  sms:        { label: "SMS",          icon: MessageSquare, color: "text-rose-500"    },
+  service:    { label: "Service Sheet", icon: ClipboardList, color: "text-cyan-500"    },
 };
 
 const STYLE_ICONS: Record<string, React.ElementType> = {
@@ -841,6 +872,120 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
   );
 }
 
+/* ─── Service Sheet Preview ─────────────────────────────────────────────── */
+
+function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, opts }: PreviewProps) {
+  const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
+  const compact = templateId === "ss-compact";
+  return (
+    <div className="text-[9px] text-gray-800 font-sans space-y-2">
+      {/* Header */}
+      <div className="flex justify-between items-start border-b-2 border-gray-800 pb-2 mb-2">
+        <div className="space-y-0.5">
+          {opts.showLogo && <div className="w-5 h-5 rounded mb-0.5" style={{ background: brandColor }} />}
+          <p className="font-bold text-[11px]">{businessName}</p>
+          {opts.showAbn && abn && <p className="text-gray-400">ABN {abn}</p>}
+          {address && <p className="text-gray-400">{address}</p>}
+          {email && <p className="text-gray-400">{email}</p>}
+        </div>
+        <div className="text-right space-y-0.5">
+          <p className="font-bold text-[11px] uppercase tracking-wide" style={{ color: brandColor }}>
+            {opts.headerText || "SERVICE JOB SHEET"}
+          </p>
+          <p className="text-gray-500">Job No: <strong>SVC-0001</strong></p>
+          <p className="text-gray-500">Date: {new Date().toLocaleDateString("en-AU")}</p>
+          <p className="text-gray-500">Status: <strong>Pending</strong></p>
+        </div>
+      </div>
+
+      {/* Customer + Device grid */}
+      {(opts.showCustomerDetails || opts.showDeviceDetails) && (
+        <div className={`grid gap-1.5 ${opts.showCustomerDetails && opts.showDeviceDetails ? "grid-cols-2" : "grid-cols-1"}`}>
+          {opts.showCustomerDetails && (
+            <div className="border rounded p-1.5 space-y-0.5">
+              <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide">Customer</p>
+              <p>Name: <span className="text-gray-500">Sarah Johnson</span></p>
+              <p>Phone: <span className="text-gray-500">(03) 9000 1111</span></p>
+              {!compact && <p>Email: <span className="text-gray-500">sarah@email.com</span></p>}
+            </div>
+          )}
+          {opts.showDeviceDetails && (
+            <div className="border rounded p-1.5 space-y-0.5">
+              <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide">Device</p>
+              <p>Type: <span className="text-gray-500">Laptop</span></p>
+              <p>Model: <span className="text-gray-500">MacBook Pro 14"</span></p>
+              {!compact && <p>Serial: <span className="text-gray-500">C02XY123</span></p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Work required */}
+      {opts.showWorkDescription && (
+        <div className="border rounded p-1.5">
+          <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide mb-1">Fault / Work Required</p>
+          <p className="text-gray-500 italic">Screen flickering on startup. Battery draining quickly.</p>
+        </div>
+      )}
+
+      {/* Photos placeholder */}
+      {opts.showPhotos && !compact && (
+        <div>
+          <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide mb-1">Device Photos</p>
+          <div className="flex gap-1">
+            {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded border border-dashed border-gray-300 bg-gray-50" />)}
+          </div>
+        </div>
+      )}
+
+      {/* Call History */}
+      {opts.showCallHistory && (
+        <div>
+          <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide mb-1">Call History</p>
+          <table className="w-full border-collapse text-[8px]">
+            <thead>
+              <tr className="border-b border-gray-300">
+                <th className="text-left py-0.5 w-12 font-semibold">Date</th>
+                <th className="text-left py-0.5 w-12 font-semibold">Staff</th>
+                <th className="text-left py-0.5 font-semibold">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: Math.min(callRows, compact ? 3 : 4) }).map((_, i) => (
+                <tr key={i} className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-300">—</td>
+                  <td className="py-1.5 text-gray-300">—</td>
+                  <td className="py-1.5 text-gray-300">—</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Signature area */}
+      {opts.showSignature && (
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="border-t border-gray-400 pt-1">
+            <p className="text-[7.5px] text-gray-400">Customer Signature</p>
+          </div>
+          <div className="border-t border-gray-400 pt-1">
+            <p className="text-[7.5px] text-gray-400">Technician / Staff</p>
+          </div>
+        </div>
+      )}
+
+      {/* Footer / warranty */}
+      {(opts.warrantyText || opts.footerText) && (
+        <div className="border-t pt-1 space-y-0.5 text-[8px] text-gray-400">
+          {opts.warrantyText && <p>{opts.warrantyText}</p>}
+          {opts.footerText && <p>{resolveCode(opts.footerText, businessName, abn, website, email)}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ManagementTemplatesPage() {
@@ -861,7 +1006,7 @@ export default function ManagementTemplatesPage() {
 
   useEffect(() => {
     const defaults: Record<Category, string> = {
-      receipts: "r-pro", invoices: "i-pro", a4receipts: "a4-pro", emails: "e-pro", sms: "s-receipt",
+      receipts: "r-pro", invoices: "i-pro", a4receipts: "a4-pro", emails: "e-pro", sms: "s-receipt", service: "ss-standard",
     };
     setPreviewId(activeTemplates[activeCategory] ?? defaults[activeCategory]);
   }, [activeCategory, activeTemplates]);
@@ -900,7 +1045,8 @@ export default function ManagementTemplatesPage() {
       case "invoices":   return <InvoicePreview   {...previewProps} />;
       case "a4receipts": return <A4ReceiptPreview {...previewProps} />;
       case "emails":     return <EmailPreview     {...previewProps} />;
-      case "sms":        return <SMSPreview       {...previewProps} />;
+      case "sms":        return <SMSPreview        {...previewProps} />;
+      case "service":    return <ServiceSheetPreview {...previewProps} />;
     }
   };
 
@@ -1013,6 +1159,11 @@ export default function ManagementTemplatesPage() {
                     {renderPreview()}
                   </div>
                   <div className="bg-gray-800 h-1 w-16 rounded mx-auto mt-4" />
+                </div>
+              )}
+              {activeCategory === "service" && (
+                <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">
+                  {renderPreview()}
                 </div>
               )}
             </div>
