@@ -15,8 +15,9 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
-  Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail,
+  Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
 } from "lucide-react";
+import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
@@ -72,7 +73,7 @@ type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{
 type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
-  { name: "Sales Overview",    href: "/management/sales-overview", icon: TrendingUp     },
+  { name: "Reports",           href: "/management/sales-overview", icon: TrendingUp     },
   { name: "Account",           href: "/management/account",        icon: UserCircle     },
   {
     name: "Business Details",
@@ -152,7 +153,7 @@ const SEARCH_INDEX = [
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
   { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Staff" },
-  { label: "Sales Overview",     href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
+  { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
@@ -176,7 +177,22 @@ const SEARCH_INDEX = [
   { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
-  { label: "Wastage / Write-off",href: "/inventory/wastage",           icon: AlertTriangle,   group: "Inventory"  },
+  { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
+  { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
+  { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
+  { label: "Registers · Shortcuts",       href: "/management/registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
+  { label: "Reports · Payments",          href: "/management/sales-overview#payments",           icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Inventory",         href: "/management/sales-overview#inventory",          icon: Package,       group: "Reports"    },
+  { label: "Reports · Profit & Loss",     href: "/management/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Top Products",      href: "/management/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
+  { label: "Reports · Register Closures", href: "/management/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
+  { label: "Reports · Customer Insights", href: "/management/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
+  { label: "Reports · GST / BAS",         href: "/management/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Cash Movements",    href: "/management/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },
+  { label: "Reports · Report Builder",    href: "/management/sales-overview#report-builder",     icon: LayoutGrid,    group: "Reports"    },
+  { label: "Reports · Gift Cards",        href: "/management/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
+  { label: "Reports · Scheduled",         href: "/management/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
+  { label: "Reports · User Activity",     href: "/management/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
@@ -226,7 +242,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/business":         ["Management", "Business Details"],
   "/management/regional":         ["Management", "Regional Settings"],
   "/management/account":          ["Management", "Account"],
-  "/management/sales-overview":   ["Management", "Sales Overview"],
+  "/management/sales-overview":   ["Management", "Reports"],
   "/management/kpis":             ["Management", "KPIs & Targets"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
@@ -942,6 +958,35 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   useEffect(() => {
     document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "instant" });
   }, [location]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+      const enabledIds = getEnabledShortcuts();
+      for (const sc of KEYBOARD_SHORTCUTS) {
+        if (!sc.navigate || !enabledIds.includes(sc.id)) continue;
+        const k = sc.keys;
+        if (/^F\d+$/.test(k) && e.key === k && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+          e.preventDefault();
+          (navigate as (h: string) => void)(sc.navigate);
+          return;
+        }
+        if (k.startsWith("Alt+")) {
+          const ch = k.slice(4).toLowerCase();
+          if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === ch) {
+            e.preventDefault();
+            (navigate as (h: string) => void)(sc.navigate);
+            return;
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");

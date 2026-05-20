@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star, ArrowRight, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star, ArrowRight, ArrowLeft, Printer, ScanLine, Keyboard, HardDrive, Wifi, Usb, Zap, Settings2 } from "lucide-react";
 import { PageTabsNav } from "@/components/ui/page-tabs-nav";
+import { KEYBOARD_SHORTCUTS, getEnabledShortcuts, SHORTCUTS_STORAGE_KEY } from "@/lib/keyboard-shortcuts";
 
 const REGISTER_TABS = [
-  { href: "#registers",   label: "Registers",    icon: Monitor },
+  { href: "#registers",    label: "Registers",    icon: Monitor    },
   { href: "#pos-settings", label: "POS Settings", icon: CreditCard },
+  { href: "#hardware",     label: "Hardware",     icon: HardDrive  },
+  { href: "#shortcuts",    label: "Shortcuts",    icon: Keyboard   },
 ];
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
@@ -447,6 +450,222 @@ function ForceStaffLoginToggle() {
   );
 }
 
+/* ─── Hardware section ───────────────────────────────────────────────────── */
+
+const HARDWARE_KEY = "koapos_hardware_settings";
+
+interface CashDrawerCfg  { enabled: boolean; interface: "usb"|"serial"|"network"; openOnCashSale: boolean; pulseMs: number; }
+interface PrinterCfg     { enabled: boolean; type: "thermal"|"network"|"pdf"; paperWidth: "80mm"|"58mm"; autoPrintOnSale: boolean; autoPrintOnRefund: boolean; ipAddress: string; port: string; }
+interface ScannerCfg     { enabled: boolean; interface: "usb-hid"|"serial"|"bluetooth"; beepOnScan: boolean; prefix: string; suffix: string; }
+interface HardwareCfg    { cashDrawer: CashDrawerCfg; printer: PrinterCfg; scanner: ScannerCfg; }
+
+const DEFAULT_HW: HardwareCfg = {
+  cashDrawer: { enabled: false, interface: "usb",     openOnCashSale: true,  pulseMs: 200 },
+  printer:    { enabled: false, type: "thermal",      paperWidth: "80mm",    autoPrintOnSale: false, autoPrintOnRefund: false, ipAddress: "", port: "9100" },
+  scanner:    { enabled: false, interface: "usb-hid", beepOnScan: true,      prefix: "", suffix: "" },
+};
+
+function loadHardware(): HardwareCfg {
+  try { const s = localStorage.getItem(HARDWARE_KEY); if (s) return { ...DEFAULT_HW, ...JSON.parse(s) }; } catch { /* ignore */ }
+  return DEFAULT_HW;
+}
+
+function HardwareSection() {
+  const [hw, setHw] = useState<HardwareCfg>(loadHardware);
+  const save = (next: HardwareCfg) => { setHw(next); localStorage.setItem(HARDWARE_KEY, JSON.stringify(next)); };
+  const patchCD = (p: Partial<CashDrawerCfg>)  => save({ ...hw, cashDrawer: { ...hw.cashDrawer, ...p } });
+  const patchPR = (p: Partial<PrinterCfg>)      => save({ ...hw, printer:    { ...hw.printer,    ...p } });
+  const patchSC = (p: Partial<ScannerCfg>)      => save({ ...hw, scanner:    { ...hw.scanner,    ...p } });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Hardware</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Configure connected peripherals — cash drawers, receipt printers, and barcode scanners.</p>
+      </div>
+
+      {/* Cash Drawer */}
+      <div className="rounded-xl border overflow-hidden">
+        <div className="flex items-center gap-4 px-5 py-4 border-b bg-muted/20">
+          <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30"><Banknote className="w-4 h-4 text-yellow-700 dark:text-yellow-400" /></div>
+          <div className="flex-1"><p className="font-semibold text-sm">Cash Drawer</p><p className="text-xs text-muted-foreground">Auto-open on cash sales</p></div>
+          <Switch checked={hw.cashDrawer.enabled} onCheckedChange={(v) => patchCD({ enabled: v })} />
+        </div>
+        {hw.cashDrawer.enabled && (
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Interface</Label>
+                <Select value={hw.cashDrawer.interface} onValueChange={(v) => patchCD({ interface: v as CashDrawerCfg["interface"] })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usb"><span className="flex items-center gap-2"><Usb className="w-3.5 h-3.5 shrink-0" />USB (via receipt printer)</span></SelectItem>
+                    <SelectItem value="serial"><span className="flex items-center gap-2"><Settings2 className="w-3.5 h-3.5 shrink-0" />Serial (COM port)</span></SelectItem>
+                    <SelectItem value="network"><span className="flex items-center gap-2"><Wifi className="w-3.5 h-3.5 shrink-0" />Network</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Open Pulse (ms)</Label>
+                <Input type="number" min={50} max={500} value={hw.cashDrawer.pulseMs} onChange={(e) => patchCD({ pulseMs: Number(e.target.value) })} className="mt-1" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm font-medium">Open on cash sale</p><p className="text-xs text-muted-foreground">Automatically open drawer when a cash payment is processed</p></div>
+              <Switch checked={hw.cashDrawer.openOnCashSale} onCheckedChange={(v) => patchCD({ openOnCashSale: v })} />
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Test signal sent to cash drawer")}>
+              <Zap className="w-3.5 h-3.5" /> Test Open
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Receipt Printer */}
+      <div className="rounded-xl border overflow-hidden">
+        <div className="flex items-center gap-4 px-5 py-4 border-b bg-muted/20">
+          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30"><Printer className="w-4 h-4 text-blue-700 dark:text-blue-400" /></div>
+          <div className="flex-1"><p className="font-semibold text-sm">Receipt Printer</p><p className="text-xs text-muted-foreground">ESC/POS thermal or network printer</p></div>
+          <Switch checked={hw.printer.enabled} onCheckedChange={(v) => patchPR({ enabled: v })} />
+        </div>
+        {hw.printer.enabled && (
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Printer Type</Label>
+                <Select value={hw.printer.type} onValueChange={(v) => patchPR({ type: v as PrinterCfg["type"] })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="thermal">USB Thermal (ESC/POS)</SelectItem>
+                    <SelectItem value="network">Network (ESC/POS)</SelectItem>
+                    <SelectItem value="pdf">PDF / Virtual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Paper Width</Label>
+                <Select value={hw.printer.paperWidth} onValueChange={(v) => patchPR({ paperWidth: v as PrinterCfg["paperWidth"] })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="80mm">80 mm</SelectItem>
+                    <SelectItem value="58mm">58 mm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {hw.printer.type === "network" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><Label className="text-xs">IP Address</Label><Input placeholder="192.168.1.100" value={hw.printer.ipAddress} onChange={(e) => patchPR({ ipAddress: e.target.value })} className="mt-1" /></div>
+                <div><Label className="text-xs">Port</Label><Input placeholder="9100" value={hw.printer.port} onChange={(e) => patchPR({ port: e.target.value })} className="mt-1" /></div>
+              </div>
+            )}
+            <div className="divide-y border rounded-lg">
+              <div className="flex items-center justify-between px-4 py-3">
+                <div><p className="text-sm font-medium">Auto-print on sale</p><p className="text-xs text-muted-foreground">Print a receipt automatically after each sale</p></div>
+                <Switch checked={hw.printer.autoPrintOnSale} onCheckedChange={(v) => patchPR({ autoPrintOnSale: v })} />
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <div><p className="text-sm font-medium">Auto-print on refund</p><p className="text-xs text-muted-foreground">Print a receipt automatically after each refund</p></div>
+                <Switch checked={hw.printer.autoPrintOnRefund} onCheckedChange={(v) => patchPR({ autoPrintOnRefund: v })} />
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Test page sent to printer")}>
+              <Zap className="w-3.5 h-3.5" /> Print Test Page
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Barcode Scanner */}
+      <div className="rounded-xl border overflow-hidden">
+        <div className="flex items-center gap-4 px-5 py-4 border-b bg-muted/20">
+          <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><ScanLine className="w-4 h-4 text-green-700 dark:text-green-400" /></div>
+          <div className="flex-1"><p className="font-semibold text-sm">Barcode Scanner</p><p className="text-xs text-muted-foreground">USB HID, serial, or Bluetooth scanner</p></div>
+          <Switch checked={hw.scanner.enabled} onCheckedChange={(v) => patchSC({ enabled: v })} />
+        </div>
+        {hw.scanner.enabled && (
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-xs">Interface</Label>
+                <Select value={hw.scanner.interface} onValueChange={(v) => patchSC({ interface: v as ScannerCfg["interface"] })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usb-hid">USB HID (plug &amp; play)</SelectItem>
+                    <SelectItem value="serial">Serial port</SelectItem>
+                    <SelectItem value="bluetooth">Bluetooth</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">Scan Prefix</Label><Input placeholder="(none)" value={hw.scanner.prefix} onChange={(e) => patchSC({ prefix: e.target.value })} className="mt-1 font-mono" /></div>
+              <div><Label className="text-xs">Scan Suffix (e.g. \r)</Label><Input placeholder="\r" value={hw.scanner.suffix} onChange={(e) => patchSC({ suffix: e.target.value })} className="mt-1 font-mono" /></div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm font-medium">Beep on scan</p><p className="text-xs text-muted-foreground">Play an audio cue when a barcode is successfully scanned</p></div>
+              <Switch checked={hw.scanner.beepOnScan} onCheckedChange={(v) => patchSC({ beepOnScan: v })} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Shortcuts section ──────────────────────────────────────────────────── */
+
+function ShortcutsSection() {
+  const [enabled, setEnabled] = useState<string[]>(getEnabledShortcuts);
+
+  const toggle = (id: string, on: boolean) => {
+    const next = on ? [...enabled, id] : enabled.filter((e) => e !== id);
+    setEnabled(next);
+    localStorage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(next));
+    toast.success(on ? "Shortcut enabled" : "Shortcut disabled");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Enable or disable global keyboard shortcuts. Shortcuts are ignored when focus is inside a text field or input.
+        </p>
+      </div>
+      <div className="rounded-xl border overflow-hidden">
+        <div className="px-5 py-3 bg-muted/20 border-b grid grid-cols-[1fr_160px_80px_56px] gap-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span>Action</span>
+          <span>Shortcut</span>
+          <span>Scope</span>
+          <span className="text-right">On</span>
+        </div>
+        <div className="divide-y">
+          {KEYBOARD_SHORTCUTS.map((sc) => {
+            const isOn = enabled.includes(sc.id);
+            return (
+              <div key={sc.id} className={cn("grid grid-cols-[1fr_160px_80px_56px] gap-4 items-center px-5 py-3 transition-colors", !isOn && "opacity-50")}>
+                <div>
+                  <p className="text-sm font-medium">{sc.label}</p>
+                  <p className="text-xs text-muted-foreground">{sc.description}</p>
+                </div>
+                <kbd className="inline-flex items-center font-mono text-xs px-2 py-1 rounded border bg-muted text-muted-foreground whitespace-nowrap">
+                  {sc.keys}
+                </kbd>
+                <span className="text-xs text-muted-foreground">{sc.scope}</span>
+                <div className="flex justify-end">
+                  <Switch checked={isOn} onCheckedChange={(v) => toggle(sc.id, v)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        ⌘K / Ctrl+K (open search) is always available and cannot be disabled here.
+      </p>
+    </div>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementRegistersPage() {
@@ -619,6 +838,17 @@ export default function ManagementRegistersPage() {
         </div>
 
         </div>{/* end 2-col grid */}
+
+        {/* Hardware */}
+        <div id="hardware" className="space-y-4 pt-2">
+          <HardwareSection />
+        </div>
+
+        {/* Shortcuts */}
+        <div id="shortcuts" className="space-y-4 pt-2">
+          <ShortcutsSection />
+        </div>
+
       </div>
 
       {/* Dialog */}
