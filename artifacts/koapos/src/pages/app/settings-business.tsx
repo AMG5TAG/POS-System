@@ -100,6 +100,52 @@ function looksLikeCode(value: string): boolean {
   return /^[A-Z]{2,3}$/.test(value.trim().toUpperCase()) && value.trim().length <= 3;
 }
 
+const STATE_CODE_TO_NAME: Record<string, string> = {
+  /* Australia */
+  NSW: "New South Wales",      VIC: "Victoria",             QLD: "Queensland",
+  WA:  "Western Australia",    SA:  "South Australia",      TAS: "Tasmania",
+  ACT: "Australian Capital Territory", NT: "Northern Territory",
+  /* United States */
+  AL: "Alabama",    AK: "Alaska",        AZ: "Arizona",      AR: "Arkansas",
+  CA: "California", CO: "Colorado",      CT: "Connecticut",  DE: "Delaware",
+  FL: "Florida",    GA: "Georgia",       HI: "Hawaii",       ID: "Idaho",
+  IL: "Illinois",   IN: "Indiana",       IA: "Iowa",         KS: "Kansas",
+  KY: "Kentucky",   LA: "Louisiana",     ME: "Maine",        MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan",   MN: "Minnesota",    MS: "Mississippi",
+  MO: "Missouri",   MT: "Montana",       NE: "Nebraska",     NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico",   NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio",      OK: "Oklahoma",
+  OR: "Oregon",     PA: "Pennsylvania",  RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee",   TX: "Texas",        UT: "Utah",
+  VT: "Vermont",    VA: "Virginia",      WV: "West Virginia", WI: "Wisconsin",
+  WY: "Wyoming",    DC: "District of Columbia",
+  /* Canada */
+  AB: "Alberta",    BC: "British Columbia", MB: "Manitoba",  NB: "New Brunswick",
+  NL: "Newfoundland and Labrador", NS: "Nova Scotia",       ON: "Ontario",
+  PE: "Prince Edward Island",      QC: "Quebec",            SK: "Saskatchewan",
+  YT: "Yukon",
+  /* United Kingdom */
+  ENG: "England",   SCT: "Scotland",     WLS: "Wales",       NIR: "Northern Ireland",
+};
+
+const STATE_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_CODE_TO_NAME).map(([code, name]) => [name.toLowerCase(), code])
+);
+
+function expandStateCode(value: string): string {
+  const trimmed = value.trim();
+  return STATE_CODE_TO_NAME[trimmed.toUpperCase()] ?? trimmed;
+}
+
+function collapseStateName(value: string): string {
+  const trimmed = value.trim();
+  return STATE_NAME_TO_CODE[trimmed.toLowerCase()] ?? trimmed;
+}
+
+function looksLikeStateCode(value: string): boolean {
+  return /^[A-Z]{2,3}$/.test(value.trim().toUpperCase()) && value.trim().length <= 3;
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function SettingsBusinessPage() {
@@ -445,9 +491,20 @@ export default function SettingsBusinessPage() {
                 <Label>Postcode</Label>
                 <Input value={ext.postcode} onChange={(e) => setExtField("postcode", e.target.value)} placeholder="2000" />
               </div>
-              <div className="space-y-2">
+              <div>
                 <Label>Country</Label>
                 <Input value={apiForm.country} onChange={(e) => setApiForm({ ...apiForm, country: e.target.value })} placeholder="Australia" />
+              </div>
+              <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-2 pt-0.5">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={!looksLikeStateCode(ext.state)}
+                    onCheckedChange={(checked) => {
+                      setExtField("state", checked ? expandStateCode(ext.state) : collapseStateName(ext.state));
+                    }}
+                  />
+                  Use full state name (e.g. NSW → New South Wales)
+                </label>
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
                   <Checkbox
                     checked={!looksLikeCode(apiForm.country)}

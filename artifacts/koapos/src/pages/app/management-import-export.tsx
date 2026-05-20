@@ -61,6 +61,41 @@ function expandCountryValue(value: string): string {
 
 const COUNTRY_FIELD_KEYS = new Set(["billingCountry", "country"]);
 
+const STATE_CODE_TO_NAME: Record<string, string> = {
+  /* Australia */
+  NSW: "New South Wales",      VIC: "Victoria",             QLD: "Queensland",
+  WA:  "Western Australia",    SA:  "South Australia",      TAS: "Tasmania",
+  ACT: "Australian Capital Territory", NT: "Northern Territory",
+  /* United States */
+  AL: "Alabama",    AK: "Alaska",        AZ: "Arizona",      AR: "Arkansas",
+  CA: "California", CO: "Colorado",      CT: "Connecticut",  DE: "Delaware",
+  FL: "Florida",    GA: "Georgia",       HI: "Hawaii",       ID: "Idaho",
+  IL: "Illinois",   IN: "Indiana",       IA: "Iowa",         KS: "Kansas",
+  KY: "Kentucky",   LA: "Louisiana",     ME: "Maine",        MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan",   MN: "Minnesota",    MS: "Mississippi",
+  MO: "Missouri",   MT: "Montana",       NE: "Nebraska",     NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico",   NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio",      OK: "Oklahoma",
+  OR: "Oregon",     PA: "Pennsylvania",  RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee",   TX: "Texas",        UT: "Utah",
+  VT: "Vermont",    VA: "Virginia",      WV: "West Virginia", WI: "Wisconsin",
+  WY: "Wyoming",    DC: "District of Columbia",
+  /* Canada */
+  AB: "Alberta",    BC: "British Columbia", MB: "Manitoba",  NB: "New Brunswick",
+  NL: "Newfoundland and Labrador", NS: "Nova Scotia",       ON: "Ontario",
+  PE: "Prince Edward Island",      QC: "Quebec",            SK: "Saskatchewan",
+  YT: "Yukon",
+  /* United Kingdom */
+  ENG: "England",   SCT: "Scotland",     WLS: "Wales",       NIR: "Northern Ireland",
+};
+
+function expandStateValue(value: string): string {
+  const trimmed = value.trim();
+  return STATE_CODE_TO_NAME[trimmed.toUpperCase()] ?? trimmed;
+}
+
+const STATE_FIELD_KEYS = new Set(["billingState", "state"]);
+
 /* ─── Entity configs ─────────────────────────────────────────────────────── */
 
 const ENTITIES: EntityConfig[] = [
@@ -403,11 +438,13 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   const [progress, setProgress]   = useState(0);
   const [result, setResult]       = useState<ImportResult | null>(null);
   const [expandCountryCodes, setExpandCountryCodes] = useState(false);
+  const [expandStateCodes, setExpandStateCodes]     = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const hasCountryField = entity.fields.some((f) => COUNTRY_FIELD_KEYS.has(f.key));
+  const hasStateField   = entity.fields.some((f) => STATE_FIELD_KEYS.has(f.key));
 
-  const reset = () => { setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0); setExpandCountryCodes(false); };
+  const reset = () => { setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0); setExpandCountryCodes(false); setExpandStateCodes(false); };
 
   const processFile = (file: File) => {
     const reader = new FileReader();
@@ -451,9 +488,8 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         const csvCol = mapping[field.key];
         if (csvCol) {
           let rawVal = row[csvCol] ?? "";
-          if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) {
-            rawVal = expandCountryValue(rawVal);
-          }
+          if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) rawVal = expandCountryValue(rawVal);
+          if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   rawVal = expandStateValue(rawVal);
           const val = coerce(rawVal, field.type);
           if (val !== undefined) payload[field.key] = val;
         }
@@ -612,14 +648,27 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
               </div>
             ))}
           </div>
-          {hasCountryField && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none pt-1">
-              <Checkbox
-                checked={expandCountryCodes}
-                onCheckedChange={(v) => setExpandCountryCodes(!!v)}
-              />
-              Expand country codes to full names on import (e.g. AU → Australia)
-            </label>
+          {(hasStateField || hasCountryField) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1">
+              {hasStateField && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={expandStateCodes}
+                    onCheckedChange={(v) => setExpandStateCodes(!!v)}
+                  />
+                  Expand state codes (e.g. NSW → New South Wales)
+                </label>
+              )}
+              {hasCountryField && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={expandCountryCodes}
+                    onCheckedChange={(v) => setExpandCountryCodes(!!v)}
+                  />
+                  Expand country codes (e.g. AU → Australia)
+                </label>
+              )}
+            </div>
           )}
           {!hasRequiredMapping && (
             <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
