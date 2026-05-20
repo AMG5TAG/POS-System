@@ -141,6 +141,7 @@ export const DYMO_SIZES: DymoSize[] = [
   { id: "30336",    name: "Multipurpose (1\" × 2⅛\")",         widthMm: 25.4,  heightMm: 54,   series: "LW" },
   { id: "99014",    name: "Shipping 54×101mm",                  widthMm: 54,    heightMm: 101,  series: "LW" },
   { id: "S0722370", name: "Standard Address 36×89mm",           widthMm: 36,    heightMm: 89,   series: "LW" },
+  { id: "S0722520", name: "Large Return Address 25×54mm",        widthMm: 25,    heightMm: 54,   series: "LW" },
   // LabelWriter 550 series
   { id: "LW-1x1",   name: "Square 1\" × 1\" (550)",            widthMm: 25.4,  heightMm: 25.4, series: "LW550" },
   { id: "LW-2x1",   name: "Retail Tag 2\" × 1\" (550)",        widthMm: 51,    heightMm: 25.4, series: "LW550" },
@@ -162,7 +163,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: Package,
     color: "text-blue-500",
     description: "Price tags and shelf labels for stock items",
-    defaultSize: "11354",
+    defaultSize: "S0722520",
     fields: [
       { key: "productName", label: "Product Name",  defaultValue: "Flat White" },
       { key: "sku",         label: "SKU",           defaultValue: "BEV-001"    },
@@ -178,7 +179,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: User,
     color: "text-violet-500",
     description: "Loyalty cards, ID labels and membership stickers",
-    defaultSize: "30252",
+    defaultSize: "S0722520",
     fields: [
       { key: "customerName",  label: "Customer Name",  defaultValue: "Sarah Johnson" },
       { key: "customerId",    label: "Customer ID",    defaultValue: "#CUS-0042"    },
@@ -194,7 +195,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: RotateCcw,
     color: "text-amber-500",
     description: "Return authorisation labels for incoming goods",
-    defaultSize: "30256",
+    defaultSize: "S0722520",
     fields: [
       { key: "returnNo",   label: "Return #",      defaultValue: "RTN-0089"        },
       { key: "date",       label: "Date",          defaultValue: "18/05/2026"      },
@@ -210,7 +211,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: Wrench,
     color: "text-rose-500",
     description: "Job labels for service desk and repair tickets",
-    defaultSize: "30256",
+    defaultSize: "S0722520",
     fields: [
       { key: "jobNo",      label: "Job #",         defaultValue: "SVC-0031"        },
       { key: "customer",   label: "Customer",      defaultValue: "Mike Chen"       },
@@ -226,7 +227,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: MapPin,
     color: "text-emerald-500",
     description: "Shipping and postal address labels",
-    defaultSize: "30252",
+    defaultSize: "S0722520",
     fields: [
       { key: "name",     label: "Name",      defaultValue: "Sarah Johnson"      },
       { key: "company",  label: "Company",   defaultValue: "Demo Co Pty Ltd"    },
@@ -242,7 +243,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: DollarSign,
     color: "text-green-600",
     description: "Retail price tags with product info",
-    defaultSize: "LW-2.5x1",
+    defaultSize: "S0722520",
     fields: [
       { key: "productName", label: "Product Name", defaultValue: "Reusable Cup"     },
       { key: "price",       label: "Sale Price",   defaultValue: "$12.99"            },
@@ -257,7 +258,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: LayoutGrid,
     color: "text-cyan-500",
     description: "Shelf-edge labels for gondola or display shelving",
-    defaultSize: "30321",
+    defaultSize: "S0722520",
     fields: [
       { key: "productName", label: "Product Name",  defaultValue: "Flat White 250g"  },
       { key: "price",       label: "Price",         defaultValue: "$5.50"             },
@@ -271,13 +272,13 @@ export const STICKER_TYPES: StickerType[] = [
 /* ─── Recommended sizes per type ─────────────────────────────────────────── */
 
 export const RECOMMENDED_SIZES: Record<string, string[]> = {
-  product:  ["11354", "LW-2x1", "LW-2.5x1", "11353"],
-  customer: ["30252", "30331", "S0722370"],
-  return:   ["30256", "30334", "99014"],
-  repair:   ["30256", "30334", "99014"],
-  address:  ["30252", "30331", "S0722370"],
-  pricetag: ["LW-2.5x1", "11354", "LW-2x1"],
-  shelf:    ["30321", "LW-2.5x1", "11355"],
+  product:  ["S0722520", "11354", "LW-2x1", "LW-2.5x1", "11353"],
+  customer: ["S0722520", "30252", "30331", "S0722370"],
+  return:   ["S0722520", "30256", "30334", "99014"],
+  repair:   ["S0722520", "30256", "30334", "99014"],
+  address:  ["S0722520", "30252", "30331", "S0722370"],
+  pricetag: ["S0722520", "LW-2.5x1", "11354", "LW-2x1"],
+  shelf:    ["S0722520", "30321", "LW-2.5x1", "11355"],
 };
 
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
