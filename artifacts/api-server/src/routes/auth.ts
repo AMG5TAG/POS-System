@@ -135,6 +135,32 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
   res.json({ ok: true });
 });
 
+// Temporary admin password reset — protected by ADMIN_RESET_TOKEN env var
+router.post("/auth/admin-reset-password", async (req, res): Promise<void> => {
+  const token = process.env.ADMIN_RESET_TOKEN;
+  if (!token) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const { resetToken, email, newPassword } = req.body as Record<string, unknown>;
+  if (typeof resetToken !== "string" || resetToken !== token) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (typeof email !== "string" || typeof newPassword !== "string" || newPassword.length < 8) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
+  if (!merchant) {
+    res.status(404).json({ error: "Merchant not found" });
+    return;
+  }
+  const passwordHash = await hashPassword(newPassword as string);
+  await db.update(merchantsTable).set({ passwordHash }).where(eq(merchantsTable.email, email));
+  res.json({ ok: true, email });
+});
+
 router.post("/auth/logout", async (req, res): Promise<void> => {
   req.session.destroy(() => {});
   res.json({ ok: true });
