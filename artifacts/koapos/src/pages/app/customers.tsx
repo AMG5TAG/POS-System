@@ -1198,7 +1198,7 @@ export default function CustomersPage() {
               </thead>
               <tbody className="divide-y">
                 {sorted.map((customer) => {
-                  const address = [customer.billingStreet, customer.billingCity, customer.billingState]
+                  const address = [customer.billingStreet, customer.billingCity, customer.billingState, customer.billingPostcode, customer.billingCountry]
                     .filter(Boolean).join(", ") || customer.address || "—";
                   const isChecked = checked.has(customer.id);
                   return (
