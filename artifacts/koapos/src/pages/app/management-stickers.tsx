@@ -23,7 +23,8 @@ import {
 
 export default function ManagementStickersPage() {
   const [selectedTypeId, setSelectedTypeId]   = useState<string>("product");
-  const [selectedSizeId, setSelectedSizeId]   = useState<string>("11354");
+  const [selectedSizeId, setSelectedSizeId]   = useState<string>("S0722520");
+  const [orientation,    setOrientation]      = useState<"horizontal" | "vertical">("horizontal");
   const [quantity,       setQuantity]         = useState(1);
   const [showBusiness,   setShowBusiness]     = useState(true);
   const [showTplPicker,  setShowTplPicker]    = useState(false);
@@ -407,9 +408,33 @@ export default function ManagementStickersPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Label Preview</p>
-              <Badge variant="outline" className="text-[10px]">
-                {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-md border overflow-hidden">
+                  <button
+                    onClick={() => setOrientation("horizontal")}
+                    className={cn("px-2 py-1 text-[11px] font-medium transition-colors", orientation === "horizontal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    title="Horizontal (landscape)"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <svg width="14" height="10" viewBox="0 0 14 10" fill="none" className="shrink-0"><rect x="1" y="1" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+                      H
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setOrientation("vertical")}
+                    className={cn("px-2 py-1 text-[11px] font-medium transition-colors border-l", orientation === "vertical" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    title="Vertical (portrait)"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <svg width="10" height="14" viewBox="0 0 10 14" fill="none" className="shrink-0"><rect x="1" y="1" width="8" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+                      V
+                    </span>
+                  </button>
+                </div>
+                <Badge variant="outline" className="text-[10px]">
+                  {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
+                </Badge>
+              </div>
             </div>
             <div className="rounded-xl border bg-gray-50 p-6 flex items-center justify-center min-h-64">
               <LabelPreview
@@ -418,6 +443,7 @@ export default function ManagementStickersPage() {
                 size={selectedSize}
                 businessName={businessName}
                 brandColor={brandColor}
+                orientation={orientation}
               />
             </div>
             <p className="text-xs text-muted-foreground text-center">Preview is scaled — actual size: {selectedSize.widthMm}mm × {selectedSize.heightMm}mm</p>

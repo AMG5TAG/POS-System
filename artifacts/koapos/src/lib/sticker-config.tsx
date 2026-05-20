@@ -286,6 +286,7 @@ export const RECOMMENDED_SIZES: Record<string, string[]> = {
 export function LabelPreview({
   type, fields, size, businessName, brandColor,
   fillWidth, fillHeight,
+  orientation = "horizontal",
 }: {
   type: StickerType;
   fields: Record<string, string>;
@@ -295,21 +296,33 @@ export function LabelPreview({
   /** When provided together, scale to fill this container (px) maintaining aspect ratio */
   fillWidth?: number;
   fillHeight?: number;
+  /** "horizontal" (default) = landscape; "vertical" = portrait */
+  orientation?: "horizontal" | "vertical";
 }) {
+  // Determine display dimensions and whether to rotate the content
+  const isHoriz    = orientation === "horizontal";
+  const natPortrait = size.widthMm <= size.heightMm;  // label is naturally portrait
+  const rotated    = isHoriz ? natPortrait : !natPortrait;
+
+  const dispWidthMm  = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
+  const dispHeightMm = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
+
   let finalScale: number;
   if (fillWidth !== undefined && fillHeight !== undefined && fillWidth > 0 && fillHeight > 0) {
     const PAD = 48;
-    const scaleW = (fillWidth  - PAD) / size.widthMm;
-    const scaleH = (fillHeight - PAD) / size.heightMm;
+    const scaleW = (fillWidth  - PAD) / dispWidthMm;
+    const scaleH = (fillHeight - PAD) / dispHeightMm;
     finalScale = Math.min(scaleW, scaleH);
   } else {
     const PREVIEW_W = fillWidth ?? 280;
-    const scale = PREVIEW_W / size.widthMm;
-    const cappedH = Math.min(size.heightMm * scale, 320);
-    finalScale = Math.min(scale, cappedH / size.heightMm);
+    const scale = PREVIEW_W / dispWidthMm;
+    const cappedH = Math.min(dispHeightMm * scale, 320);
+    finalScale = Math.min(scale, cappedH / dispHeightMm);
   }
-  const finalW = size.widthMm * finalScale;
-  const finalH = size.heightMm * finalScale;
+  const finalW     = size.widthMm  * finalScale;   // physical label width  in px
+  const finalH     = size.heightMm * finalScale;   // physical label height in px
+  const finalDispW = dispWidthMm   * finalScale;   // visual wrapper width  in px
+  const finalDispH = dispHeightMm  * finalScale;   // visual wrapper height in px
 
   const f = (k: string) => fields[k] ?? "";
   const showBarcode = f("showBarcode") === "true";
@@ -320,12 +333,13 @@ export function LabelPreview({
     height: finalH,
     fontSize: Math.max(7, finalScale * 2.8),
     lineHeight: 1.3,
+    flexShrink: 0,
   };
 
-  return (
+  const labelEl = (
     <div
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
-      style={baseStyle}
+      style={{ ...baseStyle, ...(rotated ? { transform: "rotate(90deg)" } : {}) }}
     >
       <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
       <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">
@@ -409,6 +423,15 @@ export function LabelPreview({
       </div>
     </div>
   );
+
+  if (rotated) {
+    return (
+      <div style={{ width: finalDispW, height: finalDispH, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {labelEl}
+      </div>
+    );
+  }
+  return labelEl;
 }
 
 /* ─── Template persistence hook ──────────────────────────────────────────── */

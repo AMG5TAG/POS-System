@@ -178,6 +178,7 @@ export default function ManagementStickerTemplatesPage() {
   const [form,          setForm]          = useState<FormState>(blankForm);
   const [dirty,         setDirty]         = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [orientation,   setOrientation]   = useState<"horizontal" | "vertical">("horizontal");
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile }        = useBusinessProfile();
@@ -591,9 +592,33 @@ export default function ManagementStickerTemplatesPage() {
                 <span className="text-sm font-semibold">Live Preview</span>
                 <span className="text-xs text-muted-foreground">· {selectedType.label}</span>
               </div>
-              <Badge variant="outline" className="text-[10px] font-mono">
-                {selectedSize.widthMm}×{selectedSize.heightMm}mm · {selectedSize.id}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-md border overflow-hidden">
+                  <button
+                    onClick={() => setOrientation("horizontal")}
+                    className={cn("px-2 py-1 text-[11px] font-medium transition-colors", orientation === "horizontal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    title="Horizontal (landscape)"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <svg width="14" height="10" viewBox="0 0 14 10" fill="none" className="shrink-0"><rect x="1" y="1" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+                      H
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setOrientation("vertical")}
+                    className={cn("px-2 py-1 text-[11px] font-medium transition-colors border-l", orientation === "vertical" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    title="Vertical (portrait)"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <svg width="10" height="14" viewBox="0 0 10 14" fill="none" className="shrink-0"><rect x="1" y="1" width="8" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+                      V
+                    </span>
+                  </button>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  {selectedSize.widthMm}×{selectedSize.heightMm}mm · {selectedSize.id}
+                </Badge>
+              </div>
             </div>
 
             {/* Preview area — fills all remaining height */}
@@ -609,6 +634,7 @@ export default function ManagementStickerTemplatesPage() {
                 brandColor={brandColor}
                 fillWidth={previewSize.w}
                 fillHeight={previewSize.h}
+                orientation={orientation}
               />
             </div>
 
