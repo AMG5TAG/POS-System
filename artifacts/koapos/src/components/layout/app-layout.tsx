@@ -732,7 +732,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
-      <header ref={headerRef} className="h-14 border-b bg-background flex items-center gap-2 px-4 shrink-0 relative z-30">
+      <header ref={headerRef} className="h-14 border-b bg-background flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
           <img src="/logo.png" alt="KoaPOS" className="w-7 h-7 object-contain" />
