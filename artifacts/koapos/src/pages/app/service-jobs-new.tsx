@@ -5,7 +5,16 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
   useCreateServiceJob,
+  type ServiceJob,
+  type Customer,
 } from "@workspace/api-client-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +35,9 @@ import {
   MonitorSmartphone,
   Check,
   ClipboardList,
+  CheckCircle2,
+  Mail,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -151,6 +163,8 @@ export default function ServiceJobNewPage() {
   const createMutation = useCreateServiceJob();
 
   const [customerId, setCustomerId] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [successJob, setSuccessJob] = useState<ServiceJob | null>(null);
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -322,10 +336,9 @@ export default function ServiceJobNewPage() {
         },
       },
       {
-        onSuccess: () => {
-          toast.success("Service job created");
+        onSuccess: (job) => {
           queryClient.invalidateQueries({ queryKey: ["listServiceJobs"] });
-          navigate("/service-jobs");
+          setSuccessJob(job);
         },
         onError: () => toast.error("Failed to create service job"),
       }
@@ -333,6 +346,7 @@ export default function ServiceJobNewPage() {
   }
 
   return (
+    <>
     <AppLayout>
       <div className="p-6 space-y-6 pb-12">
         {/* Header */}
@@ -358,7 +372,7 @@ export default function ServiceJobNewPage() {
             </Label>
             <CustomerSearchInput
               value={customerId}
-              onChange={(id) => setCustomerId(id)}
+              onChange={(id, customer) => { setCustomerId(id); setSelectedCustomer(customer); }}
               placeholder="Search customer..."
               allowNone
               noneLabel="No customer (walk-in)"
@@ -587,10 +601,8 @@ export default function ServiceJobNewPage() {
             </Button>
             <Button
               size="sm"
-              className={cn(
-                "flex-1 gap-1.5",
-                signatureSaved ? "bg-teal-600 hover:bg-teal-700" : ""
-              )}
+              variant={signatureSaved ? "secondary" : "default"}
+              className="flex-1 gap-1.5"
               onClick={saveSignature}
             >
               {signatureSaved ? <Check className="w-4 h-4" /> : null}
@@ -618,5 +630,64 @@ export default function ServiceJobNewPage() {
         </div>
       </div>
     </AppLayout>
+
+    {/* Success dialog */}
+    <Dialog open={!!successJob} onOpenChange={(open) => { if (!open) { setSuccessJob(null); navigate("/service-jobs"); } }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <div className="flex flex-col items-center gap-3 pt-2 pb-1">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30">
+              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <DialogTitle className="text-center text-xl">Service Created!</DialogTitle>
+            {successJob && (
+              <p className="text-center text-sm text-muted-foreground">
+                Job <span className="font-semibold text-foreground">#{successJob.jobNumber ?? successJob.id}</span> has been booked in successfully.
+              </p>
+            )}
+          </div>
+        </DialogHeader>
+        <DialogFooter className="flex-col gap-2 sm:flex-col mt-2">
+          {selectedCustomer?.email && (
+            <Button
+              className="w-full gap-2"
+              variant="outline"
+              asChild
+            >
+              <a
+                href={`mailto:${selectedCustomer.email}?subject=Service%20Job%20Confirmation%20%23${successJob?.jobNumber ?? successJob?.id}&body=Hi%20${encodeURIComponent((selectedCustomer.firstName ?? "") + " " + (selectedCustomer.lastName ?? "")).trim()}%2C%0A%0AYour%20device%20has%20been%20booked%20in%20for%20service.%20Your%20job%20number%20is%20%23${successJob?.jobNumber ?? successJob?.id}.%0A%0AWe%20will%20be%20in%20touch%20with%20an%20update%20shortly.%0A%0AThank%20you%21`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Mail className="w-4 h-4" />
+                Email Customer
+              </a>
+            </Button>
+          )}
+          <Button
+            className="w-full gap-2"
+            variant="outline"
+            onClick={() => { window.print(); }}
+          >
+            <Printer className="w-4 h-4" />
+            Print Job Sheet
+          </Button>
+          <Button
+            className="w-full"
+            onClick={() => { setSuccessJob(null); navigate(`/service-jobs/${successJob?.id}`); }}
+          >
+            View Service Job
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full"
+            onClick={() => { setSuccessJob(null); navigate("/service-jobs"); }}
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
