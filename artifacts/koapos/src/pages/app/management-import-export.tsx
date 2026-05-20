@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   Download, Upload, Users, Package, Truck, Bookmark, Check, FileText,
   AlertCircle, X, ArrowRight, Clock, ChevronLeft, ChevronRight,
+  Tag, FolderOpen, History, Link2, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ interface EntityConfig {
   pluralLabel: string;
   icon: React.ComponentType<{ className?: string }>;
   comingSoon?: boolean;
+  exportOnly?: boolean;
   description: string;
   fields: FieldDef[];
   sampleRows: Record<string, string>[];
@@ -150,25 +152,29 @@ const ENTITIES: EntityConfig[] = [
     label: "Products",
     pluralLabel: "Products",
     icon: Package,
-    description: "Import and export your product catalogue including pricing and stock levels.",
+    description: "Import and export your product catalogue including pricing, stock levels, type, and category.",
     exportUrl: "/api/products?limit=10000",
     createUrl: "/api/products",
     fields: [
-      { key: "name",              label: "Product Name",       required: true  },
-      { key: "price",             label: "Price",              required: true, type: "number", hint: "e.g. 29.99" },
-      { key: "sku",               label: "SKU",                hint: "Unique product code"  },
-      { key: "barcode",           label: "Barcode",            hint: "EAN/UPC/ISBN"         },
-      { key: "description",       label: "Description"         },
-      { key: "costPrice",         label: "Cost Price",         type: "number", hint: "e.g. 12.50" },
-      { key: "stockQuantity",     label: "Stock Quantity",     type: "number" },
-      { key: "lowStockThreshold", label: "Low Stock Alert",    type: "number" },
-      { key: "trackInventory",    label: "Track Inventory",    type: "boolean", hint: "true or false" },
-      { key: "isActive",          label: "Active",             type: "boolean", hint: "true or false" },
+      { key: "name",              label: "Product Name",    required: true  },
+      { key: "price",             label: "Price",           required: true, type: "number", hint: "e.g. 29.99" },
+      { key: "sku",               label: "SKU",             hint: "Unique product code"  },
+      { key: "barcode",           label: "Barcode",         hint: "EAN/UPC/ISBN"         },
+      { key: "description",       label: "Description"      },
+      { key: "costPrice",         label: "Cost Price",      type: "number", hint: "e.g. 12.50" },
+      { key: "productType",       label: "Product Type",    hint: "standard, service, digital, bundle" },
+      { key: "category",          label: "Category",        hint: "Category name — must already exist in your catalogue" },
+      { key: "taxRate",           label: "Tax Rate %",      type: "number", hint: "e.g. 10 for 10%" },
+      { key: "imageUrl",          label: "Image URL"        },
+      { key: "stockQuantity",     label: "Stock Quantity",  type: "number" },
+      { key: "lowStockThreshold", label: "Low Stock Alert", type: "number" },
+      { key: "trackInventory",    label: "Track Inventory", type: "boolean", hint: "true or false" },
+      { key: "isActive",          label: "Active",          type: "boolean", hint: "true or false" },
     ],
     sampleRows: [
-      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones",  barcode: "9781234567890", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true" },
-      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable",  barcode: "9787654321098", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true" },
-      { name: "Coffee Mug",          sku: "MG-003", price: "12.00",  costPrice: "4.50",  description: "Ceramic 350ml mug",            barcode: "",              stockQuantity: "80",  lowStockThreshold: "15", trackInventory: "true", isActive: "true" },
+      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true" },
+      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true" },
+      { name: "Coffee Mug",          sku: "MG-003", price: "12.00",  costPrice: "4.50",  description: "Ceramic 350ml mug",           barcode: "",              productType: "standard", category: "Snacks",      taxRate: "10", imageUrl: "", stockQuantity: "80",  lowStockThreshold: "15", trackInventory: "true", isActive: "true" },
     ],
     toExportRow: (item) => ({
       name:              String(item.name              ?? ""),
@@ -177,6 +183,10 @@ const ENTITIES: EntityConfig[] = [
       costPrice:         String(item.costPrice         ?? ""),
       description:       String(item.description       ?? ""),
       barcode:           String(item.barcode           ?? ""),
+      productType:       String(item.productType       ?? ""),
+      category:          String((item.category as { name?: string } | null)?.name ?? ""),
+      taxRate:           String(item.taxRate           ?? ""),
+      imageUrl:          String(item.imageUrl          ?? ""),
       stockQuantity:     String(item.stockQuantity     ?? ""),
       lowStockThreshold: String(item.lowStockThreshold ?? ""),
       trackInventory:    String(item.trackInventory    ?? ""),
@@ -250,6 +260,112 @@ const ENTITIES: EntityConfig[] = [
       website:     String(item.website     ?? ""),
     }),
   },
+  {
+    key: "tags",
+    label: "Tags",
+    pluralLabel: "Tags",
+    icon: Tag,
+    description: "Import and export your product tags used for filtering and categorisation.",
+    exportUrl: "/api/tags",
+    createUrl: "/api/tags",
+    fields: [
+      { key: "name",  label: "Tag Name", required: true },
+      { key: "color", label: "Color",    hint: "Hex color e.g. #6366f1" },
+    ],
+    sampleRows: [
+      { name: "New Arrival", color: "#22c55e" },
+      { name: "On Sale",     color: "#ef4444" },
+      { name: "Staff Pick",  color: "#8b5cf6" },
+      { name: "Clearance",   color: "#f97316" },
+    ],
+    toExportRow: (item) => ({
+      name:  String(item.name  ?? ""),
+      color: String(item.color ?? ""),
+    }),
+  },
+  {
+    key: "categories",
+    label: "Categories",
+    pluralLabel: "Categories",
+    icon: FolderOpen,
+    description: "Import and export your product categories including colour coding and display order.",
+    exportUrl: "/api/categories",
+    createUrl: "/api/categories",
+    fields: [
+      { key: "name",      label: "Category Name", required: true },
+      { key: "color",     label: "Color",          hint: "Hex color e.g. #3b82f6" },
+      { key: "icon",      label: "Icon",           hint: "Lucide icon name e.g. Coffee, ShoppingCart" },
+      { key: "sortOrder", label: "Sort Order",     type: "number", hint: "Display order (lower = first)" },
+    ],
+    sampleRows: [
+      { name: "Beverages",   color: "#3b82f6", icon: "Coffee",       sortOrder: "1" },
+      { name: "Snacks",      color: "#f97316", icon: "Cookie",       sortOrder: "2" },
+      { name: "Electronics", color: "#8b5cf6", icon: "Cpu",          sortOrder: "3" },
+      { name: "Apparel",     color: "#ec4899", icon: "Shirt",        sortOrder: "4" },
+    ],
+    toExportRow: (item) => ({
+      name:      String(item.name      ?? ""),
+      color:     String(item.color     ?? ""),
+      icon:      String(item.icon      ?? ""),
+      sortOrder: String(item.sortOrder ?? ""),
+    }),
+  },
+  {
+    key: "types",
+    label: "Types",
+    pluralLabel: "Product Types",
+    icon: Layers,
+    comingSoon: true,
+    description: "Define custom product types (standard, service, digital, bundle, and more) for your catalogue.",
+    exportUrl: "",
+    createUrl: "",
+    fields: [],
+    sampleRows: [],
+    toExportRow: () => ({}),
+  },
+  {
+    key: "similar",
+    label: "Similar",
+    pluralLabel: "Similar Products",
+    icon: Link2,
+    comingSoon: true,
+    description: "Link similar or related products together so customers can discover alternatives at the point of sale.",
+    exportUrl: "",
+    createUrl: "",
+    fields: [],
+    sampleRows: [],
+    toExportRow: () => ({}),
+  },
+  {
+    key: "history",
+    label: "History",
+    pluralLabel: "Transaction History",
+    icon: History,
+    exportOnly: true,
+    description: "Export your full transaction history as a CSV for accounting, reconciliation, or external analysis.",
+    exportUrl: "/api/transactions?limit=10000",
+    createUrl: "",
+    fields: [
+      { key: "id",            label: "Transaction ID"   },
+      { key: "total",         label: "Total ($)"        },
+      { key: "status",        label: "Status"           },
+      { key: "paymentMethod", label: "Payment Method"   },
+      { key: "customerName",  label: "Customer Name"    },
+      { key: "createdAt",     label: "Date"             },
+    ],
+    sampleRows: [],
+    toExportRow: (item) => {
+      const cust = item.customer as { firstName?: string; lastName?: string } | null | undefined;
+      return {
+        id:            String(item.id            ?? ""),
+        total:         String(item.total         ?? ""),
+        status:        String(item.status        ?? ""),
+        paymentMethod: String(item.paymentMethod ?? ""),
+        customerName:  cust ? `${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() : "",
+        createdAt:     String(item.createdAt     ?? ""),
+      };
+    },
+  },
 ];
 
 /* ─── Column alias matching ──────────────────────────────────────────────── */
@@ -288,6 +404,15 @@ const ALIASES: Record<string, string[]> = {
   state:              ["state", "province", "region"],
   postcode:           ["postcode", "postalcode", "zip", "zipcode", "postal"],
   country:            ["country", "countryname"],
+  productType:        ["producttype", "type", "itemtype", "variant", "kind"],
+  category:           ["category", "categoryname", "cat", "group", "department"],
+  taxRate:            ["taxrate", "tax", "gst", "vat", "taxpercentage", "taxamt"],
+  imageUrl:           ["imageurl", "image", "photo", "picture", "img", "thumbnail"],
+  color:              ["color", "colour", "hex", "hexcolor", "tagcolor", "catcolor"],
+  icon:               ["icon", "iconname", "symbol", "emoji"],
+  sortOrder:          ["sortorder", "order", "sort", "sequence", "position", "rank"],
+  paymentMethod:      ["paymentmethod", "payment", "method", "tender", "paidby"],
+  customerName:       ["customername", "customer", "buyer", "clientname", "client"],
 };
 
 function normalize(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ""); }
@@ -866,6 +991,20 @@ export default function ManagementImportExportPage() {
         {entity.comingSoon ? (
           <div className="grid grid-cols-2 gap-6">
             <ComingSoonCard label={entity.label} />
+          </div>
+        ) : entity.exportOnly ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ExportCard entity={entity} />
+            <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center">
+              <Upload className="w-10 h-10 text-muted-foreground/30" />
+              <div>
+                <p className="font-medium text-muted-foreground">Import Not Available</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                  {entity.pluralLabel} are created through normal system activity and cannot be imported via CSV.
+                  Use the export above to download a copy for your records.
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
