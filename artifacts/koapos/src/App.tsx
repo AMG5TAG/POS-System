@@ -74,6 +74,7 @@ import ManagementStickersPage from "@/pages/app/management-stickers";
 import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
+import SettingsEmailPage from "@/pages/app/settings-email";
 import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
@@ -294,6 +295,9 @@ function Router() {
       </Route>
       <Route path="/settings/tax">
         <ProtectedRoute component={SettingsTaxPage} />
+      </Route>
+      <Route path="/settings/email">
+        <ProtectedRoute component={SettingsEmailPage} />
       </Route>
 
       <Route path="/modules">

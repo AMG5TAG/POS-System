@@ -1891,6 +1891,59 @@ paths:
               schema:
                 $ref: "#/components/schemas/TaxSettings"
 
+  # ── Email Settings ────────────────────────────────────────────────────────────
+  /settings/email:
+    get:
+      operationId: getEmailSettings
+      summary: Get email provider settings
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+    put:
+      operationId: updateEmailSettings
+      summary: Update email provider settings
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+
+  /settings/email/test:
+    post:
+      operationId: testEmailSettings
+      summary: Send a test email to verify configuration
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestEmailRequest"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+
   # ── Send Receipt ──────────────────────────────────────────────────────────────
   /transactions/{id}/send-receipt:
     post:
@@ -3535,3 +3588,37 @@ components:
       required: [email]
       properties:
         email: { type: string }
+
+    # ── Email Settings ──────────────────────────────────────────────────────────
+    EmailSettings:
+      type: object
+      required: [provider, smtpSecure, smtpPassSet, apiKeySet, receiptEmailsEnabled]
+      properties:
+        provider:             { type: string }
+        fromName:             { type: string, nullable: true }
+        fromEmail:            { type: string, nullable: true }
+        smtpHost:             { type: string, nullable: true }
+        smtpPort:             { type: string, nullable: true }
+        smtpSecure:           { type: string }
+        smtpUser:             { type: string, nullable: true }
+        smtpPassSet:          { type: boolean }
+        apiKeySet:            { type: boolean }
+        receiptEmailsEnabled: { type: string }
+    EmailSettingsInput:
+      type: object
+      properties:
+        provider:             { type: string }
+        fromName:             { type: string }
+        fromEmail:            { type: string }
+        smtpHost:             { type: string }
+        smtpPort:             { type: string }
+        smtpSecure:           { type: string }
+        smtpUser:             { type: string }
+        smtpPass:             { type: string }
+        apiKey:               { type: string }
+        receiptEmailsEnabled: { type: string }
+    TestEmailRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { type: string }

@@ -1147,6 +1147,36 @@ export interface SendReceiptRequest {
   email: string;
 }
 
+export interface EmailSettings {
+  provider: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: string | null;
+  smtpSecure: string;
+  smtpUser?: string | null;
+  smtpPassSet: boolean;
+  apiKeySet: boolean;
+  receiptEmailsEnabled: string;
+}
+
+export interface EmailSettingsInput {
+  provider?: string;
+  fromName?: string;
+  fromEmail?: string;
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpSecure?: string;
+  smtpUser?: string;
+  smtpPass?: string;
+  apiKey?: string;
+  receiptEmailsEnabled?: string;
+}
+
+export interface TestEmailRequest {
+  to: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1268,6 +1298,11 @@ export type DeleteWastageEntry200 = {
 
 export type DeletePriceTier200 = {
   success?: boolean;
+};
+
+export type TestEmailSettings200 = {
+  success?: boolean;
+  provider?: string;
 };
 
 export type SendTransactionReceipt200 = {

@@ -27,6 +27,7 @@ import discountsRouter from "./discounts";
 import wastageRouter from "./wastage";
 import priceTiersRouter from "./price-tiers";
 import taxSettingsRouter from "./tax-settings";
+import emailSettingsRouter from "./email-settings";
 import formsRouter from "./forms";
 import formSubmissionsRouter from "./form-submissions";
 
@@ -60,6 +61,7 @@ router.use(discountsRouter);
 router.use(wastageRouter);
 router.use(priceTiersRouter);
 router.use(taxSettingsRouter);
+router.use(emailSettingsRouter);
 router.use(formsRouter);
 router.use(formSubmissionsRouter);
 

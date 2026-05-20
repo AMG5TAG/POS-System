@@ -2517,6 +2517,66 @@ export const UpdateTaxSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get email provider settings
+ */
+export const GetEmailSettingsResponse = zod.object({
+  "provider": zod.string(),
+  "fromName": zod.string().nullish(),
+  "fromEmail": zod.string().nullish(),
+  "smtpHost": zod.string().nullish(),
+  "smtpPort": zod.string().nullish(),
+  "smtpSecure": zod.string(),
+  "smtpUser": zod.string().nullish(),
+  "smtpPassSet": zod.boolean(),
+  "apiKeySet": zod.boolean(),
+  "receiptEmailsEnabled": zod.string()
+})
+
+
+/**
+ * @summary Update email provider settings
+ */
+export const UpdateEmailSettingsBody = zod.object({
+  "provider": zod.string().optional(),
+  "fromName": zod.string().optional(),
+  "fromEmail": zod.string().optional(),
+  "smtpHost": zod.string().optional(),
+  "smtpPort": zod.string().optional(),
+  "smtpSecure": zod.string().optional(),
+  "smtpUser": zod.string().optional(),
+  "smtpPass": zod.string().optional(),
+  "apiKey": zod.string().optional(),
+  "receiptEmailsEnabled": zod.string().optional()
+})
+
+export const UpdateEmailSettingsResponse = zod.object({
+  "provider": zod.string(),
+  "fromName": zod.string().nullish(),
+  "fromEmail": zod.string().nullish(),
+  "smtpHost": zod.string().nullish(),
+  "smtpPort": zod.string().nullish(),
+  "smtpSecure": zod.string(),
+  "smtpUser": zod.string().nullish(),
+  "smtpPassSet": zod.boolean(),
+  "apiKeySet": zod.boolean(),
+  "receiptEmailsEnabled": zod.string()
+})
+
+
+/**
+ * @summary Send a test email to verify configuration
+ */
+export const TestEmailSettingsBody = zod.object({
+  "to": zod.string()
+})
+
+export const TestEmailSettingsResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional()
+})
+
+
+/**
  * @summary Send a receipt via email
  */
 export const SendTransactionReceiptParams = zod.object({

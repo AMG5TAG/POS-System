@@ -15,7 +15,7 @@ import {
   BriefcaseBusiness, ArrowLeftRight, Search, Sun, Moon,
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
-  Cpu, Calculator, HardDrive, Target, StickyNote, Link2,
+  Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail,
 } from "lucide-react";
 import { useLogout } from "@workspace/api-client-react";
 import {
@@ -107,6 +107,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Templates",  href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
+  { name: "Email",              href: "/settings/email",            icon: Mail           },
   { name: "Tax & Receipts",    href: "/settings/tax",              icon: Receipt        },
   { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
 ];
@@ -142,6 +143,7 @@ const SEARCH_INDEX = [
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Price Tiers",        href: "/management/price-tiers",      icon: Layers,          group: "Management" },
+  { label: "Email Settings",      href: "/settings/email",                        icon: Mail,         group: "Management" },
   { label: "Tax & Receipts",     href: "/settings/tax",                          icon: Receipt,      group: "Management" },
   { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
   { label: "Calculators · 3D",       href: "/management/calculators/3d-printing",  icon: Calculator,  group: "Management" },
