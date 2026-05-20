@@ -64,7 +64,8 @@ export default function ProductsPreOrdersPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Clock className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Pre-Orders</h1>
+            <h1 className="text-2xl font-bold">Pre-Orders</h1>
+            <p className="text-sm text-muted-foreground">Manage customer pre-orders and deposits for upcoming stock arrivals.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Pre-Order</Button>
         </div>

@@ -66,7 +66,8 @@ export default function ProductsRecallsPage() {
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Product Recalls</h1>
+              <h1 className="text-2xl font-bold">Product Recalls</h1>
+              <p className="text-sm text-muted-foreground">Record and manage product recall notices and affected stock.</p>
               {activeCount > 0 && <p className="text-sm text-amber-600 font-medium">{activeCount} active recall{activeCount !== 1 ? "s" : ""}</p>}
             </div>
           </div>

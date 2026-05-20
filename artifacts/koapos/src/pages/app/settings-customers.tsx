@@ -108,7 +108,7 @@ export default function SettingsCustomersPage() {
       <div className="p-6 md:p-8 space-y-8">
 
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customer Settings</h1>
+          <h1 className="text-2xl font-bold">Customer Settings</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Manage how customers are organised and what information is collected.
           </p>

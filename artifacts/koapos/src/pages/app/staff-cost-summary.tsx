@@ -5,7 +5,8 @@ export default function StaffCostSummaryPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Costs</h1>
+        <h1 className="text-2xl font-bold">Costs</h1>
+        <p className="text-sm text-muted-foreground">Review staff wage costs and labour expense summaries.</p>
 
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
           <Coins className="h-10 w-10 mx-auto mb-4 opacity-30" />

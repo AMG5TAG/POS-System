@@ -274,7 +274,7 @@ export default function ManagementStickerTemplatesPage() {
           <div className="flex items-center gap-3">
             <LayoutTemplate className="w-6 h-6 text-primary shrink-0" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Sticker Templates</h1>
+              <h1 className="text-2xl font-bold">Sticker Templates</h1>
               <p className="text-sm text-muted-foreground">Save and reuse label configurations for fast, consistent printing.</p>
             </div>
           </div>

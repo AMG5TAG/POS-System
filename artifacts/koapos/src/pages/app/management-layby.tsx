@@ -87,7 +87,7 @@ export default function ManagementLaybyPage() {
           <div className="flex items-center gap-3">
             <Package2 className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Layby</h1>
+              <h1 className="text-2xl font-bold">Layby</h1>
               <p className="text-sm text-muted-foreground">Configure layby rules, deposits, and printed terms</p>
             </div>
           </div>

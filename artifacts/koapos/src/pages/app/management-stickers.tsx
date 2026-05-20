@@ -159,7 +159,7 @@ export default function ManagementStickersPage() {
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Sticker & Label Printing</h1>
+              <h1 className="text-2xl font-bold">Labels</h1>
               <p className="text-sm text-muted-foreground">Design and print labels on DYMO LabelWriter printers</p>
             </div>
           </div>

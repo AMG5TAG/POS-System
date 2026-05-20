@@ -76,7 +76,8 @@ export default function POSLaybuysPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Package2 className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Laybys</h1>
+            <h1 className="text-2xl font-bold">Laybys</h1>
+            <p className="text-sm text-muted-foreground">Manage customer layby agreements and instalment payment schedules.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Layby</Button>
         </div>

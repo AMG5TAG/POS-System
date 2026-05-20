@@ -68,7 +68,7 @@ export default function ModulesPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Add-on Modules</h1>
+          <h1 className="text-2xl font-bold">Modules</h1>
           <p className="text-muted-foreground mt-1">Extend KoaPOS with powerful add-ons for your business.</p>
         </div>
 

@@ -45,7 +45,8 @@ export default function ProductsOverviewPage() {
       <div className="p-6 md:p-8 space-y-8">
         <div className="flex items-center gap-3">
           <LayoutGrid className="w-7 h-7 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Products Overview</h1>
+          <h1 className="text-2xl font-bold">Overview</h1>
+          <p className="text-sm text-muted-foreground">A summary view of your product catalogue and inventory management options.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

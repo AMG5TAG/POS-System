@@ -397,7 +397,7 @@ export default function SettingsRegionalPage() {
       <div className="p-6 md:p-8 space-y-8">
         {/* Page header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Regional Settings</h1>
+          <h1 className="text-2xl font-bold">Regional Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Configure how your store displays language, currency, dates, and other regional preferences.
           </p>

@@ -72,6 +72,10 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Today's sales performance, key metrics, and live business activity.</p>
+        </div>
         <DashboardClockBar onCustomize={() => setCustomiseOpen(true)} />
 
         {(config.showStatusTiles || config.showMetricTiles || config.showOverdueBanner) && (

@@ -258,6 +258,10 @@ export default function ProductsBrandsPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold">Brands</h1>
+          <p className="text-sm text-muted-foreground">Manage product brands and their associated product lines.</p>
+        </div>
         {/* Top bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="relative flex-1 min-w-0 max-w-xs">

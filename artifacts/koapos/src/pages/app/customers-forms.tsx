@@ -140,7 +140,7 @@ export default function CustomersFormsPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold">Customer Forms</h1>
+          <h1 className="text-2xl font-bold">Forms</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Fill form templates for customers. Submissions are saved to the customer&apos;s profile.
           </p>

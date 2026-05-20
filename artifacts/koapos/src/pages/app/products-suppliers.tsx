@@ -490,7 +490,8 @@ export default function ProductsSuppliersPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Truck className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Suppliers</h1>
+            <h1 className="text-2xl font-bold">Suppliers</h1>
+            <p className="text-sm text-muted-foreground">Manage supplier contacts, pricing terms, and purchase order history.</p>
           </div>
           <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Supplier</Button>
         </div>

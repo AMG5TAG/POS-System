@@ -105,7 +105,7 @@ export default function InventoryWastagePage() {
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Wastage / Write-off</h1>
+              <h1 className="text-2xl font-bold">Wastage</h1>
               <p className="text-sm text-muted-foreground">Track damaged, expired, or lost inventory</p>
             </div>
           </div>

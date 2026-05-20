@@ -520,7 +520,7 @@ export default function ManagementRegistersPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">POS Registers</h1>
+            <h1 className="text-2xl font-bold">POS Registers</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Assign each register to a staff member — it becomes their default till when they log in to KoaPOS.
             </p>

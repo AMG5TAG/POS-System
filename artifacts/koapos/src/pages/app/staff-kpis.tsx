@@ -186,7 +186,7 @@ export default function StaffKpisPage() {
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Staff</h1>
+            <h1 className="text-2xl font-bold">KPIs</h1>
             <p className="text-sm text-muted-foreground mt-1">KPI tracker and team leaderboard.</p>
           </div>
         </div>

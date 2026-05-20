@@ -87,7 +87,8 @@ export default function SettingsAccountPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Account</h1>
+        <h1 className="text-2xl font-bold">Account</h1>
+        <p className="text-sm text-muted-foreground">Manage your login credentials, profile details, and subscription plan.</p>
 
         <PageTabsNav tabs={ACCOUNT_TABS} />
 

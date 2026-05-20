@@ -58,7 +58,8 @@ export default function ProductsTagsPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Hash className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Tags</h1>
+            <h1 className="text-2xl font-bold">Tags</h1>
+            <p className="text-sm text-muted-foreground">Create and manage tags to label and filter products in your catalogue.</p>
           </div>
           <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Tag</Button>
         </div>

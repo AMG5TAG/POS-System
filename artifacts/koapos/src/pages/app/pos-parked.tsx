@@ -91,7 +91,7 @@ export default function POSParkedPage() {
           <div className="flex items-center gap-3">
             <ParkingCircle className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Parked Sales</h1>
+              <h1 className="text-2xl font-bold">Parked Sales</h1>
               <p className="text-sm text-muted-foreground">Hold a sale and resume it later</p>
             </div>
           </div>

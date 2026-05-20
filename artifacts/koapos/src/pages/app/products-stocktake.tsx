@@ -58,7 +58,7 @@ export default function ProductsStocktakePage() {
           <div className="flex items-center gap-3">
             <ClipboardList className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Stocktake</h1>
+              <h1 className="text-2xl font-bold">Stocktake</h1>
               <p className="text-sm text-muted-foreground">Enter physical counts to adjust stock levels</p>
             </div>
           </div>

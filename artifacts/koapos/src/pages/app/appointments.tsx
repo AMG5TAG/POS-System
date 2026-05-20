@@ -499,15 +499,19 @@ export default function AppointmentsPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-0">
+      <div className="p-6 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold">Appointments</h1>
+          <p className="text-sm text-muted-foreground">Schedule and manage customer appointments and service bookings.</p>
+        </div>
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
-          <h1 className="text-base font-semibold">
+          <h2 className="text-base font-semibold">
             All Appointments{" "}
             <span className="font-normal text-muted-foreground text-sm">
               ({upcoming} upcoming)
             </span>
-          </h1>
+          </h2>
           <div className="flex items-center gap-3">
             <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNew}>
               <Plus className="w-3.5 h-3.5" />

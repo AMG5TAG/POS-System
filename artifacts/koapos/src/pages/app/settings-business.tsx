@@ -438,7 +438,8 @@ export default function SettingsBusinessPage() {
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Business Details</h1>
+          <h1 className="text-2xl font-bold">Business Details</h1>
+          <p className="text-sm text-muted-foreground">Update your business name, logo, contact details, and branding.</p>
           <Button onClick={handleSave} disabled={updateMutation.isPending} size="sm" className="bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold">
             {updateMutation.isPending ? "Saving…" : "Save Business Info"}
           </Button>

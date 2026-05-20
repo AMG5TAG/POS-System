@@ -52,7 +52,7 @@ export default function POSRefundPage() {
         <div className="flex items-center gap-3">
           <RotateCcw className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Process Refund</h1>
+            <h1 className="text-2xl font-bold">Process Refund</h1>
             <p className="text-sm text-muted-foreground">Find a completed sale and issue a refund</p>
           </div>
         </div>

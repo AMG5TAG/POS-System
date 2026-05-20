@@ -360,15 +360,19 @@ export default function ServiceJobsPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-0">
+      <div className="p-6 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold">Service Jobs</h1>
+          <p className="text-sm text-muted-foreground">Manage repair and service job tickets, status updates, and job history.</p>
+        </div>
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
-          <h1 className="text-base font-semibold">
+          <h2 className="text-base font-semibold">
             All Services{" "}
             <span className="font-normal text-muted-foreground text-sm">
               ({active} active job{active !== 1 ? "s" : ""})
             </span>
-          </h1>
+          </h2>
           <div className="flex items-center gap-3">
             <Link href="/service-jobs/new">
               <Button size="sm" className="gap-1.5 h-8 text-xs">

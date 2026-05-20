@@ -169,7 +169,8 @@ export default function POSInvoicesPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
+            <h1 className="text-2xl font-bold">Invoices</h1>
+            <p className="text-sm text-muted-foreground">Create and manage customer invoices for quote-to-payment workflows.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
         </div>

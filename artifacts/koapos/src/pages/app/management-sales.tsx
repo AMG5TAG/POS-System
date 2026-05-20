@@ -45,7 +45,8 @@ export default function ManagementSalesPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sales Overview</h1>
+          <h1 className="text-2xl font-bold">Sales Overview</h1>
+          <p className="text-sm text-muted-foreground">Review aggregated sales performance across products, categories, and time.</p>
           <Select value={period} onValueChange={(val) => setPeriod(val as GetDashboardSummaryPeriod)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select period" />

@@ -1204,7 +1204,8 @@ export default function CustomersPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customers</h1>
+          <h1 className="text-2xl font-bold">Customers</h1>
+          <p className="text-sm text-muted-foreground">Manage your customer database, contacts, and loyalty activity.</p>
           <Button onClick={openCreate}>
             <Plus className="w-4 h-4 mr-2" /> Add Customer
           </Button>

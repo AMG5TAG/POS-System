@@ -371,7 +371,7 @@ export default function ProductsCategoriesPage() {
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
+              <h1 className="text-2xl font-bold">Categories</h1>
               <p className="text-sm text-muted-foreground">Up to 4 levels deep</p>
             </div>
           </div>

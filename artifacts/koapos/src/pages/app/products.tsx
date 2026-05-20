@@ -770,6 +770,10 @@ export default function ProductsPage() {
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-3">
+        <div>
+          <h1 className="text-2xl font-bold">Products</h1>
+          <p className="text-sm text-muted-foreground">Manage your product catalogue, pricing, and availability.</p>
+        </div>
 
         {/* ── Toolbar ─────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2">

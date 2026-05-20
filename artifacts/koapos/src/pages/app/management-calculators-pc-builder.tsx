@@ -138,7 +138,7 @@ export default function ManagementCalculatorsPCBuilderPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">PC Builder Defaults</h1>
+            <h1 className="text-2xl font-bold">PC Builder Defaults</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Configure default settings used when quoting custom PC builds in the POS.
             </p>

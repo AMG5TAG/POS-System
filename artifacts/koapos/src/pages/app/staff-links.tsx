@@ -156,7 +156,7 @@ export default function StaffLinksPage() {
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Staff</h1>
+            <h1 className="text-2xl font-bold">Links</h1>
             <p className="text-sm text-muted-foreground mt-1">Helpful links and resources for your team.</p>
           </div>
           <div className="flex items-center gap-3">

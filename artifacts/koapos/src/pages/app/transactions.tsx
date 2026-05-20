@@ -214,7 +214,8 @@ export default function TransactionsPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Transactions</h1>
+          <h1 className="text-2xl font-bold">Transactions</h1>
+          <p className="text-sm text-muted-foreground">View and manage all completed and refunded sales transactions.</p>
           <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
             <SelectContent>

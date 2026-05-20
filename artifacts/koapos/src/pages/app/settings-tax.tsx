@@ -137,7 +137,7 @@ export default function SettingsTaxPage() {
         <div className="flex items-center gap-3">
           <Percent className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">GST / Tax Configuration</h1>
+            <h1 className="text-2xl font-bold">GST / Tax Configuration</h1>
             <p className="text-sm text-muted-foreground">Configure tax rates, receipt settings, and notification preferences</p>
           </div>
         </div>

@@ -140,7 +140,7 @@ export default function ManagementDiscountsPage() {
           <div className="flex items-center gap-3">
             <Percent className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Discounts & Promotions</h1>
+              <h1 className="text-2xl font-bold">Discounts & Promotions</h1>
               <p className="text-sm text-muted-foreground">Manage discount codes and automatic promotions</p>
             </div>
           </div>

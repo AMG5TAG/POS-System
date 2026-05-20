@@ -298,7 +298,7 @@ export default function StaffNotesPage() {
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Staff</h1>
+            <h1 className="text-2xl font-bold">Notes</h1>
             <p className="text-sm text-muted-foreground mt-1">Team notes, announcements and reminders.</p>
           </div>
           <div className="flex items-center gap-3">

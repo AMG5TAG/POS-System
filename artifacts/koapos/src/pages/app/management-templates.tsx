@@ -912,7 +912,7 @@ export default function ManagementTemplatesPage() {
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
+              <h1 className="text-2xl font-bold">Templates</h1>
               <p className="text-sm text-muted-foreground">Design and customise your receipts, invoices, emails and messages. All templates use your Business Details automatically.</p>
             </div>
           </div>

@@ -57,7 +57,8 @@ export default function ProductsReturnAuthPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <RotateCcw className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Return Authorisations</h1>
+            <h1 className="text-2xl font-bold">Return Authorisations</h1>
+            <p className="text-sm text-muted-foreground">Create and manage return authorisation requests from customers.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Return</Button>
         </div>

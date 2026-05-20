@@ -71,7 +71,8 @@ export default function ManagementInventoryPage() {
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex items-center gap-3">
           <Boxes className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight">Inventory Settings</h1>
+          <h1 className="text-2xl font-bold">Inventory Settings</h1>
+          <p className="text-sm text-muted-foreground">Configure stock tracking rules, low-stock alerts, and automation settings.</p>
         </div>
 
         <PageTabsNav tabs={INVENTORY_TABS} />

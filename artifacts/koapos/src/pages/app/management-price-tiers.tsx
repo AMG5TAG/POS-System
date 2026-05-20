@@ -113,7 +113,7 @@ export default function ManagementPriceTiersPage() {
           <div className="flex items-center gap-3">
             <Layers className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Price Tiers</h1>
+              <h1 className="text-2xl font-bold">Price Tiers</h1>
               <p className="text-sm text-muted-foreground">Wholesale, VIP, staff and other customer price groups</p>
             </div>
           </div>

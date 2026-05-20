@@ -688,7 +688,7 @@ export default function ManagementKpisPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">KPIs & Targets</h1>
+            <h1 className="text-2xl font-bold">KPIs & Targets</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Set performance targets for your store and team, track progress, and reward results.
             </p>
