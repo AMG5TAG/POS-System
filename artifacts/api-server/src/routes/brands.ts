@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, brandsTable } from "@workspace/db";
-import { eq, and, ilike } from "drizzle-orm";
+import { db, brandsTable, productsTable } from "@workspace/db";
+import { eq, and, ilike, count, sum, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -9,8 +9,40 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
   const { search } = req.query as { search?: string };
   const conditions = [eq(brandsTable.merchantId, req.session.merchantId!)];
   if (search) conditions.push(ilike(brandsTable.name, `%${search}%`));
-  const brands = await db.select().from(brandsTable).where(and(...conditions)).orderBy(brandsTable.name);
-  res.json({ items: brands, total: brands.length });
+
+  const brands = await db
+    .select({
+      id:           brandsTable.id,
+      merchantId:   brandsTable.merchantId,
+      name:         brandsTable.name,
+      logoUrl:      brandsTable.logoUrl,
+      website:      brandsTable.website,
+      description:  brandsTable.description,
+      createdAt:    brandsTable.createdAt,
+      productCount: count(productsTable.id),
+      retailValue:  sql<string>`COALESCE(SUM(${productsTable.price}), 0)`,
+    })
+    .from(brandsTable)
+    .leftJoin(
+      productsTable,
+      and(
+        eq(productsTable.brandId, brandsTable.id),
+        eq(productsTable.merchantId, req.session.merchantId!),
+        eq(productsTable.isActive, "true"),
+      ),
+    )
+    .where(and(...conditions))
+    .groupBy(brandsTable.id)
+    .orderBy(brandsTable.name);
+
+  res.json({
+    items: brands.map((b) => ({
+      ...b,
+      productCount: Number(b.productCount),
+      retailValue:  parseFloat(b.retailValue),
+    })),
+    total: brands.length,
+  });
 });
 
 router.post("/brands", requireAuth, async (req, res): Promise<void> => {

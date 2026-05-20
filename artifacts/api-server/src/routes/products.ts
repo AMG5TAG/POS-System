@@ -129,9 +129,11 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
   if (!queryParams.success) { res.status(400).json({ error: queryParams.error.message }); return; }
 
   const { search, categoryId, limit = 50, offset = 0 } = queryParams.data;
+  const brandIdRaw = req.query.brandId ? parseInt(String(req.query.brandId)) : undefined;
   const conditions = [eq(productsTable.merchantId, req.session.merchantId!)];
   if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
   if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
+  if (brandIdRaw && !isNaN(brandIdRaw)) conditions.push(eq(productsTable.brandId, brandIdRaw));
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })

@@ -3,6 +3,7 @@ import { type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
+import { brandsTable } from "./brands";
 
 export const categoriesTable = pgTable("categories", {
   id:         serial("id").primaryKey(),
@@ -25,6 +26,7 @@ export const productsTable = pgTable("products", {
   sku:               text("sku"),
   barcode:           text("barcode"),
   categoryId:        integer("category_id").references(() => categoriesTable.id),
+  brandId:           integer("brand_id").references(() => brandsTable.id),
   imageUrl:          text("image_url"),
   productType:       text("product_type").notNull().default("standard"),
   trackInventory:    text("track_inventory").notNull().default("true"),
