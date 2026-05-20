@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -159,6 +160,87 @@ function InfoRow({ icon: Icon, label, value, valueClass }: {
 function SectionHeader({ label }: { label: string }) {
   return (
     <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground">{label}</p>
+  );
+}
+
+/* ─── Category tree selector ─────────────────────────────────────────────── */
+
+type CatNode = { id: number; name: string; parentId: number | null; children: CatNode[] };
+
+function buildCatTree(cats: { id: number; name: string; parentId?: number | null }[]): CatNode[] {
+  const map = new Map<number, CatNode>();
+  cats.forEach((c) => map.set(c.id, { id: c.id, name: c.name, parentId: c.parentId ?? null, children: [] }));
+  const roots: CatNode[] = [];
+  map.forEach((node) => {
+    if (node.parentId != null && map.has(node.parentId)) {
+      map.get(node.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+function TreeCategorySelect({
+  categories, value, onChange, placeholder = "No Category", triggerClass,
+}: {
+  categories: { id: number; name: string; parentId?: number | null }[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  triggerClass?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const tree = buildCatTree(categories);
+  const selected = categories.find((c) => c.id.toString() === value);
+
+  const renderNodes = (nodes: CatNode[], depth = 0): React.ReactNode =>
+    nodes.map((node) => (
+      <div key={node.id}>
+        <button
+          type="button"
+          onClick={() => { onChange(node.id.toString()); setOpen(false); }}
+          className={cn(
+            "w-full text-left py-1.5 text-sm rounded hover:bg-muted transition-colors flex items-center gap-1",
+            value === node.id.toString() && "bg-primary/10 text-primary font-medium",
+          )}
+          style={{ paddingLeft: `${8 + depth * 16}px`, paddingRight: "8px" }}
+        >
+          {depth > 0 && <span className="text-muted-foreground/40 text-xs shrink-0">└</span>}
+          {node.name}
+        </button>
+        {node.children.length > 0 && renderNodes(node.children, depth + 1)}
+      </div>
+    ));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            triggerClass,
+          )}
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected?.name ?? placeholder}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-1.5 max-h-64 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
+        <button
+          type="button"
+          onClick={() => { onChange(""); setOpen(false); }}
+          className={cn(
+            "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors",
+            !value && "bg-primary/10 text-primary font-medium",
+          )}
+        >
+          {placeholder}
+        </button>
+        {renderNodes(tree)}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -522,9 +604,15 @@ export default function ProductsPage() {
   const updateMutation   = useUpdateProduct();
   const deleteMutation   = useDeleteProduct();
   const createCategoryMutation = useCreateCategory();
+  const [suppliersList, setSuppliersList] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/suppliers", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { items: [] })
+      .then((data) => setSuppliersList((data as { items: { id: number; name: string }[] }).items || []));
+  }, []);
 
   const products   = productsData?.items || [];
-  const categories = (categoriesData as unknown as { id: number; name: string }[]) || [];
+  const categories = (categoriesData as unknown as { id: number; name: string; parentId?: number | null }[]) || [];
 
   /* Sort */
   const sorted = [...products].sort((a, b) => {
@@ -697,15 +785,13 @@ export default function ProductsPage() {
           </div>
 
           {/* All Categories */}
-          <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <TreeCategorySelect
+            categories={categories}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            placeholder="All Categories"
+            triggerClass="w-[160px]"
+          />
 
           {/* All Types */}
           <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -808,7 +894,9 @@ export default function ProductsPage() {
                           <p className="font-medium leading-tight">{product.name}</p>
                           {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
                         </td>
-                        <td className="p-3 text-muted-foreground">Standard</td>
+                        <td className="p-3 text-muted-foreground text-sm">
+                          {PRODUCT_TYPES.find((t) => t.value === ((product as Product & { productType?: string }).productType ?? "standard"))?.label ?? "Standard"}
+                        </td>
                         <td className="p-3">
                           {product.category
                             ? <Badge variant="outline" className="text-xs font-normal">{product.category.name}</Badge>
@@ -988,13 +1076,13 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Category</Label>
-                    <Select value={form.categoryId || "none"} onValueChange={(v) => setField("categoryId", v === "none" ? "" : v)}>
-                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="No category" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No Category</SelectItem>
-                        {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <TreeCategorySelect
+                      categories={categories}
+                      value={form.categoryId}
+                      onChange={(v) => setField("categoryId", v)}
+                      placeholder="No Category"
+                      triggerClass="mt-1.5"
+                    />
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Status</Label>
@@ -1059,12 +1147,22 @@ export default function ProductsPage() {
                   <div className="mt-3 grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs text-muted-foreground">Primary Supplier</Label>
-                      <Input
-                        value={form.supplier}
-                        onChange={(e) => setField("supplier", e.target.value)}
-                        placeholder="No supplier"
-                        className="mt-1.5"
-                      />
+                      {suppliersList.length > 0 ? (
+                        <Select value={form.supplier || "__none__"} onValueChange={(v) => setField("supplier", v === "__none__" ? "" : v)}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="No supplier" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">No supplier</SelectItem>
+                            {suppliersList.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={form.supplier}
+                          onChange={(e) => setField("supplier", e.target.value)}
+                          placeholder="No supplier"
+                          className="mt-1.5"
+                        />
+                      )}
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Supplier Code</Label>

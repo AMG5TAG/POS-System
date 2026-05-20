@@ -18,24 +18,29 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
   let products = await db
     .select()
     .from(productsTable)
-    .where(and(eq(productsTable.merchantId, req.session.merchantId!), eq(productsTable.trackInventory, "true")));
+    .where(eq(productsTable.merchantId, req.session.merchantId!));
 
   if (lowStock) {
     products = products.filter((p) => {
+      if (p.trackInventory !== "true") return false;
       const threshold = p.lowStockThreshold ?? 5;
       return p.stockQuantity <= threshold;
     });
   }
 
   res.json(
-    products.map((p) => ({
-      productId: p.id,
-      productName: p.name,
-      sku: p.sku ?? null,
-      stockQuantity: p.stockQuantity,
-      lowStockThreshold: p.lowStockThreshold ?? null,
-      isLowStock: p.stockQuantity <= (p.lowStockThreshold ?? 5),
-    }))
+    products.map((p) => {
+      const tracked = p.trackInventory === "true";
+      return {
+        productId: p.id,
+        productName: p.name,
+        sku: p.sku ?? null,
+        trackInventory: tracked,
+        stockQuantity: p.stockQuantity,
+        lowStockThreshold: p.lowStockThreshold ?? null,
+        isLowStock: tracked && p.stockQuantity <= (p.lowStockThreshold ?? 5),
+      };
+    })
   );
 });
 
@@ -65,13 +70,15 @@ router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<voi
     return;
   }
 
+  const tracked = product.trackInventory === "true";
   res.json({
     productId: product.id,
     productName: product.name,
     sku: product.sku ?? null,
+    trackInventory: tracked,
     stockQuantity: product.stockQuantity,
     lowStockThreshold: product.lowStockThreshold ?? null,
-    isLowStock: product.stockQuantity <= (product.lowStockThreshold ?? 5),
+    isLowStock: tracked && product.stockQuantity <= (product.lowStockThreshold ?? 5),
   });
 });
 

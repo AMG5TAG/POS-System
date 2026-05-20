@@ -24,6 +24,7 @@ interface InventoryItem {
   productId: number;
   productName: string;
   sku?: string | null;
+  trackInventory: boolean;
   stockQuantity: number;
   lowStockThreshold: number | null;
   isLowStock: boolean;
@@ -199,7 +200,9 @@ export default function InventoryPage() {
                         {item.sku || "—"}
                       </td>
                       <td className={cn("p-3 text-right font-bold", item.isLowStock && "text-destructive")}>
-                        {item.stockQuantity}
+                        {item.trackInventory
+                          ? item.stockQuantity
+                          : <span className="text-muted-foreground font-normal">∞</span>}
                       </td>
                       <td className="p-3 text-right hidden sm:table-cell text-muted-foreground">
                         {item.lowStockThreshold ?? 5}
