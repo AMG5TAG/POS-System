@@ -46,6 +46,7 @@ import {
   Mail,
   Printer,
   Tag,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -114,21 +115,38 @@ function ToggleCard({ icon, label, description, checked, onChange }: ToggleCardP
   );
 }
 
+const PHOTO_WARN_BYTES  = 2 * 1024 * 1024;  // 2 MB per image — yellow
+const PHOTO_ERROR_BYTES = 5 * 1024 * 1024;  // 5 MB per image — red
+const VIDEO_WARN_BYTES  = 5 * 1024 * 1024;  // 5 MB per video — yellow
+const VIDEO_ERROR_BYTES = 8 * 1024 * 1024;  // 8 MB per video — red
+const TOTAL_WARN_BYTES  = 7 * 1024 * 1024;  // 7 MB total — banner warning
+
+function fmtBytes(b: number) {
+  if (b >= 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024).toFixed(0)} KB`;
+}
+
 interface PhotoSlotProps {
   index: number;
   value: string;
   onChange: (v: string) => void;
+  onSizeChange: (bytes: number) => void;
   icon: React.ReactNode;
   label: string;
   accept?: string;
+  isVideo?: boolean;
 }
 
-function PhotoSlot({ index, value, onChange, icon, label, accept = "image/*" }: PhotoSlotProps) {
+function PhotoSlot({ index, value, onChange, onSizeChange, icon, label, accept = "image/*", isVideo = false }: PhotoSlotProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [fileBytes, setFileBytes] = useState(0);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const bytes = file.size;
+    setFileBytes(bytes);
+    onSizeChange(bytes);
     const reader = new FileReader();
     reader.onload = (ev) => {
       onChange(ev.target?.result as string ?? "");
@@ -137,13 +155,21 @@ function PhotoSlot({ index, value, onChange, icon, label, accept = "image/*" }: 
     e.target.value = "";
   };
 
+  const warnAt  = isVideo ? VIDEO_WARN_BYTES  : PHOTO_WARN_BYTES;
+  const errorAt = isVideo ? VIDEO_ERROR_BYTES : PHOTO_ERROR_BYTES;
+  const isError = value && fileBytes >= errorAt;
+  const isWarn  = value && !isError && fileBytes >= warnAt;
+
   return (
     <button
       type="button"
       onClick={() => inputRef.current?.click()}
       className={cn(
         "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed aspect-square transition-colors text-muted-foreground",
-        value ? "border-primary/30 bg-primary/5" : "border-border hover:border-muted-foreground/40 hover:bg-muted/20"
+        isError ? "border-destructive/60" :
+        isWarn  ? "border-amber-400/70" :
+        value   ? "border-primary/30 bg-primary/5" :
+                  "border-border hover:border-muted-foreground/40 hover:bg-muted/20"
       )}
     >
       <input
@@ -154,7 +180,17 @@ function PhotoSlot({ index, value, onChange, icon, label, accept = "image/*" }: 
         onChange={handleFile}
       />
       {value ? (
-        <img src={value} alt={`slot ${index}`} className="absolute inset-0 w-full h-full object-cover rounded-xl" />
+        <>
+          <img src={value} alt={`slot ${index}`} className="absolute inset-0 w-full h-full object-cover rounded-xl" />
+          {(isWarn || isError) && (
+            <span className={cn(
+              "absolute top-1 right-1 text-[9px] font-semibold px-1 py-0.5 rounded leading-none",
+              isError ? "bg-destructive text-destructive-foreground" : "bg-amber-500 text-white"
+            )}>
+              {fmtBytes(fileBytes)}
+            </span>
+          )}
+        </>
       ) : (
         <>
           <span className="text-muted-foreground/60">{icon}</span>
@@ -211,6 +247,7 @@ export default function ServiceJobNewPage() {
   const [partnerRepairCode, setPartnerRepairCode] = useState("");
 
   const [photos, setPhotos] = useState<string[]>(Array(9).fill(""));
+  const [photoSizes, setPhotoSizes] = useState<number[]>(Array(9).fill(0));
 
   const [additionalEquipment, setAdditionalEquipment] = useState("");
   const [workDescription, setWorkDescription] = useState("");
@@ -343,6 +380,22 @@ export default function ServiceJobNewPage() {
       return next;
     });
   }
+
+  function updatePhotoSize(idx: number, bytes: number) {
+    setPhotoSizes((prev) => {
+      const next = [...prev];
+      next[idx] = bytes;
+      return next;
+    });
+  }
+
+  const totalPhotoBytes = photoSizes.reduce((a, b) => a + b, 0);
+  const hasOversizedFile = photos.some((v, i) => {
+    if (!v) return false;
+    const isVid = i === 4;
+    return photoSizes[i] >= (isVid ? VIDEO_ERROR_BYTES : PHOTO_ERROR_BYTES);
+  });
+  const hasTotalWarning = totalPhotoBytes >= TOTAL_WARN_BYTES;
 
   function handleSubmit() {
     createMutation.mutate(
@@ -584,7 +637,14 @@ export default function ServiceJobNewPage() {
 
         {/* Photos / Media */}
         <div className="border rounded-xl p-5 space-y-3">
-          <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
+            {totalPhotoBytes > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Total: {fmtBytes(totalPhotoBytes)}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-5 gap-2">
             {[0, 1, 2, 3].map((i) => (
               <PhotoSlot
@@ -592,6 +652,7 @@ export default function ServiceJobNewPage() {
                 index={i}
                 value={photos[i]}
                 onChange={(v) => updatePhoto(i, v)}
+                onSizeChange={(b) => updatePhotoSize(i, b)}
                 icon={<Camera className="w-4 h-4" />}
                 label="Camera"
               />
@@ -600,11 +661,26 @@ export default function ServiceJobNewPage() {
               index={4}
               value={photos[4]}
               onChange={(v) => updatePhoto(4, v)}
+              onSizeChange={(b) => updatePhotoSize(4, b)}
               icon={<Video className="w-4 h-4" />}
               label="Video"
               accept="video/*"
+              isVideo
             />
           </div>
+          {hasOversizedFile && (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>One or more files are very large and may fail to submit. Consider resizing images to under 5 MB each.</span>
+            </div>
+          )}
+          {!hasOversizedFile && hasTotalWarning && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>Total media size is {fmtBytes(totalPhotoBytes)} — this may slow down submission. Consider reducing image sizes.</span>
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground/60">Images: warn above 2 MB · Video: warn above 5 MB</p>
         </div>
 
         {/* Customer Signature */}
