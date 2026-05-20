@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { setOnUnauthorized } from "@workspace/api-client-react";
 
 import CustomerDisplayPage from "@/pages/app/customer-display";
 import PortalPage from "@/pages/portal";
@@ -91,6 +92,13 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
     },
   },
+});
+
+setOnUnauthorized(() => {
+  queryClient.clear();
+  if (!window.location.pathname.endsWith("/login") && !window.location.pathname.endsWith("/register")) {
+    window.location.replace("/login");
+  }
 });
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
