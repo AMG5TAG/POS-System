@@ -6,6 +6,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 import {
   DollarSign, ShoppingCart, TrendingUp, Users, Gift, TrendingDown,
   Mail, Activity, Trophy, MapPin, Monitor, AlertCircle,
+  RotateCcw, Receipt, Package, Percent, Package2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -80,6 +81,9 @@ export default function ManagementOverviewPage() {
   const txCount       = summary?.transactionCount ?? 0;
   const avgSale       = txCount > 0 ? totalSales / txCount : 0;
   const totalCustomers= summary?.newCustomers     ?? 0;
+  const gstCollected  = totalSales / 11;
+  const grossProfit   = totalSales * 0.91;
+  const grossMarginPct= totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : "0.0";
 
   const today     = new Date();
   const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay() + 1);
@@ -185,7 +189,51 @@ export default function ManagementOverviewPage() {
               value={formatCurrency(0)}
               sub="—"
               valueClass="text-orange-500"
-              href="/management/sales-overview#payments"
+              href="/management/discounts"
+            />
+            <KpiCard
+              title="Refunds"
+              icon={RotateCcw}
+              iconBg="bg-red-100 dark:bg-red-900/30 text-red-600"
+              value={isLoading ? "—" : formatCurrency(0)}
+              sub="—"
+              valueClass="text-red-500"
+              href="/management/sales-overview#refunds"
+            />
+            <KpiCard
+              title="GST Collected"
+              icon={Receipt}
+              iconBg="bg-amber-100 dark:bg-amber-900/30 text-amber-600"
+              value={isLoading ? "—" : formatCurrency(gstCollected)}
+              sub="inc. in revenue —"
+              valueClass="text-amber-600"
+              href="/management/tax"
+            />
+            <KpiCard
+              title="Items Sold"
+              icon={Package}
+              iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
+              value={isLoading ? "—" : "0"}
+              sub="units —"
+              href="/management/sales-overview"
+            />
+            <KpiCard
+              title="Gross Margin"
+              icon={Percent}
+              iconBg="bg-lime-100 dark:bg-lime-900/30 text-lime-600"
+              value={isLoading ? "—" : `${grossMarginPct}%`}
+              sub="ex-GST —"
+              valueClass="text-lime-600"
+              href="/management/sales-overview#profit-loss"
+            />
+            <KpiCard
+              title="Laybys"
+              icon={Package2}
+              iconBg="bg-sky-100 dark:bg-sky-900/30 text-sky-600"
+              value={isLoading ? "—" : formatCurrency(0)}
+              sub="outstanding —"
+              valueClass="text-sky-600"
+              href="/management/layby"
             />
           </div>
 
