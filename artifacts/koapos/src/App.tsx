@@ -317,7 +317,7 @@ function Router() {
         <ProtectedRoute component={SettingsBusinessPage} />
       </Route>
       <Route path="/management/regional">
-        <Redirect to="/management/business" />
+        <ProtectedRoute component={SettingsRegionalPage} />
       </Route>
       <Route path="/management/account">
         <ProtectedRoute component={SettingsAccountPage} />
