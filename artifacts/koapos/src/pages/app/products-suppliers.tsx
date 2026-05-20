@@ -109,7 +109,7 @@ function StepNav({ current }: { current: number }) {
   }, [current]);
 
   return (
-    <div ref={navRef} className="flex items-center gap-1 flex-wrap">
+    <div ref={navRef} className="flex items-center gap-1 flex-nowrap overflow-x-auto pb-0.5 scrollbar-none">
       {STEPS.map((step, i) => {
         const Icon   = step.icon;
         const done   = i < current;
