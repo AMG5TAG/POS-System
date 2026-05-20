@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable } from "@workspace/db";
-import { eq, and, gte, sql, desc, lt } from "drizzle-orm";
+import { eq, and, gte, sql, desc, lt, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams } from "@workspace/api-zod";
 
@@ -330,9 +330,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   // Get customer names for appointments
   const apptCustomerIds = [...new Set(appts.filter((a) => a.customerId).map((a) => a.customerId!))];
   const apptCustomers = apptCustomerIds.length > 0
-    ? await db.select().from(customersTable).where(
-        sql`${customersTable.id} = ANY(ARRAY[${sql.raw(apptCustomerIds.join(","))}]::int[])`
-      )
+    ? await db.select().from(customersTable).where(inArray(customersTable.id, apptCustomerIds))
     : [];
   const apptCustomerMap = new Map(apptCustomers.map((c) => [c.id, c]));
 

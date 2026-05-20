@@ -261,7 +261,8 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
   const [merchant] = await db.select({ username: merchantsTable.username })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, req.session.merchantId!));
-  const origin = `${req.protocol}://${req.get("host")}`;
+  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const origin = `https://${domain}`;
   const username = merchant?.username;
   const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
   res.json({ token, portalUrl: `${origin}${portalPath}` });

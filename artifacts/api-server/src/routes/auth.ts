@@ -1,10 +1,19 @@
 import { Router, type IRouter } from "express";
+import rateLimit from "express-rate-limit";
 import { db, merchantsTable, plansTable, subscriptionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many attempts — please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function formatMerchant(m: typeof merchantsTable.$inferSelect) {
   return {
@@ -42,7 +51,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
   res.json(formatMerchant(merchant));
 });
 
-router.post("/auth/register", async (req, res): Promise<void> => {
+router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -81,7 +90,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   res.status(201).json(formatMerchant(merchant));
 });
 
-router.post("/auth/login", async (req, res): Promise<void> => {
+router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

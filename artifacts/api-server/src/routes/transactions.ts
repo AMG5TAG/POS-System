@@ -156,7 +156,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         visitCount:    sql`${customersTable.visitCount} + 1`,
         loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${Math.floor(total)}`,
       })
-      .where(eq(customersTable.id, customerId));
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, req.session.merchantId!)));
   }
 
   // Auto-complete linked service job or appointment
@@ -240,7 +240,7 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
   const [updated] = await db
     .update(transactionsTable)
     .set({ status: "refunded", notes: parsed.data.reason })
-    .where(eq(transactionsTable.id, params.data.id))
+    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)))
     .returning();
 
   res.json(formatTransaction(updated));

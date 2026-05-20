@@ -392,8 +392,8 @@ router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
     .from(merchantsTable)
     .where(eq(merchantsTable.id, customer.merchantId));
 
-  const origin = `${req.protocol}://${req.get("host")}`;
-  const portalUrl = `${origin}/portal/${customer.portalToken}`;
+  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const portalUrl = `https://${domain}/portal/${customer.portalToken}`;
   const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Valued Customer";
 
   const passJson = buildPassJson({
@@ -434,8 +434,8 @@ router.get("/portal/:token/google-wallet", async (req, res): Promise<void> => {
     .from(merchantsTable)
     .where(eq(merchantsTable.id, customer.merchantId));
 
-  const origin = `${req.protocol}://${req.get("host")}`;
-  const portalUrl = `${origin}/portal/${customer.portalToken}`;
+  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const portalUrl = `https://${domain}/portal/${customer.portalToken}`;
   const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Valued Customer";
 
   const saveUrl = buildGoogleWalletSaveUrl({
