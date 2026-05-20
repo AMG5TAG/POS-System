@@ -151,6 +151,7 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     id: j.id, jobNumber: j.jobNumber, status: j.status,
     deviceType: j.deviceType ?? null, deviceDescription: j.deviceDescription ?? null,
     estimatedCost: j.estimatedCost ? parseFloat(j.estimatedCost) : null,
+    photos: j.photos ? (() => { try { return JSON.parse(j.photos!); } catch { return []; } })() : [],
     createdAt: j.createdAt.toISOString(),
   }));
 

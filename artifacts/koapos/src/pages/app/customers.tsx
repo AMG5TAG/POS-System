@@ -81,6 +81,44 @@ const defaultForm: CustomerForm = {
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
+function ServiceJobPhotoStrip({ photos }: { photos: string[] }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  return (
+    <>
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+            onClick={() => setLightboxSrc(null)}
+          >
+            <X className="w-8 h-8" />
+          </button>
+          <img
+            src={lightboxSrc}
+            alt="Full size"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      <div className="flex gap-1.5 flex-wrap">
+        {photos.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt={`photo ${i + 1}`}
+            className="w-12 h-12 object-cover rounded-md border cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => setLightboxSrc(src)}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
   return (
     <div className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
@@ -652,18 +690,26 @@ function CustomerDetailInner({
                   <p className="text-sm text-muted-foreground pl-1">No service jobs recorded.</p>
                 ) : (
                   <div className="rounded-xl border divide-y bg-muted/20">
-                    {history.serviceJobs.map((j) => (
-                      <div key={j.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                        <div>
-                          <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
-                          <p className="text-xs text-muted-foreground">{j.deviceDescription || "—"}</p>
+                    {history.serviceJobs.map((j) => {
+                      const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
+                      return (
+                        <div key={j.id} className="px-4 py-2.5 text-sm space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
+                              <p className="text-xs text-muted-foreground">{j.deviceDescription || "—"}</p>
+                            </div>
+                            <div className="text-right">
+                              {j.estimatedCost != null && <p className="font-bold">{formatCurrency(j.estimatedCost)}</p>}
+                              <Badge variant="outline" className="text-xs capitalize">{j.status}</Badge>
+                            </div>
+                          </div>
+                          {jobPhotos.length > 0 && (
+                            <ServiceJobPhotoStrip photos={jobPhotos} />
+                          )}
                         </div>
-                        <div className="text-right">
-                          {j.estimatedCost != null && <p className="font-bold">{formatCurrency(j.estimatedCost)}</p>}
-                          <Badge variant="outline" className="text-xs capitalize">{j.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
