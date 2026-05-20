@@ -15,7 +15,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote, SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star, ArrowRight, ArrowLeft, Printer, ScanLine, Keyboard, HardDrive, Wifi, Usb, Zap, Settings2 } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts, SHORTCUTS_STORAGE_KEY } from "@/lib/keyboard-shortcuts";
 
 const REGISTER_TABS = [
@@ -749,7 +748,6 @@ export default function ManagementRegistersPage() {
           </Button>
         </div>
 
-        <PageTabsNav tabs={REGISTER_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 

@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Receipt, Percent, Mail, MessageSquare, Info, Hash } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 import { toast } from "sonner";
 
 /* ─── Code prefix settings (localStorage) ───────────────────────────────── */
@@ -142,7 +141,6 @@ export default function SettingsTaxPage() {
           </div>
         </div>
 
-        <PageTabsNav tabs={TAX_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 

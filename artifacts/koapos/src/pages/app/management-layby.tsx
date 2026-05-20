@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Package2, Save, RotateCcw, Info } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 const LAYBY_TABS = [
   { href: "#duration",      label: "Duration & Payments" },
@@ -102,7 +101,6 @@ export default function ManagementLaybyPage() {
           </div>
         </div>
 
-        <PageTabsNav tabs={LAYBY_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 

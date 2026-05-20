@@ -73,10 +73,10 @@ type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{
 type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
-  { name: "Reports",           href: "/management/sales-overview", icon: TrendingUp     },
-  { name: "Account",           href: "/management/account",        icon: UserCircle     },
+  { name: "Overview",       href: "/management/overview",       icon: LayoutDashboard },
+  { name: "Account",        href: "/management/account",        icon: UserCircle      },
   {
-    name: "Business Details",
+    name: "Business Info",
     icon: Building2,
     children: [
       { name: "Details",  href: "/management/business",  icon: Building2 },
@@ -91,39 +91,39 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "PC Builder",  href: "/management/calculators/pc-builder",  icon: HardDrive },
     ],
   },
-  { name: "Customers",         href: "/management/customers",      icon: Users          },
-  { name: "Discounts",         href: "/management/discounts",      icon: Percent        },
-  { name: "KPIs & Targets",   href: "/management/kpis",           icon: Target         },
-  { name: "Forms",             href: "/management/forms",          icon: FileText       },
-  { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
-  { name: "Integrations",      href: "/management/integrations",   icon: Receipt        },
-  { name: "Inventory",         href: "/management/inventory",      icon: Boxes          },
-  { name: "Layby",             href: "/management/layby",          icon: Package2       },
-  { name: "Loyalty",           href: "/management/loyalty",        icon: Gift           },
-  { name: "Modules",           href: "/modules",                   icon: Blocks         },
-  { name: "POS Registers",     href: "/management/registers",      icon: Monitor        },
-  { name: "Price Tiers",       href: "/management/price-tiers",    icon: Layers         },
+  { name: "Customers",      href: "/management/customers",      icon: Users          },
+  { name: "Discounts",      href: "/management/discounts",      icon: Percent        },
+  { name: "Email",          href: "/management/email",          icon: Mail           },
+  { name: "Forms",          href: "/management/forms",          icon: FileText       },
+  { name: "Import / Export",href: "/management/import-export",  icon: ArrowLeftRight },
+  { name: "Integrations",   href: "/management/integrations",   icon: Receipt        },
+  { name: "Inventory",      href: "/management/inventory",      icon: Boxes          },
+  { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
+  { name: "Layby",          href: "/management/layby",          icon: Package2       },
+  { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
+  { name: "Modules",        href: "/modules",                   icon: Blocks         },
+  { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
+  { name: "Price Tiers",    href: "/management/price-tiers",    icon: Layers         },
+  { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
     name: "Staff",
     icon: UserSquare2,
     children: [
-      { name: "Employees", href: "/staff",                 icon: UserSquare2   },
-      { name: "Timesheet", href: "/staff/timesheet",       icon: Clock         },
-      { name: "Leave",     href: "/staff/leave-requests",  icon: ClipboardList },
-      { name: "Costs",     href: "/staff/cost-summary",    icon: Coins         },
+      { name: "Employees", href: "/staff",              icon: UserSquare2 },
+      { name: "Timesheet", href: "/staff/timesheet",    icon: Clock       },
+      { name: "Costs",     href: "/staff/cost-summary", icon: Coins       },
     ],
   },
   {
     name: "Stickers",
     icon: Tag,
     children: [
-      { name: "Labels",     href: "/management/stickers",          icon: Printer        },
-      { name: "Templates",  href: "/management/sticker-templates", icon: LayoutTemplate },
+      { name: "Labels",    href: "/management/stickers",          icon: Printer        },
+      { name: "Templates", href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
-  { name: "Email",              href: "/management/email",          icon: Mail           },
-  { name: "Tax & Receipts",    href: "/management/tax",            icon: Receipt        },
-  { name: "Templates",         href: "/management/templates",      icon: LayoutTemplate },
+  { name: "Tax & Receipts", href: "/management/tax",            icon: Receipt        },
+  { name: "Templates",      href: "/management/templates",      icon: LayoutTemplate },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -148,11 +148,11 @@ const SEARCH_INDEX = [
   { label: "Staff · Employees",  href: "/staff",                       icon: UserSquare2,     group: "Staff" },
   { label: "Staff · Timesheet",  href: "/staff/timesheet",             icon: Clock,           group: "Staff" },
   { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Staff" },
-  { label: "Staff · Leave",      href: "/staff/leave-requests",        icon: ClipboardList,   group: "Staff" },
   { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Staff" },
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
   { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Staff" },
+  { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
@@ -239,9 +239,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/settings":                    ["Settings"],
   "/management/customers":        ["Management", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],
-  "/management/business":         ["Management", "Business Details"],
+  "/management/business":         ["Management", "Business Info"],
   "/management/regional":         ["Management", "Regional Settings"],
   "/management/account":          ["Management", "Account"],
+  "/management/overview":         ["Management", "Overview"],
   "/management/sales-overview":   ["Management", "Reports"],
   "/management/kpis":             ["Management", "KPIs & Targets"],
   "/management/integrations":     ["Management", "Integrations"],
@@ -1114,7 +1115,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
               onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); }}
-              items={MANAGEMENT_SUBNAV} accent defaultHref="/management/sales-overview"
+              items={MANAGEMENT_SUBNAV} accent defaultHref="/management/overview"
             />
           )}
         </SidebarMenu>

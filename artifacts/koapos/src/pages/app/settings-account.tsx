@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 const ACCOUNT_TABS = [
   { href: "#login-details",     label: "Login Details" },
@@ -90,7 +89,6 @@ export default function SettingsAccountPage() {
         <h1 className="text-2xl font-bold">Account</h1>
         <p className="text-sm text-muted-foreground">Manage your login credentials, profile details, and subscription plan.</p>
 
-        <PageTabsNav tabs={ACCOUNT_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 

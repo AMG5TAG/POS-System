@@ -16,7 +16,6 @@ import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
   Plus, Trash2, Info, Pen,
 } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 /* ─── Loyalty naming (localStorage) ─────────────────────────────────────── */
 
@@ -255,7 +254,6 @@ export default function ManagementLoyaltyPage() {
           </div>
         </div>
 
-        <PageTabsNav tabs={LOYALTY_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 

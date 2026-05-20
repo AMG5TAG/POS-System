@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 const CUSTOMER_TABS = [
   { href: "#customer-groups", label: "Customer Groups", icon: Users },
@@ -114,7 +113,6 @@ export default function SettingsCustomersPage() {
           </p>
         </div>
 
-        <PageTabsNav tabs={CUSTOMER_TABS} />
 
         {/* Summary tiles */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

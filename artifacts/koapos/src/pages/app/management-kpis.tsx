@@ -25,7 +25,6 @@ import {
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
   SplitSquareHorizontal, Flame, Store,
 } from "lucide-react";
-import { PageTabsNav } from "@/components/ui/page-tabs-nav";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -698,7 +697,6 @@ export default function ManagementKpisPage() {
           </Button>
         </div>
 
-        <PageTabsNav tabs={KPI_TABS} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 

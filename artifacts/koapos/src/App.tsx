@@ -59,6 +59,7 @@ import SettingsPOSPage from "@/pages/app/settings-pos";
 import AppointmentsPage from "@/pages/app/appointments";
 import ServiceJobsPage from "@/pages/app/service-jobs";
 import ServiceJobNewPage from "@/pages/app/service-jobs-new";
+import ManagementOverviewPage from "@/pages/app/management-overview";
 import ManagementSalesPage from "@/pages/app/management-sales";
 import ManagementRegistersPage from "@/pages/app/management-registers";
 import ManagementIntegrationsPage from "@/pages/app/management-integrations";
@@ -248,6 +249,9 @@ function Router() {
       </Route>
 
       {/* Management section */}
+      <Route path="/management/overview">
+        <ProtectedRoute component={ManagementOverviewPage} />
+      </Route>
       <Route path="/management/kpis">
         <ProtectedRoute component={ManagementKpisPage} />
       </Route>
