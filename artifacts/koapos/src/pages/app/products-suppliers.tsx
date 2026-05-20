@@ -92,7 +92,7 @@ function supplierToForm(s: Supplier): SupplierForm {
 
 const STEPS = [
   { label: "Basic Info",     short: "Basic Info",  icon: Building2  },
-  { label: "Address & Logo", short: "Address",      icon: MapPin     },
+  { label: "Address",        short: "Address",      icon: MapPin     },
   { label: "Contacts",       short: "Contacts",    icon: Users      },
   { label: "Return Auth.",   short: "Return Auth.", icon: FileText   },
   { label: "Credit Acc.",    short: "Credit Acc.", icon: CreditCard },
@@ -175,6 +175,34 @@ function PillTextarea({ label, ...props }: React.TextareaHTMLAttributes<HTMLText
 function Step1({ form, set }: { form: SupplierForm; set: <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => void }) {
   return (
     <div className="space-y-4">
+      {/* Logo */}
+      <div className="flex items-center gap-3">
+        {form.logoUrl ? (
+          <div className="relative shrink-0">
+            <img src={form.logoUrl} alt="Logo" className="h-14 w-14 rounded-xl object-contain border bg-muted" />
+            <button
+              type="button"
+              onClick={() => set("logoUrl", "")}
+              className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </div>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-full gap-2"
+          onClick={() => {
+            const url = window.prompt("Paste logo URL:");
+            if (url) set("logoUrl", url);
+          }}
+        >
+          <ImageIcon className="w-3.5 h-3.5" /> {form.logoUrl ? "Change Logo" : "Upload Logo"}
+        </Button>
+      </div>
+
       <PillInput label="Supplier Name" required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Supplier / wholesaler name" />
       <PillInput label="Account Number" value={form.accountNumber} onChange={(e) => set("accountNumber", e.target.value)} placeholder="Your account number" />
       <PillInput label="Website" type="url" value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="https://supplier.com" />
@@ -197,57 +225,19 @@ function Step1({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
   );
 }
 
-/* ─── Step 2: Address & Logo ─────────────────────────────────────────────── */
+/* ─── Step 2: Address ────────────────────────────────────────────────────── */
 
 function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => void }) {
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <ImageIcon className="w-4 h-4 text-primary" />
-          <span className="text-xs font-bold uppercase tracking-widest text-foreground/70">Supplier Logo</span>
-        </div>
-        <div className="flex items-center gap-3">
-          {form.logoUrl ? (
-            <div className="relative">
-              <img src={form.logoUrl} alt="Logo" className="h-14 w-14 rounded-xl object-contain border bg-muted" />
-              <button
-                onClick={() => set("logoUrl", "")}
-                className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center"
-              >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-full gap-2"
-            onClick={() => {
-              const url = window.prompt("Paste logo URL:");
-              if (url) set("logoUrl", url);
-            }}
-          >
-            <ImageIcon className="w-3.5 h-3.5" /> Upload Logo
-          </Button>
-        </div>
+    <div className="space-y-4">
+      <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="123 Main St" />
+      <div className="grid grid-cols-2 gap-3">
+        <PillInput label="City"  value={form.city}  onChange={(e) => set("city",  e.target.value)} placeholder="Sydney" />
+        <PillInput label="State" value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="NSW" />
       </div>
-
-      <div className="border-t pt-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-primary" />
-          <span className="text-xs font-bold uppercase tracking-widest text-foreground/70">Address</span>
-        </div>
-        <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="123 Main St" />
-        <div className="grid grid-cols-2 gap-3">
-          <PillInput label="City"  value={form.city}  onChange={(e) => set("city",  e.target.value)} placeholder="Sydney" />
-          <PillInput label="State" value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="NSW" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <PillInput label="Postcode" value={form.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="2000" />
-          <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} placeholder="Australia" />
-        </div>
+      <div className="grid grid-cols-2 gap-3">
+        <PillInput label="Postcode" value={form.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="2000" />
+        <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} placeholder="Australia" />
       </div>
     </div>
   );
