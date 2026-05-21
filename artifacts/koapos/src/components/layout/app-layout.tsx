@@ -74,7 +74,14 @@ type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Overview",       href: "/management/overview",       icon: LayoutDashboard },
-  { name: "Account",        href: "/management/account",        icon: UserCircle      },
+  {
+    name: "Account",
+    icon: UserCircle,
+    children: [
+      { name: "Account",  href: "/management/account", icon: UserCircle },
+      { name: "Modules",  href: "/modules",            icon: Blocks     },
+    ],
+  },
   {
     name: "Business Info",
     icon: Building2,
@@ -101,16 +108,15 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
-  { name: "Modules",        href: "/modules",                   icon: Blocks         },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
     name: "Staff",
     icon: UserSquare2,
     children: [
-      { name: "Employees", href: "/staff",              icon: UserSquare2 },
-      { name: "Timesheet", href: "/staff/timesheet",    icon: Clock       },
-      { name: "Costs",     href: "/staff/cost-summary", icon: Coins       },
+      { name: "Employees", href: "/management/staff",              icon: UserSquare2 },
+      { name: "Timesheet", href: "/management/staff/timesheet",    icon: Clock       },
+      { name: "Costs",     href: "/management/staff/cost-summary", icon: Coins       },
     ],
   },
   {
@@ -233,7 +239,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/notes":                 ["Staff", "Notes"],
   "/staff/kpis":                  ["Staff", "KPIs"],
   "/staff/links":                 ["Staff", "Links"],
-  "/modules":                     ["Management", "Modules"],
+  "/modules":                     ["Management", "Account", "Modules"],
+  "/management/staff":              ["Management", "Staff", "Employees"],
+  "/management/staff/timesheet":    ["Management", "Staff", "Timesheet"],
+  "/management/staff/cost-summary": ["Management", "Staff", "Costs"],
   "/settings":                    ["Settings"],
   "/management/customers":        ["Management", "Customers"],
   "/management/registers":        ["Management", "POS Registers"],

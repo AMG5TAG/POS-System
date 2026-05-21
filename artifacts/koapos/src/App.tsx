@@ -251,6 +251,17 @@ function Router() {
         <ProtectedRoute component={StaffPage} />
       </Route>
 
+      {/* Management > Staff aliases (keep nav context in Management) */}
+      <Route path="/management/staff/timesheet">
+        <ProtectedRoute component={StaffTimesheetPage} />
+      </Route>
+      <Route path="/management/staff/cost-summary">
+        <ProtectedRoute component={StaffCostSummaryPage} />
+      </Route>
+      <Route path="/management/staff">
+        <ProtectedRoute component={StaffPage} />
+      </Route>
+
       {/* Management section */}
       <Route path="/management/overview">
         <ProtectedRoute component={ManagementOverviewPage} />
