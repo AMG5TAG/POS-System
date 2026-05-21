@@ -46,6 +46,10 @@ type Invoice = {
   paidAt: string | null;
   viewedAt: string | null;
   notes: string | null;
+  isRecurring: boolean;
+  recurringFrequency: string | null;
+  recurringOccurrences: number | null;
+  recurringStartDate: string | null;
   createdAt: string;
 };
 
@@ -102,6 +106,12 @@ export default function POSInvoicesPage() {
   const [editLineSearch, setEditLineSearch] = useState<string[]>([""]);
   const [editLineDropOpen, setEditLineDropOpen] = useState<boolean[]>([false]);
   const [editSaving, setEditSaving] = useState(false);
+  const [editRecurring, setEditRecurring] = useState({
+    enabled: false,
+    frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly",
+    startDate: "",
+    occurrences: 1,
+  });
 
   const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
   const editLineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -211,6 +221,12 @@ export default function POSInvoicesPage() {
       dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : "",
       notes: inv.notes ?? "",
     });
+    setEditRecurring({
+      enabled: inv.isRecurring ?? false,
+      frequency: (inv.recurringFrequency as "daily" | "weekly" | "monthly" | "yearly") ?? "monthly",
+      startDate: inv.recurringStartDate ? inv.recurringStartDate.slice(0, 10) : "",
+      occurrences: inv.recurringOccurrences ?? 1,
+    });
     const items = inv.items?.length ? inv.items : [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
     setEditLines(items);
     setEditLineSearch(items.map(() => ""));
@@ -233,6 +249,12 @@ export default function POSInvoicesPage() {
         dueDate: editForm.dueDate || null,
         notes: editForm.notes || null,
         items: validLines,
+        recurring: {
+          enabled: editRecurring.enabled,
+          frequency: editRecurring.frequency,
+          startDate: editRecurring.startDate || null,
+          occurrences: editRecurring.occurrences,
+        },
       }),
     });
     setEditSaving(false);
@@ -987,10 +1009,16 @@ export default function POSInvoicesPage() {
                       <Send className="w-3.5 h-3.5" /> Mark as Sent
                     </Button>
                   )}
-                  {(detailInvoice.status === "draft" || detailInvoice.status === "sent") && (
+                  {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
                       onClick={() => updateStatus(detailInvoice.id, "paid")}>
                       <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Paid
+                    </Button>
+                  )}
+                  {detailInvoice.status === "paid" && (
+                    <Button size="sm" variant="outline" className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"
+                      onClick={() => updateStatus(detailInvoice.id, "sent")}>
+                      <RefreshCw className="w-3.5 h-3.5" /> Mark Unpaid
                     </Button>
                   )}
                   {detailInvoice.status !== "cancelled" && detailInvoice.status !== "paid" && (
@@ -1348,12 +1376,51 @@ export default function POSInvoicesPage() {
                 rows={2} placeholder="Payment terms, notes for customer..." />
             </div>
 
+            {/* Recurring */}
+            <div className="rounded-xl border p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Recurring Invoice</p>
+                    <p className="text-xs text-muted-foreground">Automatically repeat this invoice on a schedule</p>
+                  </div>
+                </div>
+                <Switch checked={editRecurring.enabled} onCheckedChange={(v) => setEditRecurring((r) => ({ ...r, enabled: v }))} />
+              </div>
+              {editRecurring.enabled && (
+                <div className="grid grid-cols-3 gap-3 pt-1 border-t">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Frequency</Label>
+                    <Select value={editRecurring.frequency} onValueChange={(v) => setEditRecurring((r) => ({ ...r, frequency: v as typeof r.frequency }))}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(FREQ_LABELS) as [string, string][]).map(([val, label]) => (
+                          <SelectItem key={val} value={val}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Start Date</Label>
+                    <Input type="date" className="h-8 text-xs" value={editRecurring.startDate}
+                      onChange={(e) => setEditRecurring((r) => ({ ...r, startDate: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Occurrences</Label>
+                    <Input type="number" min={1} max={999} className="h-8 text-xs" value={editRecurring.occurrences}
+                      onChange={(e) => setEditRecurring((r) => ({ ...r, occurrences: parseInt(e.target.value) || 1 }))} />
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
 
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={handleUpdate} disabled={editSaving}>
-              {editSaving ? "Saving…" : "Save Changes"}
+              {editSaving ? "Saving…" : editRecurring.enabled ? "Save Recurring Invoice" : "Save Changes"}
             </Button>
           </div>
         </DialogContent>

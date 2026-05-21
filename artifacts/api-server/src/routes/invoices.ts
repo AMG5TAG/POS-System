@@ -25,6 +25,10 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     dueDate: inv.dueDate?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
     viewedAt: inv.viewedAt?.toISOString() ?? null,
+    isRecurring: inv.isRecurring === "true",
+    recurringFrequency: inv.recurringFrequency ?? null,
+    recurringOccurrences: inv.recurringOccurrences ?? null,
+    recurringStartDate: inv.recurringStartDate?.toISOString() ?? null,
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
     customerName: customerName(cFirst ?? null, cLast ?? null),
@@ -103,6 +107,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     items: lineItems,
     invoicePrefix,
     invoiceDigits,
+    recurring,
   } = req.body as {
     customerId?: number;
     dueDate?: string;
@@ -110,6 +115,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     items?: LineItem[];
     invoicePrefix?: string;
     invoiceDigits?: number;
+    recurring?: { frequency: string; startDate?: string | null; occurrences?: number };
   };
 
   const merchantId = req.session.merchantId!;
@@ -139,6 +145,10 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     items: lines.length ? lines : null,
     dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ?? null,
+    isRecurring: recurring ? "true" : "false",
+    recurringFrequency: recurring?.frequency ?? null,
+    recurringOccurrences: recurring?.occurrences ?? null,
+    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
   }).returning();
 
   // Fetch with customer name + email
@@ -193,12 +203,17 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
 // PATCH /invoices/:id
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { status, notes, dueDate, customerId, items } = req.body as {
+  const { status, notes, dueDate, customerId, items, recurring } = req.body as {
     status?: string; notes?: string; dueDate?: string;
     customerId?: number | null; items?: LineItem[];
+    recurring?: { enabled: boolean; frequency?: string; startDate?: string | null; occurrences?: number } | null;
   };
   const updates: Record<string, unknown> = {};
-  if (status) { updates.status = status; if (status === "paid") updates.paidAt = new Date(); }
+  if (status) {
+    updates.status = status;
+    if (status === "paid") updates.paidAt = new Date();
+    else updates.paidAt = null;
+  }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
@@ -211,6 +226,12 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     updates.subtotal = String(subtotal);
     updates.taxTotal = String(taxTotal);
     updates.total    = String(total);
+  }
+  if (recurring !== undefined) {
+    updates.isRecurring = recurring?.enabled ? "true" : "false";
+    updates.recurringFrequency = recurring?.enabled ? (recurring.frequency ?? null) : null;
+    updates.recurringOccurrences = recurring?.enabled ? (recurring.occurrences ?? null) : null;
+    updates.recurringStartDate = recurring?.enabled && recurring.startDate ? new Date(recurring.startDate) : null;
   }
   const [inv] = await db
     .update(invoicesTable)

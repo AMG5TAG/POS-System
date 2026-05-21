@@ -19,6 +19,10 @@ export const invoicesTable = pgTable("invoices", {
   viewedAt: timestamp("viewed_at", { withTimezone: true }),
   notes: text("notes"),
   events: json("events"),
+  isRecurring: text("is_recurring").notNull().default("false"),
+  recurringFrequency: text("recurring_frequency"),
+  recurringOccurrences: integer("recurring_occurrences"),
+  recurringStartDate: timestamp("recurring_start_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
