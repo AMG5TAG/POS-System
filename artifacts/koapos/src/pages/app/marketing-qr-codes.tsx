@@ -12,12 +12,19 @@ import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
   ChevronDown, ChevronUp, Globe, FileText, RefreshCcw, User, Share2,
   File, Wifi, Calendar, Mail, MessageSquare, Minimize2, LayoutTemplate,
-  Lock, Grid3x3, Upload, X, Info,
+  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
+
+interface SavedQRTemplate {
+  id: string;
+  name: string;
+  settings: QRSettings;
+  createdAt: string;
+}
 
 interface QRSettings {
   patternColor: string;
@@ -60,8 +67,9 @@ interface QREntry {
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
-const HISTORY_KEY  = "koapos_qr_history";
-const SETTINGS_KEY = "koapos_qr_settings";
+const HISTORY_KEY    = "koapos_qr_history";
+const SETTINGS_KEY   = "koapos_qr_settings";
+const SAVED_TMPL_KEY = "koapos_qr_saved_templates";
 
 const DEFAULT_SETTINGS: QRSettings = {
   patternColor: "#000000",
@@ -156,6 +164,12 @@ function loadStoredSettings(): QRSettings {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<QRSettings>;
     return { ...DEFAULT_SETTINGS, ...s };
   } catch { return DEFAULT_SETTINGS; }
+}
+function loadSavedTemplates(): SavedQRTemplate[] {
+  try { return JSON.parse(localStorage.getItem(SAVED_TMPL_KEY) ?? "[]"); } catch { return []; }
+}
+function saveSavedTemplates(t: SavedQRTemplate[]) {
+  try { localStorage.setItem(SAVED_TMPL_KEY, JSON.stringify(t.slice(0, 30))); } catch { /* ignore */ }
 }
 
 /* ── QR data string builder ────────────────────────────────────────────── */
@@ -684,17 +698,21 @@ function QRContentEditor({ type, content, onChange }: {
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 export default function MarketingQRCodesPage() {
-  const [qrType,   setQrType]   = useState<QRCodeType>("website");
-  const [content,  setContent]  = useState<QRTypeContent>({ url: "https://" });
-  const [label,    setLabel]    = useState("");
-  const [settings, setSettings] = useState<QRSettings>(loadStoredSettings);
-  const [history,  setHistory]  = useState<QREntry[]>(loadHistory);
-  const [preview,  setPreview]  = useState<QREntry | null>(null);
-  const [advanced, setAdvanced] = useState(false);
+  const [qrType,         setQrType]         = useState<QRCodeType>("website");
+  const [content,        setContent]        = useState<QRTypeContent>({ url: "https://" });
+  const [label,          setLabel]          = useState("");
+  const [settings,       setSettings]       = useState<QRSettings>(loadStoredSettings);
+  const [history,        setHistory]        = useState<QREntry[]>(loadHistory);
+  const [preview,        setPreview]        = useState<QREntry | null>(null);
+  const [advanced,       setAdvanced]       = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<SavedQRTemplate[]>(loadSavedTemplates);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateName,   setTemplateName]   = useState("");
 
-  const liveQrRef      = useRef<QRCodeStyling | null>(null);
+  const liveQrRef        = useRef<QRCodeStyling | null>(null);
   const liveContainerRef = useRef<HTMLDivElement>(null);
-  const logoFileRef    = useRef<HTMLInputElement>(null);
+  const logoFileRef      = useRef<HTMLInputElement>(null);
+  const templateNameRef  = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof QRSettings>(k: K, v: QRSettings[K]) => {
     setSettings((s) => {
@@ -786,6 +804,36 @@ export default function MarketingQRCodesPage() {
     saveHistory(next);
     if (preview?.id === id) setPreview(null);
     toast.success("Deleted");
+  };
+
+  /* Template save / delete */
+  const confirmSaveTemplate = useCallback(() => {
+    const name = templateName.trim() || `Style ${savedTemplates.length + 1}`;
+    const entry: SavedQRTemplate = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name,
+      settings: { ...settings },
+      createdAt: new Date().toISOString(),
+    };
+    const next = [entry, ...savedTemplates];
+    setSavedTemplates(next);
+    saveSavedTemplates(next);
+    setTemplateName("");
+    setSavingTemplate(false);
+    toast.success(`Template "${name}" saved`);
+  }, [templateName, settings, savedTemplates]);
+
+  const deleteTemplate = (id: string) => {
+    const next = savedTemplates.filter((t) => t.id !== id);
+    setSavedTemplates(next);
+    saveSavedTemplates(next);
+    toast.success("Template removed");
+  };
+
+  const applyTemplate = (t: SavedQRTemplate) => {
+    setSettings(t.settings);
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(t.settings)); } catch { /* ignore */ }
+    toast.success(`Applied "${t.name}"`);
   };
 
   const copyUrl = (u: string) =>
@@ -921,8 +969,87 @@ export default function MarketingQRCodesPage() {
 
             {/* Templates */}
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Template</CardTitle></CardHeader>
-              <CardContent>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Template</CardTitle>
+                  {!savingTemplate ? (
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5 h-7 text-xs"
+                      onClick={() => {
+                        setSavingTemplate(true);
+                        setTimeout(() => templateNameRef.current?.focus(), 50);
+                      }}>
+                      <BookmarkPlus className="w-3.5 h-3.5" /> Save current style
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        ref={templateNameRef}
+                        placeholder="Template name…"
+                        value={templateName}
+                        onChange={(e) => setTemplateName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") confirmSaveTemplate();
+                          if (e.key === "Escape") { setSavingTemplate(false); setTemplateName(""); }
+                        }}
+                        className="h-7 text-xs w-36"
+                      />
+                      <Button type="button" size="sm" className="h-7 w-7 p-0" onClick={confirmSaveTemplate}>
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground"
+                        onClick={() => { setSavingTemplate(false); setTemplateName(""); }}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+
+                {/* Saved templates row */}
+                {savedTemplates.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-2">Saved styles</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
+                      {savedTemplates.map((tmpl) => (
+                        <div key={tmpl.id} className="relative shrink-0 group">
+                          <button
+                            type="button"
+                            onClick={() => applyTemplate(tmpl)}
+                            className="flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-border hover:border-primary/50 hover:bg-muted/40 transition-all"
+                            style={{ width: 100 }}
+                          >
+                            <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
+                              <TemplateWrapper
+                                template={tmpl.settings.template}
+                                bgColor={tmpl.settings.bgColor}
+                                patternColor={tmpl.settings.patternColor}
+                                scale={0.6}
+                              >
+                                <StyledQR settings={tmpl.settings} data={qrData || "https://koapos.com"} size={72} />
+                              </TemplateWrapper>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap overflow-hidden max-w-full text-ellipsis px-1">
+                              {tmpl.name}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            title="Remove template"
+                            onClick={(e) => { e.stopPropagation(); deleteTemplate(tmpl.id); }}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t mt-3 mb-1" />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-2 mt-3">Built-in frames</p>
+                  </div>
+                )}
+
+                {/* Built-in templates */}
                 <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
                   {TEMPLATES.map((t) => (
                     <TemplateMini key={t.id} template={t} settings={settings} data={qrData || "https://koapos.com"}
