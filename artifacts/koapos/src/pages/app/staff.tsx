@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -239,12 +239,20 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardForm>(defaultForm);
 
-  /* Sync form when dialog opens */
-  const handleOpen = (isOpen: boolean) => {
-    if (isOpen) {
+  /* Reset form whenever the dialog opens (open prop → true).
+     Radix UI does NOT fire onOpenChange when the controlled `open` prop changes
+     programmatically, so we use an effect to reliably reset state. */
+  useEffect(() => {
+    if (open) {
       setStep(0);
       setForm(editingStaff ? staffToForm(editingStaff) : defaultForm());
-    } else {
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  /* Sync form when dialog opens */
+  const handleOpen = (isOpen: boolean) => {
+    if (!isOpen) {
       onClose();
     }
   };

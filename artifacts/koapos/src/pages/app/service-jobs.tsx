@@ -863,31 +863,50 @@ export default function ServiceJobsPage() {
         const stickerSize = DYMO_SIZES.find((s) => s.id === (tpl?.sizeId ?? repairType.defaultSize))
                          ?? DYMO_SIZES.find((s) => s.id === "S0722520")
                          ?? DYMO_SIZES[0];
+        // Orientation-adjusted sticker dimensions (horizontal = landscape)
+        const stkW = Math.max(stickerSize.widthMm, stickerSize.heightMm);
+        const stkH = Math.min(stickerSize.widthMm, stickerSize.heightMm);
         return (
           <>
+            {/* Screen: hide both print areas so they don't appear in the UI */}
+            {/* Print: show only the area matching the current data-print attribute */}
             <style>{`
+              @media screen {
+                #sj-sheet-print-area, #sj-sticker-print-area { display: none !important; }
+              }
               @media print {
                 body * { visibility: hidden !important; }
                 body[data-print="sj-sheet"] #sj-sheet-print-area,
                 body[data-print="sj-sheet"] #sj-sheet-print-area * { visibility: visible !important; }
                 body[data-print="sj-sheet"] #sj-sheet-print-area {
-                  position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important;
+                  display: block !important;
+                  position: fixed !important; left: 0 !important; top: 0 !important;
+                  width: 210mm !important; box-sizing: border-box !important;
                 }
                 body[data-print="sj-sticker"] #sj-sticker-print-area,
                 body[data-print="sj-sticker"] #sj-sticker-print-area * { visibility: visible !important; }
                 body[data-print="sj-sticker"] #sj-sticker-print-area {
+                  display: flex !important;
                   position: fixed !important; left: 0 !important; top: 0 !important;
-                  width: 100vw !important; height: 100vh !important;
-                  display: flex !important; align-items: center !important; justify-content: center !important;
+                  width: ${stkW}mm !important; height: ${stkH}mm !important;
+                  align-items: center !important; justify-content: center !important;
+                  overflow: hidden !important;
                 }
               }
             `}</style>
+            {/* Inject @page size rules separately — @page cannot be nested inside selectors */}
+            {printState.mode === "sheet" && (
+              <style>{`@media print { @page { size: A4 portrait; margin: 10mm; } }`}</style>
+            )}
+            {printState.mode === "sticker" && (
+              <style>{`@media print { @page { size: ${stkW}mm ${stkH}mm; margin: 0; } }`}</style>
+            )}
 
             {/* A4 service sheet */}
             <div
               id="sj-sheet-print-area"
               aria-hidden="true"
-              style={{ position: "absolute", left: "-9999px", top: 0, width: 794, background: "white", padding: "48px 48px 48px 48px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: 12, color: "#111", lineHeight: 1.6 }}
+              style={{ width: "100%", maxWidth: 794, background: "white", padding: "48px 48px 48px 48px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: 12, color: "#111", lineHeight: 1.6 }}
             >
               {/* Header */}
               <div style={{ borderBottom: `4px solid ${brandColor}`, paddingBottom: 16, marginBottom: 24 }}>
@@ -1020,7 +1039,7 @@ export default function ServiceJobsPage() {
             <div
               id="sj-sticker-print-area"
               aria-hidden="true"
-              style={{ position: "absolute", left: "-9999px", top: 0 }}
+              style={{ position: "fixed", left: "-9999px", top: 0 }}
             >
               <LabelPreview
                 type={repairType}
