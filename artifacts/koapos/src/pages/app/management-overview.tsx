@@ -9,6 +9,7 @@ import {
   RotateCcw, Receipt, Package, Percent, Package2,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
 
 /* ─── Period tabs ─────────────────────────────────────────────────────────── */
 
@@ -344,39 +345,42 @@ export default function ManagementOverviewPage() {
             </div>
           </div>
 
-          {/* Device Types + Customers by Suburb */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-2xl border bg-card p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-primary flex items-center gap-2">
-                  <Monitor className="w-4 h-4" />
-                  Device Types
-                </p>
-                <p className="text-xs text-muted-foreground">1 total jobs</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-primary">Printer</span>
-                  <span>1</span>
-                </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full bg-primary rounded-full" style={{ width: "100%" }} />
-                </div>
-              </div>
+          {/* Device Types */}
+          <div className="rounded-2xl border bg-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-primary flex items-center gap-2">
+                <Monitor className="w-4 h-4" />
+                Device Types
+              </p>
+              <p className="text-xs text-muted-foreground">1 total jobs</p>
             </div>
-            <div className="rounded-2xl border bg-card p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-primary flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  Customers by Suburb
-                </p>
-                <p className="text-xs text-muted-foreground">0 contacts</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-primary">Printer</span>
+                <span>1</span>
               </div>
-              <p className="text-sm text-muted-foreground py-4 text-center">No suburb data yet.</p>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-primary rounded-full" style={{ width: "100%" }} />
+              </div>
             </div>
           </div>
 
         </section>
+
+        {/* ── Customer Locations ─────────────────────────────────────────── */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              Map of Customers
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              See where your customer base is physically located. Pins appear for customers with a billing city saved.
+            </p>
+          </div>
+          <CustomerLocationMap />
+        </section>
+
       </div>
     </AppLayout>
   );
