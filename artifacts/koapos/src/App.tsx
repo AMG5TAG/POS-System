@@ -84,6 +84,10 @@ import StaffNotesPage from "@/pages/app/staff-notes";
 import StaffKpisPage from "@/pages/app/staff-kpis";
 import StaffLinksPage from "@/pages/app/staff-links";
 
+import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
+import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
+import ManagementMarketingGeneratorsPage from "@/pages/app/management-marketing-generators";
+
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -350,6 +354,17 @@ function Router() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
+      </Route>
+
+      {/* Marketing section */}
+      <Route path="/marketing/generators/qr-codes">
+        <ProtectedRoute component={MarketingQRCodesPage} />
+      </Route>
+      <Route path="/marketing/generators/shortlinks">
+        <ProtectedRoute component={MarketingShortlinksPage} />
+      </Route>
+      <Route path="/management/marketing/generators">
+        <ProtectedRoute component={ManagementMarketingGeneratorsPage} />
       </Route>
 
       <Route component={NotFound} />

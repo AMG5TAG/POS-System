@@ -16,6 +16,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
+  Megaphone, QrCode,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -50,6 +51,17 @@ const STAFF_SUBNAV: NavItem[] = [
   { name: "Notes",      href: "/staff/notes",          icon: StickyNote    },
   { name: "KPIs",       href: "/staff/kpis",           icon: Target        },
   { name: "Links",      href: "/staff/links",          icon: Link2         },
+];
+
+const MARKETING_SUBNAV: NavItem[] = [
+  {
+    name: "Generators",
+    icon: QrCode,
+    children: [
+      { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
+      { name: "Shortlinks", href: "/marketing/generators/shortlinks",  icon: Link2  },
+    ],
+  },
 ];
 
 const INVENTORY_SUBNAV = [
@@ -108,6 +120,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
+  {
+    name: "Marketing",
+    icon: Megaphone,
+    children: [
+      { name: "Generators", href: "/management/marketing/generators", icon: QrCode },
+    ],
+  },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
@@ -181,6 +200,9 @@ const SEARCH_INDEX = [
   { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
+  { label: "Marketing · QR Codes",      href: "/marketing/generators/qr-codes",         icon: QrCode,      group: "Marketing" },
+  { label: "Marketing · Shortlinks",    href: "/marketing/generators/shortlinks",        icon: Link2,       group: "Marketing" },
+  { label: "Marketing · Generator Settings", href: "/management/marketing/generators",   icon: Megaphone,   group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -719,6 +741,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
+  const isMarketingSection  = location.startsWith("/marketing/");
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -757,6 +780,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavBtn icon={Users} label="Customers" isActive={location === "/customers"} onClick={() => navigate("/customers")} />
           <TopNavDropdown label="Staff" icon={UserSquare2} items={STAFF_SUBNAV} isActive={isStaffSection}
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
+          <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
+            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} />
           <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
             isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
         </nav>
@@ -806,6 +831,12 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
     {
       label: "Staff",
       items: STAFF_SUBNAV.flatMap((item) =>
+        "children" in item ? item.children : [item as NavLeaf]
+      ),
+    },
+    {
+      label: "Marketing",
+      items: MARKETING_SUBNAV.flatMap((item) =>
         "children" in item ? item.children : [item as NavLeaf]
       ),
     },
@@ -998,16 +1029,18 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
+  const isMarketingSection  = location.startsWith("/marketing/");
   const isManagementSection =
     location.startsWith("/management/") ||
     location === "/modules" || location.startsWith("/settings/");
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
 
-  const [posOpen,    setPosOpen]    = useState(isPOSSection);
-  const [invOpen,    setInvOpen]    = useState(isInventorySection);
-  const [staffOpen,  setStaffOpen]  = useState(isStaffSection);
-  const [mgmtOpen,   setMgmtOpen]   = useState(isManagementSection);
-  const [custsOpen,  setCustsOpen]  = useState(isCustomersSection);
+  const [posOpen,      setPosOpen]      = useState(isPOSSection);
+  const [invOpen,      setInvOpen]      = useState(isInventorySection);
+  const [staffOpen,    setStaffOpen]    = useState(isStaffSection);
+  const [marketingOpen, setMarketingOpen] = useState(isMarketingSection);
+  const [mgmtOpen,     setMgmtOpen]     = useState(isManagementSection);
+  const [custsOpen,    setCustsOpen]    = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const canManage = !!user;
@@ -1114,13 +1147,18 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           />
           <CollapsibleSection
             label="Staff" icon={UserSquare2} isActive={isStaffSection} isOpen={staffOpen}
-            onToggle={() => { setStaffOpen((o) => !o); setPosOpen(false); setInvOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
+            onToggle={() => { setStaffOpen((o) => !o); setPosOpen(false); setInvOpen(false); setCustsOpen(false); setMgmtOpen(false); setMarketingOpen(false); }}
             items={STAFF_SUBNAV} defaultHref="/staff"
+          />
+          <CollapsibleSection
+            label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
+            onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
+            items={MARKETING_SUBNAV} defaultHref="/marketing/generators/qr-codes"
           />
           {canManage && (
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
-              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); }}
+              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setMarketingOpen(false); }}
               items={MANAGEMENT_SUBNAV} accent defaultHref="/management/overview"
             />
           )}
