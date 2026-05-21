@@ -398,6 +398,16 @@ export default function ServiceJobNewPage() {
   const hasTotalWarning = totalPhotoBytes >= TOTAL_WARN_BYTES;
 
   function handleSubmit() {
+    let jobNumberPrefix = "KS", jobNumberDigits = 4;
+    try {
+      const raw = localStorage.getItem("koapos_code_prefixes");
+      if (raw) {
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof p.servicePrefix === "string" && p.servicePrefix) jobNumberPrefix = p.servicePrefix;
+        if (typeof p.serviceDigits === "number" && p.serviceDigits > 0) jobNumberDigits = p.serviceDigits;
+      }
+    } catch { /* use defaults */ }
+
     createMutation.mutate(
       {
         data: {
@@ -418,7 +428,9 @@ export default function ServiceJobNewPage() {
           passwordOrPin: credentials.filter(c => c.passwordOrPin.trim()).map(c => c.passwordOrPin.trim()).join("\n") || null,
           accounts: credentials.filter(c => c.accounts.trim()).map(c => c.accounts.trim()).join("\n") || null,
           signature: signature || null,
-        },
+          jobNumberPrefix,
+          jobNumberDigits,
+        } as Parameters<typeof createMutation.mutate>[0]["data"],
       },
       {
         onSuccess: (job) => {

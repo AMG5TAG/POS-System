@@ -471,6 +471,7 @@ export interface TransactionInput {
   changeDue?: number;
   notes?: string;
   loyaltyEarned?: number;
+  receiptNumber?: string;
 }
 
 export interface RefundInput {

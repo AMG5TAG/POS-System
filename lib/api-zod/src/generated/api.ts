@@ -1112,7 +1112,8 @@ export const CreateTransactionBody = zod.object({
   "amountTendered": zod.number().optional(),
   "changeDue": zod.number().optional(),
   "notes": zod.string().optional(),
-  "loyaltyEarned": zod.number().optional()
+  "loyaltyEarned": zod.number().optional(),
+  "receiptNumber": zod.string().optional()
 })
 
 
@@ -1182,6 +1183,14 @@ export const GetTransactionResponse = zod.object({
   "discount": zod.number().optional()
 })),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a transaction
+ */
+export const DeleteTransactionParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

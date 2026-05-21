@@ -891,6 +891,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Transaction"
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      summary: Delete a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /transactions/{id}/refund:
     post:
@@ -2669,6 +2682,8 @@ components:
           type: string
         loyaltyEarned:
           type: number
+        receiptNumber:
+          type: string
 
     RefundInput:
       type: object

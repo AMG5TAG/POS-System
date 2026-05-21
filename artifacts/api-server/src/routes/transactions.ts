@@ -8,6 +8,7 @@ import {
   GetTransactionParams,
   RefundTransactionParams,
   RefundTransactionBody,
+  DeleteTransactionParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -50,9 +51,9 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
   };
 }
 
-function generateReceiptNumber(merchantId: number): string {
-  const timestamp = Date.now();
-  return `RCP-${merchantId}-${timestamp}`;
+function generateReceiptNumber(prefix = "KR", digits = 5): string {
+  const n = Math.floor(Math.random() * Math.pow(10, digits));
+  return `${prefix}${String(n).padStart(digits, "0")}`;
 }
 
 router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
@@ -103,9 +104,9 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes, loyaltyEarned } = parsed.data;
+  const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes, loyaltyEarned, receiptNumber: providedReceiptNumber } = parsed.data;
 
-  const receiptNumber = generateReceiptNumber(req.session.merchantId!);
+  const receiptNumber = providedReceiptNumber || generateReceiptNumber();
 
   const [transaction] = await db
     .insert(transactionsTable)
@@ -244,6 +245,30 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
     .returning();
 
   res.json(formatTransaction(updated));
+});
+
+router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
+  const params = DeleteTransactionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ id: transactionsTable.id })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+
+  if (!existing) {
+    res.status(404).json({ error: "Transaction not found" });
+    return;
+  }
+
+  await db
+    .delete(transactionsTable)
+    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+
+  res.status(204).send();
 });
 
 export default router;

@@ -158,6 +158,24 @@ interface DetailDialogProps {
   deleteIsPending: boolean;
 }
 
+function loadApptPrefix(): { prefix: string; digits: number } {
+  try {
+    const raw = localStorage.getItem("koapos_code_prefixes");
+    if (raw) {
+      const p = JSON.parse(raw) as Record<string, unknown>;
+      const prefix = typeof p.appointmentPrefix === "string" && p.appointmentPrefix ? p.appointmentPrefix : "KA";
+      const digits = typeof p.appointmentDigits === "number" && p.appointmentDigits > 0 ? p.appointmentDigits : 5;
+      return { prefix, digits };
+    }
+  } catch { /* use defaults */ }
+  return { prefix: "KA", digits: 5 };
+}
+
+function apptRefCode(id: number): string {
+  const { prefix, digits } = loadApptPrefix();
+  return `${prefix}${String(id).padStart(digits, "0")}`;
+}
+
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (!appt) return null;
@@ -171,6 +189,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary shrink-0" />
             <span className="truncate">{appt.title || "Appointment"}</span>
+            <span className="font-mono text-xs font-normal text-muted-foreground">{apptRefCode(appt.id)}</span>
             <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
               {label}
             </span>
@@ -594,6 +613,7 @@ export default function AppointmentsPage() {
                             className="rounded border-muted-foreground/40 accent-primary"
                           />
                         </th>
+                        <th className="px-3 py-3 text-left font-medium">Ref #</th>
                         <SortableHeader {...sh("Date & Time", "scheduledAt")} />
                         <SortableHeader {...sh("Duration", "durationMinutes")} />
                         <SortableHeader {...sh("Customer", "customerName")} />
@@ -625,6 +645,10 @@ export default function AppointmentsPage() {
                                 onChange={() => toggleOne(appt.id)}
                                 className="rounded border-muted-foreground/40 accent-primary"
                               />
+                            </td>
+
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <span className="font-mono text-xs font-medium text-muted-foreground">{apptRefCode(appt.id)}</span>
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap text-xs text-foreground">

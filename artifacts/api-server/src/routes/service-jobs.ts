@@ -40,13 +40,13 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
   };
 }
 
-function nextJobNumber(existing: Array<{ jobNumber: string }>): string {
+function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4): string {
   let max = 0;
   for (const job of existing) {
     const n = parseInt(job.jobNumber.replace(/\D/g, ""), 10);
     if (!isNaN(n) && n > max) max = n;
   }
-  return `SJ-${String(max + 1).padStart(4, "0")}`;
+  return `${prefix}${String(max + 1).padStart(digits, "0")}`;
 }
 
 router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
@@ -84,13 +84,16 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
 
   const today = new Date().toISOString().split("T")[0];
 
+  const jobPrefix = typeof body.jobNumberPrefix === "string" && body.jobNumberPrefix ? body.jobNumberPrefix : "SJ";
+  const jobDigits = typeof body.jobNumberDigits === "number" && body.jobNumberDigits > 0 ? body.jobNumberDigits : 4;
+
   const [job] = await db
     .insert(serviceJobsTable)
     .values({
       merchantId,
       customerId: body.customerId ? Number(body.customerId) : null,
       staffId: body.staffId ? Number(body.staffId) : null,
-      jobNumber: nextJobNumber(existing),
+      jobNumber: nextJobNumber(existing, jobPrefix, jobDigits),
       title: body.title ? String(body.title) : "Service Job",
       status: typeof body.status === "string" ? body.status : "pending",
       bookInDate: typeof body.bookInDate === "string" ? body.bookInDate : today,

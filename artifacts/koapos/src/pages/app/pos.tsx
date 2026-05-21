@@ -465,6 +465,19 @@ export default function POSPage() {
       linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
       saleNotes || null,
     ].filter(Boolean);
+
+    let receiptPrefix = "KR", receiptDigits = 5;
+    try {
+      const raw = localStorage.getItem("koapos_code_prefixes");
+      if (raw) {
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof p.receiptPrefix === "string" && p.receiptPrefix) receiptPrefix = p.receiptPrefix;
+        if (typeof p.receiptDigits === "number" && p.receiptDigits > 0) receiptDigits = p.receiptDigits;
+      }
+    } catch { /* use defaults */ }
+    const n = Math.floor(Math.random() * Math.pow(10, receiptDigits));
+    const receiptNumber = `${receiptPrefix}${String(n).padStart(receiptDigits, "0")}`;
+
     createTransactionMutation.mutate({
       data: {
         items: txItems, paymentMethod, subtotal, taxTotal,
@@ -474,6 +487,7 @@ export default function POSPage() {
         staffId: currentStaff?.id,
         loyaltyEarned: !walkIn && loyaltyAmount > 0 ? loyaltyAmount : undefined,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+        receiptNumber,
       }
     }, {
       onSuccess: (data) => {
