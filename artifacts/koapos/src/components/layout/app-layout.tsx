@@ -54,6 +54,7 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
+  { name: "Landing Pages", href: "/marketing/landing-pages", icon: LayoutTemplate },
   {
     name: "Generators",
     icon: QrCode,

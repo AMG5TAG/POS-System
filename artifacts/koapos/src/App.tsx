@@ -86,7 +86,9 @@ import StaffLinksPage from "@/pages/app/staff-links";
 
 import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
 import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
+import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
 import ManagementMarketingGeneratorsPage from "@/pages/app/management-marketing-generators";
+import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
 import NotFound from "@/pages/not-found";
 
@@ -356,7 +358,13 @@ function Router() {
         <ProtectedRoute component={SettingsPage} />
       </Route>
 
+      {/* Public landing pages (no auth required) */}
+      <Route path="/p/:slug" component={LandingPagePublicView} />
+
       {/* Marketing section */}
+      <Route path="/marketing/landing-pages">
+        <ProtectedRoute component={MarketingLandingPagesPage} />
+      </Route>
       <Route path="/marketing/generators/qr-codes">
         <ProtectedRoute component={MarketingQRCodesPage} />
       </Route>
