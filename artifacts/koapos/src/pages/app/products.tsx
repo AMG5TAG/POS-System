@@ -36,7 +36,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
-  Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star,
+  Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -647,6 +647,15 @@ export default function ProductsPage() {
   const [codesLoading, setCodesLoading]     = useState(false);
   const [newCodeInput, setNewCodeInput]     = useState("");
   const [bulkMode, setBulkMode]             = useState(false);
+
+  /* Only owners and managers can see digital code values; cashiers see XXXX */
+  const canViewCodes = (() => {
+    try {
+      const staff = JSON.parse(localStorage.getItem("koapos_pos_staff") || "null") as { role?: string } | null;
+      if (!staff) return true; // no staff signed into POS → merchant owner access
+      return staff.role === "owner" || staff.role === "manager";
+    } catch { return true; }
+  })();
 
   const loadDigitalCodes = useCallback(async (productId: number) => {
     setCodesLoading(true);
@@ -1529,52 +1538,59 @@ export default function ProductsPage() {
                     </div>
                   ) : (
                     <>
-                      {/* Add code(s) */}
-                      {!bulkMode ? (
-                        <div className="mt-3 flex gap-2">
-                          <Input
-                            value={newCodeInput}
-                            onChange={(e) => setNewCodeInput(e.target.value)}
-                            placeholder="Enter a code (e.g. XXXX-XXXX-XXXX)"
-                            onKeyDown={(e) => { if (e.key === "Enter" && newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
-                            className="flex-1"
-                          />
-                          <Button
-                            type="button" variant="outline" size="sm"
-                            onClick={() => { if (newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
-                            disabled={!newCodeInput.trim()}
-                          >
-                            <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setBulkMode(true)}>
-                            Bulk
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="mt-3 space-y-2">
-                          <Textarea
-                            value={newCodeInput}
-                            onChange={(e) => setNewCodeInput(e.target.value)}
-                            placeholder={"One code per line:\nXXXX-XXXX-XXXX\nYYYY-YYYY-YYYY"}
-                            rows={5}
-                            className="resize-none font-mono text-xs"
-                          />
-                          <div className="flex gap-2">
+                      {/* Add code(s) — managers/owners only */}
+                      {canViewCodes ? (
+                        !bulkMode ? (
+                          <div className="mt-3 flex gap-2">
+                            <Input
+                              value={newCodeInput}
+                              onChange={(e) => setNewCodeInput(e.target.value)}
+                              placeholder="Enter a code (e.g. XXXX-XXXX-XXXX)"
+                              onKeyDown={(e) => { if (e.key === "Enter" && newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
+                              className="flex-1"
+                            />
                             <Button
-                              type="button" size="sm"
-                              onClick={async () => {
-                                const lines = newCodeInput.split("\n").map(l => l.trim()).filter(Boolean);
-                                for (const line of lines) await addDigitalCode(editingProduct.id, line);
-                                setNewCodeInput(""); setBulkMode(false);
-                              }}
+                              type="button" variant="outline" size="sm"
+                              onClick={() => { if (newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
                               disabled={!newCodeInput.trim()}
                             >
-                              Add {newCodeInput.split("\n").filter(l => l.trim()).length} codes
+                              <Plus className="w-3.5 h-3.5 mr-1" /> Add
                             </Button>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => { setBulkMode(false); setNewCodeInput(""); }}>
-                              Cancel
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setBulkMode(true)}>
+                              Bulk
                             </Button>
                           </div>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            <Textarea
+                              value={newCodeInput}
+                              onChange={(e) => setNewCodeInput(e.target.value)}
+                              placeholder={"One code per line:\nXXXX-XXXX-XXXX\nYYYY-YYYY-YYYY"}
+                              rows={5}
+                              className="resize-none font-mono text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                type="button" size="sm"
+                                onClick={async () => {
+                                  const lines = newCodeInput.split("\n").map(l => l.trim()).filter(Boolean);
+                                  for (const line of lines) await addDigitalCode(editingProduct.id, line);
+                                  setNewCodeInput(""); setBulkMode(false);
+                                }}
+                                disabled={!newCodeInput.trim()}
+                              >
+                                Add {newCodeInput.split("\n").filter(l => l.trim()).length} codes
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => { setBulkMode(false); setNewCodeInput(""); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <div className="mt-3 flex items-center gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
+                          <Lock className="w-4 h-4 shrink-0" />
+                          <p className="text-sm">Code management is restricted to managers and owners.</p>
                         </div>
                       )}
 
@@ -1598,12 +1614,12 @@ export default function ProductsPage() {
                               <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                                 <KeyRound className={cn("w-3.5 h-3.5 shrink-0", c.isUsed ? "text-muted-foreground/40" : "text-primary")} />
                                 <span className={cn("flex-1 font-mono text-sm", c.isUsed && "line-through text-muted-foreground/60")}>
-                                  {c.code}
+                                  {canViewCodes ? c.code : c.code.replace(/[A-Za-z0-9]/g, "X")}
                                 </span>
                                 {c.isUsed && (
                                   <Badge variant="secondary" className="text-[10px] shrink-0">Used</Badge>
                                 )}
-                                {!c.isUsed && (
+                                {!c.isUsed && canViewCodes && (
                                   <button
                                     type="button"
                                     onClick={() => deleteDigitalCode(c.id, editingProduct.id)}
