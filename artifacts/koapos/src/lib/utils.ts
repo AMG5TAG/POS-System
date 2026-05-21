@@ -22,3 +22,9 @@ export function formatDate(dateString: string) {
     timeStyle: 'short',
   }).format(new Date(dateString));
 }
+
+export function formatDateOnly(dateString: string) {
+  return new Intl.DateTimeFormat('en-AU', {
+    dateStyle: 'medium',
+  }).format(new Date(dateString));
+}

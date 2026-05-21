@@ -18,10 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
-  Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download,
+  Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -92,8 +92,16 @@ export default function POSInvoicesPage() {
   const [emailAddr, setEmailAddr] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [editForm, setEditForm] = useState({ customerId: "", dueDate: "", notes: "" });
+  const [editLines, setEditLines] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
+  const [editLineSearch, setEditLineSearch] = useState<string[]>([""]);
+  const [editLineDropOpen, setEditLineDropOpen] = useState<boolean[]>([false]);
+  const [editSaving, setEditSaving] = useState(false);
 
   const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const editLineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [lineSearch, setLineSearch] = useState<string[]>([""]);
   const [lineDropOpen, setLineDropOpen] = useState<boolean[]>([false]);
 
@@ -132,6 +140,17 @@ export default function POSInvoicesPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      editLineDropRefs.current.forEach((ref, i) => {
+        if (ref && !ref.contains(e.target as Node))
+          setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+      });
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
   /* ── Line helpers ── */
   const addLine = () => {
     setLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
@@ -157,6 +176,70 @@ export default function POSInvoicesPage() {
   const invTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
   const taxTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
   const subtotal  = invTotal - taxTotal;
+
+  /* ── Edit line helpers ── */
+  const addEditLine = () => {
+    setEditLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
+    setEditLineSearch((p) => [...p, ""]);
+    setEditLineDropOpen((p) => [...p, false]);
+  };
+  const updateEditLine = (i: number, field: keyof LineItem, val: string | number) =>
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const removeEditLine = (i: number) => {
+    setEditLines((p) => p.filter((_, idx) => idx !== i));
+    setEditLineSearch((p) => p.filter((_, idx) => idx !== i));
+    setEditLineDropOpen((p) => p.filter((_, idx) => idx !== i));
+  };
+  const selectEditProduct = (i: number, product: { name: string; price?: number | null }) => {
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
+    setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+    setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
+
+  const editInvTotal  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const editTaxTotal  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const editSubtotal  = editInvTotal - editTaxTotal;
+
+  /* ── Open edit dialog ── */
+  const openEdit = (inv: Invoice) => {
+    setEditingInvoice(inv);
+    setEditForm({
+      customerId: String(inv.customerId ?? ""),
+      dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : "",
+      notes: inv.notes ?? "",
+    });
+    const items = inv.items?.length ? inv.items : [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
+    setEditLines(items);
+    setEditLineSearch(items.map(() => ""));
+    setEditLineDropOpen(items.map(() => false));
+    setEditOpen(true);
+  };
+
+  /* ── Save edits ── */
+  const handleUpdate = async () => {
+    if (!editingInvoice) return;
+    const validLines = editLines.filter((l) => l.description.trim());
+    if (!validLines.length) { toast.error("Add at least one line item"); return; }
+    setEditSaving(true);
+    const res = await fetch(`${API}/${editingInvoice.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        customerId: editForm.customerId ? parseInt(editForm.customerId) : null,
+        dueDate: editForm.dueDate || null,
+        notes: editForm.notes || null,
+        items: validLines,
+      }),
+    });
+    setEditSaving(false);
+    if (!res.ok) { toast.error("Failed to update invoice"); return; }
+    const updated = await res.json() as Invoice;
+    setInvoices((prev) => prev.map((i) => i.id === updated.id ? updated : i));
+    if (detailInvoice?.id === updated.id) setDetailInvoice(updated);
+    toast.success("Invoice updated");
+    setEditOpen(false);
+  };
 
   /* ── Reset create dialog ── */
   const resetCreate = () => {
@@ -345,7 +428,7 @@ export default function POSInvoicesPage() {
           <div class="inv-meta">
             <strong>${inv.invoiceNumber}</strong><br>
             Date: ${formatDate(inv.createdAt)}<br>
-            ${inv.dueDate ? `Due: ${formatDate(inv.dueDate)}<br>` : ""}
+            ${inv.dueDate ? `Due: ${formatDateOnly(inv.dueDate)}<br>` : ""}
             Status: ${STATUS_LABELS[inv.status]}
           </div>
         </div>
@@ -452,7 +535,7 @@ export default function POSInvoicesPage() {
     doc.setTextColor(100, 100, 100);
     let imY = y + 18;
     doc.text(`Date: ${formatDate(inv.createdAt)}`, W - MR, imY, { align: "right" }); imY += 5;
-    if (inv.dueDate) { doc.text(`Due: ${formatDate(inv.dueDate)}`, W - MR, imY, { align: "right" }); imY += 5; }
+    if (inv.dueDate) { doc.text(`Due: ${formatDateOnly(inv.dueDate)}`, W - MR, imY, { align: "right" }); imY += 5; }
     doc.text(`Status: ${STATUS_LABELS[inv.status]}`, W - MR, imY, { align: "right" });
 
     y = Math.max(metaY, imY) + 7;
@@ -665,7 +748,7 @@ export default function POSInvoicesPage() {
                     <td className="p-3 font-mono font-medium text-xs">{inv.invoiceNumber}</td>
                     <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
-                      {inv.dueDate ? formatDate(inv.dueDate) : <span>—</span>}
+                      {inv.dueDate ? formatDateOnly(inv.dueDate) : <span>—</span>}
                     </td>
                     <td className="p-3">
                       <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
@@ -734,6 +817,10 @@ export default function POSInvoicesPage() {
                   </div>
                   <div className="flex gap-1.5 flex-wrap justify-end">
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      onClick={() => openEdit(detailInvoice)}>
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
                       onClick={() => { setEmailDialog({ open: true, invoiceId: detailInvoice.id }); setEmailAddr(""); }}>
                       <Mail className="w-3.5 h-3.5" /> Email
                     </Button>
@@ -768,7 +855,7 @@ export default function POSInvoicesPage() {
                   {detailInvoice.dueDate && (
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Due Date</p>
-                      <p className="font-medium mt-0.5">{formatDate(detailInvoice.dueDate)}</p>
+                      <p className="font-medium mt-0.5">{formatDateOnly(detailInvoice.dueDate)}</p>
                     </div>
                   )}
                   {detailInvoice.paidAt && (
@@ -1082,6 +1169,133 @@ export default function POSInvoicesPage() {
             <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreate(); }}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? "Creating…" : recurring.enabled ? "Create Recurring Invoice" : "Create Invoice"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Edit Invoice Dialog ─── */}
+      <Dialog open={editOpen} onOpenChange={(o) => { if (!o) setEditOpen(false); }}>
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <DialogTitle>Edit Invoice {editingInvoice?.invoiceNumber}</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+            {/* Customer + Due Date */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Customer (optional)</Label>
+                <CustomerSearchInput
+                  value={editForm.customerId}
+                  onChange={(id) => setEditForm({ ...editForm, customerId: id })}
+                  allowNone
+                  placeholder="Walk-in customer"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Due Date</Label>
+                <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Line Items</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addEditLine}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
+                </Button>
+              </div>
+              <div className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+                <span>Description</span>
+                <span className="text-center">Qty</span>
+                <span className="text-right">Price</span>
+                <span className="text-right">Tax%</span>
+                <span />
+              </div>
+              <div className="space-y-1.5">
+                {editLines.map((line, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 items-start">
+                    <div className="relative" ref={(el) => { editLineDropRefs.current[i] = el; }}>
+                      <div className="relative">
+                        <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        <Input
+                          value={editLineSearch[i] !== undefined && editLineSearch[i] !== "" ? editLineSearch[i] : line.description}
+                          placeholder="Search or type description..."
+                          className="h-8 text-sm pl-6"
+                          onFocus={() => setEditLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setEditLineSearch((p) => { const n = [...p]; n[i] = v; return n; });
+                            updateEditLine(i, "description", v);
+                            setEditLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; });
+                          }}
+                          onBlur={() => {
+                            if (!editLineSearch[i]) return;
+                            setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+                          }}
+                        />
+                      </div>
+                      {editLineDropOpen[i] && (
+                        <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
+                          {filteredProducts(editLineSearch[i] ?? "").length === 0 ? (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          ) : filteredProducts(editLineSearch[i] ?? "").map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); selectEditProduct(i, p); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">{p.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <Input type="number" min={1} value={line.quantity}
+                      onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 1)}
+                      className="h-8 text-sm text-center" />
+                    <Input type="number" step="0.01" value={line.unitPrice || ""}
+                      onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                      placeholder="0.00" className="h-8 text-sm text-right" />
+                    <Input type="number" min={0} max={100} value={line.taxRate}
+                      onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                      className="h-8 text-sm text-right" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                      onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="flex justify-end">
+              <div className="w-52 space-y-1 text-sm">
+                <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex-GST)</span><span>{formatCurrency(editSubtotal)}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>GST included</span><span>{formatCurrency(editTaxTotal)}</span></div>
+                <div className="flex justify-between font-semibold border-t pt-1"><span>Total (inc-GST)</span><span>{formatCurrency(editInvTotal)}</span></div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={2} placeholder="Payment terms, notes for customer..." />
+            </div>
+
+          </div>
+
+          <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={editSaving}>
+              {editSaving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
         </DialogContent>

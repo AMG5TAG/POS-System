@@ -156,11 +156,25 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
 // PATCH /invoices/:id
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { status, notes, dueDate } = req.body as { status?: string; notes?: string; dueDate?: string };
+  const { status, notes, dueDate, customerId, items } = req.body as {
+    status?: string; notes?: string; dueDate?: string;
+    customerId?: number | null; items?: LineItem[];
+  };
   const updates: Record<string, unknown> = {};
   if (status) { updates.status = status; if (status === "paid") updates.paidAt = new Date(); }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
+  if (customerId !== undefined) updates.customerId = customerId ?? null;
+  if (items !== undefined) {
+    const lines: LineItem[] = items;
+    const total    = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const taxTotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / (100 + (i.taxRate ?? 0))), 0);
+    const subtotal = total - taxTotal;
+    updates.items    = lines.length ? lines : null;
+    updates.subtotal = String(subtotal);
+    updates.taxTotal = String(taxTotal);
+    updates.total    = String(total);
+  }
   const [inv] = await db
     .update(invoicesTable)
     .set(updates)
