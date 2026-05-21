@@ -288,8 +288,12 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
   "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
   "/pos/pc-builder":                     ["POS", "PC Builder"],
-  "/management/stickers":         ["Management", "Stickers"],
-  "/management/sticker-templates":["Management", "Sticker Templates"],
+  "/management/stickers":                  ["Management", "Stickers"],
+  "/management/sticker-templates":         ["Management", "Sticker Templates"],
+  "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
+  "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
+  "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
+  "/management/marketing/generators":      ["Management", "Marketing", "Generators"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
