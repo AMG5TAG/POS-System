@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable } from "@workspace/db";
-import { eq, and, gte, sql, desc, lt, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams } from "@workspace/api-zod";
 
@@ -386,18 +386,29 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     });
   }
 
-  // Service jobs
+  // Service jobs — use scheduledAt when set, fall back to createdAt so unscheduled jobs still appear
   const jobs = await db
     .select()
     .from(serviceJobsTable)
     .where(and(
       eq(serviceJobsTable.merchantId, merchantId),
-      gte(serviceJobsTable.scheduledAt, monthStart),
-      lt(serviceJobsTable.scheduledAt, monthEnd),
+      or(
+        and(
+          isNotNull(serviceJobsTable.scheduledAt),
+          gte(serviceJobsTable.scheduledAt, monthStart),
+          lt(serviceJobsTable.scheduledAt, monthEnd),
+        ),
+        and(
+          isNull(serviceJobsTable.scheduledAt),
+          gte(serviceJobsTable.createdAt, monthStart),
+          lt(serviceJobsTable.createdAt, monthEnd),
+        ),
+      ),
     ));
 
   for (const j of jobs) {
-    const localDate = new Date(j.scheduledAt!.getTime() + 10 * 60 * 60 * 1000);
+    const dateSource = j.scheduledAt ?? j.createdAt;
+    const localDate = new Date(dateSource.getTime() + 10 * 60 * 60 * 1000);
     const key = localDate.toISOString().split("T")[0];
     if (dayMap[key]) dayMap[key].serviceJobs += 1;
   }

@@ -718,9 +718,10 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
 
       const payload = buildPayload(rows[i]);
 
-      /* Auto-generate SKU for products if not provided */
+      /* Auto-generate SKU for products if not provided — matches Inventory SKU Generator format */
       if (entity.key === "products" && !payload.sku) {
-        payload.sku = `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const prefix = (() => { try { return localStorage.getItem("koapos_sku_prefix") || "KP"; } catch { return "KP"; } })();
+        payload.sku = `${prefix}-${Math.floor(10000 + Math.random() * 90000)}`;
       }
 
       const isUpdate = conflict?.action === "update" && !!entity.updateUrl;
