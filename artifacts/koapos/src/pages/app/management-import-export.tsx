@@ -460,7 +460,7 @@ function parseCSVLine(line: string): string[] {
 function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines   = text.trim().split(/\r?\n/);
   const headers = parseCSVLine(lines[0]);
-  const rows    = lines.slice(1).filter((l) => l.trim()).map((line) => {
+  const rows    = lines.slice(1).filter((l) => l.replace(/,/g, "").trim() !== "").map((line) => {
     const vals = parseCSVLine(line);
     return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
   });
