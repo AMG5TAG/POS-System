@@ -383,15 +383,29 @@ function EyeIcon({ csStyle, cdStyle }: { csStyle: CornerSquareType; cdStyle: Cor
 function StyledQR({ settings, data, size }: { settings: QRSettings; data: string; size: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<QRCodeStyling | null>(null);
+
   useEffect(() => {
     const opts = buildQROptions(settings, data, size);
     if (!qrRef.current) {
       qrRef.current = new QRCodeStyling(opts);
-      if (containerRef.current) { containerRef.current.innerHTML = ""; qrRef.current.append(containerRef.current); }
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+        qrRef.current.append(containerRef.current);
+      }
     } else {
       qrRef.current.update(opts);
     }
   });
+
+  useEffect(() => {
+    return () => {
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
+      qrRef.current = null;
+    };
+  }, []);
+
   return <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />;
 }
 
