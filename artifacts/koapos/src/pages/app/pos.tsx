@@ -18,6 +18,7 @@ import {
 } from "@/pages/app/management-registers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ import {
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
+  Banknote, Clock, FileText, TrendingUp,
 } from "lucide-react";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
@@ -42,6 +44,15 @@ type CartItem = {
 };
 
 type WalkIn = { firstName: string; lastName: string };
+
+type RegisterSession = {
+  openedAt: string;
+  openedBy: string | null;
+  openingFloat: number;
+  openingNotes: string;
+  sales: Record<string, number>;
+  txCount: number;
+};
 
 const DISPLAY_KEY = "koapos_pos_display";
 
@@ -108,7 +119,57 @@ export default function POSPage() {
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(() => localStorage.getItem("koapos_register_open") === "true");
-  const toggleRegister = () => setRegisterOpen(v => { const next = !v; localStorage.setItem("koapos_register_open", String(next)); return next; });
+  const [openRegisterDialogOpen, setOpenRegisterDialogOpen] = useState(false);
+  const [closeRegisterDialogOpen, setCloseRegisterDialogOpen] = useState(false);
+  const [openFloat, setOpenFloat] = useState("");
+  const [openNotes, setOpenNotes] = useState("");
+  const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
+  const [sessionSnap, setSessionSnap] = useState<RegisterSession | null>(null);
+
+  const getSession = (): RegisterSession | null => {
+    try { return JSON.parse(localStorage.getItem("koapos_register_session") ?? "null"); } catch { return null; }
+  };
+
+  const handleOpenRegister = () => {
+    const float = parseFloat(openFloat) || 0;
+    const session: RegisterSession = {
+      openedAt: new Date().toISOString(),
+      openedBy: currentStaff?.name ?? null,
+      openingFloat: float,
+      openingNotes: openNotes,
+      sales: {},
+      txCount: 0,
+    };
+    localStorage.setItem("koapos_register_session", JSON.stringify(session));
+    localStorage.setItem("koapos_register_open", "true");
+    setRegisterOpen(true);
+    setOpenRegisterDialogOpen(false);
+    setOpenFloat("");
+    setOpenNotes("");
+    toast.success("Register opened");
+  };
+
+  const handleCloseRegister = () => {
+    const session = getSession();
+    const zReport = {
+      ...(session ?? {}),
+      closedAt: new Date().toISOString(),
+      cashCounted: parseFloat(closeFormData.cashCounted) || 0,
+      eftposDeclared: parseFloat(closeFormData.eftposDeclared) || 0,
+      closingNotes: closeFormData.notes,
+    };
+    try {
+      const reports = JSON.parse(localStorage.getItem("koapos_z_reports") ?? "[]") as unknown[];
+      reports.push(zReport);
+      localStorage.setItem("koapos_z_reports", JSON.stringify(reports));
+    } catch { /* ignore */ }
+    localStorage.removeItem("koapos_register_session");
+    localStorage.setItem("koapos_register_open", "false");
+    setRegisterOpen(false);
+    setCloseRegisterDialogOpen(false);
+    setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
+    toast.success("Register closed — Z-report saved");
+  };
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
 
@@ -416,6 +477,18 @@ export default function POSPage() {
       }
     }, {
       onSuccess: (data) => {
+        // Track session sales by payment method
+        try {
+          const raw = localStorage.getItem("koapos_register_session");
+          if (raw) {
+            const s = JSON.parse(raw) as RegisterSession;
+            const pm = paymentMethod as string;
+            s.sales = s.sales ?? {};
+            s.sales[pm] = (s.sales[pm] ?? 0) + total;
+            s.txCount = (s.txCount ?? 0) + 1;
+            localStorage.setItem("koapos_register_session", JSON.stringify(s));
+          }
+        } catch { /* ignore */ }
         clearCart(); setPaymentModalOpen(false);
         setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
         setReceiptEmail(selectedCustomer?.email ?? "");
@@ -512,7 +585,15 @@ export default function POSPage() {
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
               <button
-                onClick={toggleRegister}
+                onClick={() => {
+                  if (registerOpen) {
+                    setSessionSnap(getSession());
+                    setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
+                    setCloseRegisterDialogOpen(true);
+                  } else {
+                    setOpenRegisterDialogOpen(true);
+                  }
+                }}
                 title={registerOpen ? "Close Register" : "Open Register"}
                 className={cn("p-1.5 rounded-lg transition-colors", registerOpen ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30")}
               >
@@ -1286,6 +1367,235 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Open Register Dialog ─── */}
+      <Dialog open={openRegisterDialogOpen} onOpenChange={(o) => { if (!o) setOpenRegisterDialogOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DoorOpen className="w-5 h-5 text-green-600" /> Open Register
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            {/* Date / Staff */}
+            <div className="rounded-xl bg-muted/40 border px-4 py-3 space-y-1 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Date &amp; Time</span>
+                <span className="font-medium text-foreground">{new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Staff</span>
+                <span className="font-medium text-foreground">{currentStaff?.name ?? "— not signed in —"}</span>
+              </div>
+            </div>
+
+            {/* Opening float */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Banknote className="w-4 h-4 text-muted-foreground" /> Opening Float (Cash in Drawer)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                <Input
+                  type="number" step="0.01" min="0" placeholder="0.00"
+                  value={openFloat}
+                  onChange={(e) => setOpenFloat(e.target.value)}
+                  className="pl-7"
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Count the starting cash in your till drawer before opening.</p>
+            </div>
+
+            {/* Denomination helper */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {[50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setOpenFloat((v) => String((parseFloat(v) || 0) + d))}
+                  className="text-xs border rounded-lg py-1.5 hover:bg-muted transition-colors font-mono"
+                >${d < 1 ? d.toFixed(2) : d}</button>
+              ))}
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label>Opening Notes (optional)</Label>
+              <textarea
+                className="w-full min-h-[56px] rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Any notes for start of shift…"
+                value={openNotes}
+                onChange={(e) => setOpenNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenRegisterDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister}>
+              <DoorOpen className="w-4 h-4 mr-1.5" /> Open Register
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Close Register Dialog ─── */}
+      <Dialog open={closeRegisterDialogOpen} onOpenChange={(o) => { if (!o) setCloseRegisterDialogOpen(false); }}>
+        <DialogContent className="max-w-lg flex flex-col p-0 gap-0 max-h-[90vh]">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <DoorClosed className="w-5 h-5 text-red-500" /> Close Register
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+            {/* Session summary */}
+            {(() => {
+              const s = sessionSnap;
+              const openedAt = s?.openedAt ? new Date(s.openedAt) : null;
+              const elapsed = openedAt ? Math.round((Date.now() - openedAt.getTime()) / 60000) : null;
+              const cashSales = s?.sales?.["cash"] ?? 0;
+              const cardSales = (s?.sales?.["card"] ?? 0) + (s?.sales?.["eftpos"] ?? 0);
+              const splitSales = s?.sales?.["split"] ?? 0;
+              const otherSales = Object.entries(s?.sales ?? {})
+                .filter(([k]) => !["cash", "card", "eftpos", "split"].includes(k))
+                .reduce((sum, [, v]) => sum + v, 0);
+              const totalSales = Object.values(s?.sales ?? {}).reduce((a, b) => a + b, 0);
+              const openingFloat = s?.openingFloat ?? 0;
+              const expectedCash = openingFloat + cashSales;
+              const cashCounted = parseFloat(closeFormData.cashCounted) || 0;
+              const cashVariance = cashCounted - expectedCash;
+              const eftposDeclared = parseFloat(closeFormData.eftposDeclared) || 0;
+              const eftposVariance = eftposDeclared - (cardSales + splitSales);
+
+              return (
+                <>
+                  {/* Session info */}
+                  <div className="rounded-xl bg-muted/40 border px-4 py-3 space-y-1.5 text-sm">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                      <Clock className="w-3.5 h-3.5" /> Session Info
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Opened</span>
+                      <span className="font-medium text-foreground">
+                        {openedAt ? openedAt.toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" }) : "—"}
+                        {elapsed !== null && <span className="text-xs text-muted-foreground ml-1.5">({elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed/60)}h ${elapsed%60}m`})</span>}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Opened by</span>
+                      <span className="font-medium text-foreground">{s?.openedBy ?? "—"}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Transactions</span>
+                      <span className="font-medium text-foreground">{s?.txCount ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground border-t pt-1.5 mt-1">
+                      <span className="font-semibold text-foreground">Total Sales</span>
+                      <span className="font-bold text-foreground">{formatCurrency(totalSales)}</span>
+                    </div>
+                  </div>
+
+                  {/* Cash Drawer */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      <Banknote className="w-3.5 h-3.5" /> Cash Drawer
+                    </div>
+                    <div className="rounded-xl border p-3 space-y-2 text-sm">
+                      <div className="flex justify-between text-muted-foreground"><span>Opening float</span><span>{formatCurrency(openingFloat)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>Cash sales (POS)</span><span>{formatCurrency(cashSales)}</span></div>
+                      <div className="flex justify-between font-medium border-t pt-2 mt-1"><span>Expected in drawer</span><span>{formatCurrency(expectedCash)}</span></div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Counted Cash in Drawer</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                        <Input type="number" step="0.01" min="0" placeholder="0.00" value={closeFormData.cashCounted}
+                          onChange={(e) => setCloseFormData((p) => ({ ...p, cashCounted: e.target.value }))}
+                          className="pl-7" />
+                      </div>
+                    </div>
+                    {closeFormData.cashCounted !== "" && (
+                      <div className={cn("flex justify-between text-sm font-semibold px-3 py-2 rounded-lg", cashVariance === 0 ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400" : cashVariance > 0 ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400" : "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400")}>
+                        <span>Cash variance</span>
+                        <span>{cashVariance >= 0 ? "+" : ""}{formatCurrency(cashVariance)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* EFTPOS / Card */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      <CreditCard className="w-3.5 h-3.5" /> EFTPOS / Card
+                    </div>
+                    <div className="rounded-xl border p-3 space-y-2 text-sm">
+                      <div className="flex justify-between text-muted-foreground"><span>Card sales (POS)</span><span>{formatCurrency(cardSales)}</span></div>
+                      {splitSales > 0 && <div className="flex justify-between text-muted-foreground"><span>Split payments (POS)</span><span>{formatCurrency(splitSales)}</span></div>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">EFTPOS Terminal Total</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                        <Input type="number" step="0.01" min="0" placeholder="0.00" value={closeFormData.eftposDeclared}
+                          onChange={(e) => setCloseFormData((p) => ({ ...p, eftposDeclared: e.target.value }))}
+                          className="pl-7" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Enter the total from your EFTPOS terminal settlement report.</p>
+                    </div>
+                    {closeFormData.eftposDeclared !== "" && (
+                      <div className={cn("flex justify-between text-sm font-semibold px-3 py-2 rounded-lg", eftposVariance === 0 ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400" : eftposVariance > 0 ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400" : "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400")}>
+                        <span>EFTPOS variance</span>
+                        <span>{eftposVariance >= 0 ? "+" : ""}{formatCurrency(eftposVariance)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Other payments */}
+                  {(otherSales > 0) && (
+                    <>
+                      <Separator />
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                          <TrendingUp className="w-3.5 h-3.5" /> Other Payments
+                        </div>
+                        <div className="rounded-xl border p-3 space-y-2 text-sm">
+                          {Object.entries(s?.sales ?? {}).filter(([k]) => !["cash","card","eftpos","split"].includes(k)).map(([k, v]) => (
+                            <div key={k} className="flex justify-between text-muted-foreground capitalize"><span>{k}</span><span>{formatCurrency(v)}</span></div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <Separator />
+
+                  {/* Closing notes */}
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5"><FileText className="w-4 h-4 text-muted-foreground" /> Closing Notes (optional)</Label>
+                    <textarea
+                      className="w-full min-h-[64px] rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder="Any notes for end of shift, discrepancies, handover…"
+                      value={closeFormData.notes}
+                      onChange={(e) => setCloseFormData((p) => ({ ...p, notes: e.target.value }))}
+                    />
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="px-6 py-4 border-t shrink-0 flex justify-between items-center bg-background gap-3">
+            <p className="text-xs text-muted-foreground">A Z-report will be saved automatically.</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setCloseRegisterDialogOpen(false)}>Cancel</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleCloseRegister}>
+                <DoorClosed className="w-4 h-4 mr-1.5" /> Close Register
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 }
