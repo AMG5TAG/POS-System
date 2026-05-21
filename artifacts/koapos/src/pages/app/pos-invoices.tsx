@@ -29,6 +29,7 @@ import { toast } from "sonner";
 
 type InvStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 type Invoice = {
   id: number;
   invoiceNumber: string;
@@ -40,6 +41,7 @@ type Invoice = {
   taxTotal: number;
   total: number;
   items: LineItem[];
+  events: InvoiceEvent[];
   dueDate: string | null;
   paidAt: string | null;
   viewedAt: string | null;
@@ -286,15 +288,30 @@ export default function POSInvoicesPage() {
     load();
   };
 
+  /* ── Record a client-side event (download, print) ── */
+  const recordEvent = async (invoiceId: number, type: string, detail?: string) => {
+    const res = await fetch(`${API}/${invoiceId}/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ type, detail }),
+    });
+    if (res.ok) {
+      const updated = await res.json() as Invoice;
+      setInvoices((prev) => prev.map((i) => i.id === invoiceId ? updated : i));
+      setDetailInvoice((d) => d?.id === invoiceId ? updated : d);
+    }
+  };
+
   /* ── Row click: open detail + mark viewed ── */
   const openDetail = async (inv: Invoice) => {
     setDetailInvoice(inv);
     if (!inv.viewedAt) {
       const res = await fetch(`${API}/${inv.id}/viewed`, { method: "PATCH", credentials: "include" });
       if (res.ok) {
-        const { viewedAt } = await res.json() as { viewedAt: string };
-        setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, viewedAt } : i));
-        setDetailInvoice((d) => d ? { ...d, viewedAt } : d);
+        const updated = await res.json() as Invoice;
+        setInvoices((prev) => prev.map((i) => i.id === inv.id ? updated : i));
+        setDetailInvoice(updated);
       }
     }
   };
@@ -327,7 +344,8 @@ export default function POSInvoicesPage() {
   const handleSendEmail = async () => {
     if (!emailDialog.invoiceId || !emailAddr.trim()) return;
     setSendingEmail(true);
-    const res = await fetch(`${API}/${emailDialog.invoiceId}/send-email`, {
+    const invId = emailDialog.invoiceId;
+    const res = await fetch(`${API}/${invId}/send-email`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -338,6 +356,13 @@ export default function POSInvoicesPage() {
       toast.success("Invoice emailed");
       setEmailDialog({ open: false, invoiceId: null });
       setEmailAddr("");
+      // Refresh the invoice so the activity log updates
+      const refreshRes = await fetch(`${API}/${invId}`, { credentials: "include" });
+      if (refreshRes.ok) {
+        const updated = await refreshRes.json() as Invoice;
+        setInvoices((prev) => prev.map((i) => i.id === invId ? updated : i));
+        if (detailInvoice?.id === invId) setDetailInvoice(updated);
+      }
       load();
     } else {
       const err = await res.json() as { error?: string };
@@ -830,11 +855,11 @@ export default function POSInvoicesPage() {
                       <MessageSquare className="w-3.5 h-3.5" /> SMS
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => downloadInvoicePDF(detailInvoice)}>
+                      onClick={() => { downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
                       <Download className="w-3.5 h-3.5" /> Download PDF
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => printInvoice(detailInvoice)}>
+                      onClick={() => { printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
                       <Printer className="w-3.5 h-3.5" /> Print
                     </Button>
                   </div>
@@ -919,6 +944,38 @@ export default function POSInvoicesPage() {
                   <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1 text-xs uppercase tracking-wide">Notes</p>
                     <p className="whitespace-pre-line">{detailInvoice.notes}</p>
+                  </div>
+                )}
+
+                {/* Activity history */}
+                {detailInvoice.events && detailInvoice.events.length > 0 && (
+                  <div className="space-y-2 text-sm">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Activity</p>
+                    <div className="space-y-1.5">
+                      {[...detailInvoice.events].reverse().map((ev, i) => (
+                        <div key={i} className="flex items-start gap-2 text-muted-foreground text-xs">
+                          <span className="mt-0.5 shrink-0">
+                            {ev.type === "email" && <Mail className="w-3.5 h-3.5" />}
+                            {ev.type === "viewed" && <Eye className="w-3.5 h-3.5" />}
+                            {ev.type === "download" && <Download className="w-3.5 h-3.5" />}
+                            {ev.type === "print" && <Printer className="w-3.5 h-3.5" />}
+                            {ev.type === "sms" && <MessageSquare className="w-3.5 h-3.5" />}
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="text-foreground font-medium">
+                              {ev.type === "email" ? "Emailed"
+                                : ev.type === "viewed" ? "Viewed"
+                                : ev.type === "download" ? "Downloaded PDF"
+                                : ev.type === "print" ? "Printed"
+                                : ev.type === "sms" ? "SMS sent"
+                                : ev.type}
+                            </span>
+                            {ev.detail && <span className="ml-1">→ {ev.detail}</span>}
+                            <span className="ml-2 text-muted-foreground/70">{formatDate(ev.timestamp)}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

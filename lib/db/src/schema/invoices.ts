@@ -18,6 +18,7 @@ export const invoicesTable = pgTable("invoices", {
   paidAt: timestamp("paid_at", { withTimezone: true }),
   viewedAt: timestamp("viewed_at", { withTimezone: true }),
   notes: text("notes"),
+  events: json("events"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -7,6 +7,7 @@ import { sendEmail } from "../services/email";
 const router: IRouter = Router();
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 
 function customerName(first: string | null, last: string | null): string | null {
   const n = [first, last].filter(Boolean).join(" ");
@@ -20,6 +21,7 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     taxTotal: parseFloat(inv.taxTotal),
     total: parseFloat(inv.total),
     items: (inv.items as LineItem[] | null) ?? [],
+    events: (inv.events as InvoiceEvent[] | null) ?? [],
     dueDate: inv.dueDate?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
     viewedAt: inv.viewedAt?.toISOString() ?? null,
@@ -28,6 +30,16 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     customerName: customerName(cFirst ?? null, cLast ?? null),
     customerEmail: cEmail ?? null,
   };
+}
+
+async function appendInvoiceEvent(id: number, merchantId: number, event: InvoiceEvent) {
+  const [row] = await db
+    .select({ events: invoicesTable.events })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) return;
+  const events: InvoiceEvent[] = [...((row.events as InvoiceEvent[] | null) ?? []), event];
+  await db.update(invoicesTable).set({ events }).where(eq(invoicesTable.id, id));
 }
 
 // GET /invoices
@@ -148,13 +160,34 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const [inv] = await db
+
+  const [existing] = await db
+    .select({ events: invoicesTable.events })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  const events: InvoiceEvent[] = [
+    ...((existing.events as InvoiceEvent[] | null) ?? []),
+    { type: "viewed", timestamp: new Date().toISOString() },
+  ];
+  await db
     .update(invoicesTable)
-    .set({ viewedAt: new Date() })
-    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
-    .returning();
-  if (!inv) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ viewedAt: inv.viewedAt?.toISOString() ?? null });
+    .set({ viewedAt: new Date(), events })
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
 });
 
 // PATCH /invoices/:id
@@ -283,8 +316,43 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, id));
   }
 
+  await appendInvoiceEvent(id, merchantId, { type: "email", timestamp: new Date().toISOString(), detail: email });
+
   req.log.info({ invoiceId: id, email }, "Invoice emailed");
   res.json({ success: true });
+});
+
+// POST /invoices/:id/event  — record a client-side event (download, print, etc.)
+router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id));
+  const merchantId = req.session.merchantId!;
+  const { type, detail } = req.body as { type: string; detail?: string };
+  if (!type) { res.status(400).json({ error: "type is required" }); return; }
+
+  const [existing] = await db
+    .select({ events: invoicesTable.events })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  const events: InvoiceEvent[] = [
+    ...((existing.events as InvoiceEvent[] | null) ?? []),
+    { type, timestamp: new Date().toISOString(), ...(detail ? { detail } : {}) },
+  ];
+  await db.update(invoicesTable).set({ events }).where(eq(invoicesTable.id, id));
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
 });
 
 export default router;
