@@ -1192,22 +1192,12 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Digital / Download notice — shown inline after the type selector */}
-                {(form.productType === "digital_code" || form.productType === "digital") && (
+                {form.productType === "digital" && (
                   <div className="flex items-start gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
-                    {form.productType === "digital_code"
-                      ? <KeyRound className="w-4 h-4 shrink-0 mt-0.5" />
-                      : <Download className="w-4 h-4 shrink-0 mt-0.5" />}
+                    <Download className="w-4 h-4 shrink-0 mt-0.5" />
                     <div className="text-sm">
-                      <p className="font-medium text-foreground">
-                        {form.productType === "digital_code" ? "Code inventory" : "Digital download"}
-                      </p>
-                      <p className="text-xs mt-0.5">
-                        {form.productType === "digital_code"
-                          ? editingProduct
-                            ? "Manage delivery codes in the Digital Codes tab. No physical stock is tracked."
-                            : "Save this product first, then add delivery codes in the Digital Codes tab."
-                          : "No physical stock tracked. Customers receive a download link."}
-                      </p>
+                      <p className="font-medium text-foreground">Digital download</p>
+                      <p className="text-xs mt-0.5">No physical stock tracked. Customers receive a download link.</p>
                     </div>
                   </div>
                 )}
@@ -1442,20 +1432,12 @@ export default function ProductsPage() {
                 {/* Inventory */}
                 <div>
                   <SectionHeader label="Inventory" />
-                  {NO_STOCK_TYPES.has(form.productType) ? (
+                  {form.productType === "digital_code" ? null : NO_STOCK_TYPES.has(form.productType) ? (
                     <div className="mt-3 flex items-center gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
-                      {form.productType === "digital_code"
-                        ? <KeyRound className="w-4 h-4 shrink-0" />
-                        : <Briefcase className="w-4 h-4 shrink-0" />}
+                      <Briefcase className="w-4 h-4 shrink-0" />
                       <div className="text-sm">
-                        <p className="font-medium text-foreground">
-                          {form.productType === "digital_code" ? "Code inventory" : "No stock tracking"}
-                        </p>
-                        <p className="text-xs mt-0.5">
-                          {form.productType === "digital_code"
-                            ? "No physical stock is tracked. Manage codes in the Digital Codes tab."
-                            : "This product type does not use inventory tracking."}
-                        </p>
+                        <p className="font-medium text-foreground">No stock tracking</p>
+                        <p className="text-xs mt-0.5">This product type does not use inventory tracking.</p>
                       </div>
                     </div>
                   ) : (
