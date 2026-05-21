@@ -107,7 +107,7 @@ export function ColourPicker({ value, onChange, className }: ColourPickerProps) 
             onChange={(e) => handleHexChange(e.target.value)}
             onBlur={handleHexBlur}
             placeholder="#000000"
-            className="font-mono text-sm h-8 w-28"
+            className="font-mono text-sm h-8 w-full"
             maxLength={7}
           />
         ) : (

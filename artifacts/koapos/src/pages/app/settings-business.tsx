@@ -538,9 +538,9 @@ export default function SettingsBusinessPage() {
 
             {/* Brand Colours */}
             <div>
-              <Label className="block mb-2">Brand Colours</Label>
+              <Label className="block mb-1">Brand Colours</Label>
               <p className="text-xs text-muted-foreground mb-2">These are applied as the default colours throughout the app.</p>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {ext.brandColors.map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setBrandColor(i, v)} />
                 ))}
@@ -550,7 +550,7 @@ export default function SettingsBusinessPage() {
             {/* Background & UI Colours */}
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Background &amp; UI Colours</Label>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {ext.bgColors.map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setBgColor(i, v)} />
                 ))}
@@ -560,7 +560,7 @@ export default function SettingsBusinessPage() {
             {/* Text Colours */}
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Text Colours</Label>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {ext.textColors.map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setTextColor(i, v)} />
                 ))}
