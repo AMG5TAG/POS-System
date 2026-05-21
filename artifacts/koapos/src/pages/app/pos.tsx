@@ -83,6 +83,7 @@ export default function POSPage() {
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [completedTx, setCompletedTx] = useState<Pick<Transaction, "id" | "receiptNumber"> | null>(null);
+  const [completedTotal, setCompletedTotal] = useState(0);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms">("idle");
@@ -503,13 +504,19 @@ export default function POSPage() {
             localStorage.setItem("koapos_register_session", JSON.stringify(s));
           }
         } catch { /* ignore */ }
-        clearCart(); setPaymentModalOpen(false);
+        // Capture total before cart is cleared
+        const saleTotal = total;
+        clearCart();
         setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
+        setCompletedTotal(saleTotal);
         setReceiptEmail(selectedCustomer?.email ?? "");
         setReceiptPhone(selectedCustomer?.phone ?? "");
         setReceiptMode("idle");
-        setReceiptOpen(true);
-        setSelectedCustomer(null); setWalkIn(null);
+        setSelectedCustomer(null);
+        setWalkIn(null);
+        // Close payment modal first, then open receipt after animation completes
+        setPaymentModalOpen(false);
+        setTimeout(() => setReceiptOpen(true), 250);
       },
       onError: () => toast.error("Failed to process transaction"),
     });
@@ -1125,7 +1132,7 @@ export default function POSPage() {
             {completedTx && (
               <p className="text-center text-sm text-muted-foreground">
                 {completedTx.receiptNumber ? `Receipt #${completedTx.receiptNumber}` : `Transaction #${completedTx.id}`}
-                {" · "}{formatCurrency(total)}
+                {" · "}{formatCurrency(completedTotal)}
               </p>
             )}
           </DialogHeader>
