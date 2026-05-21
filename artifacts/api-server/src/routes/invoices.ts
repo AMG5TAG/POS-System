@@ -3,6 +3,7 @@ import { db, invoicesTable, customersTable, merchantsTable } from "@workspace/db
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,12 @@ function customerName(first: string | null, last: string | null): string | null 
 }
 
 function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLast?: string | null, cEmail?: string | null) {
+  const isRecurring = inv.isRecurring === "true";
+  const nextSendDate =
+    isRecurring && inv.recurringStartDate
+      ? computeNextSendDate(inv.recurringStartDate, inv.recurringFrequency ?? "monthly").toISOString()
+      : null;
+
   return {
     ...inv,
     subtotal: parseFloat(inv.subtotal),
@@ -25,10 +32,11 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     dueDate: inv.dueDate?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
     viewedAt: inv.viewedAt?.toISOString() ?? null,
-    isRecurring: inv.isRecurring === "true",
+    isRecurring,
     recurringFrequency: inv.recurringFrequency ?? null,
     recurringOccurrences: inv.recurringOccurrences ?? null,
     recurringStartDate: inv.recurringStartDate?.toISOString() ?? null,
+    nextSendDate,
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
     customerName: customerName(cFirst ?? null, cLast ?? null),

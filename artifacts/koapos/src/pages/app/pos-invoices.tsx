@@ -50,6 +50,7 @@ type Invoice = {
   recurringFrequency: string | null;
   recurringOccurrences: number | null;
   recurringStartDate: string | null;
+  nextSendDate: string | null;
   createdAt: string;
 };
 
@@ -793,7 +794,15 @@ export default function POSInvoicesPage() {
                     className="bg-background hover:bg-muted/30 cursor-pointer transition-colors"
                     onClick={() => openDetail(inv)}
                   >
-                    <td className="p-3 font-mono font-medium text-xs">{inv.invoiceNumber}</td>
+                    <td className="p-3">
+                      <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
+                      {inv.isRecurring && inv.nextSendDate && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-blue-600 font-medium">
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          Next {formatDateOnly(inv.nextSendDate)}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
                       {inv.dueDate ? formatDateOnly(inv.dueDate) : <span>—</span>}
@@ -859,6 +868,11 @@ export default function POSInvoicesPage() {
                       {detailInvoice.viewedAt && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Eye className="w-3 h-3 text-green-500" /> Viewed {formatDate(detailInvoice.viewedAt)}
+                        </span>
+                      )}
+                      {detailInvoice.isRecurring && detailInvoice.nextSendDate && (
+                        <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
+                          <RefreshCw className="w-3 h-3" /> Next auto-send {formatDateOnly(detailInvoice.nextSendDate)}
                         </span>
                       )}
                     </div>
