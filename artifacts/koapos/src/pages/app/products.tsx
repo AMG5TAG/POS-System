@@ -1024,7 +1024,7 @@ export default function ProductsPage() {
                     const isLowStock  = !isService && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
-                    const marginPct = cost && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
                     return (
                       <tr key={product.id}
                         className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
