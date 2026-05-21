@@ -16,6 +16,7 @@ import {
   useDeleteCustomerFile,
   useRequestUploadUrl,
   useGetLoyaltySettings,
+  getListCustomersQueryKey,
   Customer,
   CustomerNote,
   CustomerFile,
@@ -335,7 +336,7 @@ function CustomerDetailInner({
           toast.success(`${loyaltyLabel} updated`);
           setLocalLoyaltyPts(next);
           setLoyaltyAmount("");
-          queryClient.invalidateQueries({ queryKey: ["customers"] });
+          queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
         },
         onError: () => toast.error("Failed to update loyalty balance"),
       }
@@ -1079,7 +1080,6 @@ export default function CustomersPage() {
 
   const { data: customersData, isLoading } = useListCustomers(
     { search: search || undefined, limit: 1000 },
-    { query: { queryKey: ["customers", search] } }
   );
 
   const createMutation = useCreateCustomer();
@@ -1155,7 +1155,7 @@ export default function CustomersPage() {
     ));
     setChecked(new Set());
     setBulkDeleteConfirm(false);
-    queryClient.invalidateQueries({ queryKey: ["customers"] });
+    queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
     toast.success(`${success} customer${success === 1 ? "" : "s"} deleted`);
   };
 
@@ -1210,7 +1210,7 @@ export default function CustomersPage() {
 
   const handleSave = () => {
     const payload = buildPayload();
-    const inv = () => queryClient.invalidateQueries({ queryKey: ["customers"] });
+    const inv = () => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
     if (editingCustomer) {
       updateMutation.mutate({ id: editingCustomer.id, data: payload }, {
         onSuccess: () => { toast.success("Customer updated"); setDialogOpen(false); inv(); },
@@ -1231,7 +1231,7 @@ export default function CustomersPage() {
       onSuccess: () => {
         toast.success("Customer deleted");
         setDeleteDialogOpen(false);
-        queryClient.invalidateQueries({ queryKey: ["customers"] });
+        queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
       },
       onError: () => toast.error("Failed to delete customer"),
     });
