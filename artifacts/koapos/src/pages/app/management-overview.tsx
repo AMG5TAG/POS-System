@@ -3,6 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
+  useGetTaxSettings,
+  useGetLoyaltySettings,
+  useListCustomers,
   GetDashboardSummaryPeriod,
   GetDashboardActivityPeriod,
 } from "@workspace/api-client-react";
@@ -134,17 +137,36 @@ export default function ManagementOverviewPage() {
     { query: { queryKey: ["mgmt-activity", actPeriod] } },
   );
 
+  /* Tax & loyalty settings */
+  const { data: taxData }     = useGetTaxSettings();
+  const { data: loyaltyData } = useGetLoyaltySettings();
+  const { data: customerData } = useListCustomers({ limit: 500 });
+
   /* Derived sales values */
-  const totalSales     = summary?.totalSales       ?? 0;
-  const txCount        = summary?.transactionCount ?? 0;
-  const avgSale        = summary?.averageOrderValue ?? 0;
-  const newCustomers   = summary?.newCustomers     ?? 0;
-  const refundTotal    = summary?.refundTotal      ?? 0;
-  const discountTotal  = summary?.discountTotal    ?? 0;
-  const itemsSold      = summary?.itemsSold        ?? 0;
-  const gstCollected   = totalSales / 11;
-  const grossProfit    = totalSales - gstCollected;
-  const grossMarginPct = totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : "0.0";
+  const totalSales    = summary?.totalSales       ?? 0;
+  const txCount       = summary?.transactionCount ?? 0;
+  const avgSale       = summary?.averageOrderValue ?? 0;
+  const newCustomers  = summary?.newCustomers     ?? 0;
+  const refundTotal   = summary?.refundTotal      ?? 0;
+  const discountTotal = summary?.discountTotal    ?? 0;
+  const itemsSold     = summary?.itemsSold        ?? 0;
+
+  /* GST calculation using merchant's configured rate */
+  const gstRatePct    = parseFloat(String(taxData?.gstRate ?? 10));
+  const gstRateStr    = taxData ? `${gstRatePct.toFixed(0)}%` : "10%";
+  const gstInclusive  = taxData?.taxInclusive !== "false";
+  const gstCollected  = gstInclusive
+    ? totalSales * ((gstRatePct / 100) / (1 + gstRatePct / 100))
+    : totalSales * (gstRatePct / 100);
+  const revenueExGst  = totalSales - gstCollected;
+
+  /* Loyalty / store credit dollar value */
+  const customers     = customerData?.items ?? [];
+  const totalPoints   = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
+  const pointsPerDollar = loyaltyData?.pointsPerDollar ? Number(loyaltyData.pointsPerDollar) : 10;
+  const loyaltyDollarValue = pointsPerDollar > 0 ? totalPoints / pointsPerDollar : 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loyaltyEnabled = !!(loyaltyData?.isEnabled as any);
 
   /* Yesterday values (for VS bar) */
   const ySales     = yesterday?.totalSales       ?? 0;
@@ -220,8 +242,8 @@ export default function ManagementOverviewPage() {
               title="Revenue ex-GST"
               icon={TrendingUp}
               iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600"
-              value={isLoading ? "—" : formatCurrency(grossProfit)}
-              sub="GST removed from revenue"
+              value={isLoading ? "—" : formatCurrency(revenueExGst)}
+              sub={`${gstRateStr} GST removed from revenue`}
               valueClass="text-teal-600"
               href="/management/sales-overview#profit-loss"
             />
@@ -250,11 +272,11 @@ export default function ManagementOverviewPage() {
               href="/management/customers"
             />
             <KpiCard
-              title="Kredits Issued"
+              title="Loyalty Liability"
               icon={Gift}
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
-              value={formatCurrency(0)}
-              sub="No store credit module active"
+              value={formatCurrency(loyaltyDollarValue)}
+              sub={loyaltyEnabled ? `${totalPoints.toLocaleString()} pts across ${customers.filter((c) => (c.loyaltyPoints ?? 0) > 0).length} customers` : "Loyalty programme inactive"}
               href="/management/sales-overview#store-credit"
             />
           </div>
@@ -300,8 +322,8 @@ export default function ManagementOverviewPage() {
               title="GST Rate"
               icon={Percent}
               iconBg="bg-lime-100 dark:bg-lime-900/30 text-lime-600"
-              value="10%"
-              sub="Australian standard GST"
+              value={gstRateStr}
+              sub={taxData?.gstEnabled === "true" ? `${gstInclusive ? "Inclusive" : "Exclusive"} · ${taxData.taxName ?? "GST"}` : "GST disabled"}
               valueClass="text-lime-600"
               href="/management/tax"
             />
