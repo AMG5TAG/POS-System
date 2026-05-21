@@ -1338,7 +1338,7 @@ export default function ProductsPage() {
               <div className="py-5 space-y-6">
                 <div>
                   <SectionHeader label="Product Images" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">Upload images or paste a URL. JPG, PNG, WebP · Min 800×800px recommended.</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Upload images or paste a URL. JPG, PNG, WebP · Max 2048×2048px recommended.</p>
                   <div className="grid grid-cols-4 gap-3">
                     <ImageSlot label="Primary"  value={form.imageUrl}  onChange={(v) => setField("imageUrl", v)}  />
                     <ImageSlot label="Image 2"  value={form.imageUrl2} onChange={(v) => setField("imageUrl2", v)} />
