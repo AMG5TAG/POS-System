@@ -1154,7 +1154,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
             onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
-            items={MARKETING_SUBNAV} defaultHref="/marketing/generators/qr-codes"
+            items={MARKETING_SUBNAV}
           />
           {canManage && (
             <CollapsibleSection
