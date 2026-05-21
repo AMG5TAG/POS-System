@@ -2003,6 +2003,184 @@ paths:
                 properties:
                   success: { type: boolean }
 
+  # ── Laybys ────────────────────────────────────────────────────────────────────
+  /laybys:
+    get:
+      operationId: listLaybys
+      summary: List laybys for the authenticated merchant
+      security: [{ session: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: customerId
+          schema: { type: integer }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+        - in: query
+          name: offset
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of laybys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Layby" }
+                  total: { type: integer }
+    post:
+      operationId: createLayby
+      summary: Create a new layby
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLaybyBody"
+      responses:
+        "201":
+          description: Created layby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+
+  /laybys/{id}:
+    get:
+      operationId: getLayby
+      summary: Get a layby by ID
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Layby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+    patch:
+      operationId: updateLayby
+      summary: Update a layby
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLaybyBody"
+      responses:
+        "200":
+          description: Updated layby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+
+  /laybys/{id}/payments:
+    get:
+      operationId: listLaybyPayments
+      summary: List payments for a layby
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LaybyPayment" }
+    post:
+      operationId: addLaybyPayment
+      summary: Add a payment to a layby
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddLaybyPaymentBody"
+      responses:
+        "201":
+          description: Updated layby after payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+
+  /laybys/{id}/cancel:
+    post:
+      operationId: cancelLayby
+      summary: Cancel a layby
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Cancelled layby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+
+  /laybys/{id}/complete:
+    post:
+      operationId: completeLayby
+      summary: Mark a layby as completed (collected)
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Completed layby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layby"
+
 components:
   schemas:
     HealthStatus:
@@ -3717,3 +3895,77 @@ components:
       required: [to]
       properties:
         to: { type: string }
+
+    Layby:
+      type: object
+      required: [id, reference, totalAmount, depositAmount, amountPaid, balance, status, items, createdAt, updatedAt]
+      properties:
+        id:            { type: integer }
+        reference:     { type: string }
+        customerId:    { type: integer, nullable: true }
+        customerName:  { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:   { type: integer }
+              productName: { type: string }
+              quantity:    { type: integer }
+              price:       { type: number }
+        totalAmount:   { type: number }
+        depositAmount: { type: number }
+        amountPaid:    { type: number }
+        balance:       { type: number }
+        status:        { type: string }
+        dueDate:       { type: string, nullable: true }
+        notes:         { type: string, nullable: true }
+        cancelReason:  { type: string, nullable: true }
+        createdAt:     { type: string }
+        updatedAt:     { type: string }
+
+    LaybyPayment:
+      type: object
+      required: [id, laybyId, amount, paymentMethod, createdAt]
+      properties:
+        id:            { type: integer }
+        laybyId:       { type: integer }
+        amount:        { type: number }
+        paymentMethod: { type: string }
+        note:          { type: string, nullable: true }
+        createdAt:     { type: string }
+
+    CreateLaybyBody:
+      type: object
+      required: [items, totalAmount, depositAmount]
+      properties:
+        customerId:    { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:   { type: integer }
+              productName: { type: string }
+              quantity:    { type: integer }
+              price:       { type: number }
+        totalAmount:   { type: number }
+        depositAmount: { type: number }
+        dueDate:       { type: string }
+        notes:         { type: string }
+        paymentMethod: { type: string }
+
+    UpdateLaybyBody:
+      type: object
+      properties:
+        dueDate:  { type: string }
+        notes:    { type: string }
+        status:   { type: string }
+
+    AddLaybyPaymentBody:
+      type: object
+      required: [amount]
+      properties:
+        amount:        { type: number }
+        paymentMethod: { type: string }
+        note:          { type: string }

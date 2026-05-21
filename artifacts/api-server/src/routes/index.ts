@@ -30,6 +30,7 @@ import taxSettingsRouter from "./tax-settings";
 import emailSettingsRouter from "./email-settings";
 import formsRouter from "./forms";
 import formSubmissionsRouter from "./form-submissions";
+import laybysRouter from "./laybys";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(taxSettingsRouter);
 router.use(emailSettingsRouter);
 router.use(formsRouter);
 router.use(formSubmissionsRouter);
+router.use(laybysRouter);
 
 export default router;

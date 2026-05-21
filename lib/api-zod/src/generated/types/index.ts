@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './addLaybyPaymentBody';
 export * from './appointment';
 export * from './appointmentInput';
 export * from './appointmentInputStatus';
@@ -14,11 +15,14 @@ export * from './calendarAppointment';
 export * from './calendarBirthday';
 export * from './calendarDay';
 export * from './calendarMonth';
+export * from './cancelLaybyBody';
 export * from './cashDrawerEntry';
 export * from './cashDrawerEntryInput';
 export * from './category';
 export * from './categoryInput';
 export * from './categoryUpdate';
+export * from './createLaybyBody';
+export * from './createLaybyBodyItemsItem';
 export * from './customer';
 export * from './customerFile';
 export * from './customerFileInput';
@@ -58,10 +62,15 @@ export * from './getTopProductsPeriod';
 export * from './healthStatus';
 export * from './inventoryItem';
 export * from './inventoryUpdate';
+export * from './layby';
+export * from './laybyItemsItem';
+export * from './laybyPayment';
 export * from './listAppointmentsParams';
 export * from './listCashDrawerEntriesParams';
 export * from './listCustomersParams';
 export * from './listInventoryParams';
+export * from './listLaybys200';
+export * from './listLaybysParams';
 export * from './listProductsParams';
 export * from './listPurchaseOrdersParams';
 export * from './listTransactionsParams';
@@ -124,6 +133,7 @@ export * from './transactionItem';
 export * from './transactionList';
 export * from './transactionPaymentMethod';
 export * from './transactionStatus';
+export * from './updateLaybyBody';
 export * from './uploadUrlRequest';
 export * from './uploadUrlResponse';
 export * from './validateDiscountRequest';

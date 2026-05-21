@@ -2649,3 +2649,226 @@ export const SendTransactionReceiptResponse = zod.object({
 })
 
 
+/**
+ * @summary List laybys for the authenticated merchant
+ */
+export const ListLaybysQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "customerId": zod.coerce.number().optional(),
+  "search": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListLaybysResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "cancelReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create a new layby
+ */
+export const CreateLaybyBody = zod.object({
+  "customerId": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "dueDate": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "paymentMethod": zod.string().optional()
+})
+
+
+/**
+ * @summary Get a layby by ID
+ */
+export const GetLaybyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLaybyResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "cancelReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a layby
+ */
+export const UpdateLaybyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLaybyBody = zod.object({
+  "dueDate": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const UpdateLaybyResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "cancelReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List payments for a layby
+ */
+export const ListLaybyPaymentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListLaybyPaymentsResponseItem = zod.object({
+  "id": zod.number(),
+  "laybyId": zod.number(),
+  "amount": zod.number(),
+  "paymentMethod": zod.string(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListLaybyPaymentsResponse = zod.array(ListLaybyPaymentsResponseItem)
+
+
+/**
+ * @summary Add a payment to a layby
+ */
+export const AddLaybyPaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddLaybyPaymentBody = zod.object({
+  "amount": zod.number(),
+  "paymentMethod": zod.string().optional(),
+  "note": zod.string().optional()
+})
+
+
+/**
+ * @summary Cancel a layby
+ */
+export const CancelLaybyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CancelLaybyBody = zod.object({
+  "reason": zod.string().optional()
+})
+
+export const CancelLaybyResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "cancelReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Mark a layby as completed (collected)
+ */
+export const CompleteLaybyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CompleteLaybyResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional()
+})),
+  "totalAmount": zod.number(),
+  "depositAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "cancelReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+

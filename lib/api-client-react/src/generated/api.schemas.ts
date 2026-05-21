@@ -1218,6 +1218,69 @@ export interface TestEmailRequest {
   to: string;
 }
 
+export type LaybyItemsItem = {
+  productId?: number;
+  productName?: string;
+  quantity?: number;
+  price?: number;
+};
+
+export interface Layby {
+  id: number;
+  reference: string;
+  customerId?: number | null;
+  customerName?: string | null;
+  items: LaybyItemsItem[];
+  totalAmount: number;
+  depositAmount: number;
+  amountPaid: number;
+  balance: number;
+  status: string;
+  dueDate?: string | null;
+  notes?: string | null;
+  cancelReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LaybyPayment {
+  id: number;
+  laybyId: number;
+  amount: number;
+  paymentMethod: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export type CreateLaybyBodyItemsItem = {
+  productId?: number;
+  productName?: string;
+  quantity?: number;
+  price?: number;
+};
+
+export interface CreateLaybyBody {
+  customerId?: number;
+  items: CreateLaybyBodyItemsItem[];
+  totalAmount: number;
+  depositAmount: number;
+  dueDate?: string;
+  notes?: string;
+  paymentMethod?: string;
+}
+
+export interface UpdateLaybyBody {
+  dueDate?: string;
+  notes?: string;
+  status?: string;
+}
+
+export interface AddLaybyPaymentBody {
+  amount: number;
+  paymentMethod?: string;
+  note?: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1363,5 +1426,22 @@ export type TestEmailSettings200 = {
 
 export type SendTransactionReceipt200 = {
   success?: boolean;
+};
+
+export type ListLaybysParams = {
+status?: string;
+customerId?: number;
+search?: string;
+limit?: number;
+offset?: number;
+};
+
+export type ListLaybys200 = {
+  items: Layby[];
+  total: number;
+};
+
+export type CancelLaybyBody = {
+  reason?: string;
 };
 

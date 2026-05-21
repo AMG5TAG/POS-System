@@ -20,14 +20,17 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AddLaybyPaymentBody,
   Appointment,
   AppointmentInput,
   CalendarMonth,
+  CancelLaybyBody,
   CashDrawerEntry,
   CashDrawerEntryInput,
   Category,
   CategoryInput,
   CategoryUpdate,
+  CreateLaybyBody,
   Customer,
   CustomerFile,
   CustomerFileInput,
@@ -62,10 +65,14 @@ import type {
   HealthStatus,
   InventoryItem,
   InventoryUpdate,
+  Layby,
+  LaybyPayment,
   ListAppointmentsParams,
   ListCashDrawerEntriesParams,
   ListCustomersParams,
   ListInventoryParams,
+  ListLaybys200,
+  ListLaybysParams,
   ListProductsParams,
   ListPurchaseOrdersParams,
   ListTransactionsParams,
@@ -108,6 +115,7 @@ import type {
   Transaction,
   TransactionInput,
   TransactionList,
+  UpdateLaybyBody,
   UploadUrlRequest,
   UploadUrlResponse,
   ValidateDiscountRequest,
@@ -7793,5 +7801,600 @@ export const useSendTransactionReceipt = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendTransactionReceiptMutationOptions(options));
+    }
+
+export const getListLaybysUrl = (params?: ListLaybysParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/laybys?${stringifiedParams}` : `/api/laybys`
+}
+
+/**
+ * @summary List laybys for the authenticated merchant
+ */
+export const listLaybys = async (params?: ListLaybysParams, options?: RequestInit): Promise<ListLaybys200> => {
+
+  return customFetch<ListLaybys200>(getListLaybysUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLaybysQueryKey = (params?: ListLaybysParams,) => {
+    return [
+    `/api/laybys`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLaybysQueryOptions = <TData = Awaited<ReturnType<typeof listLaybys>>, TError = ErrorType<unknown>>(params?: ListLaybysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLaybys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLaybysQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLaybys>>> = ({ signal }) => listLaybys(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLaybys>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLaybysQueryResult = NonNullable<Awaited<ReturnType<typeof listLaybys>>>
+export type ListLaybysQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List laybys for the authenticated merchant
+ */
+
+export function useListLaybys<TData = Awaited<ReturnType<typeof listLaybys>>, TError = ErrorType<unknown>>(
+ params?: ListLaybysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLaybys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLaybysQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateLaybyUrl = () => {
+
+
+
+
+  return `/api/laybys`
+}
+
+/**
+ * @summary Create a new layby
+ */
+export const createLayby = async (createLaybyBody: CreateLaybyBody, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getCreateLaybyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createLaybyBody,)
+  }
+);}
+
+
+
+
+export const getCreateLaybyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLayby>>, TError,{data: BodyType<CreateLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLayby>>, TError,{data: BodyType<CreateLaybyBody>}, TContext> => {
+
+const mutationKey = ['createLayby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLayby>>, {data: BodyType<CreateLaybyBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLayby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLaybyMutationResult = NonNullable<Awaited<ReturnType<typeof createLayby>>>
+    export type CreateLaybyMutationBody = BodyType<CreateLaybyBody>
+    export type CreateLaybyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a new layby
+ */
+export const useCreateLayby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLayby>>, TError,{data: BodyType<CreateLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLayby>>,
+        TError,
+        {data: BodyType<CreateLaybyBody>},
+        TContext
+      > => {
+      return useMutation(getCreateLaybyMutationOptions(options));
+    }
+
+export const getGetLaybyUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}`
+}
+
+/**
+ * @summary Get a layby by ID
+ */
+export const getLayby = async (id: number, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getGetLaybyUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLaybyQueryKey = (id: number,) => {
+    return [
+    `/api/laybys/${id}`
+    ] as const;
+    }
+
+
+export const getGetLaybyQueryOptions = <TData = Awaited<ReturnType<typeof getLayby>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLayby>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLaybyQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLayby>>> = ({ signal }) => getLayby(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLayby>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLaybyQueryResult = NonNullable<Awaited<ReturnType<typeof getLayby>>>
+export type GetLaybyQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a layby by ID
+ */
+
+export function useGetLayby<TData = Awaited<ReturnType<typeof getLayby>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLayby>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLaybyQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateLaybyUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}`
+}
+
+/**
+ * @summary Update a layby
+ */
+export const updateLayby = async (id: number,
+    updateLaybyBody: UpdateLaybyBody, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getUpdateLaybyUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateLaybyBody,)
+  }
+);}
+
+
+
+
+export const getUpdateLaybyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLayby>>, TError,{id: number;data: BodyType<UpdateLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLayby>>, TError,{id: number;data: BodyType<UpdateLaybyBody>}, TContext> => {
+
+const mutationKey = ['updateLayby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLayby>>, {id: number;data: BodyType<UpdateLaybyBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLayby(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLaybyMutationResult = NonNullable<Awaited<ReturnType<typeof updateLayby>>>
+    export type UpdateLaybyMutationBody = BodyType<UpdateLaybyBody>
+    export type UpdateLaybyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a layby
+ */
+export const useUpdateLayby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLayby>>, TError,{id: number;data: BodyType<UpdateLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLayby>>,
+        TError,
+        {id: number;data: BodyType<UpdateLaybyBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateLaybyMutationOptions(options));
+    }
+
+export const getListLaybyPaymentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}/payments`
+}
+
+/**
+ * @summary List payments for a layby
+ */
+export const listLaybyPayments = async (id: number, options?: RequestInit): Promise<LaybyPayment[]> => {
+
+  return customFetch<LaybyPayment[]>(getListLaybyPaymentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLaybyPaymentsQueryKey = (id: number,) => {
+    return [
+    `/api/laybys/${id}/payments`
+    ] as const;
+    }
+
+
+export const getListLaybyPaymentsQueryOptions = <TData = Awaited<ReturnType<typeof listLaybyPayments>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLaybyPayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLaybyPaymentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLaybyPayments>>> = ({ signal }) => listLaybyPayments(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLaybyPayments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLaybyPaymentsQueryResult = NonNullable<Awaited<ReturnType<typeof listLaybyPayments>>>
+export type ListLaybyPaymentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List payments for a layby
+ */
+
+export function useListLaybyPayments<TData = Awaited<ReturnType<typeof listLaybyPayments>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLaybyPayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLaybyPaymentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAddLaybyPaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}/payments`
+}
+
+/**
+ * @summary Add a payment to a layby
+ */
+export const addLaybyPayment = async (id: number,
+    addLaybyPaymentBody: AddLaybyPaymentBody, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getAddLaybyPaymentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      addLaybyPaymentBody,)
+  }
+);}
+
+
+
+
+export const getAddLaybyPaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addLaybyPayment>>, TError,{id: number;data: BodyType<AddLaybyPaymentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addLaybyPayment>>, TError,{id: number;data: BodyType<AddLaybyPaymentBody>}, TContext> => {
+
+const mutationKey = ['addLaybyPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addLaybyPayment>>, {id: number;data: BodyType<AddLaybyPaymentBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addLaybyPayment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddLaybyPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof addLaybyPayment>>>
+    export type AddLaybyPaymentMutationBody = BodyType<AddLaybyPaymentBody>
+    export type AddLaybyPaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a payment to a layby
+ */
+export const useAddLaybyPayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addLaybyPayment>>, TError,{id: number;data: BodyType<AddLaybyPaymentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addLaybyPayment>>,
+        TError,
+        {id: number;data: BodyType<AddLaybyPaymentBody>},
+        TContext
+      > => {
+      return useMutation(getAddLaybyPaymentMutationOptions(options));
+    }
+
+export const getCancelLaybyUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}/cancel`
+}
+
+/**
+ * @summary Cancel a layby
+ */
+export const cancelLayby = async (id: number,
+    cancelLaybyBody?: CancelLaybyBody, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getCancelLaybyUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cancelLaybyBody,)
+  }
+);}
+
+
+
+
+export const getCancelLaybyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLayby>>, TError,{id: number;data?: BodyType<CancelLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelLayby>>, TError,{id: number;data?: BodyType<CancelLaybyBody>}, TContext> => {
+
+const mutationKey = ['cancelLayby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelLayby>>, {id: number;data?: BodyType<CancelLaybyBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  cancelLayby(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelLaybyMutationResult = NonNullable<Awaited<ReturnType<typeof cancelLayby>>>
+    export type CancelLaybyMutationBody = BodyType<CancelLaybyBody> | undefined
+    export type CancelLaybyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a layby
+ */
+export const useCancelLayby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelLayby>>, TError,{id: number;data?: BodyType<CancelLaybyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelLayby>>,
+        TError,
+        {id: number;data?: BodyType<CancelLaybyBody>},
+        TContext
+      > => {
+      return useMutation(getCancelLaybyMutationOptions(options));
+    }
+
+export const getCompleteLaybyUrl = (id: number,) => {
+
+
+
+
+  return `/api/laybys/${id}/complete`
+}
+
+/**
+ * @summary Mark a layby as completed (collected)
+ */
+export const completeLayby = async (id: number, options?: RequestInit): Promise<Layby> => {
+
+  return customFetch<Layby>(getCompleteLaybyUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCompleteLaybyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLayby>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeLayby>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['completeLayby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeLayby>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  completeLayby(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteLaybyMutationResult = NonNullable<Awaited<ReturnType<typeof completeLayby>>>
+
+    export type CompleteLaybyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark a layby as completed (collected)
+ */
+export const useCompleteLayby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeLayby>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeLayby>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCompleteLaybyMutationOptions(options));
     }
 
