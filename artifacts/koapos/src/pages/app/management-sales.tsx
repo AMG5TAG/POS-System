@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetDashboardSummary,
@@ -24,7 +25,8 @@ import {
   CalendarDays, Gift, Wallet, RefreshCw, Download, Receipt,
   ShoppingCart, AlertCircle, CheckCircle2, Package, UserSquare2,
   ArrowUpRight, ArrowDownRight, Percent, Hash, Mail, Clock, Plus,
-  Trash2, FileText, Settings2,
+  Trash2, FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
+  MousePointerClick,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
@@ -89,6 +91,7 @@ const REPORT_TABS = [
   { id: "gst-bas",           label: "GST / BAS",         icon: Receipt           },
   { id: "gift-cards",        label: "Gift Cards",        icon: Gift              },
   { id: "store-credit",      label: "Store Credit",      icon: Wallet            },
+  { id: "analytics",         label: "Analytics",         icon: Globe             },
 ] as const;
 
 type ReportTabId = (typeof REPORT_TABS)[number]["id"];
@@ -1182,6 +1185,301 @@ function StoreCreditTab() {
   );
 }
 
+/* ─── Tab: Analytics (Marketing) ────────────────────────────────────────── */
+
+interface _QREntry   { id: string; label: string; url: string; createdAt: string; settings?: { template?: string; dotStyle?: string } }
+interface _LinkEntry { id: string; label: string; longUrl: string; slug: string; createdAt: string; clicks: number; tags?: string }
+interface _PageEntry { id: string; slug: string; title: string; links?: { enabled: boolean }[]; createdAt: string }
+
+function _loadLS<T>(key: string): T[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? "[]") as T[]; } catch { return []; }
+}
+
+function _groupByDay(items: { createdAt: string }[], days = 30): Record<string, number> {
+  const result: Record<string, number> = {};
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    result[d.toISOString().split("T")[0]] = 0;
+  }
+  for (const item of items) {
+    const day = (item.createdAt ?? "").split("T")[0];
+    if (day in result) result[day]++;
+  }
+  return result;
+}
+
+function _countBy<T>(items: T[], key: (x: T) => string): { name: string; value: number }[] {
+  const counts: Record<string, number> = {};
+  for (const x of items) { const k = key(x); counts[k] = (counts[k] ?? 0) + 1; }
+  return Object.entries(counts)
+    .map(([n, v]) => ({ name: n.charAt(0).toUpperCase() + n.slice(1).replace(/-/g, " "), value: v }))
+    .sort((a, b) => b.value - a.value);
+}
+
+const _CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f97316", "#14b8a6"];
+
+function AnalyticsTab() {
+  const qr    = useMemo(() => _loadLS<_QREntry>("koapos_qr_history"), []);
+  const links = useMemo(() => _loadLS<_LinkEntry>("koapos_shortlinks"), []);
+  const pages = useMemo(() => _loadLS<_PageEntry>("koapos_landing_pages"), []);
+
+  const totalClicks   = useMemo(() => links.reduce((s, l) => s + (l.clicks || 0), 0), [links]);
+  const avgClicks     = links.length > 0 ? (totalClicks / links.length) : 0;
+  const topLinks      = useMemo(() => [...links].sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).slice(0, 8), [links]);
+  const templates     = useMemo(() => _countBy(qr, (e) => e.settings?.template ?? "standard"), [qr]);
+  const dotStyles     = useMemo(() => _countBy(qr, (e) => e.settings?.dotStyle ?? "square"), [qr]);
+
+  const activityData = useMemo(() => {
+    const qrByDay  = _groupByDay(qr, 30);
+    const lkByDay  = _groupByDay(links, 30);
+    return Object.keys(qrByDay).map((date) => ({
+      date: new Date(date + "T00:00:00").toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
+      "QR Codes":  qrByDay[date],
+      "Shortlinks": lkByDay[date] ?? 0,
+    }));
+  }, [qr, links]);
+
+  if (qr.length === 0 && links.length === 0 && pages.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4 text-muted-foreground">
+        <Globe className="w-16 h-16 opacity-10" />
+        <div>
+          <p className="font-semibold text-foreground">No marketing data yet</p>
+          <p className="text-sm">Create QR codes, shortlinks, or landing pages to see analytics here.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── KPI tiles ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label="QR Codes" value={qr.length.toString()} sub="Generated" />
+        <KpiTile label="Shortlinks" value={links.length.toString()} sub="Created" />
+        <KpiTile label="Total Clicks" value={totalClicks.toLocaleString()} sub="Across all shortlinks" accent />
+        <KpiTile label="Avg. Clicks" value={avgClicks.toFixed(1)} sub="Per shortlink" />
+        <KpiTile label="Landing Pages" value={pages.length.toString()} sub="Published" />
+      </div>
+
+      {/* ── Activity timeline ── */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <SectionHeader title="Activity — Last 30 Days" />
+        <div className="p-5">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={activityData} barSize={6} barGap={2}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
+                interval={Math.floor(activityData.length / 6)} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={24} />
+              <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="QR Codes"  fill="#6366f1" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="Shortlinks" fill="#22c55e" radius={[2, 2, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Charts row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Top shortlinks by clicks */}
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="Top Shortlinks by Clicks" action={
+            <Link href="/marketing/generators/shortlinks">
+              <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
+            </Link>
+          } />
+          <div className="p-5">
+            {topLinks.length === 0 ? (
+              <div className="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                <Link2 className="w-8 h-8 opacity-20" />
+                <p className="text-sm">No shortlinks yet.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={topLinks.map((l) => ({ name: (l.label || l.slug || "").slice(0, 18), clicks: l.clicks || 0 }))}
+                  layout="vertical" barSize={14}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={90} />
+                  <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                  <Bar dataKey="clicks" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* QR template usage */}
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="QR Code Templates Used" action={
+            <Link href="/marketing/generators/qr-codes">
+              <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
+            </Link>
+          } />
+          <div className="p-5">
+            {templates.length === 0 ? (
+              <div className="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                <QrCode className="w-8 h-8 opacity-20" />
+                <p className="text-sm">No QR codes generated yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={templates} barSize={22}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={24} />
+                    <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                    <Bar dataKey="value" name="Uses" radius={[4, 4, 0, 0]}>
+                      {templates.map((_, i) => <Cell key={i} fill={_CHART_COLORS[i % _CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* Dot styles */}
+                {dotStyles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <p className="w-full text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Dot Styles</p>
+                    {dotStyles.map((d, i) => (
+                      <span key={d.name} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium"
+                        style={{ borderColor: _CHART_COLORS[i % _CHART_COLORS.length], color: _CHART_COLORS[i % _CHART_COLORS.length] }}>
+                        {d.name} <span className="opacity-70">×{d.value}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Shortlinks table ── */}
+      {links.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="All Shortlinks" action={<ExportBtn />} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Label</th>
+                  <th className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Slug</th>
+                  <th className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Destination</th>
+                  <th className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide text-right">
+                    <span className="flex items-center gap-1 justify-end"><MousePointerClick className="w-3 h-3" />Clicks</span>
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...links].sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).map((l, i) => (
+                  <tr key={l.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3 font-medium">{l.label || <span className="text-muted-foreground italic">Unlabelled</span>}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-primary">{l.slug}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs max-w-[200px] truncate">{l.longUrl}</td>
+                    <td className="px-5 py-3 text-right">
+                      <span className={cn("font-bold tabular-nums", i === 0 && "text-primary")}>
+                        {(l.clicks || 0).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                      {new Date(l.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── QR codes table ── */}
+      {qr.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="QR Code History" action={<ExportBtn />} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  {["Label", "URL", "Template", "Dot Style", "Created"].map((h) => (
+                    <th key={h} className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {qr.slice(0, 20).map((e) => (
+                  <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3 font-medium max-w-[140px] truncate">{e.label || <span className="text-muted-foreground italic">Unlabelled</span>}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground max-w-[180px] truncate">{e.url}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-secondary font-medium capitalize">
+                        {(e.settings?.template ?? "standard").replace(/-/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full border font-medium capitalize">
+                        {(e.settings?.dotStyle ?? "square").replace(/-/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                      {new Date(e.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Landing pages summary ── */}
+      {pages.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="Landing Pages" action={
+            <Link href="/marketing/landing-pages">
+              <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
+            </Link>
+          } />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  {["Title", "URL", "Active Links", "Last Updated"].map((h) => (
+                    <th key={h} className="px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pages.map((p) => (
+                  <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3 font-medium">{p.title || "Untitled"}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-primary">/p/{p.slug}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-secondary font-medium">
+                        {(p.links ?? []).filter((l) => l.enabled).length} links
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                      {new Date(p.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ReportsPage() {
@@ -1301,6 +1599,7 @@ export default function ReportsPage() {
         {activeTab === "gst-bas"           && <GstBasTab summary={summary} summaryLoading={summaryLoading} />}
         {activeTab === "gift-cards"        && <GiftCardsTab />}
         {activeTab === "store-credit"      && <StoreCreditTab />}
+        {activeTab === "analytics"         && <AnalyticsTab />}
 
       </div>
     </AppLayout>
