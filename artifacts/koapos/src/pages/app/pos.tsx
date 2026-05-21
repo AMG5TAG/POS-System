@@ -473,7 +473,7 @@ export default function POSPage() {
                 >
                   <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
                     {product.imageUrl
-                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                       : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
                     }
                     {product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
