@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts } from "@workspace/api-client-react";
+import { useListProducts, useGetMerchant } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,6 +100,8 @@ export default function POSInvoicesPage() {
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { profile } = useBusinessProfile();
 
   /* ── Data loading ── */
   const load = async () => {
@@ -254,8 +257,37 @@ export default function POSInvoicesPage() {
 
   /* ── Print ── */
   const printInvoice = (inv: Invoice) => {
+    /* Read active invoice template settings from Management > Templates */
+    let tpl = {
+      showLogo: true, showAbn: true, showGstBreakdown: true, showWebsite: true,
+      paymentTerms: "Payment due within 30 days.",
+      invoiceNotes: "", footerText: "",
+    };
+    try {
+      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
+      const tplId  = active.invoices ?? "i-pro";
+      const opts   = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Record<string, unknown>;
+      tpl = {
+        showLogo:         opts.showLogo         !== false,
+        showAbn:          opts.showAbn          !== false,
+        showGstBreakdown: opts.showGstBreakdown !== false,
+        showWebsite:      opts.showWebsite      !== false,
+        paymentTerms:     (opts.paymentTerms  as string) || "Payment due within 30 days.",
+        invoiceNotes:     (opts.invoiceNotes  as string) || "",
+        footerText:       (opts.footerText    as string) || "",
+      };
+    } catch { /* use defaults */ }
+
+    const bizName  = merchant?.businessName ?? "Your Business";
+    const abn      = profile.abn ?? "";
+    const website  = profile.website ?? "";
+    const address  = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const email    = profile.contactEmail ?? "";
+    const brandColor = profile.brandColors?.[0] ?? "#4f46e5";
+
     const w = window.open("", "_blank", "width=800,height=900");
     if (!w) return;
+
     const rows = (inv.items ?? []).map((l) => `
       <tr>
         <td>${l.description}</td>
@@ -264,32 +296,59 @@ export default function POSInvoicesPage() {
         <td style="text-align:right">$${(l.quantity * l.unitPrice * (l.taxRate / 100)).toFixed(2)}</td>
         <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
       </tr>`).join("");
+
     w.document.write(`<!DOCTYPE html><html><head>
       <title>Invoice ${inv.invoiceNumber}</title>
       <style>
-        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:700px;margin:0 auto}
-        h1{font-size:24px;margin:0 0 4px}
-        .meta{color:#666;font-size:13px;margin-bottom:24px}
-        table{width:100%;border-collapse:collapse;margin:24px 0}
-        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:13px;color:#555}
-        td{padding:8px 6px;border-bottom:1px solid #eee;font-size:13px}
-        .totals{margin-left:auto;width:220px}
-        .totals div{display:flex;justify-content:space-between;padding:4px 0;font-size:14px}
-        .totals .grand{font-weight:bold;border-top:2px solid #ddd;padding-top:8px;margin-top:4px;font-size:16px}
-        .notes{margin-top:24px;padding:16px;background:#f9f9f9;border-radius:6px;font-size:13px;color:#555}
+        *{box-sizing:border-box}
+        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:720px;margin:0 auto}
+        .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${brandColor};padding-bottom:16px;margin-bottom:24px}
+        .logo-box{width:40px;height:40px;border-radius:6px;background:${brandColor};display:inline-block;margin-bottom:6px}
+        .biz-name{font-size:20px;font-weight:700;margin:0}
+        .biz-meta{font-size:12px;color:#666;margin-top:4px;line-height:1.6}
+        .inv-title{font-size:28px;font-weight:800;color:${brandColor};text-align:right;margin:0}
+        .inv-meta{font-size:13px;color:#666;text-align:right;margin-top:4px;line-height:1.7}
+        .bill-to{background:#f7f7f7;border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:13px}
+        .bill-to strong{display:block;margin-bottom:2px}
+        table{width:100%;border-collapse:collapse;margin:0 0 16px}
+        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+        td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px}
+        .totals{margin-left:auto;width:240px;margin-top:4px}
+        .totals .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}
+        .totals .grand{font-weight:700;border-top:2px solid #ddd;padding-top:8px;margin-top:4px;font-size:16px;color:#111;display:flex;justify-content:space-between}
+        .terms{margin-top:28px;padding:14px 16px;background:#f9f9f9;border-left:3px solid ${brandColor};border-radius:0 6px 6px 0;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
+        .terms-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:6px}
+        .inv-notes{margin-top:12px;padding:12px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
+        .footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}
         @media print{body{padding:20px}}
       </style>
     </head><body>
-      <h1>Invoice ${inv.invoiceNumber}</h1>
-      <div class="meta">
-        ${inv.customerName ? `<div>To: <strong>${inv.customerName}</strong></div>` : ""}
-        <div>Date: ${formatDate(inv.createdAt)}</div>
-        ${inv.dueDate ? `<div>Due: ${formatDate(inv.dueDate)}</div>` : ""}
-        <div>Status: ${STATUS_LABELS[inv.status]}</div>
+      <div class="header">
+        <div>
+          ${tpl.showLogo ? `<div class="logo-box"></div>` : ""}
+          <p class="biz-name">${bizName}</p>
+          <div class="biz-meta">
+            ${tpl.showAbn && abn ? `ABN ${abn}<br>` : ""}
+            ${address ? `${address}<br>` : ""}
+            ${email ? `${email}<br>` : ""}
+            ${tpl.showWebsite && website ? `${website}` : ""}
+          </div>
+        </div>
+        <div>
+          <p class="inv-title">INVOICE</p>
+          <div class="inv-meta">
+            <strong>${inv.invoiceNumber}</strong><br>
+            Date: ${formatDate(inv.createdAt)}<br>
+            ${inv.dueDate ? `Due: ${formatDate(inv.dueDate)}<br>` : ""}
+            Status: ${STATUS_LABELS[inv.status]}
+          </div>
+        </div>
       </div>
+      ${inv.customerName ? `<div class="bill-to"><strong>Bill To</strong>${inv.customerName}</div>` : ""}
       <table>
         <thead><tr>
-          <th>Description</th><th style="text-align:center">Qty</th>
+          <th>Description</th>
+          <th style="text-align:center">Qty</th>
           <th style="text-align:right">Unit Price</th>
           <th style="text-align:right">Tax</th>
           <th style="text-align:right">Amount</th>
@@ -297,11 +356,18 @@ export default function POSInvoicesPage() {
         <tbody>${rows}</tbody>
       </table>
       <div class="totals">
-        <div><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
-        <div><span>Tax</span><span>$${inv.taxTotal.toFixed(2)}</span></div>
-        <div class="grand"><span>Total</span><span>$${inv.total.toFixed(2)}</span></div>
+        <div class="row"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
+        ${tpl.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
+        <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
       </div>
-      ${inv.notes ? `<div class="notes">${inv.notes}</div>` : ""}
+      ${tpl.paymentTerms || tpl.invoiceNotes ? `
+        <div class="terms">
+          <div class="terms-title">Terms</div>
+          ${tpl.paymentTerms ? `<div>${tpl.paymentTerms}</div>` : ""}
+          ${tpl.invoiceNotes ? `<div style="margin-top:8px">${tpl.invoiceNotes}</div>` : ""}
+        </div>` : ""}
+      ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
+      ${tpl.footerText ? `<div class="footer">${tpl.footerText}</div>` : ""}
     </body></html>`);
     w.document.close();
     w.focus();
@@ -542,7 +608,7 @@ export default function POSInvoicesPage() {
                 {detailInvoice.notes && (
                   <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1 text-xs uppercase tracking-wide">Notes</p>
-                    {detailInvoice.notes}
+                    <p className="whitespace-pre-line">{detailInvoice.notes}</p>
                   </div>
                 )}
 

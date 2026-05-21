@@ -475,6 +475,7 @@ function ProductDetailDialog({
 
         {tab === "details" && (
           <div className="space-y-3">
+            {/* Pricing */}
             <div className="rounded-xl border bg-muted/20 divide-y">
               <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
               {product.costPrice != null && (
@@ -483,17 +484,27 @@ function ProductDetailDialog({
               {margin !== null && (
                 <InfoRow icon={DollarSign} label="Margin" value={`${margin}%`} valueClass={margin < 20 ? "text-destructive" : "text-emerald-600"} />
               )}
+              <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
             </div>
-            {(product.sku || product.barcode) && (
+            {/* Identifiers */}
+            {(product.sku || (product as Product & { barcode?: string }).barcode) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
                 <InfoRow icon={Tag}     label="SKU"     value={product.sku} />
-                <InfoRow icon={Barcode} label="Barcode" value={product.barcode} />
+                <InfoRow icon={Barcode} label="Barcode" value={(product as Product & { barcode?: string }).barcode} />
               </div>
             )}
+            {/* Product type */}
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              <InfoRow icon={Package} label="Product Type"
+                value={((product as Product & { productType?: string }).productType ?? "standard")
+                  .replace(/-/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase())} />
+            </div>
+            {/* Description */}
             {product.description && (
               <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
                 <p className="text-xs text-muted-foreground mb-0.5">Description</p>
-                <p>{product.description}</p>
+                <p className="whitespace-pre-line">{product.description}</p>
               </div>
             )}
           </div>
@@ -535,7 +546,13 @@ function ProductDetailDialog({
                   <p className="font-medium">{product.isActive ? "Active — visible in POS" : "Inactive — hidden from POS"}</p>
                 </div>
               </div>
-              <InfoRow icon={Settings2} label="GST Rate" value={`${product.taxRate ?? 10}%`} />
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                <div className="text-sm">
+                  <p className="text-xs text-muted-foreground">Loyalty Points</p>
+                  <p className="font-medium">{product.excludeFromLoyalty ? "Excluded — does not earn points" : "Included — earns loyalty points"}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}

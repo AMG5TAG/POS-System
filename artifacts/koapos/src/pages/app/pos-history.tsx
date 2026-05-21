@@ -52,10 +52,52 @@ function SendDialog({ tx, txDetail, onClose }: SendDialogProps) {
 
   function handleReprint() {
     if (!tx) return;
-    const content = printRef.current?.innerHTML;
-    if (!content) return;
+
+    /* Read active receipt template settings from Management > Templates */
+    let tpl = {
+      showAbn: true, showGstBreakdown: true, showWebsite: true,
+      thankYouMsg: "Thank you for your purchase!",
+      footerText: "", headerText: "",
+    };
+    try {
+      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
+      const tplId  = active.receipts ?? "r-pro";
+      const opts   = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Record<string, unknown>;
+      tpl = {
+        showAbn:          opts.showAbn          !== false,
+        showGstBreakdown: opts.showGstBreakdown !== false,
+        showWebsite:      opts.showWebsite      !== false,
+        thankYouMsg:      (opts.thankYouMsg  as string) || "Thank you for your purchase!",
+        footerText:       (opts.footerText   as string) || "",
+        headerText:       (opts.headerText   as string) || "",
+      };
+    } catch { /* use defaults */ }
+
+    /* Read business info saved in localStorage by Business Details page */
+    let bizName = "Your Business";
+    let abn = "";
+    let website = "";
+    try {
+      const bp = JSON.parse(localStorage.getItem("koapos_business_profile") ?? "{}") as Record<string, unknown>;
+      bizName = (bp.businessName as string) || bizName;
+      abn     = (bp.abn         as string) || "";
+      website = (bp.website     as string) || "";
+    } catch { /* use defaults */ }
+
     const win = window.open("", "_blank", "width=400,height=600");
     if (!win) { toast.error("Popup blocked — please allow popups"); return; }
+
+    const itemRows = items.map((item) => `
+      <div class="row">
+        <span>${item.name ?? ""} × ${item.quantity ?? 1}</span>
+        <span>${new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format((item.price ?? 0) * (item.quantity ?? 1))}</span>
+      </div>`).join("");
+
+    const subtotal = txDetail?.subtotal ?? 0;
+    const taxTotal = txDetail?.taxTotal ?? 0;
+    const total    = tx.total ?? 0;
+    const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
+
     win.document.write(`
       <html><head><title>Receipt ${tx.receiptNumber ?? "#" + tx.id}</title>
       <style>
@@ -65,8 +107,24 @@ function SendDialog({ tx, txDetail, onClose }: SendDialogProps) {
         .center { text-align: center; }
         .divider { border-top: 1px dashed #999; margin: 8px 0; }
         .total { font-size: 14px; font-weight: bold; }
+        .footer-msg { font-size: 11px; color: #666; }
       </style>
-      </head><body>${content}</body></html>
+      </head><body>
+        ${tpl.headerText ? `<div class="center bold" style="margin-bottom:6px">${tpl.headerText}</div>` : ""}
+        <div class="center bold">${bizName}</div>
+        ${tpl.showAbn && abn ? `<div class="center" style="font-size:11px">ABN ${abn}</div>` : ""}
+        <div class="center" style="margin-top:4px">${tx.receiptNumber ?? "#" + tx.id}</div>
+        <div class="divider"></div>
+        ${itemRows}
+        <div class="divider"></div>
+        <div class="row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
+        ${tpl.showGstBreakdown ? `<div class="row"><span>GST incl.</span><span>${fmt(taxTotal)}</span></div>` : ""}
+        <div class="row total"><span>TOTAL</span><span>${fmt(total)}</span></div>
+        <div class="divider"></div>
+        ${tpl.thankYouMsg ? `<div class="center footer-msg" style="margin-top:8px">${tpl.thankYouMsg}</div>` : ""}
+        ${tpl.footerText  ? `<div class="center footer-msg">${tpl.footerText}</div>` : ""}
+        ${tpl.showWebsite && website ? `<div class="center footer-msg">${website}</div>` : ""}
+      </body></html>
     `);
     win.document.close();
     win.focus();
