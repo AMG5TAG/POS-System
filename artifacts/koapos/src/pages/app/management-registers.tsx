@@ -29,7 +29,8 @@ export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
 
 export const ALL_PAYMENT_METHODS = [
   { id: "cash",           label: "Cash",                description: "Physical cash and change",                icon: Banknote },
-  { id: "card",           label: "Credit / Debit Card", description: "EFTPOS and card payments",                icon: CreditCard },
+  { id: "eftpos",         label: "EFTPOS",              description: "EFTPOS terminal / tap & go",              icon: CreditCard },
+  { id: "card",           label: "Credit / Debit Card", description: "Manually keyed card payments",            icon: CreditCard },
   { id: "direct_deposit", label: "Direct Deposit",      description: "Bank transfer / direct deposit",          icon: Landmark },
   { id: "voucher",        label: "Voucher",             description: "Gift vouchers and coupon codes",          icon: Ticket },
   { id: "store_credit",   label: "Store Credit",        description: "Accumulated store credit balance",        icon: Wallet },

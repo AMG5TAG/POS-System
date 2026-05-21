@@ -2603,7 +2603,7 @@ components:
           type: number
         paymentMethod:
           type: string
-          enum: [cash, card, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
         amountTendered:
           type: ["number", "null"]
         changeDue:
@@ -2634,7 +2634,7 @@ components:
             $ref: "#/components/schemas/TransactionItem"
         paymentMethod:
           type: string
-          enum: [cash, card, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
         subtotal:
           type: number
         taxTotal:

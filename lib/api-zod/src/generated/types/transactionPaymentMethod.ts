@@ -12,6 +12,7 @@ export type TransactionPaymentMethod = typeof TransactionPaymentMethod[keyof typ
 export const TransactionPaymentMethod = {
   cash: 'cash',
   card: 'card',
+  eftpos: 'eftpos',
   split: 'split',
   voucher: 'voucher',
   other: 'other',
