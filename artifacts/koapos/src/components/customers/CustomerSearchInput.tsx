@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useListCustomers, Customer } from "@workspace/api-client-react";
+import { useListCustomers, useGetCustomer, Customer } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Search, UserSearch, X, AlertTriangle, UserPlus } from "lucide-react";
+import { Search, UserSearch, X, AlertTriangle, UserPlus, Loader2 } from "lucide-react";
 import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
 
 interface CustomerSearchInputProps {
@@ -26,24 +26,39 @@ export function CustomerSearchInput({
 }: CustomerSearchInputProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useListCustomers({ limit: 500 });
-  const customers = (data?.items ?? []) as Customer[];
-  const selected = customers.find((c) => String(c.id) === value) ?? null;
+  /* Debounce the search query by 300 ms */
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  const filtered = !query.trim()
-    ? customers
-    : customers.filter((c) => {
-        const q = query.toLowerCase();
-        return (
-          `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase().includes(q) ||
-          (c.email ?? "").toLowerCase().includes(q) ||
-          (c.phone ?? "").toLowerCase().includes(q)
-        );
-      });
+  /* Server-side search — only fires when the dropdown is open */
+  const { data: searchData, isFetching } = useListCustomers(
+    { search: debouncedQuery || undefined, limit: 50 },
+    { query: { queryKey: ["customers-search", debouncedQuery], enabled: open } }
+  );
+  const customers = searchData?.items ?? [];
 
+  /* Look up the selected customer by ID when value is pre-set from outside
+     (e.g. editing an existing appointment) and we don't have the object yet */
+  const needLookup = !!value && (!selectedCustomer || String(selectedCustomer.id) !== value);
+  const { data: lookedUpCustomer } = useGetCustomer(
+    parseInt(value, 10) || 0,
+    { query: { queryKey: ["customer-by-id", value], enabled: needLookup && !!value } }
+  );
+
+  /* Resolved selected customer: prefer local state (just selected), fall back to server lookup */
+  const selected: Customer | null =
+    selectedCustomer && String(selectedCustomer.id) === value
+      ? selectedCustomer
+      : (lookedUpCustomer as Customer | undefined) ?? null;
+
+  /* Close dropdown on outside click */
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -55,13 +70,22 @@ export function CustomerSearchInput({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  /* Reset local selectedCustomer when the value is cleared from outside */
+  useEffect(() => {
+    if (!value) setSelectedCustomer(null);
+  }, [value]);
+
   const select = (c: Customer) => {
+    setSelectedCustomer(c);
     onChange(String(c.id), c);
     setOpen(false);
     setQuery("");
   };
 
-  const clear = () => onChange("", null);
+  const clear = () => {
+    setSelectedCustomer(null);
+    onChange("", null);
+  };
 
   const initials = (c: Customer) =>
     ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
@@ -110,13 +134,18 @@ export function CustomerSearchInput({
       {open && !selected && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border rounded-lg shadow-lg flex flex-col max-h-[min(320px,60dvh)]">
           <div className="p-2 border-b shrink-0">
-            <Input
-              autoFocus
-              placeholder="Search by name, email or phone..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-8 text-sm"
-            />
+            <div className="relative">
+              <Input
+                autoFocus
+                placeholder="Search by name, email or phone..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="h-8 text-sm pr-7"
+              />
+              {isFetching && (
+                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />
+              )}
+            </div>
           </div>
           <div className="overflow-y-auto min-h-0">
             <button
@@ -136,11 +165,11 @@ export function CustomerSearchInput({
                 {noneLabel}
               </button>
             )}
-            {filtered.length === 0 ? (
+            {customers.length === 0 && !isFetching ? (
               <div className="px-3 py-4 text-sm text-center text-muted-foreground">
-                {query ? (
+                {debouncedQuery ? (
                   <>
-                    No customers match &ldquo;{query}&rdquo; —{" "}
+                    No customers match &ldquo;{debouncedQuery}&rdquo; —{" "}
                     <button
                       type="button"
                       className="text-primary font-medium hover:underline"
@@ -152,7 +181,7 @@ export function CustomerSearchInput({
                 ) : "Start typing to search customers"}
               </div>
             ) : (
-              filtered.map((c) => (
+              customers.map((c) => (
                 <button
                   key={c.id}
                   type="button"
@@ -183,7 +212,7 @@ export function CustomerSearchInput({
       <QuickAddCustomerDialog
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        onCreated={(c) => { onChange(String(c.id), c); setQuickAddOpen(false); }}
+        onCreated={(c) => { setSelectedCustomer(c as Customer); onChange(String(c.id), c as Customer); setQuickAddOpen(false); }}
         prefillName={query}
       />
     </div>
