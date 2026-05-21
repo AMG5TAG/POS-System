@@ -8,6 +8,10 @@
 
 export interface DashboardSummary {
   totalSales: number;
+  posSales?: number;
+  invoiceSales?: number;
+  posCount?: number;
+  invoiceCount?: number;
   transactionCount: number;
   averageOrderValue: number;
   newCustomers: number;

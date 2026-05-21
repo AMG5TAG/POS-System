@@ -3128,6 +3128,14 @@ components:
       properties:
         totalSales:
           type: number
+        posSales:
+          type: number
+        invoiceSales:
+          type: number
+        posCount:
+          type: integer
+        invoiceCount:
+          type: integer
         transactionCount:
           type: integer
         averageOrderValue:

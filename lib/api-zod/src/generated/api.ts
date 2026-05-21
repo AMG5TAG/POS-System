@@ -1523,6 +1523,10 @@ export const GetDashboardSummaryQueryParams = zod.object({
 
 export const GetDashboardSummaryResponse = zod.object({
   "totalSales": zod.number(),
+  "posSales": zod.number().optional(),
+  "invoiceSales": zod.number().optional(),
+  "posCount": zod.number().optional(),
+  "invoiceCount": zod.number().optional(),
   "transactionCount": zod.number(),
   "averageOrderValue": zod.number(),
   "newCustomers": zod.number(),

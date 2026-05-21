@@ -25,7 +25,7 @@ import {
   CalendarDays, Gift, Wallet, RefreshCw, Download, Receipt,
   ShoppingCart, AlertCircle, CheckCircle2, Package, UserSquare2,
   ArrowUpRight, ArrowDownRight, Percent, Hash, Mail, Clock, Plus,
-  Trash2, FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
+  FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
   MousePointerClick,
 } from "lucide-react";
 import {
@@ -132,16 +132,20 @@ const PAYMENT_COLORS: Record<string, string> = {
 /* ─── Tab: Sales ─────────────────────────────────────────────────────────── */
 
 function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales, txCount, avgSaleValue }: {
-  summary: { totalSales: number; transactionCount: number; averageOrderValue: number } | undefined;
+  summary: { totalSales: number; transactionCount: number; averageOrderValue: number; posSales?: number; invoiceSales?: number; posCount?: number; invoiceCount?: number } | undefined;
   summaryLoading: boolean; chartData: { label: string; sales: number; transactions: number }[] | undefined;
   chartLoading: boolean; totalSales: number; txCount: number; avgSaleValue: number;
 }) {
+  const posSales     = summary?.posSales     ?? totalSales;
+  const invoiceSales = summary?.invoiceSales ?? 0;
+  const posCount     = summary?.posCount     ?? txCount;
+  const invoiceCount = summary?.invoiceCount ?? 0;
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiTile label="Total Revenue" value={summaryLoading ? "—" : formatCurrency(totalSales)} sub="POS + Invoices" accent />
-        <KpiTile label="Transactions" value={summaryLoading ? "—" : txCount.toLocaleString()} sub={`${txCount} POS · 0 Invoices`} />
-        <KpiTile label="Invoice Revenue" value={formatCurrency(0)} sub="0 paid invoices" />
+        <KpiTile label="POS Transactions" value={summaryLoading ? "—" : posCount.toLocaleString()} sub={formatCurrency(posSales)} />
+        <KpiTile label="Invoice Revenue" value={summaryLoading ? "—" : formatCurrency(invoiceSales)} sub={`${invoiceCount} paid invoice${invoiceCount !== 1 ? "s" : ""}`} />
         <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
@@ -201,9 +205,9 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
 
 /* ─── Tab: Payments ──────────────────────────────────────────────────────── */
 
-function PaymentsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod }) {
+function PaymentsTab({ fromDate }: { fromDate: string }) {
   const { data, isLoading } = useListTransactions({ limit: 500 });
-  const txs = data?.items ?? [];
+  const txs = (data?.items ?? []).filter((tx) => !fromDate || (tx.createdAt ?? "") >= fromDate);
 
   const breakdown = useMemo(() => {
     const map: Record<string, { count: number; total: number }> = {};
@@ -641,11 +645,11 @@ function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod })
 
 /* ─── Tab: User Activity ─────────────────────────────────────────────────── */
 
-function UserActivityTab() {
+function UserActivityTab({ fromDate }: { fromDate: string }) {
   const { data: staffData, isLoading: staffLoading } = useListStaff();
   const { data: txData,    isLoading: txLoading    } = useListTransactions({ limit: 500 });
   const staff = staffData ?? [];
-  const txs   = txData?.items ?? [];
+  const txs   = (txData?.items ?? []).filter((tx) => !fromDate || (tx.createdAt ?? "") >= fromDate);
 
   const staffSales = useMemo(() => {
     const map: Record<number, { name: string; count: number; total: number }> = {};
@@ -924,47 +928,25 @@ function ReportBuilderTab() {
 
 /* ─── Tab: Scheduled ─────────────────────────────────────────────────────── */
 
-const SAMPLE_SCHEDULES = [
-  { id: 1, name: "Daily Sales Summary",     freq: "Daily",   time: "8:00 AM",    format: "PDF",  to: "owner@store.com" },
-  { id: 2, name: "Weekly Revenue Report",   freq: "Weekly",  time: "Mon 9:00 AM",format: "CSV",  to: "owner@store.com" },
-  { id: 3, name: "Monthly P&L Statement",   freq: "Monthly", time: "1st 8:00 AM",format: "PDF",  to: "accountant@firm.com" },
-];
-
 function ScheduledTab() {
-  const [schedules, setSchedules] = useState(SAMPLE_SCHEDULES);
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{schedules.length} scheduled report{schedules.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> New Schedule</Button>
+        <p className="text-sm text-muted-foreground">0 scheduled reports</p>
+        <Button size="sm" className="gap-1.5" disabled><Plus className="w-4 h-4" /> New Schedule</Button>
       </div>
-      {schedules.length === 0 ? (
-        <div className="rounded-xl border bg-card flex flex-col items-center py-14 gap-3">
-          <CalendarDays className="w-10 h-10 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">No scheduled reports. Create one to get started.</p>
+      <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+          <CalendarDays className="w-7 h-7 text-muted-foreground/50" />
         </div>
-      ) : (
-        <div className="space-y-3">
-          {schedules.map((s) => (
-            <div key={s.id} className="rounded-xl border bg-card p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <FileText className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">{s.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {s.freq} · {s.time} · {s.format} → {s.to}
-                </p>
-              </div>
-              <Badge variant="secondary" className="shrink-0 text-xs">{s.freq}</Badge>
-              <button onClick={() => setSchedules((prev) => prev.filter((x) => x.id !== s.id))}
-                className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+        <div className="text-center">
+          <p className="font-semibold">No scheduled reports</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+            Scheduled report delivery is coming soon. You'll be able to automatically email daily, weekly, or monthly reports in PDF or CSV format.
+          </p>
         </div>
-      )}
+        <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
+      </div>
     </div>
   );
 }
@@ -985,9 +967,9 @@ function GstBasTab({ summary, summaryLoading }: {
   const quarter = Math.floor(new Date().getMonth() / 3) + 1;
   const year    = new Date().getFullYear();
   const quarters = [
-    { label: `Q${quarter} ${year} (Current)`, sales: salesExGst, gst: gstCollected, current: true  },
-    { label: `Q${quarter > 1 ? quarter - 1 : 4} ${quarter > 1 ? year : year - 1}`,  sales: 0, gst: 0, current: false },
-    { label: `Q${quarter > 2 ? quarter - 2 : 4 + quarter - 2} ${year - (quarter <= 2 ? 1 : 0)}`, sales: 0, gst: 0, current: false },
+    { label: `Q${quarter} ${year} (Current)`, sales: salesExGst, gst: gstCollected, current: true,  hasData: true  },
+    { label: `Q${quarter > 1 ? quarter - 1 : 4} ${quarter > 1 ? year : year - 1}`,  sales: null,    gst: null,      current: false, hasData: false },
+    { label: `Q${quarter > 2 ? quarter - 2 : 4 + quarter - 2} ${year - (quarter <= 2 ? 1 : 0)}`, sales: null, gst: null, current: false, hasData: false },
   ];
 
   return (
@@ -1014,12 +996,12 @@ function GstBasTab({ summary, summaryLoading }: {
               {quarters.map((q) => (
                 <tr key={q.label} className="border-b last:border-0 hover:bg-muted/20">
                   <td className="px-5 py-3 font-medium">{q.label}</td>
-                  <td className="px-5 py-3 text-right">{formatCurrency(q.sales)}</td>
-                  <td className="px-5 py-3 text-right font-medium text-amber-600">{formatCurrency(q.gst)}</td>
+                  <td className="px-5 py-3 text-right">{q.hasData ? formatCurrency(q.sales ?? 0) : <span className="text-muted-foreground">—</span>}</td>
+                  <td className="px-5 py-3 text-right font-medium text-amber-600">{q.hasData ? formatCurrency(q.gst ?? 0) : <span className="text-muted-foreground font-normal">—</span>}</td>
                   <td className="px-5 py-3 text-right">
                     {q.current
                       ? <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-700">In Progress</Badge>
-                      : <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700">Filed</Badge>
+                      : <Badge variant="secondary" className="text-[10px]">Not Available</Badge>
                     }
                   </td>
                 </tr>
@@ -1589,13 +1571,13 @@ export default function ReportsPage() {
 
         {/* ── Tab content ──────────────────────────────────────────────────── */}
         {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} />}
-        {activeTab === "payments"          && <PaymentsTab apiPeriod={apiPeriod} />}
+        {activeTab === "payments"          && <PaymentsTab fromDate={fromDate} />}
         {activeTab === "inventory"         && <InventoryTab />}
         {activeTab === "register-closures" && <RegisterClosuresTab />}
         {activeTab === "profit-loss"       && <ProfitLossTab summary={summary} summaryLoading={summaryLoading} />}
         {activeTab === "customer-insights" && <CustomerInsightsTab />}
         {activeTab === "top-products"      && <TopProductsTab apiPeriod={apiPeriod} />}
-        {activeTab === "user-activity"     && <UserActivityTab />}
+        {activeTab === "user-activity"     && <UserActivityTab fromDate={fromDate} />}
         {activeTab === "cash-movements"    && <CashMovementsTab />}
         {activeTab === "adjustments"       && <AdjustmentsTab />}
         {activeTab === "report-builder"    && <ReportBuilderTab />}

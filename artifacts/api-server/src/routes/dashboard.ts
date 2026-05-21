@@ -192,6 +192,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   res.json({
     totalSales: Math.round(totalSales * 100) / 100,
+    posSales: Math.round(posSales * 100) / 100,
+    invoiceSales: Math.round(invoiceSales * 100) / 100,
+    posCount: completedTxns.length,
+    invoiceCount: paidInvoices.length,
     transactionCount,
     averageOrderValue: Math.round(averageOrderValue * 100) / 100,
     newCustomers: Number(newCustomersResult.count),
