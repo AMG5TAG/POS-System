@@ -834,14 +834,12 @@ export default function ManagementRegistersPage() {
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
           </div>
+          <div id="hardware">
+            <HardwareSection />
+          </div>
         </div>
 
         </div>{/* end 2-col grid */}
-
-        {/* Hardware */}
-        <div id="hardware" className="space-y-4 pt-2">
-          <HardwareSection />
-        </div>
 
         {/* Shortcuts */}
         <div id="shortcuts" className="space-y-4 pt-2">
