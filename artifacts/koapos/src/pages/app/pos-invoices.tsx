@@ -11,38 +11,85 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package } from "lucide-react";
+import {
+  Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
+  Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock,
+} from "lucide-react";
 import { toast } from "sonner";
+
+/* ── Types ───────────────────────────────────────────────────────────────── */
 
 type InvStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
-type Invoice = { id: number; invoiceNumber: string; customerId: number | null; customerName: string; status: InvStatus; subtotal: number; taxTotal: number; total: number; dueDate: string | null; notes: string | null; createdAt: string };
+type Invoice = {
+  id: number;
+  invoiceNumber: string;
+  customerId: number | null;
+  customerName: string | null;
+  status: InvStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  items: LineItem[];
+  dueDate: string | null;
+  paidAt: string | null;
+  viewedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+/* ── Constants ───────────────────────────────────────────────────────────── */
 
 const STATUS_COLORS: Record<InvStatus, "default" | "secondary" | "destructive" | "outline"> = {
   draft: "secondary", sent: "outline", paid: "default", overdue: "destructive", cancelled: "secondary",
+};
+
+const STATUS_LABELS: Record<InvStatus, string> = {
+  draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
 const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
 
 const API = "/api/invoices";
 
+/* ── Prefix settings from localStorage ──────────────────────────────────── */
+
+function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
+  try {
+    const raw = localStorage.getItem("koapos_code_prefixes");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { invoicePrefix?: string; invoiceDigits?: number };
+      return {
+        invoicePrefix: parsed.invoicePrefix ?? "KI",
+        invoiceDigits: parsed.invoiceDigits ?? 5,
+      };
+    }
+  } catch { /* ignore */ }
+  return { invoicePrefix: "KI", invoiceDigits: 5 };
+}
+
+/* ── Main page ───────────────────────────────────────────────────────────── */
+
 export default function POSInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ customerId: "", dueDate: "", notes: "" });
   const [lines, setLines] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
   const [saving, setSaving] = useState(false);
+  const [emailDialog, setEmailDialog] = useState<{ open: boolean; invoiceId: number | null }>({ open: false, invoiceId: null });
+  const [emailAddr, setEmailAddr] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
 
-  /* product search per line */
+  const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [lineSearch, setLineSearch] = useState<string[]>([""]);
   const [lineDropOpen, setLineDropOpen] = useState<boolean[]>([false]);
-  const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  /* recurring */
   const [recurring, setRecurring] = useState({
     enabled: false,
     frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly",
@@ -53,6 +100,7 @@ export default function POSInvoicesPage() {
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
 
+  /* ── Data loading ── */
   const load = async () => {
     setLoading(true);
     const q = statusFilter !== "all" ? `?status=${statusFilter}` : "";
@@ -63,52 +111,44 @@ export default function POSInvoicesPage() {
 
   useEffect(() => { load(); }, [statusFilter]);
 
-  /* close product dropdowns on outside click */
+  /* ── Close product dropdowns on outside click ── */
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       lineDropRefs.current.forEach((ref, i) => {
-        if (ref && !ref.contains(e.target as Node)) {
+        if (ref && !ref.contains(e.target as Node))
           setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
-        }
       });
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ── Line item helpers ── */
+  /* ── Line helpers ── */
   const addLine = () => {
     setLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
     setLineSearch((p) => [...p, ""]);
     setLineDropOpen((p) => [...p, false]);
   };
-
   const updateLine = (i: number, field: keyof LineItem, val: string | number) =>
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
-
   const removeLine = (i: number) => {
     setLines((p) => p.filter((_, idx) => idx !== i));
     setLineSearch((p) => p.filter((_, idx) => idx !== i));
     setLineDropOpen((p) => p.filter((_, idx) => idx !== i));
   };
-
   const selectProduct = (i: number, product: { name: string; price?: number | null }) => {
-    setLines((p) => p.map((l, idx) =>
-      idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l
-    ));
+    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
-
   const filteredProducts = (q: string) =>
     !q.trim() ? allProducts.slice(0, 8) : allProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
 
-  /* ── Totals ── */
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
   const taxTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
 
-  /* ── Save ── */
-  const resetDialog = () => {
+  /* ── Reset create dialog ── */
+  const resetCreate = () => {
     setForm({ customerId: "", dueDate: "", notes: "" });
     setLines([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
     setLineSearch([""]);
@@ -116,15 +156,19 @@ export default function POSInvoicesPage() {
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });
   };
 
+  /* ── Create invoice ── */
   const handleSave = async () => {
     const validLines = lines.filter((l) => l.description.trim());
     if (!validLines.length) { toast.error("Add at least one line item"); return; }
     setSaving(true);
+    const prefixSettings = getInvoicePrefix();
     const body = {
       customerId: form.customerId ? parseInt(form.customerId) : null,
       dueDate: form.dueDate || null,
       notes: form.notes || null,
       items: validLines,
+      invoicePrefix: prefixSettings.invoicePrefix,
+      invoiceDigits: prefixSettings.invoiceDigits,
       ...(recurring.enabled && {
         recurring: {
           frequency: recurring.frequency,
@@ -142,62 +186,174 @@ export default function POSInvoicesPage() {
     setSaving(false);
     if (!res.ok) { toast.error("Failed to create invoice"); return; }
     toast.success(recurring.enabled ? "Recurring invoice created" : "Invoice created");
-    setDialogOpen(false);
-    resetDialog();
+    setCreateOpen(false);
+    resetCreate();
     load();
   };
 
+  /* ── Row click: open detail + mark viewed ── */
+  const openDetail = async (inv: Invoice) => {
+    setDetailInvoice(inv);
+    if (!inv.viewedAt) {
+      const res = await fetch(`${API}/${inv.id}/viewed`, { method: "PATCH", credentials: "include" });
+      if (res.ok) {
+        const { viewedAt } = await res.json() as { viewedAt: string };
+        setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, viewedAt } : i));
+        setDetailInvoice((d) => d ? { ...d, viewedAt } : d);
+      }
+    }
+  };
+
+  /* ── Status update ── */
   const updateStatus = async (id: number, status: string) => {
-    await fetch(`${API}/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ status }) });
-    toast.success(`Invoice marked as ${status}`);
-    load();
+    const res = await fetch(`${API}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      const updated = await res.json() as Invoice;
+      setInvoices((prev) => prev.map((i) => i.id === id ? updated : i));
+      if (detailInvoice?.id === id) setDetailInvoice(updated);
+      toast.success(`Marked as ${status}`);
+    }
   };
 
+  /* ── Delete ── */
   const deleteInvoice = async (id: number) => {
     await fetch(`${API}/${id}`, { method: "DELETE", credentials: "include" });
+    setInvoices((prev) => prev.filter((i) => i.id !== id));
+    if (detailInvoice?.id === id) setDetailInvoice(null);
     toast.success("Invoice deleted");
-    load();
+  };
+
+  /* ── Send email ── */
+  const handleSendEmail = async () => {
+    if (!emailDialog.invoiceId || !emailAddr.trim()) return;
+    setSendingEmail(true);
+    const res = await fetch(`${API}/${emailDialog.invoiceId}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: emailAddr }),
+    });
+    setSendingEmail(false);
+    if (res.ok) {
+      toast.success("Invoice emailed");
+      setEmailDialog({ open: false, invoiceId: null });
+      setEmailAddr("");
+      load();
+    } else {
+      const err = await res.json() as { error?: string };
+      toast.error(err.error ?? "Failed to send email");
+    }
+  };
+
+  /* ── Print ── */
+  const printInvoice = (inv: Invoice) => {
+    const w = window.open("", "_blank", "width=800,height=900");
+    if (!w) return;
+    const rows = (inv.items ?? []).map((l) => `
+      <tr>
+        <td>${l.description}</td>
+        <td style="text-align:center">${l.quantity}</td>
+        <td style="text-align:right">$${l.unitPrice.toFixed(2)}</td>
+        <td style="text-align:right">$${(l.quantity * l.unitPrice * (l.taxRate / 100)).toFixed(2)}</td>
+        <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
+      </tr>`).join("");
+    w.document.write(`<!DOCTYPE html><html><head>
+      <title>Invoice ${inv.invoiceNumber}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:700px;margin:0 auto}
+        h1{font-size:24px;margin:0 0 4px}
+        .meta{color:#666;font-size:13px;margin-bottom:24px}
+        table{width:100%;border-collapse:collapse;margin:24px 0}
+        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:13px;color:#555}
+        td{padding:8px 6px;border-bottom:1px solid #eee;font-size:13px}
+        .totals{margin-left:auto;width:220px}
+        .totals div{display:flex;justify-content:space-between;padding:4px 0;font-size:14px}
+        .totals .grand{font-weight:bold;border-top:2px solid #ddd;padding-top:8px;margin-top:4px;font-size:16px}
+        .notes{margin-top:24px;padding:16px;background:#f9f9f9;border-radius:6px;font-size:13px;color:#555}
+        @media print{body{padding:20px}}
+      </style>
+    </head><body>
+      <h1>Invoice ${inv.invoiceNumber}</h1>
+      <div class="meta">
+        ${inv.customerName ? `<div>To: <strong>${inv.customerName}</strong></div>` : ""}
+        <div>Date: ${formatDate(inv.createdAt)}</div>
+        ${inv.dueDate ? `<div>Due: ${formatDate(inv.dueDate)}</div>` : ""}
+        <div>Status: ${STATUS_LABELS[inv.status]}</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Description</th><th style="text-align:center">Qty</th>
+          <th style="text-align:right">Unit Price</th>
+          <th style="text-align:right">Tax</th>
+          <th style="text-align:right">Amount</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="totals">
+        <div><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
+        <div><span>Tax</span><span>$${inv.taxTotal.toFixed(2)}</span></div>
+        <div class="grand"><span>Total</span><span>$${inv.total.toFixed(2)}</span></div>
+      </div>
+      ${inv.notes ? `<div class="notes">${inv.notes}</div>` : ""}
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 300);
   };
 
   const filtered = invoices.filter((inv) =>
-    !search || inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) || inv.customerName?.toLowerCase().includes(search.toLowerCase())
+    !search ||
+    inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
+    (inv.customerName ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ── Render ── */
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+
+        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold">Invoices</h1>
-            <p className="text-sm text-muted-foreground">Create and manage customer invoices for quote-to-payment workflows.</p>
+            <div>
+              <h1 className="text-2xl font-bold">Invoices</h1>
+              <p className="text-sm text-muted-foreground">Create and manage customer invoices.</p>
+            </div>
           </div>
-          <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
+          <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
         </div>
 
+        {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search invoices..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Search by number or customer..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="All statuses" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["draft","sent","paid","overdue","cancelled"].map((s) => (
-                <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+              {(["draft","sent","paid","overdue","cancelled"] as InvStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
+        {/* Table */}
         {loading ? (
-          <div className="text-center py-16 text-muted-foreground">Loading invoices...</div>
+          <div className="text-center py-16 text-muted-foreground">Loading invoices…</div>
         ) : filtered.length === 0 ? (
           <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
             <FileText className="w-16 h-16 text-muted-foreground/30" />
             <div><p className="font-medium text-lg">No invoices yet</p><p className="text-muted-foreground text-sm">Create invoices to send to customers.</p></div>
-            <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
+            <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
           </CardContent></Card>
         ) : (
           <div className="rounded-lg border overflow-hidden">
@@ -208,27 +364,58 @@ export default function POSInvoicesPage() {
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
                   <th className="text-left p-3 font-medium hidden md:table-cell">Due Date</th>
                   <th className="text-left p-3 font-medium">Status</th>
+                  <th className="text-left p-3 font-medium hidden lg:table-cell">Viewed</th>
                   <th className="text-right p-3 font-medium">Total</th>
-                  <th className="p-3 w-28" />
+                  <th className="p-3 w-24" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filtered.map((inv) => (
-                  <tr key={inv.id} className="bg-background hover:bg-muted/20">
+                  <tr
+                    key={inv.id}
+                    className="bg-background hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => openDetail(inv)}
+                  >
                     <td className="p-3 font-mono font-medium text-xs">{inv.invoiceNumber}</td>
-                    <td className="p-3 hidden sm:table-cell text-muted-foreground">{inv.customerName || "—"}</td>
-                    <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">{inv.dueDate ? formatDate(inv.dueDate) : "—"}</td>
-                    <td className="p-3"><Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{inv.status}</Badge></td>
-                    <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
+                    <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
+                    <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
+                      {inv.dueDate ? formatDate(inv.dueDate) : <span>—</span>}
+                    </td>
                     <td className="p-3">
+                      <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
+                    </td>
+                    <td className="p-3 hidden lg:table-cell">
+                      {inv.viewedAt ? (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Eye className="w-3.5 h-3.5 text-green-500" />
+                          {formatDate(inv.viewedAt)}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <EyeOff className="w-3.5 h-3.5" />
+                          Not viewed
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
+                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {inv.status === "draft" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark as sent" onClick={() => updateStatus(inv.id, "sent")}><Send className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark as sent"
+                            onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "sent"); }}>
+                            <Send className="w-3.5 h-3.5" />
+                          </Button>
                         )}
                         {inv.status === "sent" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid" onClick={() => updateStatus(inv.id, "paid")}><CheckCircle2 className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
+                            onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteInvoice(inv.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); deleteInvoice(inv.id); }}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -239,14 +426,193 @@ export default function POSInvoicesPage() {
         )}
       </div>
 
-      {/* ─── New Invoice Dialog ─── */}
-      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetDialog(); setDialogOpen(o); }}>
+      {/* ─── Invoice Detail Dialog ─── */}
+      <Dialog open={!!detailInvoice} onOpenChange={(o) => { if (!o) setDetailInvoice(null); }}>
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+          {detailInvoice && (
+            <>
+              <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <DialogTitle className="text-lg font-bold font-mono">{detailInvoice.invoiceNumber}</DialogTitle>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant={STATUS_COLORS[detailInvoice.status]} className="capitalize text-xs">
+                        {STATUS_LABELS[detailInvoice.status]}
+                      </Badge>
+                      {detailInvoice.viewedAt && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Eye className="w-3 h-3 text-green-500" /> Viewed {formatDate(detailInvoice.viewedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap justify-end">
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      onClick={() => { setEmailDialog({ open: true, invoiceId: detailInvoice.id }); setEmailAddr(""); }}>
+                      <Mail className="w-3.5 h-3.5" /> Email
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      onClick={() => toast.info("SMS receipts require an SMS integration in Management → Integrations")}>
+                      <MessageSquare className="w-3.5 h-3.5" /> SMS
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      onClick={() => printInvoice(detailInvoice)}>
+                      <Printer className="w-3.5 h-3.5" /> Print
+                    </Button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+                {/* Meta grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Customer</p>
+                    <p className="font-medium mt-0.5">{detailInvoice.customerName ?? "Walk-in"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Created</p>
+                    <p className="font-medium mt-0.5">{formatDate(detailInvoice.createdAt)}</p>
+                  </div>
+                  {detailInvoice.dueDate && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Due Date</p>
+                      <p className="font-medium mt-0.5">{formatDate(detailInvoice.dueDate)}</p>
+                    </div>
+                  )}
+                  {detailInvoice.paidAt && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Paid At</p>
+                      <p className="font-medium mt-0.5 text-green-600">{formatDate(detailInvoice.paidAt)}</p>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Line items */}
+                {detailInvoice.items && detailInvoice.items.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Line Items</p>
+                    <table className="w-full text-sm border rounded-lg overflow-hidden">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="text-left p-2.5 font-medium text-xs">Description</th>
+                          <th className="text-center p-2.5 font-medium text-xs w-14">Qty</th>
+                          <th className="text-right p-2.5 font-medium text-xs w-24">Unit Price</th>
+                          <th className="text-right p-2.5 font-medium text-xs w-16">Tax%</th>
+                          <th className="text-right p-2.5 font-medium text-xs w-24">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {detailInvoice.items.map((l, i) => (
+                          <tr key={i}>
+                            <td className="p-2.5">{l.description}</td>
+                            <td className="p-2.5 text-center text-muted-foreground">{l.quantity}</td>
+                            <td className="p-2.5 text-right text-muted-foreground">{formatCurrency(l.unitPrice)}</td>
+                            <td className="p-2.5 text-right text-muted-foreground">{l.taxRate}%</td>
+                            <td className="p-2.5 text-right font-medium">{formatCurrency(l.quantity * l.unitPrice)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No line items recorded.</p>
+                )}
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-52 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal</span><span>{formatCurrency(detailInvoice.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Tax</span><span>{formatCurrency(detailInvoice.taxTotal)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t pt-1.5 text-base">
+                      <span>Total</span><span>{formatCurrency(detailInvoice.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {detailInvoice.notes && (
+                  <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground mb-1 text-xs uppercase tracking-wide">Notes</p>
+                    {detailInvoice.notes}
+                  </div>
+                )}
+
+                {/* Status actions */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {detailInvoice.status === "draft" && (
+                    <Button size="sm" variant="outline" className="gap-1.5"
+                      onClick={() => updateStatus(detailInvoice.id, "sent")}>
+                      <Send className="w-3.5 h-3.5" /> Mark as Sent
+                    </Button>
+                  )}
+                  {(detailInvoice.status === "draft" || detailInvoice.status === "sent") && (
+                    <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
+                      onClick={() => updateStatus(detailInvoice.id, "paid")}>
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Paid
+                    </Button>
+                  )}
+                  {detailInvoice.status !== "cancelled" && detailInvoice.status !== "paid" && (
+                    <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5"
+                      onClick={() => updateStatus(detailInvoice.id, "cancelled")}>
+                      <X className="w-3.5 h-3.5" /> Cancel Invoice
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-6 py-3 border-t shrink-0 flex justify-between items-center bg-background">
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5"
+                  onClick={() => deleteInvoice(detailInvoice.id)}>
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDetailInvoice(null)}>Close</Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Email Dialog ─── */}
+      <Dialog open={emailDialog.open} onOpenChange={(o) => setEmailDialog({ open: o, invoiceId: emailDialog.invoiceId })}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Email Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Recipient Email</Label>
+              <Input
+                type="email"
+                placeholder="customer@example.com"
+                value={emailAddr}
+                onChange={(e) => setEmailAddr(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEmailDialog({ open: false, invoiceId: null })}>Cancel</Button>
+              <Button onClick={handleSendEmail} disabled={sendingEmail || !emailAddr.trim()}>
+                {sendingEmail ? "Sending…" : <><Mail className="w-3.5 h-3.5 mr-1.5" /> Send Invoice</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Create Invoice Dialog ─── */}
+      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) resetCreate(); setCreateOpen(o); }}>
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>New Invoice</DialogTitle>
           </DialogHeader>
 
-          {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
 
             {/* Customer + Due Date */}
@@ -274,8 +640,6 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-
-              {/* Header row */}
               <div className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -283,17 +647,10 @@ export default function POSInvoicesPage() {
                 <span className="text-right">Tax%</span>
                 <span />
               </div>
-
-              {/* Lines */}
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
                   <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 items-start">
-
-                    {/* Description + product search dropdown */}
-                    <div
-                      className="relative"
-                      ref={(el) => { lineDropRefs.current[i] = el; }}
-                    >
+                    <div className="relative" ref={(el) => { lineDropRefs.current[i] = el; }}>
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                         <Input
@@ -311,52 +668,33 @@ export default function POSInvoicesPage() {
                       </div>
                       {lineDropOpen[i] && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
-                          <div>
-                            {filteredProducts(lineSearch[i] ?? "").length === 0 ? (
-                              <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
-                            ) : (
-                              filteredProducts(lineSearch[i] ?? "").map((p) => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onMouseDown={(e) => { e.preventDefault(); selectProduct(i, p); }}
-                                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
-                                >
-                                  <span className="truncate">{p.name}</span>
-                                  <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
+                          {filteredProducts(lineSearch[i] ?? "").length === 0 ? (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          ) : filteredProducts(lineSearch[i] ?? "").map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); selectProduct(i, p); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">{p.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
-
-                    <Input
-                      type="number" min={1}
-                      value={line.quantity}
+                    <Input type="number" min={1} value={line.quantity}
                       onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 1)}
-                      className="h-8 text-sm text-center"
-                    />
-                    <Input
-                      type="number" step="0.01"
-                      value={line.unitPrice || ""}
+                      className="h-8 text-sm text-center" />
+                    <Input type="number" step="0.01" value={line.unitPrice || ""}
                       onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      className="h-8 text-sm text-right"
-                    />
-                    <Input
-                      type="number" min={0} max={100}
-                      value={line.taxRate}
+                      placeholder="0.00" className="h-8 text-sm text-right" />
+                    <Input type="number" min={0} max={100} value={line.taxRate}
                       onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm text-right"
-                    />
-                    <Button
-                      variant="ghost" size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeLine(i)}
-                      disabled={lines.length === 1}
-                    >
+                      className="h-8 text-sm text-right" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                      onClick={() => removeLine(i)} disabled={lines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -376,12 +714,8 @@ export default function POSInvoicesPage() {
             {/* Notes */}
             <div className="space-y-1.5">
               <Label>Notes</Label>
-              <Textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2}
-                placeholder="Payment terms, notes for customer..."
-              />
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2} placeholder="Payment terms, notes for customer..." />
             </div>
 
             {/* Recurring */}
@@ -394,23 +728,14 @@ export default function POSInvoicesPage() {
                     <p className="text-xs text-muted-foreground">Automatically repeat this invoice on a schedule</p>
                   </div>
                 </div>
-                <Switch
-                  checked={recurring.enabled}
-                  onCheckedChange={(v) => setRecurring((r) => ({ ...r, enabled: v }))}
-                />
+                <Switch checked={recurring.enabled} onCheckedChange={(v) => setRecurring((r) => ({ ...r, enabled: v }))} />
               </div>
-
               {recurring.enabled && (
                 <div className="grid grid-cols-3 gap-3 pt-1 border-t">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Frequency</Label>
-                    <Select
-                      value={recurring.frequency}
-                      onValueChange={(v) => setRecurring((r) => ({ ...r, frequency: v as typeof r.frequency }))}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={recurring.frequency} onValueChange={(v) => setRecurring((r) => ({ ...r, frequency: v as typeof r.frequency }))}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {(Object.entries(FREQ_LABELS) as [string, string][]).map(([val, label]) => (
                           <SelectItem key={val} value={val}>{label}</SelectItem>
@@ -420,37 +745,38 @@ export default function POSInvoicesPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Start Date</Label>
-                    <Input
-                      type="date"
-                      className="h-8 text-xs"
-                      value={recurring.startDate}
-                      onChange={(e) => setRecurring((r) => ({ ...r, startDate: e.target.value }))}
-                    />
+                    <Input type="date" className="h-8 text-xs" value={recurring.startDate}
+                      onChange={(e) => setRecurring((r) => ({ ...r, startDate: e.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Occurrences</Label>
-                    <Input
-                      type="number" min={1} max={999}
-                      className="h-8 text-xs"
-                      value={recurring.occurrences}
-                      onChange={(e) => setRecurring((r) => ({ ...r, occurrences: parseInt(e.target.value) || 1 }))}
-                    />
+                    <Input type="number" min={1} max={999} className="h-8 text-xs" value={recurring.occurrences}
+                      onChange={(e) => setRecurring((r) => ({ ...r, occurrences: parseInt(e.target.value) || 1 }))} />
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Invoice number preview */}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              Invoice number will follow your Document Code Prefix settings
+              (currently: <span className="font-mono font-medium text-foreground">
+                {(() => { const p = getInvoicePrefix(); return `${p.invoicePrefix}${"0".repeat(p.invoiceDigits - 1)}1`; })()}
+              </span>)
+            </div>
+
           </div>
 
-          {/* Footer */}
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={() => { setDialogOpen(false); resetDialog(); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreate(); }}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? "Creating…" : recurring.enabled ? "Create Recurring Invoice" : "Create Invoice"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
     </AppLayout>
   );
 }
