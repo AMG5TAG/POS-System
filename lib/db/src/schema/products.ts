@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
 import { type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -14,7 +14,9 @@ export const categoriesTable = pgTable("categories", {
   parentId:   integer("parent_id").references((): AnyPgColumn => categoriesTable.id),
   sortOrder:  integer("sort_order").notNull().default(0),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("categories_merchant_id_idx").on(t.merchantId),
+]);
 
 export const productsTable = pgTable("products", {
   id:                serial("id").primaryKey(),
@@ -41,7 +43,9 @@ export const productsTable = pgTable("products", {
   isEpay:             text("is_epay").notNull().default("false"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("products_merchant_id_idx").on(t.merchantId),
+]);
 
 export const digitalCodesTable = pgTable("digital_codes", {
   id:         serial("id").primaryKey(),
@@ -51,7 +55,10 @@ export const digitalCodesTable = pgTable("digital_codes", {
   isUsed:     text("is_used").notNull().default("false"),
   usedAt:     timestamp("used_at", { withTimezone: true }),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("digital_codes_merchant_id_idx").on(t.merchantId),
+  index("digital_codes_product_id_idx").on(t.productId),
+]);
 
 export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;

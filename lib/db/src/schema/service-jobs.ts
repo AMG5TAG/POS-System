@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -38,7 +38,10 @@ export const serviceJobsTable = pgTable("service_jobs", {
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("service_jobs_merchant_id_idx").on(t.merchantId),
+  index("service_jobs_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+]);
 
 export const insertServiceJobSchema = createInsertSchema(serviceJobsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertServiceJob = z.infer<typeof insertServiceJobSchema>;
