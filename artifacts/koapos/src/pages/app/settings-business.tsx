@@ -21,6 +21,7 @@ import {
   Hash, DollarSign, Calendar,
 } from "lucide-react";
 import { ColourPicker } from "@/components/ui/colour-picker";
+import { FontPicker } from "@/components/ui/font-picker";
 
 const BUSINESS_TABS = [
   { href: "#business-info",  label: "Business Info",  icon: Building2   },
@@ -522,18 +523,19 @@ export default function SettingsBusinessPage() {
           <CardContent className="space-y-6">
             {/* Font */}
             <div>
-              <Label>Brand Font</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  value={ext.brandFont}
-                  onChange={(e) => setExtField("brandFont", e.target.value)}
-                  placeholder="e.g. Inter, Roboto"
-                  className="flex-1"
-                />
-                <Button type="button" variant="outline" size="sm">
-                  <Upload className="h-3.5 w-3.5 mr-1" />Upload Font File
-                </Button>
-              </div>
+              <Label className="block mb-1.5">Brand Font</Label>
+              <FontPicker
+                value={ext.brandFont}
+                onChange={(v) => setExtField("brandFont", v)}
+              />
+              {ext.brandFont && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Preview:{" "}
+                  <span style={{ fontFamily: `"${ext.brandFont}", sans-serif` }} className="font-medium">
+                    The quick brown fox jumps over the lazy dog
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Brand Colours */}
