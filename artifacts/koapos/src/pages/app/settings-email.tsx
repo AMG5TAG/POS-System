@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetEmailSettings,
   useUpdateEmailSettings,
   useTestEmailSettings,
+  getGetEmailSettingsQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +55,7 @@ const PROVIDERS: { id: Provider; label: string; description: string; icon: React
 ];
 
 export default function SettingsEmailPage() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useGetEmailSettings();
   const update = useUpdateEmailSettings();
   const testMutation = useTestEmailSettings();
@@ -84,7 +87,8 @@ export default function SettingsEmailPage() {
     setSmtpPassSet(data.smtpPassSet ?? false);
     setApiKeySet(data.apiKeySet ?? false);
     setReceiptEmails(data.receiptEmailsEnabled === "true");
-    setDirty(false);
+    // Only reset dirty on the initial load, not on background refetches
+    setDirty((d) => (d ? d : false));
   }, [data]);
 
   const mark = () => setDirty(true);
@@ -113,9 +117,17 @@ export default function SettingsEmailPage() {
         setSmtpPass("");
         setApiKey("");
         setDirty(false);
+        void queryClient.invalidateQueries({ queryKey: getGetEmailSettingsQueryKey() });
         toast.success("Email settings saved");
       },
-      onError: () => toast.error("Failed to save email settings"),
+      onError: (err: unknown) => {
+        const status = (err as { status?: number })?.status;
+        if (status === 401) {
+          toast.error("Session expired — please refresh the page and try again");
+        } else {
+          toast.error("Failed to save email settings");
+        }
+      },
     });
   }
 
