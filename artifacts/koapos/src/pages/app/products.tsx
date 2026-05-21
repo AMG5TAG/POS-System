@@ -636,6 +636,7 @@ export default function ProductsPage() {
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
+  const [groupExportOpen, setGroupExportOpen] = useState(false);
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [hideCosts, setHideCosts]       = useState(true);
@@ -886,6 +887,61 @@ export default function ProductsPage() {
     ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
     : null;
 
+  const exportGroupPriceSheet = (groupId: string, groupName: string) => {
+    setGroupExportOpen(false);
+
+    const hdrCell = "background:#1e293b;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #334155;font-size:13px;";
+    const cell    = "padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;";
+    const hiCell  = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;";
+    const hiPriceCell = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;font-weight:bold;color:#92400e;";
+
+    const headerRow = `<tr>
+      <th style="${hdrCell}">Product Name</th>
+      <th style="${hdrCell}">SKU</th>
+      <th style="${hdrCell}">Description</th>
+      <th style="${hdrCell}">RRP (inc GST)</th>
+      <th style="${hdrCell}">${groupName} Price</th>
+    </tr>`;
+
+    const dataRows = products.map((p) => {
+      const ep = p as Product & { groupPrices?: Record<string, number>; description?: string };
+      const gp = ep.groupPrices?.[groupId];
+      const hasPrice = gp != null && Number(gp) > 0;
+      const rowBg = hasPrice ? "background:#fefce8;" : "";
+      return `<tr style="${rowBg}">
+        <td style="${hasPrice ? hiCell : cell}">${(p.name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td style="${hasPrice ? hiCell : cell}">${(p.sku ?? "").replace(/&/g, "&amp;")}</td>
+        <td style="${hasPrice ? hiCell : cell}">${(ep.description ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td style="${hasPrice ? hiCell : cell}">${p.price != null ? "$" + Number(p.price).toFixed(2) : ""}</td>
+        <td style="${hasPrice ? hiPriceCell : cell}">${hasPrice ? "$" + Number(gp).toFixed(2) : ""}</td>
+      </tr>`;
+    }).join("");
+
+    const legend = `<p style="font-family:sans-serif;font-size:12px;color:#92400e;background:#fefce8;border:1px solid #fcd34d;padding:6px 10px;display:inline-block;border-radius:4px;margin-bottom:8px;">
+      ★ Highlighted rows have a custom <strong>${groupName}</strong> price set
+    </p>`;
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8">
+        <style>table{border-collapse:collapse;font-family:sans-serif;}</style>
+      </head>
+      <body>
+        <h2 style="font-family:sans-serif;margin-bottom:4px;">${groupName} Group Pricing</h2>
+        ${legend}
+        <table>${headerRow}${dataRows}</table>
+      </body></html>`;
+
+    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `Group_Pricing_${groupName.replace(/\s+/g, "_")}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-3">
@@ -949,6 +1005,30 @@ export default function ProductsPage() {
               {hideCosts ? "Show Costs" : "Hide Costs"}
             </Button>
           )}
+
+          {/* Group Export */}
+          <Popover open={groupExportOpen} onOpenChange={setGroupExportOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Download className="w-4 h-4" />
+                Group Export
+                <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-52 p-1">
+              <p className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">Export pricing for group</p>
+              {customerGroups.map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => exportGroupPriceSheet(group.id, group.name)}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: group.color }} />
+                  {group.name}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
 
           {/* Add Product */}
           <Button onClick={openCreate} className="ml-auto gap-1.5">
