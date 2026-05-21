@@ -17,6 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -155,10 +159,12 @@ interface DetailDialogProps {
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
   return (
+    <>
     <Dialog open={!!appt} onOpenChange={onClose}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -238,7 +244,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
         <DialogFooter className="gap-2 flex-row justify-between sm:justify-between">
           <Button
             variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => { onDelete(appt.id); onClose(); }}
+            onClick={() => setConfirmDelete(true)}
             disabled={deleteIsPending}
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -252,6 +258,25 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{appt.title || "Appointment"}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete this appointment and cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { onDelete(appt.id); onClose(); }}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

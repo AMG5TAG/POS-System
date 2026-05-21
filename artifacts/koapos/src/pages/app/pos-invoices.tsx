@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -86,6 +90,7 @@ export default function POSInvoicesPage() {
   const [emailDialog, setEmailDialog] = useState<{ open: boolean; invoiceId: number | null }>({ open: false, invoiceId: null });
   const [emailAddr, setEmailAddr] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [lineSearch, setLineSearch] = useState<string[]>([""]);
@@ -481,7 +486,7 @@ export default function POSInvoicesPage() {
                           </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); deleteInvoice(inv.id); }}>
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -637,7 +642,7 @@ export default function POSInvoicesPage() {
 
               <div className="px-6 py-3 border-t shrink-0 flex justify-between items-center bg-background">
                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5"
-                  onClick={() => deleteInvoice(detailInvoice.id)}>
+                  onClick={() => setDeleteConfirmId(detailInvoice.id)}>
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setDetailInvoice(null)}>Close</Button>
@@ -673,6 +678,26 @@ export default function POSInvoicesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Delete Confirm ─── */}
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the invoice and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (deleteConfirmId !== null) { void deleteInvoice(deleteConfirmId); setDeleteConfirmId(null); } }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Create Invoice Dialog ─── */}
       <Dialog open={createOpen} onOpenChange={(o) => { if (!o) resetCreate(); setCreateOpen(o); }}>

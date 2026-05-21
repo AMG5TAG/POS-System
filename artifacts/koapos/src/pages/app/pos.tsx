@@ -149,8 +149,8 @@ export default function POSPage() {
     const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
     const discountTotal      = itemDiscountTotal + overallDiscountAmt;
     const subtotal           = cartSubtotal - discountTotal;
-    const taxTotal           = subtotal * 0.10;
-    const total              = subtotal + taxTotal;
+    const taxTotal           = subtotal * (10 / 110);   // GST-inclusive: extract tax component
+    const total              = subtotal;                 // Prices already include GST
     const kodeProfit         = Math.floor(
       cart.reduce((s, i) => {
         const price = i.customPrice ?? i.product.price;
@@ -396,7 +396,7 @@ export default function POSPage() {
       quantity: i.quantity,
       unitPrice: i.customPrice ?? i.product.price,
       totalPrice: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
-      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * (i.product.taxRate || 0.10),
+      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * ((i.product.taxRate ?? 10) / (100 + (i.product.taxRate ?? 10))),
       discount: i.itemDiscount || undefined,
     }));
     const notesParts = [
@@ -727,10 +727,10 @@ export default function POSPage() {
               </div>
             )}
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
+              <span>Subtotal (incl. GST)</span><span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>GST (10%)</span><span>{formatCurrency(taxTotal)}</span>
+              <span>Includes GST (10%)</span><span>{formatCurrency(taxTotal)}</span>
             </div>
             {/* Overall discount */}
             <div className="flex items-center gap-2">

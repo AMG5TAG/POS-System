@@ -16,6 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Plus,
   Trash2,
   ChevronUp,
@@ -181,6 +185,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [uploading,   setUploading]   = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!job) return;
@@ -448,7 +453,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
               variant="destructive"
               size="sm"
               className="gap-1.5"
-              onClick={() => { onDelete(job); onClose(); }}
+              onClick={() => setConfirmDelete(true)}
               disabled={deleteIsPending}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -468,6 +473,24 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete service job #{job?.jobNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this service job and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (job) { onDelete(job); onClose(); } }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -932,18 +955,19 @@ export default function ServiceJobsPage() {
                 </div>
               )}
 
-              {Array.isArray(pj.photos) && (pj.photos as string[]).filter(Boolean).length > 0 && (
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>
-                    Photos ({(pj.photos as string[]).filter(Boolean).length})
+              {Array.isArray(pj.photos) && (pj.photos as string[]).filter(Boolean).length > 0 && (() => {
+                const photoCount = (pj.photos as string[]).filter(Boolean).length;
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>
+                      Attachments
+                    </div>
+                    <div style={{ fontSize: 12, color: "#555", padding: "8px 10px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4 }}>
+                      📷 {photoCount} photo{photoCount !== 1 ? "s" : ""} attached — view on device
+                    </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-                    {(pj.photos as string[]).filter(Boolean).map((src, i) => (
-                      <img key={i} src={src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 4, border: "1px solid #e2e8f0" }} />
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {pj.signature && (
                 <div style={{ marginBottom: 20 }}>

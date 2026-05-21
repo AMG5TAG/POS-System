@@ -20,6 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -423,6 +427,7 @@ function ProductDetailDialog({
 }) {
   const [tab, setTab]                         = useState<DetailTab>("details");
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete]       = useState(false);
   if (!product) return null;
 
   const margin = product.costPrice && product.price > 0
@@ -439,6 +444,7 @@ function ProductDetailDialog({
   ];
 
   return (
+    <>
     <Dialog open={!!product} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -559,7 +565,7 @@ function ProductDetailDialog({
 
         <div className="flex items-center justify-between pt-2 border-t">
           <Button variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => { onDelete(product.id); onClose(); }} disabled={deleteIsPending}>
+            onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
             <Trash2 className="w-3.5 h-3.5" /> Delete
           </Button>
           <div className="flex gap-2">
@@ -575,6 +581,25 @@ function ProductDetailDialog({
       </DialogContent>
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
     </Dialog>
+    <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{product.name}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete the product and cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { onDelete(product.id); onClose(); }}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }
 
