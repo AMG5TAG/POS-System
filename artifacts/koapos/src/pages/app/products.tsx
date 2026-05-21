@@ -1144,7 +1144,8 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Physical details */}
+                {/* Physical details — hidden for Service products */}
+                {form.productType !== "service" && (
                 <div className="border-t pt-4 space-y-3">
                   <SectionHeader label="Physical Details" />
                   <div className="grid grid-cols-5 gap-3">
@@ -1183,6 +1184,7 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             )}
 
