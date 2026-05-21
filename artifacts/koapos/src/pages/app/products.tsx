@@ -37,6 +37,7 @@ import {
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
+  Archive, X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -827,6 +828,29 @@ export default function ProductsPage() {
     });
   };
 
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Delete ${checked.size} product${checked.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    const ids = [...checked];
+    let ok = 0;
+    for (const id of ids) {
+      await new Promise<void>((res) => deleteMutation.mutate({ id }, { onSuccess: () => { ok++; res(); }, onError: () => res() }));
+    }
+    setChecked(new Set());
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    toast.success(`${ok} product${ok !== 1 ? "s" : ""} deleted`);
+  };
+
+  const handleBulkSetActive = async (isActive: boolean) => {
+    const ids = [...checked];
+    let ok = 0;
+    for (const id of ids) {
+      await new Promise<void>((res) => updateMutation.mutate({ id, data: { isActive } }, { onSuccess: () => { ok++; res(); }, onError: () => res() }));
+    }
+    setChecked(new Set());
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    toast.success(`${ok} product${ok !== 1 ? "s" : ""} ${isActive ? "activated" : "archived"}`);
+  };
+
   const handleCreateCategory = () => {
     if (!newCategoryName) return;
     createCategoryMutation.mutate({ data: { name: newCategoryName } }, {
@@ -932,6 +956,25 @@ export default function ProductsPage() {
           </Button>
         </div>
 
+        {/* ── Bulk action bar (shown when rows are selected) ─────────────── */}
+        {checked.size > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-primary/5 border-primary/20 flex-wrap">
+            <span className="text-sm font-medium text-primary">{checked.size} selected</span>
+            <Button size="sm" variant="destructive" className="gap-1.5 h-7" onClick={handleBulkDelete} disabled={deleteMutation.isPending}>
+              <Trash2 className="w-3 h-3" /> Delete
+            </Button>
+            <Button size="sm" variant="outline" className="h-7" onClick={() => handleBulkSetActive(true)} disabled={updateMutation.isPending}>
+              Activate
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => handleBulkSetActive(false)} disabled={updateMutation.isPending}>
+              <Archive className="w-3 h-3" /> Archive
+            </Button>
+            <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={() => setChecked(new Set())}>
+              <XIcon className="w-3 h-3 mr-1" /> Clear
+            </Button>
+          </div>
+        )}
+
         {/* ── Table ───────────────────────────────────────────────────────── */}
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading products...</div>
@@ -1001,7 +1044,9 @@ export default function ProductsPage() {
                             ? <Badge variant="outline" className="text-xs font-normal">{product.category.name}</Badge>
                             : <span className="text-muted-foreground">—</span>}
                         </td>
-                        <td className="p-3 text-muted-foreground">—</td>
+                        <td className="p-3 text-muted-foreground text-sm">
+                          {(product as Product & { supplier?: string | null }).supplier || <span className="text-muted-foreground/40">—</span>}
+                        </td>
                         {!hideCosts && (
                           <td className="p-3 text-muted-foreground">
                             {cost != null ? formatCurrency(cost) : <span className="text-muted-foreground/50">—</span>}
@@ -1527,8 +1572,8 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Code inventory */}
-                <div className="border-t pt-5">
+                {/* Code inventory — hidden when ePay mode is on */}
+                {!form.isEpay && <div className="border-t pt-5">
                   <SectionHeader label="Code Inventory" />
 
                   {!editingProduct ? (
@@ -1636,7 +1681,7 @@ export default function ProductsPage() {
                       )}
                     </>
                   )}
-                </div>
+                </div>}
               </div>
             )}
 

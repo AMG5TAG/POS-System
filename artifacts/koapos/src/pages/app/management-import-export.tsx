@@ -22,6 +22,14 @@ interface FieldDef {
   type?: "string" | "number" | "boolean";
 }
 
+interface ConflictEntry {
+  rowIndex: number;
+  existingId: number;
+  existingLabel: string;
+  importedPreview: string;
+  action: "update" | "ignore" | "keep";
+}
+
 interface EntityConfig {
   key: string;
   label: string;
@@ -34,6 +42,12 @@ interface EntityConfig {
   sampleRows: Record<string, string>[];
   exportUrl: string;
   createUrl: string;
+  updateUrl?: string;       // base URL for PUT /updateUrl/:id
+  fetchAllUrl?: string;     // URL to fetch all existing items for dedupe
+  dedupeBy?: (
+    importPayload: Record<string, unknown>,
+    existing: Record<string, unknown>
+  ) => { match: boolean; id: number; label: string };
   /* Convert an API response item into a flat CSV row object */
   toExportRow: (item: Record<string, unknown>) => Record<string, string>;
 }
@@ -109,6 +123,19 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your customer contact list and loyalty data.",
     exportUrl: "/api/customers?limit=10000",
     createUrl: "/api/customers",
+    updateUrl: "/api/customers",
+    fetchAllUrl: "/api/customers?limit=10000",
+    dedupeBy: (p, e) => {
+      const pFull = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim().toLowerCase();
+      const eFull = `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim().toLowerCase();
+      const nameMatch  = pFull.length > 0 && pFull === eFull;
+      const phoneMatch = !!p.phone && !!e.phone && String(p.phone) === String(e.phone);
+      return {
+        match: nameMatch && phoneMatch,
+        id: e.id as number,
+        label: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || String(e.email ?? ""),
+      };
+    },
     fields: [
       { key: "firstName",       label: "First Name",    required: true  },
       { key: "lastName",        label: "Last Name",     required: true  },
@@ -155,6 +182,13 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your product catalogue including pricing, stock levels, type, and category.",
     exportUrl: "/api/products?limit=10000",
     createUrl: "/api/products",
+    updateUrl: "/api/products",
+    fetchAllUrl: "/api/products?limit=10000",
+    dedupeBy: (p, e) => {
+      const matchSku     = !!p.sku     && !!e.sku     && String(p.sku)     === String(e.sku);
+      const matchBarcode = !!p.barcode && !!e.barcode && String(p.barcode) === String(e.barcode);
+      return { match: matchSku || matchBarcode, id: e.id as number, label: String(e.name ?? "") };
+    },
     fields: [
       { key: "name",              label: "Product Name",    required: true  },
       { key: "price",             label: "Price",           required: true, type: "number", hint: "e.g. 29.99" },
@@ -173,11 +207,13 @@ const ENTITIES: EntityConfig[] = [
       { key: "excludeFromLoyalty", label: "Exclude from Loyalty", type: "boolean", hint: "true or false" },
       { key: "supplier",          label: "Supplier",             hint: "Supplier / vendor name" },
       { key: "supplierCode",      label: "Supplier Code",        hint: "Supplier's product code or SKU" },
+      { key: "isEpay",            label: "ePay / Physical Card", type: "boolean", hint: "true if no digital code prints (card handles it)" },
     ],
     sampleRows: [
-      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001" },
-      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M"  },
-      { name: "Coffee Mug",          sku: "MG-003", price: "12.00",  costPrice: "4.50",  description: "Ceramic 350ml mug",           barcode: "",              productType: "standard", category: "Snacks",      taxRate: "10", imageUrl: "", stockQuantity: "80",  lowStockThreshold: "15", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "",                supplierCode: ""           },
+      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001", isEpay: "false" },
+      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M",  isEpay: "false" },
+      { name: "Steam Gift Card $50", sku: "SG-050", price: "50.00",  costPrice: "48.00", description: "Steam wallet $50 gift card",   barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Valve",           supplierCode: "STEAM-50",   isEpay: "false" },
+      { name: "Visa ePay Card $100", sku: "VP-100", price: "100.00", costPrice: "99.00", description: "Visa prepaid ePay card $100",  barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Visa",            supplierCode: "VISA-EPAY-100", isEpay: "true" },
     ],
     toExportRow: (item) => ({
       name:               String(item.name               ?? ""),
@@ -197,6 +233,7 @@ const ENTITIES: EntityConfig[] = [
       excludeFromLoyalty: String(item.excludeFromLoyalty ?? ""),
       supplier:           String(item.supplier           ?? ""),
       supplierCode:       String(item.supplierCode       ?? ""),
+      isEpay:             String((item as Record<string, unknown>).isEpay ?? "false"),
     }),
   },
   {
@@ -573,12 +610,19 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   const [result, setResult]       = useState<ImportResult | null>(null);
   const [expandCountryCodes, setExpandCountryCodes] = useState(false);
   const [expandStateCodes, setExpandStateCodes]     = useState(false);
+  const [conflicts, setConflicts]           = useState<ConflictEntry[]>([]);
+  const [conflictsStep, setConflictsStep]   = useState(false);
+  const [fetchingConflicts, setFetchingConflicts] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const hasCountryField = entity.fields.some((f) => COUNTRY_FIELD_KEYS.has(f.key));
   const hasStateField   = entity.fields.some((f) => STATE_FIELD_KEYS.has(f.key));
 
-  const reset = () => { setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0); setExpandCountryCodes(false); setExpandStateCodes(false); };
+  const reset = () => {
+    setStep(0); setHeaders([]); setRows([]); setMapping({}); setResult(null); setProgress(0);
+    setExpandCountryCodes(false); setExpandStateCodes(false);
+    setConflicts([]); setConflictsStep(false); setFetchingConflicts(false);
+  };
 
   const processFile = (file: File) => {
     const reader = new FileReader();
@@ -610,28 +654,82 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     return value || undefined;
   };
 
+  const buildPayload = (row: Record<string, string>) => {
+    const payload: Record<string, unknown> = {};
+    for (const field of entity.fields) {
+      const csvCol = mapping[field.key];
+      if (csvCol) {
+        let rawVal = row[csvCol] ?? "";
+        if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) rawVal = expandCountryValue(rawVal);
+        if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   rawVal = expandStateValue(rawVal);
+        const val = coerce(rawVal, field.type);
+        if (val !== undefined) payload[field.key] = val;
+      }
+    }
+    return payload;
+  };
+
+  const checkConflicts = async () => {
+    if (!entity.fetchAllUrl || !entity.dedupeBy) { setStep(2); return; }
+    setFetchingConflicts(true);
+    try {
+      const r    = await fetch(entity.fetchAllUrl, { credentials: "include" });
+      const data = await r.json() as Record<string, unknown>;
+      const existing: Record<string, unknown>[] = (data.items as Record<string, unknown>[] | undefined) ?? (Array.isArray(data) ? data as Record<string, unknown>[] : []);
+
+      const found: ConflictEntry[] = [];
+      rows.forEach((row, i) => {
+        const payload = buildPayload(row);
+        for (const ex of existing) {
+          const { match, id, label } = entity.dedupeBy!(payload, ex);
+          if (match) {
+            const preview = (payload.name as string | undefined) ?? (payload.firstName ? `${payload.firstName} ${payload.lastName ?? ""}`.trim() : `Row ${i + 1}`);
+            found.push({ rowIndex: i, existingId: id, existingLabel: label, importedPreview: preview, action: "update" });
+            break;
+          }
+        }
+      });
+
+      setConflicts(found);
+      if (found.length > 0) { setConflictsStep(true); }
+      else                  { setStep(2); }
+    } catch {
+      toast.error("Could not check for duplicates — proceeding to import.");
+      setStep(2);
+    } finally {
+      setFetchingConflicts(false);
+    }
+  };
+
   const handleImport = async () => {
     setImporting(true);
     setProgress(0);
     const res: ImportResult = { success: 0, failed: 0, errors: [] };
+    const conflictMap = new Map(conflicts.map((c) => [c.rowIndex, c]));
+    let processed = 0;
 
     for (let i = 0; i < rows.length; i++) {
-      const row     = rows[i];
-      const payload: Record<string, unknown> = {};
-      for (const field of entity.fields) {
-        const csvCol = mapping[field.key];
-        if (csvCol) {
-          let rawVal = row[csvCol] ?? "";
-          if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) rawVal = expandCountryValue(rawVal);
-          if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   rawVal = expandStateValue(rawVal);
-          const val = coerce(rawVal, field.type);
-          if (val !== undefined) payload[field.key] = val;
-        }
+      const conflict = conflictMap.get(i);
+      if (conflict?.action === "ignore") {
+        processed++;
+        setProgress(Math.round((processed / rows.length) * 100));
+        continue;
       }
 
+      const payload = buildPayload(rows[i]);
+
+      /* Auto-generate SKU for products if not provided */
+      if (entity.key === "products" && !payload.sku) {
+        payload.sku = `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      }
+
+      const isUpdate = conflict?.action === "update" && !!entity.updateUrl;
+      const url    = isUpdate ? `${entity.updateUrl}/${conflict!.existingId}` : entity.createUrl;
+      const method = isUpdate ? "PUT" : "POST";
+
       try {
-        const r = await fetch(entity.createUrl, {
-          method: "POST",
+        const r = await fetch(url, {
+          method,
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -639,14 +737,15 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (r.ok) { res.success++; }
         else {
           res.failed++;
-          const data = await r.json().catch(() => ({}));
-          res.errors.push(`Row ${i + 1}: ${data.error ?? r.statusText}`);
+          const d = await r.json().catch(() => ({})) as Record<string, unknown>;
+          res.errors.push(`Row ${i + 1}: ${String(d.error ?? r.statusText)}`);
         }
       } catch {
         res.failed++;
         res.errors.push(`Row ${i + 1}: Network error`);
       }
-      setProgress(Math.round(((i + 1) / rows.length) * 100));
+      processed++;
+      setProgress(Math.round((processed / rows.length) * 100));
     }
 
     setResult(res);
@@ -693,24 +792,30 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
       </div>
 
       {/* Step indicator */}
-      {step > 0 && !result && (
-        <div className="flex items-center gap-1 text-xs">
-          {(["Upload", "Map Columns", "Preview & Import"] as const).map((label, i) => (
-            <div key={label} className="flex items-center gap-1">
-              <span className={cn(
-                "w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0",
-                i < step  && "bg-emerald-500 text-white",
-                i === step && "bg-primary text-primary-foreground",
-                i > step  && "bg-muted text-muted-foreground",
-              )}>
-                {i < step ? <Check className="w-3 h-3" /> : i + 1}
-              </span>
-              <span className={cn("hidden sm:inline", i === step ? "text-foreground font-medium" : "text-muted-foreground")}>{label}</span>
-              {i < 2 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
-            </div>
-          ))}
-        </div>
-      )}
+      {(step > 0 || conflictsStep) && !result && (() => {
+        const steps = entity.dedupeBy
+          ? ["Upload", "Map Columns", "Resolve Duplicates", "Preview & Import"]
+          : ["Upload", "Map Columns", "Preview & Import"];
+        const currentStep = conflictsStep ? 2 : step === 2 ? (entity.dedupeBy ? 3 : 2) : step;
+        return (
+          <div className="flex items-center gap-1 text-xs">
+            {steps.map((label, i) => (
+              <div key={label} className="flex items-center gap-1">
+                <span className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0",
+                  i < currentStep  && "bg-emerald-500 text-white",
+                  i === currentStep && "bg-primary text-primary-foreground",
+                  i > currentStep  && "bg-muted text-muted-foreground",
+                )}>
+                  {i < currentStep ? <Check className="w-3 h-3" /> : i + 1}
+                </span>
+                <span className={cn("hidden sm:inline", i === currentStep ? "text-foreground font-medium" : "text-muted-foreground")}>{label}</span>
+                {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Step 0: Upload ── */}
       {step === 0 && (
@@ -816,6 +921,49 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         </div>
       )}
 
+      {/* ── Conflict resolution step ── */}
+      {conflictsStep && !result && (
+        <div className="space-y-3 flex-1">
+          <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span><strong>{conflicts.length}</strong> duplicate{conflicts.length !== 1 ? "s" : ""} found. Choose what to do with each row below.</span>
+          </div>
+          <div className="overflow-x-auto rounded-lg border text-xs max-h-[340px] overflow-y-auto">
+            <table className="w-full">
+              <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+                <tr className="border-b">
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">CSV Row</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Existing Record</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {conflicts.map((c) => (
+                  <tr key={c.rowIndex} className="hover:bg-muted/20">
+                    <td className="px-3 py-2 font-medium">{c.importedPreview} <span className="text-muted-foreground font-normal">(row {c.rowIndex + 1})</span></td>
+                    <td className="px-3 py-2 text-muted-foreground">{c.existingLabel}</td>
+                    <td className="px-3 py-2">
+                      <select
+                        className="text-xs border rounded px-2 py-1 bg-background"
+                        value={c.action}
+                        onChange={(e) => setConflicts(prev => prev.map(x => x.rowIndex === c.rowIndex ? { ...x, action: e.target.value as ConflictEntry["action"] } : x))}
+                      >
+                        <option value="update">Update existing</option>
+                        <option value="ignore">Ignore (skip)</option>
+                        <option value="keep">Keep both (create new)</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Rows without duplicates ({rows.length - conflicts.length}) will always be created as new records.
+          </p>
+        </div>
+      )}
+
       {/* ── Step 2: Preview & Import ── */}
       {step === 2 && !result && (
         <div className="space-y-4 flex-1">
@@ -900,23 +1048,31 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
 
       {/* Footer buttons */}
       {!result && (
-        <div className={cn("flex items-center", step === 0 ? "justify-end" : "justify-between")}>
-          {step > 0 && (
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2)}>
+        <div className={cn("flex items-center", (step === 0 && !conflictsStep) ? "justify-end" : "justify-between")}>
+          {(step > 0 || conflictsStep) && (
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+              if (conflictsStep) { setConflictsStep(false); }
+              else { setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2); }
+            }}>
               <ChevronLeft className="w-3.5 h-3.5" /> Back
             </Button>
           )}
-          {step === 1 && (
+          {step === 1 && !conflictsStep && (
             <Button
               size="sm"
               className="gap-1"
-              disabled={!hasRequiredMapping}
-              onClick={() => setStep(2)}
+              disabled={!hasRequiredMapping || fetchingConflicts}
+              onClick={checkConflicts}
             >
-              Preview <ChevronRight className="w-3.5 h-3.5" />
+              {fetchingConflicts ? "Checking…" : <>Preview <ChevronRight className="w-3.5 h-3.5" /></>}
             </Button>
           )}
-          {step === 2 && (
+          {conflictsStep && (
+            <Button size="sm" className="gap-1" onClick={() => { setConflictsStep(false); setStep(2); }}>
+              Continue <ChevronRight className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          {step === 2 && !conflictsStep && (
             <Button
               size="sm"
               className="gap-1.5"

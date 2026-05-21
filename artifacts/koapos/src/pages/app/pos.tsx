@@ -29,7 +29,7 @@ import {
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
-  Banknote, Clock, FileText, TrendingUp,
+  Banknote, Clock, FileText, TrendingUp, Star,
 } from "lucide-react";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
@@ -67,7 +67,22 @@ function formatKode(profit: number): string {
 export default function POSPage() {
   /* product browse */
   const [search, setSearch] = useState("");
-  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
+  const [categoryPath, setCategoryPath] = useState<number[]>([]);
+  const [favouriteIds, setFavouriteIds] = useState<Set<number>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("koapos_pos_favourites") ?? "[]") as number[]); }
+    catch { return new Set(); }
+  });
+
+  const toggleFavourite = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavouriteIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      try { localStorage.setItem("koapos_pos_favourites", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   /* cart */
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -175,9 +190,14 @@ export default function POSPage() {
   const [pinError, setPinError] = useState("");
 
   /* ── Data fetches ── */
+  /* Effective category for API filtering — last element of drill-down path */
+  const effectiveCategoryId = posTab === "browse" && categoryPath.length > 0
+    ? categoryPath[categoryPath.length - 1]
+    : null;
+
   const { data: productsData } = useListProducts(
-    { search: search || undefined, categoryId: activeCategoryId || undefined, limit: 100 },
-    { query: { queryKey: ["products", search, activeCategoryId] } }
+    { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
+    { query: { queryKey: ["products", search, effectiveCategoryId, posTab] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: customersData } = useListCustomers(
@@ -190,9 +210,20 @@ export default function POSPage() {
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
   const createTransactionMutation = useCreateTransaction();
 
-  const products = productsData?.items || [];
-  const categories = categoriesData || [];
-  const customers = customersData?.items || [];
+  const allProducts = productsData?.items || [];
+  const categories  = categoriesData || [];
+  const customers   = customersData?.items || [];
+
+  /* Build category tree */
+  const topLevelCats  = categories.filter(c => !c.parentId);
+  const getChildren   = (id: number) => categories.filter(c => c.parentId === id);
+  const activeCatId   = categoryPath.length > 0 ? categoryPath[categoryPath.length - 1] : null;
+  const subCats       = activeCatId ? getChildren(activeCatId) : [];
+
+  /* Filter products: favourites mode → client-side filter by pinned IDs */
+  const products = posTab === "favourites"
+    ? allProducts.filter(p => favouriteIds.has(p.id))
+    : allProducts;
 
   /* All products for barcode lookup (loaded once, unfiltered) */
   const { data: allProductsBarcodeData } = useListProducts(
@@ -548,11 +579,62 @@ export default function POSPage() {
               </div>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
-              <div className="flex w-max space-x-2 pb-1">
-                <Button variant={activeCategoryId === null ? "default" : "outline"} onClick={() => setActiveCategoryId(null)} size="sm" className="rounded-full h-7 text-xs">All</Button>
-                {categories.map(cat => (
-                  <Button key={cat.id} variant={activeCategoryId === cat.id ? "default" : "outline"} onClick={() => setActiveCategoryId(cat.id)} size="sm" className="rounded-full h-7 text-xs">{cat.name}</Button>
-                ))}
+              <div className="flex w-max space-x-1.5 pb-1">
+                {/* ─ Favourites tab ─ */}
+                <Button
+                  variant={posTab === "favourites" ? "default" : "outline"}
+                  onClick={() => { setPosTab("favourites"); setCategoryPath([]); }}
+                  size="sm" className="rounded-full h-7 text-xs gap-1 shrink-0"
+                >
+                  <Star className="w-3 h-3" />
+                  Favourites {favouriteIds.size > 0 && `(${favouriteIds.size})`}
+                </Button>
+
+                {/* ─ Browse: All or drill-down ─ */}
+                {categoryPath.length === 0 ? (
+                  <>
+                    <Button
+                      variant={posTab === "browse" ? "default" : "outline"}
+                      onClick={() => { setPosTab("browse"); setCategoryPath([]); }}
+                      size="sm" className="rounded-full h-7 text-xs shrink-0"
+                    >All</Button>
+                    {topLevelCats.map(cat => (
+                      <Button key={cat.id} variant="outline"
+                        onClick={() => { setPosTab("browse"); setCategoryPath([cat.id]); }}
+                        size="sm" className="rounded-full h-7 text-xs shrink-0"
+                      >{cat.name}</Button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {/* Back to top level */}
+                    <Button variant="outline" size="sm" className="rounded-full h-7 text-xs gap-0.5 shrink-0"
+                      onClick={() => setCategoryPath([])}
+                    >
+                      ← All
+                    </Button>
+                    {/* Breadcrumb ancestors (all but last) */}
+                    {categoryPath.slice(0, -1).map((catId, idx) => {
+                      const cat = categories.find(c => c.id === catId);
+                      return cat ? (
+                        <Button key={catId} variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
+                          onClick={() => setCategoryPath(prev => prev.slice(0, idx + 1))}
+                        >{cat.name}</Button>
+                      ) : null;
+                    })}
+                    {/* Current category (selected) */}
+                    {(() => {
+                      const cur = categories.find(c => c.id === categoryPath[categoryPath.length - 1]);
+                      return cur ? <Button variant="default" size="sm" className="rounded-full h-7 text-xs shrink-0">{cur.name}</Button> : null;
+                    })()}
+                    {/* Children of current category */}
+                    {subCats.map(child => (
+                      <Button key={child.id} variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
+                        onClick={() => setCategoryPath(prev => [...prev, child.id])}
+                      >{child.name}</Button>
+                    ))}
+                  </>
+                )}
               </div>
             </ScrollArea>
           </div>
@@ -560,10 +642,13 @@ export default function POSPage() {
           <ScrollArea className="flex-1 p-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {products.map(product => (
-                <button
+                <div
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && addToCart(product)}
+                  className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md cursor-pointer"
                 >
                   <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
                     {product.imageUrl
@@ -573,6 +658,20 @@ export default function POSPage() {
                     {(product as typeof product & { productType?: string }).productType !== "service" && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
                     )}
+                    {/* Pin to Favourites */}
+                    <button
+                      onClick={(e) => toggleFavourite(product.id, e)}
+                      title={favouriteIds.has(product.id) ? "Remove from Favourites" : "Pin to Favourites"}
+                      className={cn(
+                        "absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                        "opacity-0 group-hover:opacity-100",
+                        favouriteIds.has(product.id)
+                          ? "opacity-100 bg-amber-400 text-white shadow"
+                          : "bg-black/30 text-white hover:bg-amber-400"
+                      )}
+                    >
+                      <Star className={cn("w-3 h-3", favouriteIds.has(product.id) && "fill-current")} />
+                    </button>
                   </div>
                   <div className="p-2.5">
                     <p className="font-semibold text-xs line-clamp-2 leading-snug min-h-[2rem]">{product.name}</p>
@@ -582,11 +681,21 @@ export default function POSPage() {
                         : formatCurrency(product.price)}
                     </p>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
             {products.length === 0 && (
-              <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">No products found.</div>
+              posTab === "favourites" ? (
+                <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm text-center">
+                  <Star className="w-10 h-10 text-muted-foreground/20" />
+                  <div>
+                    <p className="font-medium">No favourites yet</p>
+                    <p className="text-xs mt-1">Hover over any product and click the star to pin it here.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">No products found.</div>
+              )
             )}
           </ScrollArea>
         </div>

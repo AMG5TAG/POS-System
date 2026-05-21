@@ -17,7 +17,7 @@ export const customersTable = pgTable("customers", {
   totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).notNull().default("0"),
   visitCount: integer("visit_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // New fields
   company: text("company"),
   abn: text("abn"),
