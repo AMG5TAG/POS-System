@@ -68,22 +68,36 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const periodStart = getPeriodStart(period);
   const merchantId = req.session.merchantId!;
 
-  const transactions = await db
-    .select()
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.merchantId, merchantId),
-        gte(transactionsTable.createdAt, periodStart)
-      )
-    );
+  const [transactions, paidInvoices] = await Promise.all([
+    db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.merchantId, merchantId),
+          gte(transactionsTable.createdAt, periodStart)
+        )
+      ),
+    db
+      .select()
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.merchantId, merchantId),
+          eq(invoicesTable.status, "paid"),
+          gte(invoicesTable.paidAt, periodStart)
+        )
+      ),
+  ]);
 
   const completedTxns = transactions.filter((t) => t.status === "completed");
   const refundedTxns = transactions.filter((t) => t.status === "refunded");
 
-  const totalSales = completedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
+  const posSales = completedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
+  const invoiceSales = paidInvoices.reduce((sum, i) => sum + parseFloat(String(i.total)), 0);
+  const totalSales = posSales + invoiceSales;
   const refundTotal = refundedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
-  const transactionCount = completedTxns.length;
+  const transactionCount = completedTxns.length + paidInvoices.length;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
 
   // New customers in period
@@ -166,17 +180,30 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
 
   const period = queryParams.data.period ?? "week";
   const periodStart = getPeriodStart(period);
+  const merchantId = req.session.merchantId!;
 
-  const transactions = await db
-    .select()
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.merchantId, req.session.merchantId!),
-        gte(transactionsTable.createdAt, periodStart),
-        eq(transactionsTable.status, "completed")
-      )
-    );
+  const [transactions, paidInvoices] = await Promise.all([
+    db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.merchantId, merchantId),
+          gte(transactionsTable.createdAt, periodStart),
+          eq(transactionsTable.status, "completed")
+        )
+      ),
+    db
+      .select()
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.merchantId, merchantId),
+          eq(invoicesTable.status, "paid"),
+          gte(invoicesTable.paidAt, periodStart)
+        )
+      ),
+  ]);
 
   // Group by day
   const groups: Record<string, { sales: number; transactions: number }> = {};
@@ -185,6 +212,14 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
     const day = t.createdAt.toISOString().split("T")[0];
     if (!groups[day]) groups[day] = { sales: 0, transactions: 0 };
     groups[day].sales += parseFloat(t.total);
+    groups[day].transactions += 1;
+  }
+
+  for (const inv of paidInvoices) {
+    if (!inv.paidAt) continue;
+    const day = inv.paidAt.toISOString().split("T")[0];
+    if (!groups[day]) groups[day] = { sales: 0, transactions: 0 };
+    groups[day].sales += parseFloat(String(inv.total));
     groups[day].transactions += 1;
   }
 
