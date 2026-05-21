@@ -1106,7 +1106,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [today, week, month, year]
+            enum: [today, yesterday, week, month, year]
       responses:
         "200":
           description: Dashboard summary
@@ -1114,6 +1114,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get activity counts (service jobs, appointments, new customers) for current and previous period
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year]
+      responses:
+        "200":
+          description: Activity summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardActivity"
 
   /dashboard/recent-transactions:
     get:
@@ -3121,8 +3140,39 @@ components:
           type: string
         refundTotal:
           type: number
+        discountTotal:
+          type: number
+        itemsSold:
+          type: integer
         topPaymentMethod:
           type: ["string", "null"]
+
+    DashboardActivity:
+      type: object
+      required: [services, appointments, newCustomers, prevServices, prevAppointments, prevNewCustomers, deviceTypes]
+      properties:
+        services:
+          type: integer
+        appointments:
+          type: integer
+        newCustomers:
+          type: integer
+        prevServices:
+          type: integer
+        prevAppointments:
+          type: integer
+        prevNewCustomers:
+          type: integer
+        deviceTypes:
+          type: array
+          items:
+            type: object
+            required: [type, count]
+            properties:
+              type:
+                type: string
+              count:
+                type: integer
 
     SalesDataPoint:
       type: object

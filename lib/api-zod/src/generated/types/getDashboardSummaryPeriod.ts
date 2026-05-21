@@ -11,6 +11,7 @@ export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof t
 
 export const GetDashboardSummaryPeriod = {
   today: 'today',
+  yesterday: 'yesterday',
   week: 'week',
   month: 'month',
   year: 'year',

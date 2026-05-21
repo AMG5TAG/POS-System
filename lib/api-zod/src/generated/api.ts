@@ -1518,7 +1518,7 @@ export const UpdateInventoryResponse = zod.object({
  * @summary Get dashboard summary stats
  */
 export const GetDashboardSummaryQueryParams = zod.object({
-  "period": zod.enum(['today', 'week', 'month', 'year']).optional()
+  "period": zod.enum(['today', 'yesterday', 'week', 'month', 'year']).optional()
 })
 
 export const GetDashboardSummaryResponse = zod.object({
@@ -1529,7 +1529,30 @@ export const GetDashboardSummaryResponse = zod.object({
   "lowStockCount": zod.number(),
   "period": zod.string(),
   "refundTotal": zod.number().optional(),
+  "discountTotal": zod.number().optional(),
+  "itemsSold": zod.number().optional(),
   "topPaymentMethod": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get activity counts (service jobs, appointments, new customers) for current and previous period
+ */
+export const GetDashboardActivityQueryParams = zod.object({
+  "period": zod.enum(['day', 'week', 'month', 'year']).optional()
+})
+
+export const GetDashboardActivityResponse = zod.object({
+  "services": zod.number(),
+  "appointments": zod.number(),
+  "newCustomers": zod.number(),
+  "prevServices": zod.number(),
+  "prevAppointments": zod.number(),
+  "prevNewCustomers": zod.number(),
+  "deviceTypes": zod.array(zod.object({
+  "type": zod.string(),
+  "count": zod.number()
+}))
 })
 
 

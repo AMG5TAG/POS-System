@@ -813,8 +813,25 @@ export interface DashboardSummary {
   lowStockCount: number;
   period: string;
   refundTotal?: number;
+  discountTotal?: number;
+  itemsSold?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
+}
+
+export type DashboardActivityDeviceTypesItem = {
+  type: string;
+  count: number;
+};
+
+export interface DashboardActivity {
+  services: number;
+  appointments: number;
+  newCustomers: number;
+  prevServices: number;
+  prevAppointments: number;
+  prevNewCustomers: number;
+  deviceTypes: DashboardActivityDeviceTypesItem[];
 }
 
 export interface SalesDataPoint {
@@ -1229,6 +1246,21 @@ export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof t
 
 export const GetDashboardSummaryPeriod = {
   today: 'today',
+  yesterday: 'yesterday',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type GetDashboardActivityParams = {
+period?: GetDashboardActivityPeriod;
+};
+
+export type GetDashboardActivityPeriod = typeof GetDashboardActivityPeriod[keyof typeof GetDashboardActivityPeriod];
+
+
+export const GetDashboardActivityPeriod = {
+  day: 'day',
   week: 'week',
   month: 'month',
   year: 'year',

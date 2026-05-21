@@ -14,6 +14,8 @@ export interface DashboardSummary {
   lowStockCount: number;
   period: string;
   refundTotal?: number;
+  discountTotal?: number;
+  itemsSold?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
 }

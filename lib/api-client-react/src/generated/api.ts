@@ -37,6 +37,7 @@ import type {
   CustomerNote,
   CustomerNoteInput,
   CustomerUpdate,
+  DashboardActivity,
   DashboardSummary,
   DeleteCashDrawerEntry200,
   DeleteDiscount200,
@@ -52,6 +53,7 @@ import type {
   EmailSettings,
   EmailSettingsInput,
   ErrorEnvelope,
+  GetDashboardActivityParams,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
   GetRecentTransactionsParams,
@@ -4282,6 +4284,90 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardSummaryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardActivityUrl = (params?: GetDashboardActivityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/activity?${stringifiedParams}` : `/api/dashboard/activity`
+}
+
+/**
+ * @summary Get activity counts (service jobs, appointments, new customers) for current and previous period
+ */
+export const getDashboardActivity = async (params?: GetDashboardActivityParams, options?: RequestInit): Promise<DashboardActivity> => {
+
+  return customFetch<DashboardActivity>(getGetDashboardActivityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardActivityQueryKey = (params?: GetDashboardActivityParams,) => {
+    return [
+    `/api/dashboard/activity`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardActivityQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActivity>>, TError = ErrorType<unknown>>(params?: GetDashboardActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActivityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActivity>>> = ({ signal }) => getDashboardActivity(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardActivityQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardActivity>>>
+export type GetDashboardActivityQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get activity counts (service jobs, appointments, new customers) for current and previous period
+ */
+
+export function useGetDashboardActivity<TData = Awaited<ReturnType<typeof getDashboardActivity>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardActivityQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

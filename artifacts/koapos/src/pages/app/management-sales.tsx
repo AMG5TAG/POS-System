@@ -569,7 +569,9 @@ function CustomerInsightsTab() {
 /* ─── Tab: Top Products ──────────────────────────────────────────────────── */
 
 function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod }) {
-  const { data, isLoading } = useGetTopProducts({ limit: 20, period: apiPeriod });
+  const safeTopPeriod = apiPeriod === "yesterday" ? "today" : apiPeriod;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, isLoading } = useGetTopProducts({ limit: 20, period: safeTopPeriod as any });
   const products = data ?? [];
   const maxRevenue = products[0]?.revenue ?? 1;
 
@@ -1512,8 +1514,10 @@ export default function ReportsPage() {
     { period: apiPeriod },
     { query: { queryKey: ["reports-summary", apiPeriod, refreshKey] } },
   );
+  const safeChartPeriod = (apiPeriod === "today" || apiPeriod === "yesterday") ? "week" : apiPeriod;
   const { data: chartData, isLoading: chartLoading } = useGetSalesChart(
-    { period: apiPeriod === "today" ? "week" : apiPeriod },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { period: safeChartPeriod as any },
     { query: { queryKey: ["reports-chart", apiPeriod, refreshKey] } },
   );
 

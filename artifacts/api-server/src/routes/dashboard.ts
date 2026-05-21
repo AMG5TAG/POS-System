@@ -34,6 +34,12 @@ function getPeriodStart(period: string): Date {
       d.setHours(0, 0, 0, 0);
       return d;
     }
+    case "yesterday": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
     case "week": {
       const d = new Date(now);
       d.setDate(d.getDate() - 7);
@@ -57,6 +63,53 @@ function getPeriodStart(period: string): Date {
   }
 }
 
+function getPeriodEnd(period: string): Date {
+  const now = new Date();
+  if (period === "yesterday") {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  return now;
+}
+
+/** Returns [currentStart, currentEnd, prevStart, prevEnd] for activity comparison */
+function getActivityWindows(period: string): [Date, Date, Date, Date] {
+  const now = new Date();
+  switch (period) {
+    case "day": {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - 1);
+      const prevEnd = new Date(start);
+      return [start, now, prevStart, prevEnd];
+    }
+    case "week": {
+      const start = new Date(now); start.setDate(start.getDate() - 7);
+      const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - 14);
+      const prevEnd = new Date(start);
+      return [start, now, prevStart, prevEnd];
+    }
+    case "month": {
+      const start = new Date(now); start.setDate(start.getDate() - 30);
+      const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - 60);
+      const prevEnd = new Date(start);
+      return [start, now, prevStart, prevEnd];
+    }
+    case "year": {
+      const start = new Date(now); start.setFullYear(start.getFullYear() - 1);
+      const prevStart = new Date(now); prevStart.setFullYear(prevStart.getFullYear() - 2);
+      const prevEnd = new Date(start);
+      return [start, now, prevStart, prevEnd];
+    }
+    default: {
+      const start = new Date(now); start.setDate(start.getDate() - 7);
+      const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - 14);
+      const prevEnd = new Date(start);
+      return [start, now, prevStart, prevEnd];
+    }
+  }
+}
+
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const queryParams = GetDashboardSummaryQueryParams.safeParse(req.query);
   if (!queryParams.success) {
@@ -66,6 +119,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   const period = queryParams.data.period ?? "today";
   const periodStart = getPeriodStart(period);
+  const periodEnd = getPeriodEnd(period);
   const merchantId = req.session.merchantId!;
 
   const [transactions, paidInvoices] = await Promise.all([
@@ -75,7 +129,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .where(
         and(
           eq(transactionsTable.merchantId, merchantId),
-          gte(transactionsTable.createdAt, periodStart)
+          gte(transactionsTable.createdAt, periodStart),
+          period === "yesterday" ? lt(transactionsTable.createdAt, periodEnd) : undefined,
         )
       ),
     db
@@ -85,7 +140,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         and(
           eq(invoicesTable.merchantId, merchantId),
           eq(invoicesTable.status, "paid"),
-          gte(invoicesTable.paidAt, periodStart)
+          gte(invoicesTable.paidAt, periodStart),
+          period === "yesterday" ? lt(invoicesTable.paidAt, periodEnd) : undefined,
         )
       ),
   ]);
@@ -97,14 +153,27 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const invoiceSales = paidInvoices.reduce((sum, i) => sum + parseFloat(String(i.total)), 0);
   const totalSales = posSales + invoiceSales;
   const refundTotal = refundedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
+  const discountTotal = completedTxns.reduce((sum, t) => sum + parseFloat(t.discountTotal), 0);
   const transactionCount = completedTxns.length + paidInvoices.length;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
 
+  // Items sold: sum of quantity across all line items in completed transactions
+  let itemsSold = 0;
+  for (const t of completedTxns) {
+    const items = Array.isArray(t.items) ? t.items : [];
+    for (const item of items as { quantity?: number }[]) {
+      itemsSold += item.quantity ?? 0;
+    }
+  }
+
   // New customers in period
+  const newCustomersWhere = period === "yesterday"
+    ? and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart), lt(customersTable.createdAt, periodEnd))
+    : and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart));
   const [newCustomersResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(customersTable)
-    .where(and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart)));
+    .where(newCustomersWhere);
 
   // Low stock count (exclude service-type products — they have no stock)
   const products = await db
@@ -129,7 +198,56 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     lowStockCount,
     period,
     refundTotal: Math.round(refundTotal * 100) / 100,
+    discountTotal: Math.round(discountTotal * 100) / 100,
+    itemsSold,
     topPaymentMethod,
+  });
+});
+
+router.get("/dashboard/activity", requireAuth, async (req, res): Promise<void> => {
+  const period = (req.query.period as string) ?? "week";
+  const merchantId = req.session.merchantId!;
+  const [curStart, curEnd, prevStart, prevEnd] = getActivityWindows(period);
+
+  const [curJobs, curAppts, prevJobs, prevAppts, curCustomers, prevCustomers] = await Promise.all([
+    db.select().from(serviceJobsTable).where(
+      and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, curStart), lt(serviceJobsTable.createdAt, curEnd))
+    ),
+    db.select().from(appointmentsTable).where(
+      and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, curStart), lt(appointmentsTable.scheduledAt, curEnd))
+    ),
+    db.select().from(serviceJobsTable).where(
+      and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, prevStart), lt(serviceJobsTable.createdAt, prevEnd))
+    ),
+    db.select().from(appointmentsTable).where(
+      and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, prevStart), lt(appointmentsTable.scheduledAt, prevEnd))
+    ),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(
+      and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, curStart), lt(customersTable.createdAt, curEnd))
+    ),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(
+      and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, prevStart), lt(customersTable.createdAt, prevEnd))
+    ),
+  ]);
+
+  // Aggregate device types from current-period service jobs
+  const deviceTypeCounts: Record<string, number> = {};
+  for (const j of curJobs) {
+    const dtype = (j.deviceType as string | null) ?? "Unknown";
+    deviceTypeCounts[dtype] = (deviceTypeCounts[dtype] ?? 0) + 1;
+  }
+  const deviceTypes = Object.entries(deviceTypeCounts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([type, count]) => ({ type, count }));
+
+  res.json({
+    services: curJobs.length,
+    appointments: curAppts.length,
+    newCustomers: Number(curCustomers[0]?.count ?? 0),
+    prevServices: prevJobs.length,
+    prevAppointments: prevAppts.length,
+    prevNewCustomers: Number(prevCustomers[0]?.count ?? 0),
+    deviceTypes,
   });
 });
 

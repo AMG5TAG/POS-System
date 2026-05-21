@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetDashboardSummary, GetDashboardSummaryPeriod } from "@workspace/api-client-react";
+import {
+  useGetDashboardSummary,
+  useGetDashboardActivity,
+  GetDashboardSummaryPeriod,
+  GetDashboardActivityPeriod,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   DollarSign, ShoppingCart, TrendingUp, Users, Gift, TrendingDown,
-  Mail, Activity, Trophy, MapPin, Monitor, AlertCircle,
-  RotateCcw, Receipt, Package, Percent, Package2,
+  Mail, Activity, MapPin, Monitor, AlertCircle,
+  RotateCcw, Receipt, Package, Percent, Package2, Calendar,
+  ArrowUp, ArrowDown, Minus,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
@@ -17,6 +23,17 @@ type Period = "today" | "month" | "year";
 
 const PERIOD_TABS: { id: Period; label: string; api: GetDashboardSummaryPeriod }[] = [
   { id: "today", label: "Today", api: "today" },
+  { id: "month", label: "Month", api: "month" },
+  { id: "year",  label: "Year",  api: "year"  },
+];
+
+/* ─── Activity period tabs ────────────────────────────────────────────────── */
+
+type ActivityPeriod = "day" | "week" | "month" | "year";
+
+const ACTIVITY_TABS: { id: ActivityPeriod; label: string; api: GetDashboardActivityPeriod }[] = [
+  { id: "day",   label: "Day",   api: "day"   },
+  { id: "week",  label: "Week",  api: "week"  },
   { id: "month", label: "Month", api: "month" },
   { id: "year",  label: "Year",  api: "year"  },
 ];
@@ -54,22 +71,49 @@ function KpiCard({
   );
 }
 
-/* ─── Activity period tabs ────────────────────────────────────────────────── */
+/* ─── Delta chip ──────────────────────────────────────────────────────────── */
 
-type ActivityPeriod = "day" | "week" | "month" | "year";
+function Delta({ current, previous, prefix = "" }: { current: number; previous: number; prefix?: string }) {
+  if (previous === 0 && current === 0) return <span className="text-muted-foreground font-medium">—</span>;
+  const diff = current - previous;
+  const pct = previous > 0 ? Math.abs((diff / previous) * 100).toFixed(0) : null;
+  if (diff === 0) return (
+    <span className="inline-flex items-center gap-0.5 text-muted-foreground font-medium">
+      <Minus className="w-3 h-3" /> no change
+    </span>
+  );
+  const positive = diff > 0;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 font-medium", positive ? "text-emerald-600" : "text-red-500")}>
+      {positive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+      {prefix}{Math.abs(diff).toLocaleString()}
+      {pct && <span className="text-[10px] opacity-70 ml-0.5">({pct}%)</span>}
+    </span>
+  );
+}
 
-const ACTIVITY_TABS: { id: ActivityPeriod; label: string }[] = [
-  { id: "day",   label: "Day"   },
-  { id: "week",  label: "Week"  },
-  { id: "month", label: "Month" },
-  { id: "year",  label: "Year"  },
-];
+/* ─── Activity stat tile ──────────────────────────────────────────────────── */
+
+function ActivityTile({
+  label, current, previous,
+}: { label: string; current: number; previous: number }) {
+  return (
+    <div>
+      <p className="text-3xl font-bold">{current}</p>
+      <p className="text-sm text-muted-foreground mt-0.5">{label}</p>
+      <div className="text-xs mt-1">
+        <Delta current={current} previous={previous} />
+        <span className="text-muted-foreground ml-1">vs prev</span>
+      </div>
+    </div>
+  );
+}
 
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 
 export default function ManagementOverviewPage() {
-  const [period, setPeriod]         = useState<Period>("today");
-  const [actPeriod, setActPeriod]   = useState<ActivityPeriod>("week");
+  const [period, setPeriod]       = useState<Period>("today");
+  const [actPeriod, setActPeriod] = useState<ActivityPeriod>("week");
 
   const api = PERIOD_TABS.find((t) => t.id === period)!.api;
 
@@ -78,18 +122,50 @@ export default function ManagementOverviewPage() {
     { query: { queryKey: ["mgmt-overview", api] } },
   );
 
-  const totalSales    = summary?.totalSales       ?? 0;
-  const txCount       = summary?.transactionCount ?? 0;
-  const avgSale       = txCount > 0 ? totalSales / txCount : 0;
-  const totalCustomers= summary?.newCustomers     ?? 0;
-  const gstCollected  = totalSales / 11;
-  const grossProfit   = totalSales * 0.91;
-  const grossMarginPct= totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : "0.0";
+  /* Always fetch "yesterday" for the VS Yesterday comparison bar */
+  const { data: yesterday } = useGetDashboardSummary(
+    { period: "yesterday" },
+    { query: { queryKey: ["mgmt-overview", "yesterday"] } },
+  );
 
-  const today     = new Date();
-  const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay() + 1);
-  const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
-  const fmt = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  /* Activity section */
+  const { data: activity, isLoading: actLoading } = useGetDashboardActivity(
+    { period: actPeriod as GetDashboardActivityPeriod },
+    { query: { queryKey: ["mgmt-activity", actPeriod] } },
+  );
+
+  /* Derived sales values */
+  const totalSales     = summary?.totalSales       ?? 0;
+  const txCount        = summary?.transactionCount ?? 0;
+  const avgSale        = summary?.averageOrderValue ?? 0;
+  const newCustomers   = summary?.newCustomers     ?? 0;
+  const refundTotal    = summary?.refundTotal      ?? 0;
+  const discountTotal  = summary?.discountTotal    ?? 0;
+  const itemsSold      = summary?.itemsSold        ?? 0;
+  const gstCollected   = totalSales / 11;
+  const grossProfit    = totalSales - gstCollected;
+  const grossMarginPct = totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : "0.0";
+
+  /* Yesterday values (for VS bar) */
+  const ySales     = yesterday?.totalSales       ?? 0;
+  const yTxCount   = yesterday?.transactionCount ?? 0;
+  const yCustomers = yesterday?.newCustomers     ?? 0;
+
+  /* Period label text */
+  const periodLabel = period === "today" ? "today" : period === "month" ? "this month" : "this year";
+
+  /* Activity data */
+  const actServices     = activity?.services       ?? 0;
+  const actAppts        = activity?.appointments   ?? 0;
+  const actCustomers    = activity?.newCustomers   ?? 0;
+  const prevServices    = activity?.prevServices   ?? 0;
+  const prevAppts       = activity?.prevAppointments ?? 0;
+  const prevCustomers   = activity?.prevNewCustomers ?? 0;
+  const deviceTypes     = activity?.deviceTypes    ?? [];
+  const totalDeviceJobs = deviceTypes.reduce((s, d) => s + d.count, 0);
+
+  const actPeriodLabel = actPeriod === "day" ? "Today" : actPeriod === "week" ? "This Week" : actPeriod === "month" ? "This Month" : "This Year";
+  const actTotal = actServices + actAppts + actCustomers;
 
   return (
     <AppLayout>
@@ -129,23 +205,23 @@ export default function ManagementOverviewPage() {
             </div>
           </div>
 
-          {/* KPI cards */}
+          {/* Row 1 — core financial KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard
               title="Revenue"
               icon={DollarSign}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
               value={isLoading ? "—" : formatCurrency(totalSales)}
-              sub={`${txCount} sale${txCount !== 1 ? "s" : ""} —`}
+              sub={`${txCount} sale${txCount !== 1 ? "s" : ""} ${periodLabel}`}
               valueClass="text-emerald-600"
               href="/management/sales-overview"
             />
             <KpiCard
-              title="Gross Profit (excl.)"
+              title="Revenue ex-GST"
               icon={TrendingUp}
               iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600"
-              value={isLoading ? "—" : formatCurrency(totalSales * 0.91)}
-              sub="admin only —"
+              value={isLoading ? "—" : formatCurrency(grossProfit)}
+              sub="GST removed from revenue"
               valueClass="text-teal-600"
               href="/management/sales-overview#profit-loss"
             />
@@ -154,7 +230,7 @@ export default function ManagementOverviewPage() {
               icon={ShoppingCart}
               iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600"
               value={isLoading ? "—" : txCount.toString()}
-              sub={`${period === "today" ? "Today" : period === "month" ? "This month" : "This year"} —`}
+              sub={`Transactions ${periodLabel}`}
               href="/management/sales-overview"
             />
             <KpiCard
@@ -162,43 +238,45 @@ export default function ManagementOverviewPage() {
               icon={Activity}
               iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600"
               value={isLoading ? "—" : formatCurrency(avgSale)}
-              sub="—"
+              sub="Average transaction value"
               href="/management/sales-overview"
             />
             <KpiCard
-              title="Customers"
+              title="New Customers"
               icon={Users}
               iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600"
-              value={isLoading ? "—" : totalCustomers.toString()}
-              sub="unique —"
-              href="/management/sales-overview#customer-insights"
+              value={isLoading ? "—" : newCustomers.toString()}
+              sub={`Joined ${periodLabel}`}
+              href="/management/customers"
             />
             <KpiCard
               title="Kredits Issued"
               icon={Gift}
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
               value={formatCurrency(0)}
-              sub="—"
+              sub="No store credit module active"
               href="/management/sales-overview#store-credit"
             />
           </div>
+
+          {/* Row 2 — cost / adjustment KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard
               title="Discounts"
               icon={TrendingDown}
               iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600"
-              value={formatCurrency(0)}
-              sub="—"
-              valueClass="text-orange-500"
+              value={isLoading ? "—" : formatCurrency(discountTotal)}
+              sub="Total discounts given"
+              valueClass={discountTotal > 0 ? "text-orange-500" : ""}
               href="/management/discounts"
             />
             <KpiCard
               title="Refunds"
               icon={RotateCcw}
               iconBg="bg-red-100 dark:bg-red-900/30 text-red-600"
-              value={isLoading ? "—" : formatCurrency(0)}
-              sub="—"
-              valueClass="text-red-500"
+              value={isLoading ? "—" : formatCurrency(refundTotal)}
+              sub="Total refunded"
+              valueClass={refundTotal > 0 ? "text-red-500" : ""}
               href="/management/sales-overview#refunds"
             />
             <KpiCard
@@ -206,7 +284,7 @@ export default function ManagementOverviewPage() {
               icon={Receipt}
               iconBg="bg-amber-100 dark:bg-amber-900/30 text-amber-600"
               value={isLoading ? "—" : formatCurrency(gstCollected)}
-              sub="inc. in revenue —"
+              sub="1/11th of revenue (10% GST)"
               valueClass="text-amber-600"
               href="/management/tax"
             />
@@ -214,70 +292,67 @@ export default function ManagementOverviewPage() {
               title="Items Sold"
               icon={Package}
               iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
-              value={isLoading ? "—" : "0"}
-              sub="units —"
+              value={isLoading ? "—" : itemsSold.toString()}
+              sub={`Units sold ${periodLabel}`}
               href="/management/sales-overview"
             />
             <KpiCard
-              title="Gross Margin"
+              title="GST Rate"
               icon={Percent}
               iconBg="bg-lime-100 dark:bg-lime-900/30 text-lime-600"
-              value={isLoading ? "—" : `${grossMarginPct}%`}
-              sub="ex-GST —"
+              value="10%"
+              sub="Australian standard GST"
               valueClass="text-lime-600"
-              href="/management/sales-overview#profit-loss"
+              href="/management/tax"
             />
             <KpiCard
               title="Laybys"
               icon={Package2}
               iconBg="bg-sky-100 dark:bg-sky-900/30 text-sky-600"
-              value={isLoading ? "—" : formatCurrency(0)}
-              sub="outstanding —"
+              value={formatCurrency(0)}
+              sub="No laybys outstanding"
               valueClass="text-sky-600"
               href="/management/layby"
             />
           </div>
 
           {/* VS Yesterday bar */}
-          <div className="rounded-xl border bg-muted/30 px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-semibold text-muted-foreground uppercase text-[11px] tracking-wider">vs yesterday:</span>
-            <span>Revenue: <span className="font-medium">{formatCurrency(0)}</span> —</span>
-            <span>Sales: <span className="font-medium">0</span> —</span>
-            <span>Customers: <span className="font-medium">0</span> —</span>
+          <div className="rounded-xl border bg-muted/30 px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1.5 text-sm">
+            <span className="font-semibold text-muted-foreground uppercase text-[11px] tracking-wider shrink-0">
+              Today vs Yesterday:
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Revenue:</span>
+              <span className="font-medium">{formatCurrency(totalSales > 0 || ySales > 0 ? totalSales : 0)}</span>
+              <Delta current={totalSales} previous={ySales} prefix="$" />
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Sales:</span>
+              <span className="font-medium">{txCount}</span>
+              <Delta current={txCount} previous={yTxCount} />
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">New Customers:</span>
+              <span className="font-medium">{newCustomers}</span>
+              <Delta current={newCustomers} previous={yCustomers} />
+            </span>
           </div>
         </section>
 
         {/* ── Activity Overview ──────────────────────────────────────────── */}
         <section className="space-y-4">
 
-          {/* Best Week Ever banner */}
-          <div className="rounded-2xl border border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10 dark:border-yellow-800 px-5 py-4 flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <Trophy className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-yellow-800 dark:text-yellow-300">Best Week Ever</p>
-                <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">{fmt(weekStart)} – {fmt(weekEnd)}</p>
-                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-yellow-700 dark:text-yellow-400">
-                  <span>1 service (×3)</span>
-                  <span>·</span>
-                  <span>0 appts (×2)</span>
-                  <span>·</span>
-                  <span>0 new customers (×1)</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">3</p>
-              <p className="text-[10px] text-yellow-600/70 dark:text-yellow-500 font-medium uppercase tracking-wider">score</p>
-            </div>
-          </div>
-
           {/* Section header + period tabs */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Activity Overview
-            </h2>
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary" />
+                Activity Overview
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Service jobs, appointments, and new customers — with comparison to the previous {actPeriod}
+              </p>
+            </div>
             <div className="flex rounded-lg border overflow-hidden">
               {ACTIVITY_TABS.map((t) => (
                 <button
@@ -296,75 +371,84 @@ export default function ManagementOverviewPage() {
             </div>
           </div>
 
-          {/* No Bookings state */}
-          <div className="rounded-2xl border bg-card px-5 py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Activity className="w-5 h-5 text-muted-foreground" />
+          {actTotal === 0 && !actLoading ? (
+            /* Empty state */
+            <div className="rounded-2xl border bg-card px-5 py-8 flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-muted-foreground/50" />
+              </div>
               <div>
-                <p className="font-semibold">No Bookings</p>
+                <p className="font-semibold">No Activity</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {actPeriod === "day" ? "Today" : actPeriod === "week" ? "This week" : actPeriod === "month" ? "This month" : "This year"}
-                  {" "}— 0 services · 0 appts · 0 new customers
+                  No service jobs, appointments, or new customers recorded {actPeriodLabel.toLowerCase()}.
                 </p>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <AlertCircle className="w-5 h-5 text-muted-foreground/50" />
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* This period / VS prev period */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="rounded-2xl border bg-card p-5 space-y-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{actPeriodLabel}</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <ActivityTile label="Service Jobs" current={actServices}  previous={prevServices}  />
+                    <ActivityTile label="Appointments" current={actAppts}     previous={prevAppts}     />
+                    <ActivityTile label="New Customers" current={actCustomers} previous={prevCustomers} />
+                  </div>
+                  <p className="text-xs text-muted-foreground border-t pt-3">
+                    {actTotal} total entries · arrows show vs previous {actPeriod}
+                  </p>
+                </div>
+                <div className="rounded-2xl border bg-card p-5 space-y-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Previous {actPeriodLabel}</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: "Service Jobs",  val: prevServices  },
+                      { label: "Appointments",  val: prevAppts     },
+                      { label: "New Customers", val: prevCustomers },
+                    ].map(({ label, val }) => (
+                      <div key={label}>
+                        <p className="text-3xl font-bold text-muted-foreground">{val}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground border-t pt-3">
+                    {prevServices + prevAppts + prevCustomers} total entries
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
 
-          {/* This week / VS last week */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-2xl border bg-card p-5 space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">This Week</p>
-              <div className="grid grid-cols-3 gap-4">
-                {["Services", "Appointments", "New Customers"].map((label) => (
-                  <div key={label}>
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
-                      <span className="text-lg font-bold text-muted-foreground/50">0</span>
+          {/* Device Types — from service jobs in current period */}
+          {deviceTypes.length > 0 && (
+            <div className="rounded-2xl border bg-card p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-primary flex items-center gap-2">
+                  <Monitor className="w-4 h-4" />
+                  Device Types
+                </p>
+                <p className="text-xs text-muted-foreground">{totalDeviceJobs} job{totalDeviceJobs !== 1 ? "s" : ""} {actPeriodLabel.toLowerCase()}</p>
+              </div>
+              <div className="space-y-2">
+                {deviceTypes.map(({ type, count }) => (
+                  <div key={type}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-primary capitalize">{type}</span>
+                      <span>{count}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{label}</p>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full"
+                        style={{ width: `${totalDeviceJobs > 0 ? (count / totalDeviceJobs) * 100 : 0}%` }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground border-t pt-3">0 total entries</p>
             </div>
-            <div className="rounded-2xl border bg-card p-5 space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">VS Last Week</p>
-              <div className="grid grid-cols-3 gap-4">
-                {["Services", "Appointments", "New Customers"].map((label) => (
-                  <div key={label}>
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
-                      <span className="text-sm text-muted-foreground/50">—</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{label}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground border-t pt-3">0 total entries</p>
-            </div>
-          </div>
-
-          {/* Device Types */}
-          <div className="rounded-2xl border bg-card p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-primary flex items-center gap-2">
-                <Monitor className="w-4 h-4" />
-                Device Types
-              </p>
-              <p className="text-xs text-muted-foreground">1 total jobs</p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-primary">Printer</span>
-                <span>1</span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-primary rounded-full" style={{ width: "100%" }} />
-              </div>
-            </div>
-          </div>
-
+          )}
         </section>
 
         {/* ── Customer Locations ─────────────────────────────────────────── */}
