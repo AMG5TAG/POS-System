@@ -7,6 +7,7 @@ import {
   useDeleteServiceJob,
   useUpdateServiceJob,
   useGetMerchant,
+  getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -199,7 +200,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
   if (!job) return null;
 
   const { className } = getStatus(localStatus);
-  const invalidate    = () => queryClient.invalidateQueries({ queryKey: ["listServiceJobs"] });
+  const invalidate    = () => queryClient.invalidateQueries({ queryKey: getListServiceJobsQueryKey() });
 
   const handleStatusChange = (status: string) => {
     setLocalStatus(status);
@@ -630,7 +631,7 @@ export default function ServiceJobsPage() {
       {
         onSuccess: () => {
           toast.success("Service job deleted");
-          queryClient.invalidateQueries({ queryKey: ["listServiceJobs"] });
+          queryClient.invalidateQueries({ queryKey: getListServiceJobsQueryKey() });
           setSelected((prev) => { const n = new Set(prev); n.delete(job.id); return n; });
         },
         onError: () => toast.error("Failed to delete"),
