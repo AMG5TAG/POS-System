@@ -897,53 +897,57 @@ export default function POSPage() {
 
           {/* Customer row */}
           <div className="border-b px-3 py-2 shrink-0 relative" ref={customerDropdownRef}>
-            {activeCustomerName ? (
-              <div className={cn("flex items-center gap-2 rounded-lg px-2.5 py-2", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
-                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
-                  {walkIn ? "?" : ((selectedCustomer?.firstName?.[0] ?? "") + (selectedCustomer?.lastName?.[0] ?? "")).toUpperCase() || "?"}
+            <div className="flex items-center gap-1.5">
+              {/* Customer chip or search button — takes remaining space */}
+              {activeCustomerName ? (
+                <div className={cn("flex-1 flex items-center gap-2 rounded-lg px-2.5 py-1.5 min-w-0", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
+                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
+                    {walkIn ? "?" : ((selectedCustomer?.firstName?.[0] ?? "") + (selectedCustomer?.lastName?.[0] ?? "")).toUpperCase() || "?"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{activeCustomerName}</p>
+                    {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
+                    {!walkIn && selectedCustomer?.warningNote && <p className="text-[10px] text-destructive flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Warning on file</p>}
+                  </div>
+                  <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{activeCustomerName}</p>
-                  {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
-                  {!walkIn && selectedCustomer?.warningNote && <p className="text-[10px] text-destructive flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Warning on file</p>}
-                </div>
-                <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            ) : (
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => setCustomerOpen(o => !o)}
-                  className={cn(
-                    "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
-                    customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
-                  )}
-                >
-                  <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
-                  <Search className="w-3 h-3 text-muted-foreground shrink-0" />
-                </button>
-                <button
-                  onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
-                  className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400"
-                  title="Walk-in customer"
-                >
-                  <Footprints className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setServiceLinkOpen(true)}
-                  title="Link to service or appointment"
-                  className={cn("p-1.5 border border-dashed rounded-lg transition-colors", (linkedService || linkedAppointment) ? "text-primary border-primary" : "text-muted-foreground hover:text-foreground hover:border-foreground")}
-                >
-                  <LinkIcon className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setNotesOpen(true)}
-                  className={cn("p-1.5 border border-dashed rounded-lg transition-colors", notesOpen || saleNotes ? "text-primary border-primary" : "text-muted-foreground hover:text-foreground hover:border-foreground")}
-                  title="Sale notes"
-                >
-                  <NotebookPen className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+              ) : (
+                <>
+                  <button
+                    onClick={() => setCustomerOpen(o => !o)}
+                    className={cn(
+                      "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
+                      customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
+                    )}
+                  >
+                    <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
+                    <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+                  </button>
+                  <button
+                    onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
+                    className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0"
+                    title="Walk-in customer"
+                  >
+                    <Footprints className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+              {/* Link and Notes — always visible */}
+              <button
+                onClick={() => setServiceLinkOpen(true)}
+                title="Link to service or appointment"
+                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", (linkedService || linkedAppointment) ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setNotesOpen(true)}
+                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+                title="Sale notes"
+              >
+                <NotebookPen className="w-3.5 h-3.5" />
+              </button>
+            </div>
             {/* Inline customer dropdown */}
             {customerOpen && !activeCustomerName && (
               <div className="absolute z-50 left-3 right-3 top-full mt-0.5 bg-popover border rounded-lg shadow-lg flex flex-col max-h-[min(320px,60dvh)]">
@@ -1016,8 +1020,8 @@ export default function POSPage() {
               <p className="text-xs mt-1">Tap products to add them to the sale.</p>
             </div>
           ) : (
-          <ScrollArea className="flex-1">
-              <div className="p-2.5 space-y-1.5">
+          <ScrollArea className="flex-1 w-full">
+              <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
                   const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
                   const lineTotal = linePrice - item.itemDiscount;
