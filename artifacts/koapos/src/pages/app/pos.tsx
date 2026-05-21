@@ -29,7 +29,7 @@ import {
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
-  Banknote, Clock, FileText, TrendingUp, Star,
+  Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
 } from "lucide-react";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
@@ -45,6 +45,18 @@ type CartItem = {
 
 type WalkIn = { firstName: string; lastName: string };
 
+type ParkedSale = {
+  id: string;
+  parkedAt: string;
+  cart: CartItem[];
+  selectedCustomer: Customer | null;
+  walkIn: WalkIn | null;
+  overallDiscount: string;
+  saleNotes: string;
+  total: number;
+  label: string;
+};
+
 type RegisterSession = {
   openedAt: string;
   openedBy: string | null;
@@ -54,7 +66,8 @@ type RegisterSession = {
   txCount: number;
 };
 
-const DISPLAY_KEY = "koapos_pos_display";
+const DISPLAY_KEY      = "koapos_pos_display";
+const PARKED_SALES_KEY = "koapos_parked_sales";
 
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
@@ -89,6 +102,13 @@ export default function POSPage() {
   const [overallDiscount, setOverallDiscount] = useState("");
   const [saleNotes, setSaleNotes] = useState("");
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
+
+  /* parked sales */
+  const [parkedSales, setParkedSales] = useState<ParkedSale[]>(() => {
+    try { return JSON.parse(localStorage.getItem(PARKED_SALES_KEY) ?? "[]") as ParkedSale[]; }
+    catch { return []; }
+  });
+  const [parkedSalesOpen, setParkedSalesOpen] = useState(false);
 
   /* payment */
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -455,6 +475,72 @@ export default function POSPage() {
     }));
   };
 
+  const saveParkedSales = (updated: ParkedSale[]) => {
+    setParkedSales(updated);
+    try { localStorage.setItem(PARKED_SALES_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
+  const parkSale = () => {
+    if (cart.length === 0) return;
+    const customerLabel = walkIn
+      ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
+      : selectedCustomer
+        ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+        : "No customer";
+    const sale: ParkedSale = {
+      id: Math.random().toString(36).substring(2, 10),
+      parkedAt: new Date().toISOString(),
+      cart: [...cart],
+      selectedCustomer,
+      walkIn,
+      overallDiscount,
+      saleNotes,
+      total,
+      label: customerLabel,
+    };
+    saveParkedSales([...parkedSales, sale]);
+    setCart([]); setOverallDiscount(""); setSaleNotes("");
+    setSelectedCustomer(null); setWalkIn(null);
+    toast.success("Sale parked");
+  };
+
+  const retrieveParkedSale = (sale: ParkedSale) => {
+    if (cart.length > 0) {
+      /* Auto-park the current active cart so nothing is lost */
+      const currentLabel = walkIn
+        ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
+        : selectedCustomer
+          ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+          : "No customer";
+      const currentSale: ParkedSale = {
+        id: Math.random().toString(36).substring(2, 10),
+        parkedAt: new Date().toISOString(),
+        cart: [...cart],
+        selectedCustomer,
+        walkIn,
+        overallDiscount,
+        saleNotes,
+        total,
+        label: currentLabel,
+      };
+      const withoutRetrieved = parkedSales.filter(s => s.id !== sale.id);
+      saveParkedSales([...withoutRetrieved, currentSale]);
+    } else {
+      saveParkedSales(parkedSales.filter(s => s.id !== sale.id));
+    }
+    setCart(sale.cart);
+    setSelectedCustomer(sale.selectedCustomer);
+    setWalkIn(sale.walkIn);
+    setOverallDiscount(sale.overallDiscount);
+    setSaleNotes(sale.saleNotes);
+    setParkedSalesOpen(false);
+    toast.success("Sale retrieved");
+  };
+
+  const deleteParkedSale = (id: string) => {
+    saveParkedSales(parkedSales.filter(s => s.id !== id));
+  };
+
   const clearCart = () => {
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
@@ -743,11 +829,71 @@ export default function POSPage() {
               >
                 <User className="w-4 h-4" />
               </button>
+              {/* Parked sales badge */}
+              {parkedSales.length > 0 && (
+                <button
+                  onClick={() => setParkedSalesOpen(o => !o)}
+                  title="Parked sales"
+                  className={cn(
+                    "relative p-1.5 rounded-lg transition-colors",
+                    parkedSalesOpen
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                  )}
+                >
+                  <History className="w-4 h-4" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[9px] flex items-center justify-center font-bold leading-none">
+                    {parkedSales.length}
+                  </span>
+                </button>
+              )}
               <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={clearCart} disabled={cart.length === 0} title="Clear cart">
                 <Trash2 className="w-4 h-4 text-destructive" />
               </Button>
             </div>
           </div>
+
+          {/* ── Parked sales panel ── */}
+          {parkedSalesOpen && (
+            <div className="border-b bg-amber-50/60 dark:bg-amber-900/10 shrink-0">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200/60 dark:border-amber-700/30">
+                <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <History className="w-3 h-3" /> Parked Sales ({parkedSales.length})
+                </span>
+                <button onClick={() => setParkedSalesOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto divide-y divide-amber-100 dark:divide-amber-800/20">
+                {parkedSales.map((sale) => {
+                  const time = new Date(sale.parkedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+                  const itemCount = sale.cart.reduce((s, i) => s + i.quantity, 0);
+                  return (
+                    <div key={sale.id} className="flex items-center gap-2 px-3 py-2 hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{sale.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{time} · {itemCount} item{itemCount !== 1 ? "s" : ""} · {formatCurrency(sale.total)}</p>
+                      </div>
+                      <button
+                        onClick={() => retrieveParkedSale(sale)}
+                        title="Retrieve sale"
+                        className="text-xs font-medium text-primary hover:underline shrink-0 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors"
+                      >
+                        Retrieve
+                      </button>
+                      <button
+                        onClick={() => deleteParkedSale(sale.id)}
+                        title="Discard parked sale"
+                        className="text-muted-foreground hover:text-destructive shrink-0 p-0.5 transition-colors"
+                      >
+                        <Trash className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Customer row */}
           <div className="border-b px-3 py-2 shrink-0 relative" ref={customerDropdownRef}>
@@ -994,20 +1140,32 @@ export default function POSPage() {
               </div>
             </div>
 
-            <Button
-              className="w-full h-12 text-base font-bold mt-1"
-              disabled={cart.length === 0}
-              onClick={() => {
-                if (forceStaffLogin && !currentStaff) {
-                  setPendingPaymentAfterPin(true);
-                  setPinInput(""); setPinError(""); setPinDialogOpen(true);
-                  return;
-                }
-                setPaymentModalOpen(true);
-              }}
-            >
-              Charge {formatCurrency(total)}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-none gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50 hover:border-amber-400 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/20"
+                disabled={cart.length === 0}
+                onClick={parkSale}
+                title="Park this sale and start a new one"
+              >
+                <PauseCircle className="w-4 h-4" />
+                Park
+              </Button>
+              <Button
+                className="flex-1 h-12 text-base font-bold"
+                disabled={cart.length === 0}
+                onClick={() => {
+                  if (forceStaffLogin && !currentStaff) {
+                    setPendingPaymentAfterPin(true);
+                    setPinInput(""); setPinError(""); setPinDialogOpen(true);
+                    return;
+                  }
+                  setPaymentModalOpen(true);
+                }}
+              >
+                Charge {formatCurrency(total)}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
