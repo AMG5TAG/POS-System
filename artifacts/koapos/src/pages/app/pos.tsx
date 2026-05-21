@@ -476,7 +476,7 @@ export default function POSPage() {
                       ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                       : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
                     }
-                    {product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
+                    {(product as typeof product & { productType?: string }).productType !== "service" && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
                     )}
                   </div>
