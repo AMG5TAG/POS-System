@@ -17,7 +17,7 @@ export default function ProductsStocktakePage() {
   const updateInventory = useUpdateInventory();
 
   const { data } = useListProducts({ search: search || undefined, limit: 200 });
-  const products = (data?.items ?? []).filter((p) => p.trackInventory);
+  const products = (data?.items ?? []).filter((p) => p.trackInventory && (p as unknown as { productType?: string }).productType !== "service");
 
   const setCount = (id: number, val: string) => setCounts((prev) => ({ ...prev, [id]: val }));
 

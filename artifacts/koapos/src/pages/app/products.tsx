@@ -1018,8 +1018,10 @@ export default function ProductsPage() {
                 </thead>
                 <tbody className="divide-y">
                   {filtered.map((product) => {
-                    const isChecked  = checked.has(product.id);
-                    const isLowStock = product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                    const isChecked   = checked.has(product.id);
+                    const productType = (product as Product & { productType?: string }).productType ?? "standard";
+                    const isService   = productType === "service";
+                    const isLowStock  = !isService && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
                     const marginPct = cost && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
@@ -1065,9 +1067,11 @@ export default function ProductsPage() {
                           </>
                         )}
                         <td className="p-3">
-                          {product.trackInventory
-                            ? <span className={isLowStock ? "text-destructive font-medium" : ""}>{product.stockQuantity}</span>
-                            : <span className="text-muted-foreground">∞</span>}
+                          {isService
+                            ? <span className="text-muted-foreground">—</span>
+                            : product.trackInventory
+                              ? <span className={isLowStock ? "text-destructive font-medium" : ""}>{product.stockQuantity}</span>
+                              : <span className="text-muted-foreground">∞</span>}
                         </td>
                         <td className="p-3">
                           <Badge variant={product.isActive !== false ? "default" : "secondary"} className="text-xs">

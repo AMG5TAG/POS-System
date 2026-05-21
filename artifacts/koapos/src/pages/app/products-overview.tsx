@@ -15,8 +15,9 @@ export default function ProductsOverviewPage() {
 
   const totalProducts = products.length;
   const activeProducts = products.filter((p) => p.isActive !== false).length;
-  const lowStock = products.filter((p) => p.trackInventory && (p.stockQuantity ?? 0) <= (p.lowStockThreshold ?? 5)).length;
-  const totalValue = products.reduce((sum, p) => sum + (p.price ?? 0) * (p.stockQuantity ?? 0), 0);
+  const stockableProducts = products.filter((p) => (p as unknown as { productType?: string }).productType !== "service");
+  const lowStock = stockableProducts.filter((p) => p.trackInventory && (p.stockQuantity ?? 0) <= (p.lowStockThreshold ?? 5)).length;
+  const totalValue = stockableProducts.reduce((sum, p) => sum + (p.price ?? 0) * (p.stockQuantity ?? 0), 0);
 
   const stats = [
     { label: "Total Products", value: totalProducts, color: "text-blue-600" },
