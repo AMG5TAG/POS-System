@@ -13,9 +13,20 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Receipt, Percent, Mail, MessageSquare, Info, Hash, Calendar, DollarSign } from "lucide-react";
+import { Receipt, Percent, Mail, MessageSquare, Info, Hash, Calendar, DollarSign, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+
+/* ─── Business ABN helper (shared localStorage key with Business Info page) ── */
+
+function getBusinessAbn(): string {
+  try {
+    const raw = localStorage.getItem("koapos_regional_ext");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return typeof parsed.abn === "string" ? parsed.abn : "";
+  } catch { return ""; }
+}
 
 /* ─── Regional ext settings (shared localStorage key with Regional page) ─── */
 
@@ -194,10 +205,11 @@ export default function SettingsTaxPage() {
 
   useEffect(() => {
     if (settings) {
+      const savedNumber = settings.gstNumber ?? "";
       setForm({
         gstEnabled: settings.gstEnabled ?? "true",
         gstRate: String(settings.gstRate ?? 10),
-        gstNumber: settings.gstNumber ?? "",
+        gstNumber: savedNumber || getBusinessAbn(),
         taxInclusive: settings.taxInclusive ?? "true",
         showTaxOnReceipt: settings.showTaxOnReceipt ?? "true",
         taxName: settings.taxName ?? "GST",
@@ -285,7 +297,22 @@ export default function SettingsTaxPage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>GST Registration Number (ABN)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>GST Registration Number (ABN)</Label>
+                    {(() => {
+                      const bizAbn = getBusinessAbn();
+                      return bizAbn ? (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, gstNumber: bizAbn })}
+                          className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                        >
+                          <Copy className="w-3 h-3" />
+                          Copy from Business Info
+                        </button>
+                      ) : null;
+                    })()}
+                  </div>
                   <Input value={form.gstNumber}
                     onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
                     placeholder="e.g. 12 345 678 901" />
