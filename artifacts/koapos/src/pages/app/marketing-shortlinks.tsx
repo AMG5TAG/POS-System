@@ -139,11 +139,6 @@ export default function MarketingShortlinksPage() {
               <p className="text-sm text-muted-foreground">Create memorable short URLs for your marketing campaigns and promotions.</p>
             </div>
           </div>
-          <Link href="/management/marketing/generators">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Settings2 className="w-3.5 h-3.5" /> Default Settings
-            </Button>
-          </Link>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -242,7 +237,7 @@ export default function MarketingShortlinksPage() {
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-900/10 dark:border-amber-700/30 p-3">
                       <p className="text-xs text-amber-800 dark:text-amber-300">
-                        <strong>Note:</strong> To make shortlinks active and redirect visitors, your domain must be pointed to KoaPOS and shortlink routing enabled in <Link href="/management/marketing/generators" className="underline">Generator Settings</Link>.
+                        <strong>Note:</strong> To make shortlinks active and redirect visitors, your domain must be pointed to KoaPOS and shortlink routing must be enabled.
                       </p>
                     </div>
                   </div>

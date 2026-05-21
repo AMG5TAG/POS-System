@@ -121,13 +121,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
-  {
-    name: "Marketing",
-    icon: Megaphone,
-    children: [
-      { name: "Generators", href: "/management/marketing/generators", icon: QrCode },
-    ],
-  },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
@@ -201,9 +194,8 @@ const SEARCH_INDEX = [
   { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
-  { label: "Marketing · QR Codes",      href: "/marketing/generators/qr-codes",         icon: QrCode,      group: "Marketing" },
-  { label: "Marketing · Shortlinks",    href: "/marketing/generators/shortlinks",        icon: Link2,       group: "Marketing" },
-  { label: "Marketing · Generator Settings", href: "/management/marketing/generators",   icon: Megaphone,   group: "Management" },
+  { label: "Marketing · QR Codes",   href: "/marketing/generators/qr-codes",  icon: QrCode, group: "Marketing" },
+  { label: "Marketing · Shortlinks", href: "/marketing/generators/shortlinks", icon: Link2,  group: "Marketing" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -293,7 +285,6 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
-  "/management/marketing/generators":      ["Management", "Marketing", "Generators"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
