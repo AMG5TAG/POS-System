@@ -26,4 +26,7 @@ export interface ProductInput {
   excludeFromLoyalty?: boolean;
   productType?: string;
   groupPrices?: ProductInputGroupPrices;
+  supplier?: string;
+  supplierCode?: string;
+  isEpay?: boolean;
 }

@@ -2191,6 +2191,12 @@ components:
           type: object
           additionalProperties:
             type: number
+        supplier:
+          type: ["string", "null"]
+        supplierCode:
+          type: ["string", "null"]
+        isEpay:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -2235,6 +2241,12 @@ components:
           type: object
           additionalProperties:
             type: number
+        supplier:
+          type: string
+        supplierCode:
+          type: string
+        isEpay:
+          type: boolean
 
     ProductUpdate:
       type: object
@@ -2273,6 +2285,12 @@ components:
           type: object
           additionalProperties:
             type: number
+        supplier:
+          type: ["string", "null"]
+        supplierCode:
+          type: ["string", "null"]
+        isEpay:
+          type: boolean
 
     ProductList:
       type: object

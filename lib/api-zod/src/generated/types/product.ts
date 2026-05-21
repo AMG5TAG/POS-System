@@ -37,5 +37,10 @@ export interface Product {
   excludeFromLoyalty?: boolean;
   productType: string;
   groupPrices?: ProductGroupPrices;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  supplierCode?: string | null;
+  isEpay?: boolean;
   createdAt: Date;
 }

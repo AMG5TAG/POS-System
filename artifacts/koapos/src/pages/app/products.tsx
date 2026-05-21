@@ -50,7 +50,7 @@ import {
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
-type FormTab   = "details" | "pricing" | "media" | "settings" | "compatibility";
+type FormTab   = "details" | "pricing" | "media" | "settings" | "digital_codes" | "compatibility";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
@@ -71,6 +71,8 @@ type ProductForm = {
   internalNotes: string;
   /* group pricing */
   groupPrices: Record<string, string>;
+  /* digital code */
+  isEpay: boolean;
 };
 
 const defaultForm: ProductForm = {
@@ -85,13 +87,15 @@ const defaultForm: ProductForm = {
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   internalNotes: "",
   groupPrices: {},
+  isEpay: false,
 };
 
-const FORM_TABS: { key: FormTab; label: string }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "pricing",       label: "Pricing"       },
   { key: "media",         label: "Media"         },
   { key: "settings",      label: "Settings"      },
+  { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "compatibility", label: "Compatibility" },
 ];
 
@@ -636,6 +640,37 @@ export default function ProductsPage() {
   const [hideCosts, setHideCosts]       = useState(true);
   const [showHideCostsBtn]              = useState(() => { try { return localStorage.getItem("koapos_display_show_hide_costs_btn") === "true"; } catch { return false; } });
   const [enableGroupPricing]            = useState(() => { try { return localStorage.getItem("koapos_enable_group_pricing") === "true"; } catch { return false; } });
+
+  /* ── Digital codes state ── */
+  type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
+  const [digitalCodes, setDigitalCodes]     = useState<DigitalCodeEntry[]>([]);
+  const [codesLoading, setCodesLoading]     = useState(false);
+  const [newCodeInput, setNewCodeInput]     = useState("");
+  const [bulkMode, setBulkMode]             = useState(false);
+
+  const loadDigitalCodes = useCallback(async (productId: number) => {
+    setCodesLoading(true);
+    try {
+      const r = await fetch(`/api/products/${productId}/digital-codes`, { credentials: "include" });
+      if (r.ok) setDigitalCodes(await r.json());
+    } finally { setCodesLoading(false); }
+  }, []);
+
+  const addDigitalCode = useCallback(async (productId: number, code: string) => {
+    const r = await fetch(`/api/products/${productId}/digital-codes`, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code.trim() }),
+    });
+    if (r.ok) { await loadDigitalCodes(productId); setNewCodeInput(""); }
+    else toast.error("Failed to add code");
+  }, [loadDigitalCodes]);
+
+  const deleteDigitalCode = useCallback(async (codeId: number, productId: number) => {
+    const r = await fetch(`/api/digital-codes/${codeId}`, { method: "DELETE", credentials: "include" });
+    if (r.ok) await loadDigitalCodes(productId);
+    else toast.error("Failed to delete code");
+  }, [loadDigitalCodes]);
   const { settings: customerSettings }  = useCustomerSettings();
   const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
 
@@ -691,17 +726,18 @@ export default function ProductsPage() {
 
   const openEdit = (p: Product) => {
     setEditingProduct(p);
+    const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
     setForm({
       name: p.name, description: p.description || "",
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
-      sku: p.sku || "", barcode: (p as Product & { barcode?: string }).barcode || "",
+      sku: p.sku || "", barcode: ep.barcode || "",
       categoryId: p.categoryId?.toString() || "",
-      imageUrl: (p as Product & { imageUrl?: string }).imageUrl || "",
+      imageUrl: ep.imageUrl || "",
       imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
-      supplier: "", supplierCode: "",
+      supplier: ep.supplier || "", supplierCode: ep.supplierCode || "",
       weight: "", weightUnit: "kg",
       lengthCm: "", widthCm: "", heightCm: "",
-      productType: (p as Product & { productType?: string }).productType ?? "standard",
+      productType: ep.productType ?? "standard",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
       lowStockThreshold: p.lowStockThreshold?.toString() || "5",
       taxRate: p.taxRate?.toString() || "10",
@@ -710,10 +746,13 @@ export default function ProductsPage() {
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
       internalNotes: "",
       groupPrices: Object.fromEntries(
-        Object.entries((p as Product & { groupPrices?: Record<string, number> }).groupPrices ?? {})
-          .map(([k, v]) => [k, v.toString()])
+        Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
+      isEpay: ep.isEpay ?? false,
     });
+    if ((ep.productType ?? "standard") === "digital_code") {
+      loadDigitalCodes(p.id);
+    }
     const _c = loadPCCompat()[p.id.toString()] || ({} as PCPartCompat);
     setPcPartType(_c.partType || "");
     setPcSocket(_c.socket || "");
@@ -739,6 +778,9 @@ export default function ProductsPage() {
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
       excludeFromLoyalty: form.excludeFromLoyalty,
+      supplier: form.supplier || undefined,
+      supplierCode: form.supplierCode || undefined,
+      isEpay: form.isEpay,
       groupPrices: Object.fromEntries(
         Object.entries(form.groupPrices)
           .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
@@ -1012,20 +1054,25 @@ export default function ProductsPage() {
 
           {/* Tab nav */}
           <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
-            {FORM_TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFormTab(key)}
-                className={cn(
-                  "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-                  formTab === key
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
+            {FORM_TABS
+              .filter(({ digitalCodeOnly }) => !digitalCodeOnly || form.productType === "digital_code")
+              .map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setFormTab(key);
+                    if (key === "digital_codes" && editingProduct) loadDigitalCodes(editingProduct.id);
+                  }}
+                  className={cn(
+                    "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                    formTab === key
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
           </div>
 
           {/* Tab content */}
@@ -1156,7 +1203,9 @@ export default function ProductsPage() {
                       </p>
                       <p className="text-xs mt-0.5">
                         {form.productType === "digital_code"
-                          ? "Manage delivery codes in the Settings tab. No physical stock is tracked."
+                          ? editingProduct
+                            ? "Manage delivery codes in the Digital Codes tab. No physical stock is tracked."
+                            : "Save this product first, then add delivery codes in the Digital Codes tab."
                           : "No physical stock tracked. Customers receive a download link."}
                       </p>
                     </div>
@@ -1404,7 +1453,7 @@ export default function ProductsPage() {
                         </p>
                         <p className="text-xs mt-0.5">
                           {form.productType === "digital_code"
-                            ? "Manage delivery codes in the product's Digital Codes tab after saving."
+                            ? "No physical stock is tracked. Manage codes in the Digital Codes tab."
                             : "This product type does not use inventory tracking."}
                         </p>
                       </div>
@@ -1462,6 +1511,133 @@ export default function ProductsPage() {
                     rows={4}
                     className="mt-3 resize-none"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* ── Digital Codes ── */}
+            {formTab === "digital_codes" && (
+              <div className="py-5 space-y-5">
+
+                {/* ePay switch */}
+                <div>
+                  <SectionHeader label="ePay Mode" />
+                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">ePay / Physical Card</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        When enabled, no digital code is printed on the receipt — the card processes its own code at the terminal.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={form.isEpay}
+                      onCheckedChange={(v) => setField("isEpay", v)}
+                    />
+                  </div>
+                </div>
+
+                {/* Code inventory */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Code Inventory" />
+
+                  {!editingProduct ? (
+                    <div className="mt-3 flex items-start gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
+                      <KeyRound className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p className="text-sm">Save this product first to start adding digital codes.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Add code(s) */}
+                      {!bulkMode ? (
+                        <div className="mt-3 flex gap-2">
+                          <Input
+                            value={newCodeInput}
+                            onChange={(e) => setNewCodeInput(e.target.value)}
+                            placeholder="Enter a code (e.g. XXXX-XXXX-XXXX)"
+                            onKeyDown={(e) => { if (e.key === "Enter" && newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button" variant="outline" size="sm"
+                            onClick={() => { if (newCodeInput.trim()) addDigitalCode(editingProduct.id, newCodeInput); }}
+                            disabled={!newCodeInput.trim()}
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setBulkMode(true)}>
+                            Bulk
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <Textarea
+                            value={newCodeInput}
+                            onChange={(e) => setNewCodeInput(e.target.value)}
+                            placeholder={"One code per line:\nXXXX-XXXX-XXXX\nYYYY-YYYY-YYYY"}
+                            rows={5}
+                            className="resize-none font-mono text-xs"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              type="button" size="sm"
+                              onClick={async () => {
+                                const lines = newCodeInput.split("\n").map(l => l.trim()).filter(Boolean);
+                                for (const line of lines) await addDigitalCode(editingProduct.id, line);
+                                setNewCodeInput(""); setBulkMode(false);
+                              }}
+                              disabled={!newCodeInput.trim()}
+                            >
+                              Add {newCodeInput.split("\n").filter(l => l.trim()).length} codes
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => { setBulkMode(false); setNewCodeInput(""); }}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Code list */}
+                      {codesLoading ? (
+                        <p className="text-xs text-muted-foreground mt-4">Loading codes…</p>
+                      ) : digitalCodes.length === 0 ? (
+                        <div className="mt-4 flex items-start gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
+                          <KeyRound className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p className="text-sm">No codes yet. Add codes above — each code is delivered to one customer upon sale.</p>
+                        </div>
+                      ) : (
+                        <div className="mt-4 border rounded-xl overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {digitalCodes.length} code{digitalCodes.length !== 1 ? "s" : ""} — {digitalCodes.filter(c => !c.isUsed).length} available
+                            </p>
+                          </div>
+                          <div className="divide-y max-h-64 overflow-y-auto">
+                            {digitalCodes.map((c) => (
+                              <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                                <KeyRound className={cn("w-3.5 h-3.5 shrink-0", c.isUsed ? "text-muted-foreground/40" : "text-primary")} />
+                                <span className={cn("flex-1 font-mono text-sm", c.isUsed && "line-through text-muted-foreground/60")}>
+                                  {c.code}
+                                </span>
+                                {c.isUsed && (
+                                  <Badge variant="secondary" className="text-[10px] shrink-0">Used</Badge>
+                                )}
+                                {!c.isUsed && (
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteDigitalCode(c.id, editingProduct.id)}
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
+                                    title="Delete code"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             )}

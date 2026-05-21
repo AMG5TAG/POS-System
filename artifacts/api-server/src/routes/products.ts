@@ -49,6 +49,9 @@ function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof c
     isActive: p.isActive === "true",
     excludeFromLoyalty: p.excludeFromLoyalty === "true",
     groupPrices: p.groupPrices ? (() => { try { return JSON.parse(p.groupPrices!); } catch { return {}; } })() : {},
+    supplier: p.supplier ?? null,
+    supplierCode: p.supplierCode ?? null,
+    isEpay: p.isEpay === "true",
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -163,7 +166,7 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, ...rest } = parsed.data;
   const [product] = await db
     .insert(productsTable)
     .values({
@@ -175,6 +178,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       trackInventory: trackInventory === false ? "false" : "true",
       isActive: isActive === false ? "false" : "true",
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
+      isEpay: isEpayRaw === true ? "true" : "false",
       groupPrices: groupPrices ? JSON.stringify(groupPrices) : null,
     })
     .returning();
@@ -202,7 +206,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, ...rest } = parsed.data;
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
@@ -210,6 +214,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (trackInventory !== undefined) updates.trackInventory = trackInventory ? "true" : "false";
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
+  if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = JSON.stringify(groupPrices);
   const [product] = await db
     .update(productsTable)

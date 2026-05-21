@@ -161,6 +161,11 @@ export interface Product {
   excludeFromLoyalty?: boolean;
   productType: string;
   groupPrices?: ProductGroupPrices;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  supplierCode?: string | null;
+  isEpay?: boolean;
   createdAt: string;
 }
 
@@ -185,6 +190,9 @@ export interface ProductInput {
   excludeFromLoyalty?: boolean;
   productType?: string;
   groupPrices?: ProductInputGroupPrices;
+  supplier?: string;
+  supplierCode?: string;
+  isEpay?: boolean;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -207,6 +215,11 @@ export interface ProductUpdate {
   excludeFromLoyalty?: boolean;
   productType?: string;
   groupPrices?: ProductUpdateGroupPrices;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  supplierCode?: string | null;
+  isEpay?: boolean;
 }
 
 export interface ProductList {

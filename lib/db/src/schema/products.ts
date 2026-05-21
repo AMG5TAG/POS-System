@@ -36,6 +36,9 @@ export const productsTable = pgTable("products", {
   isActive:          text("is_active").notNull().default("true"),
   excludeFromLoyalty: text("exclude_from_loyalty").notNull().default("false"),
   groupPrices:        text("group_prices"),
+  supplier:           text("supplier"),
+  supplierCode:       text("supplier_code"),
+  isEpay:             text("is_epay").notNull().default("false"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

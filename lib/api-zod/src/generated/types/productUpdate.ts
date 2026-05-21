@@ -25,4 +25,9 @@ export interface ProductUpdate {
   excludeFromLoyalty?: boolean;
   productType?: string;
   groupPrices?: ProductUpdateGroupPrices;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  supplierCode?: string | null;
+  isEpay?: boolean;
 }
