@@ -1144,8 +1144,27 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Physical details — hidden for Service products */}
-                {form.productType !== "service" && (
+                {/* Digital / Download notice — shown inline after the type selector */}
+                {(form.productType === "digital_code" || form.productType === "digital") && (
+                  <div className="flex items-start gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
+                    {form.productType === "digital_code"
+                      ? <KeyRound className="w-4 h-4 shrink-0 mt-0.5" />
+                      : <Download className="w-4 h-4 shrink-0 mt-0.5" />}
+                    <div className="text-sm">
+                      <p className="font-medium text-foreground">
+                        {form.productType === "digital_code" ? "Code inventory" : "Digital download"}
+                      </p>
+                      <p className="text-xs mt-0.5">
+                        {form.productType === "digital_code"
+                          ? "Manage delivery codes in the Settings tab. No physical stock is tracked."
+                          : "No physical stock tracked. Customers receive a download link."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Physical details — only for standard products */}
+                {form.productType === "standard" && (
                 <div className="border-t pt-4 space-y-3">
                   <SectionHeader label="Physical Details" />
                   <div className="grid grid-cols-5 gap-3">
