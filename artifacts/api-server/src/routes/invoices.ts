@@ -99,9 +99,10 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 
   const merchantId = req.session.merchantId!;
   const lines: LineItem[] = lineItems ?? [];
-  const subtotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const taxTotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / 100), 0);
-  const total = subtotal + taxTotal;
+  // Prices are GST-inclusive (Australian standard): extract tax from price
+  const total    = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const taxTotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / (100 + (i.taxRate ?? 0))), 0);
+  const subtotal = total - taxTotal;
 
   const [countRow] = await db
     .select({ count: sql<number>`count(*)` })

@@ -919,15 +919,17 @@ export default function ManagementKpisPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="grid grid-cols-1 gap-1.5">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                     {(Object.entries(METRIC_META) as [KpiMetric, typeof METRIC_META[KpiMetric]][]).map(([k, m]) => {
                       const Icon = m.icon;
                       return (
-                        <div key={k} className="flex items-center gap-2.5 py-1">
+                        <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0">
                           <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm">{m.label}</span>
-                          <Badge variant="outline" className="text-xs ml-auto font-mono">{m.unit}</Badge>
-                          {m.isInverse && <span className="text-xs text-rose-500">↓ lower is better</span>}
+                          <span className="text-sm flex-1 min-w-0 truncate">{m.label}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge variant="outline" className="text-xs font-mono">{m.unit}</Badge>
+                            {m.isInverse && <span className="text-xs text-rose-500">↓</span>}
+                          </div>
                         </div>
                       );
                     })}

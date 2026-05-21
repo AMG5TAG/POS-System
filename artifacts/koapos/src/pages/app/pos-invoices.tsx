@@ -144,8 +144,10 @@ export default function POSInvoicesPage() {
   const filteredProducts = (q: string) =>
     !q.trim() ? allProducts.slice(0, 8) : allProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
 
-  const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const taxTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
+  // Prices are GST-inclusive (Australian standard): extract tax from the total
+  const invTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const taxTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const subtotal  = invTotal - taxTotal;
 
   /* ── Reset create dialog ── */
   const resetCreate = () => {
@@ -704,10 +706,10 @@ export default function POSInvoicesPage() {
 
             {/* Totals */}
             <div className="flex justify-end">
-              <div className="w-48 space-y-1 text-sm">
-                <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>GST</span><span>{formatCurrency(taxTotal)}</span></div>
-                <div className="flex justify-between font-semibold border-t pt-1"><span>Total</span><span>{formatCurrency(subtotal + taxTotal)}</span></div>
+              <div className="w-52 space-y-1 text-sm">
+                <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex-GST)</span><span>{formatCurrency(subtotal)}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>GST included</span><span>{formatCurrency(taxTotal)}</span></div>
+                <div className="flex justify-between font-semibold border-t pt-1"><span>Total (inc-GST)</span><span>{formatCurrency(invTotal)}</span></div>
               </div>
             </div>
 
