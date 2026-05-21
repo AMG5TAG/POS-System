@@ -129,6 +129,9 @@ export default function SettingsAccountPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
+        {/* Left column: Login Details + Change Password stacked */}
+        <div className="space-y-6">
+
         {/* Login details */}
         <Card id="login-details">
           <CardHeader>
@@ -152,7 +155,102 @@ export default function SettingsAccountPage() {
           </CardContent>
         </Card>
 
-        {/* Business username */}
+        {/* Change Password */}
+        <Card id="change-password">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4" /> Change Password
+            </CardTitle>
+            <CardDescription>
+              Update your KoaPOS login password.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="current-pw">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="current-pw"
+                  type={showCurrent ? "text" : "password"}
+                  value={currentPw}
+                  onChange={e => setCurrentPw(e.target.value)}
+                  placeholder="Enter current password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrent(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="new-pw">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="new-pw"
+                  type={showNew ? "text" : "password"}
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className={cn("pr-10", pwTooShort && "border-destructive focus-visible:ring-destructive")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNew(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {pwTooShort && (
+                <p className="text-xs text-destructive">Password must be at least 8 characters</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-pw">Confirm New Password</Label>
+              <div className="relative">
+                <Input
+                  id="confirm-pw"
+                  type={showConfirm ? "text" : "password"}
+                  value={confirmPw}
+                  onChange={e => setConfirmPw(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className={cn("pr-10", pwMismatch && "border-destructive focus-visible:ring-destructive")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {pwMismatch && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+            </div>
+
+            <Button onClick={handleChangePassword} disabled={!canChangePw || pwSaving}>
+              {pwSaving ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
+              ) : (
+                "Update Password"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        </div>{/* end left column */}
+
+        {/* Right column: Business Username */}
         <Card id="business-username">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -249,99 +347,6 @@ export default function SettingsAccountPage() {
                 </a>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Change Password */}
-        <Card id="change-password">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4" /> Change Password
-            </CardTitle>
-            <CardDescription>
-              Update your KoaPOS login password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="current-pw">Current Password</Label>
-              <div className="relative">
-                <Input
-                  id="current-pw"
-                  type={showCurrent ? "text" : "password"}
-                  value={currentPw}
-                  onChange={e => setCurrentPw(e.target.value)}
-                  placeholder="Enter current password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="new-pw">New Password</Label>
-              <div className="relative">
-                <Input
-                  id="new-pw"
-                  type={showNew ? "text" : "password"}
-                  value={newPw}
-                  onChange={e => setNewPw(e.target.value)}
-                  placeholder="At least 8 characters"
-                  className={cn("pr-10", pwTooShort && "border-destructive focus-visible:ring-destructive")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {pwTooShort && (
-                <p className="text-xs text-destructive">Password must be at least 8 characters</p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="confirm-pw">Confirm New Password</Label>
-              <div className="relative">
-                <Input
-                  id="confirm-pw"
-                  type={showConfirm ? "text" : "password"}
-                  value={confirmPw}
-                  onChange={e => setConfirmPw(e.target.value)}
-                  placeholder="Re-enter new password"
-                  className={cn("pr-10", pwMismatch && "border-destructive focus-visible:ring-destructive")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {pwMismatch && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
-              )}
-            </div>
-
-            <Button onClick={handleChangePassword} disabled={!canChangePw || pwSaving}>
-              {pwSaving ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
-              ) : (
-                "Update Password"
-              )}
-            </Button>
           </CardContent>
         </Card>
 
