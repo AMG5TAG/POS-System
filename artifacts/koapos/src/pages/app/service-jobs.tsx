@@ -343,13 +343,29 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
                   const pins  = (job.passwordOrPin ?? "").split("\n").map(s => s.trim());
                   const accts = (job.accounts ?? "").split("\n").map(s => s.trim());
                   const max   = Math.max(pins.length, accts.length);
-                  const combined = Array.from({ length: max }, (_, i) => {
-                    const a = accts[i] || "";
-                    const p = pins[i]  || "";
-                    if (a && p) return `${a} — ${p}`;
-                    return a || p;
-                  }).filter(Boolean).join("\n");
-                  return <DetailRow icon={KeyRound} label="Logins / Accounts" value={combined} />;
+                  const hasBoth = pins.some(Boolean) && accts.some(Boolean);
+                  return (
+                    <div className="flex items-start gap-3 px-4 py-3">
+                      <KeyRound className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                      <div className="text-sm min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground mb-1.5">Logins / Accounts</p>
+                        {hasBoth ? (
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-semibold">Account</p>
+                            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-semibold">Password / PIN</p>
+                            {Array.from({ length: max }, (_, i) => [
+                              <p key={`a-${i}`} className="font-medium break-all">{accts[i] || "—"}</p>,
+                              <p key={`p-${i}`} className="font-medium font-mono break-all">{pins[i] || "—"}</p>,
+                            ])}
+                          </div>
+                        ) : (
+                          <p className="font-medium break-words whitespace-pre-line">
+                            {(job.passwordOrPin || job.accounts)?.trim()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
             )}

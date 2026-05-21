@@ -328,9 +328,13 @@ export function LabelPreview({
   const showBarcode = f("showBarcode") === "true";
   const showWas = f("showWas") === "true";
 
+  // When rotated, swap w/h so content renders naturally in landscape (no CSS transform)
+  const labelW = rotated ? finalH : finalW;
+  const labelH = rotated ? finalW : finalH;
+
   const baseStyle: React.CSSProperties = {
-    width: finalW,
-    height: finalH,
+    width: labelW,
+    height: labelH,
     fontSize: Math.max(7, finalScale * 2.8),
     lineHeight: 1.3,
     flexShrink: 0,
@@ -339,7 +343,7 @@ export function LabelPreview({
   const labelEl = (
     <div
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
-      style={{ ...baseStyle, ...(rotated ? { transform: "rotate(90deg)" } : {}) }}
+      style={baseStyle}
     >
       <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
       <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">

@@ -526,12 +526,20 @@ function ProductDetailDialog({
                   <p className="font-medium">{product.trackInventory ? "Enabled" : "Disabled"}</p>
                 </div>
               </div>
-              {product.trackInventory && (
+              {product.trackInventory ? (
                 <>
                   <InfoRow icon={Boxes} label="In Stock" value={product.stockQuantity}
                     valueClass={isLowStock ? "text-destructive" : undefined} />
                   <InfoRow icon={Boxes} label="Low Stock Alert" value={product.lowStockThreshold ?? 5} />
                 </>
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Boxes className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground">In Stock</p>
+                    <p className="font-medium text-muted-foreground text-lg">∞</p>
+                  </div>
+                </div>
               )}
             </div>
             {isLowStock && (
@@ -998,7 +1006,7 @@ export default function ProductsPage() {
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle>
-              {editingProduct ? "Edit Product" : "New Product"}
+              {editingProduct ? `Edit Product — ${editingProduct.name}` : "New Product"}
             </DialogTitle>
           </DialogHeader>
 
