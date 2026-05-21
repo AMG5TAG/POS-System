@@ -13,7 +13,7 @@ function customerName(first: string | null, last: string | null): string | null 
   return n || null;
 }
 
-function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLast?: string | null) {
+function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLast?: string | null, cEmail?: string | null) {
   return {
     ...inv,
     subtotal: parseFloat(inv.subtotal),
@@ -26,6 +26,7 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
     customerName: customerName(cFirst ?? null, cLast ?? null),
+    customerEmail: cEmail ?? null,
   };
 }
 
@@ -46,6 +47,7 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
@@ -55,7 +57,7 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .offset(parseInt(String(offset)));
 
   res.json({
-    items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName)),
+    items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName, r.customerEmail)),
     total: Number(countResult.count),
   });
 });
@@ -70,13 +72,14 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName));
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
 });
 
 // POST /invoices
@@ -126,18 +129,19 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     notes: notes ?? null,
   }).returning();
 
-  // Fetch with customer name
+  // Fetch with customer name + email
   const [row] = await db
     .select({
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(eq(invoicesTable.id, inv.id));
 
-  res.status(201).json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName) : fmt(inv));
+  res.status(201).json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail) : fmt(inv));
 });
 
 // PATCH /invoices/:id/viewed
@@ -187,12 +191,13 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(eq(invoicesTable.id, id));
 
-  res.json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName) : fmt(inv));
+  res.json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail) : fmt(inv));
 });
 
 // DELETE /invoices/:id

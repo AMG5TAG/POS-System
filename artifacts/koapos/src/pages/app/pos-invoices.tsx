@@ -34,6 +34,7 @@ type Invoice = {
   invoiceNumber: string;
   customerId: number | null;
   customerName: string | null;
+  customerEmail: string | null;
   status: InvStatus;
   subtotal: number;
   taxTotal: number;
@@ -821,7 +822,7 @@ export default function POSInvoicesPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { setEmailDialog({ open: true, invoiceId: detailInvoice.id }); setEmailAddr(""); }}>
+                      onClick={() => { setEmailDialog({ open: true, invoiceId: detailInvoice.id }); setEmailAddr(detailInvoice.customerEmail ?? ""); }}>
                       <Mail className="w-3.5 h-3.5" /> Email
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
