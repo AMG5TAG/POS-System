@@ -134,6 +134,7 @@ const REGISTER_TYPES: {
 ];
 
 const STORAGE_KEY = "koapos_pos_registers";
+export const ACTIVE_REGISTER_KEY = "koapos_active_register";
 
 function loadRegisters(): PosRegister[] {
   try {
@@ -673,6 +674,15 @@ export default function ManagementRegistersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PosRegister | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [activeRegisterId, setActiveRegisterId] = useState<string>(() => {
+    try { return localStorage.getItem(ACTIVE_REGISTER_KEY) ?? ""; } catch { return ""; }
+  });
+
+  const activateRegister = (id: string) => {
+    try { localStorage.setItem(ACTIVE_REGISTER_KEY, id); } catch { /* ignore */ }
+    setActiveRegisterId(id);
+    toast.success("Register activated for POS — favourites are now register-specific");
+  };
 
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
   const staffList = Array.isArray(staffData) ? staffData : [];
@@ -805,17 +815,26 @@ export default function ManagementRegistersPage() {
 
                   <div className="flex gap-2 pt-1 border-t border-border">
                     <Button
-                      variant="ghost"
+                      variant={activeRegisterId === reg.id ? "default" : "outline"}
                       size="sm"
-                      className="flex-1 text-muted-foreground hover:text-foreground"
-                      onClick={() => openEdit(reg)}
+                      className="flex-1 text-xs"
+                      onClick={() => activateRegister(reg.id)}
+                      title="Set as active POS register — favourites will be linked to this register"
                     >
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+                      {activeRegisterId === reg.id ? "✓ Active POS" : "Set as POS"}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 px-3"
+                      className="text-muted-foreground hover:text-foreground px-2"
+                      onClick={() => openEdit(reg)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
                       onClick={() => handleDelete(reg.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

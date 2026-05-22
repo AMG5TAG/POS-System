@@ -66,6 +66,8 @@ const PAYMENT_TERMS = [
   "EOM", "COD", "Prepaid", "Credit Card", "Custom",
 ];
 
+const CREDIT_PAYMENT_TERMS = new Set(["Net 7", "Net 14", "Net 30", "Net 60", "EOM", "Custom"]);
+
 const emptyForm = (): SupplierForm => ({
   name: "", accountNumber: "", website: "", paymentTerms: "", notes: "",
   logoUrl: "", street: "", city: "", state: "", postcode: "", country: "Australia",
@@ -101,7 +103,9 @@ const STEPS = [
 
 /* ─── Step nav ───────────────────────────────────────────────────────────── */
 
-function StepNav({ current }: { current: number }) {
+type StepDef = typeof STEPS[number];
+
+function StepNav({ current, steps }: { current: number; steps: readonly StepDef[] }) {
   const navRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -111,7 +115,7 @@ function StepNav({ current }: { current: number }) {
 
   return (
     <div ref={navRef} className="flex items-center gap-1 flex-nowrap overflow-x-auto pb-0.5 scrollbar-none">
-      {STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const Icon   = step.icon;
         const done   = i < current;
         const active = i === current;
@@ -126,7 +130,7 @@ function StepNav({ current }: { current: number }) {
               {done ? <Check className="w-3 h-3" /> : <Icon className="w-3 h-3 shrink-0" />}
               <span>{i + 1} {step.short}</span>
             </div>
-            {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+            {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
           </div>
         );
       })}
@@ -429,6 +433,13 @@ function WizardDialog({
 
   const set = <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => setForm(f => ({ ...f, [k]: v }));
 
+  const showCreditTab = CREDIT_PAYMENT_TERMS.has(form.paymentTerms);
+  const visibleSteps = STEPS.filter((_, i) => i !== 4 || showCreditTab) as readonly StepDef[];
+
+  useEffect(() => {
+    if (step >= visibleSteps.length) setStep(visibleSteps.length - 1);
+  }, [visibleSteps.length, step]);
+
   const canNext = () => {
     if (step === 0 && !form.name.trim()) return false;
     return true;
@@ -436,7 +447,7 @@ function WizardDialog({
 
   const handleNext = () => {
     if (step === 0 && !form.name.trim()) { toast.error("Supplier name is required"); return; }
-    setStep(s => Math.min(s + 1, STEPS.length - 1));
+    setStep(s => Math.min(s + 1, visibleSteps.length - 1));
   };
 
   const handleBack = () => {
@@ -444,7 +455,7 @@ function WizardDialog({
     setStep(s => Math.max(s - 1, 0));
   };
 
-  const isLast = step === STEPS.length - 1;
+  const isLast = step === visibleSteps.length - 1;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -454,7 +465,7 @@ function WizardDialog({
         </DialogHeader>
 
         <div className="shrink-0 mt-1 mb-2">
-          <StepNav current={step} />
+          <StepNav current={step} steps={visibleSteps} />
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 -mr-1">
@@ -470,7 +481,7 @@ function WizardDialog({
             <ChevronLeft className="w-4 h-4" />
             {step === 0 ? "Cancel" : "Back"}
           </Button>
-          <span className="text-sm text-muted-foreground">Step {step + 1} of {STEPS.length}</span>
+          <span className="text-sm text-muted-foreground">Step {step + 1} of {visibleSteps.length}</span>
           {isLast ? (
             <Button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="rounded-full gap-1.5">
               <Check className="w-4 h-4" />
@@ -685,7 +696,7 @@ export default function ProductsSuppliersPage() {
                   {sorted.map((s, idx) => {
                     const pc = primaryContact(s);
                     return (
-                      <tr key={s.id} className={cn("border-b last:border-0 hover:bg-muted/20 transition-colors", idx % 2 === 0 ? "" : "bg-muted/5")}>
+                      <tr key={s.id} onClick={() => openEdit(s)} className={cn("border-b last:border-0 hover:bg-muted/20 transition-colors cursor-pointer", idx % 2 === 0 ? "" : "bg-muted/5")}>
                         {/* Name */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -696,12 +707,9 @@ export default function ProductsSuppliersPage() {
                                 <Truck className="w-3.5 h-3.5 text-primary" />
                               </div>
                             )}
-                            <button
-                              className="font-medium text-primary hover:underline text-left truncate"
-                              onClick={() => openEdit(s)}
-                            >
+                            <span className="font-medium text-primary truncate">
                               {s.name}
-                            </button>
+                            </span>
                           </div>
                         </td>
                         {/* Payment Terms */}
@@ -729,10 +737,10 @@ export default function ProductsSuppliersPage() {
                         {/* Actions */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-0.5 justify-end">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
@@ -756,7 +764,7 @@ export default function ProductsSuppliersPage() {
               const pc = primaryContact(s);
               const allContacts = getContacts(s);
               return (
-                <Card key={s.id}>
+                <Card key={s.id} onClick={() => openEdit(s)} className="cursor-pointer hover:shadow-md transition-shadow">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -773,8 +781,8 @@ export default function ProductsSuppliersPage() {
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>
                     </div>
                     <div className="space-y-1 text-sm text-muted-foreground">

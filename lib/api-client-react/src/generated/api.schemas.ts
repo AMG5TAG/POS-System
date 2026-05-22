@@ -149,6 +149,8 @@ export interface Product {
   categoryId?: number | null;
   category?: Category;
   /** @nullable */
+  brandId?: number | null;
+  /** @nullable */
   imageUrl?: string | null;
   trackInventory: boolean;
   /** @nullable */
@@ -181,6 +183,7 @@ export interface ProductInput {
   sku?: string;
   barcode?: string;
   categoryId?: number;
+  brandId?: number;
   imageUrl?: string;
   trackInventory?: boolean;
   stockQuantity?: number;
@@ -206,6 +209,8 @@ export interface ProductUpdate {
   barcode?: string;
   /** @nullable */
   categoryId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
   imageUrl?: string;
   trackInventory?: boolean;
   stockQuantity?: number;

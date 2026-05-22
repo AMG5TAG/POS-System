@@ -60,8 +60,29 @@ export const digitalCodesTable = pgTable("digital_codes", {
   index("digital_codes_product_id_idx").on(t.productId),
 ]);
 
+export const productVariantsTable = pgTable("product_variants", {
+  id:            serial("id").primaryKey(),
+  merchantId:    integer("merchant_id").notNull().references(() => merchantsTable.id),
+  productId:     integer("product_id").notNull().references(() => productsTable.id),
+  name:          text("name").notNull(),
+  sku:           text("sku"),
+  barcode:       text("barcode"),
+  price:         numeric("price", { precision: 10, scale: 2 }),
+  costPrice:     numeric("cost_price", { precision: 10, scale: 2 }),
+  stockQuantity: integer("stock_quantity").notNull().default(0),
+  attributes:    text("attributes"),
+  imageUrl:      text("image_url"),
+  isActive:      text("is_active").notNull().default("true"),
+  sortOrder:     integer("sort_order").notNull().default(0),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("product_variants_product_id_idx").on(t.productId),
+  index("product_variants_merchant_id_idx").on(t.merchantId),
+]);
+
 export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertProduct = z.infer<typeof insertProductSchema>;
-export type Product     = typeof productsTable.$inferSelect;
-export type Category    = typeof categoriesTable.$inferSelect;
-export type DigitalCode = typeof digitalCodesTable.$inferSelect;
+export type InsertProduct   = z.infer<typeof insertProductSchema>;
+export type Product         = typeof productsTable.$inferSelect;
+export type Category        = typeof categoriesTable.$inferSelect;
+export type DigitalCode     = typeof digitalCodesTable.$inferSelect;
+export type ProductVariant  = typeof productVariantsTable.$inferSelect;

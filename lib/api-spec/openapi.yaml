@@ -2381,6 +2381,8 @@ components:
           type: ["integer", "null"]
         category:
           $ref: "#/components/schemas/Category"
+        brandId:
+          type: ["integer", "null"]
         imageUrl:
           type: ["string", "null"]
         trackInventory:
@@ -2431,6 +2433,8 @@ components:
           type: string
         categoryId:
           type: integer
+        brandId:
+          type: integer
         imageUrl:
           type: string
         trackInventory:
@@ -2474,6 +2478,8 @@ components:
         barcode:
           type: string
         categoryId:
+          type: ["integer", "null"]
+        brandId:
           type: ["integer", "null"]
         imageUrl:
           type: string

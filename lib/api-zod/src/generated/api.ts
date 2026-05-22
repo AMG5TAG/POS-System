@@ -297,6 +297,7 @@ export const ListProductsResponse = zod.object({
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
+  "brandId": zod.number().nullish(),
   "imageUrl": zod.string().nullish(),
   "trackInventory": zod.boolean(),
   "stockQuantity": zod.number().nullish(),
@@ -331,6 +332,7 @@ export const CreateProductBody = zod.object({
   "sku": zod.string().optional(),
   "barcode": zod.string().optional(),
   "categoryId": zod.number().optional(),
+  "brandId": zod.number().optional(),
   "imageUrl": zod.string().optional(),
   "trackInventory": zod.boolean().optional(),
   "stockQuantity": zod.number().optional(),
@@ -373,6 +375,7 @@ export const GetProductResponse = zod.object({
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
+  "brandId": zod.number().nullish(),
   "imageUrl": zod.string().nullish(),
   "trackInventory": zod.boolean(),
   "stockQuantity": zod.number().nullish(),
@@ -404,6 +407,7 @@ export const UpdateProductBody = zod.object({
   "sku": zod.string().optional(),
   "barcode": zod.string().optional(),
   "categoryId": zod.number().nullish(),
+  "brandId": zod.number().nullish(),
   "imageUrl": zod.string().optional(),
   "trackInventory": zod.boolean().optional(),
   "stockQuantity": zod.number().optional(),
@@ -438,6 +442,7 @@ export const UpdateProductResponse = zod.object({
   "sortOrder": zod.number().optional(),
   "createdAt": zod.coerce.date()
 }).optional(),
+  "brandId": zod.number().nullish(),
   "imageUrl": zod.string().nullish(),
   "trackInventory": zod.boolean(),
   "stockQuantity": zod.number().nullish(),

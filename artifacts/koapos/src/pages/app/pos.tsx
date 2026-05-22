@@ -18,7 +18,9 @@ import { formatCurrency } from "@/lib/utils";
 import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
   getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+  ACTIVE_REGISTER_KEY,
 } from "@/pages/app/management-registers";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -73,8 +75,16 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
+  const [activeRegisterId] = useState<string>(() => {
+    try { return localStorage.getItem(ACTIVE_REGISTER_KEY) ?? "default"; } catch { return "default"; }
+  });
+  const favouritesKey = `koapos_pos_favourites_${activeRegisterId}`;
+
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem("koapos_pos_favourites") ?? "[]") as number[]); }
+    try {
+      const key = `koapos_pos_favourites_${localStorage.getItem(ACTIVE_REGISTER_KEY) ?? "default"}`;
+      return new Set(JSON.parse(localStorage.getItem(key) ?? "[]") as number[]);
+    }
     catch { return new Set(); }
   });
 
@@ -83,7 +93,7 @@ export default function POSPage() {
     setFavouriteIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try { localStorage.setItem("koapos_pos_favourites", JSON.stringify([...next])); } catch { /* ignore */ }
+      try { localStorage.setItem(favouritesKey, JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
   };
@@ -107,6 +117,10 @@ export default function POSPage() {
     () => getEnabledPaymentMethods()[0] ?? "cash"
   );
   const [numpadInput, setNumpadInput] = useState("");
+  const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
+    { method: "cash", amount: "" },
+    { method: "eftpos", amount: "" },
+  ]);
 
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -203,8 +217,9 @@ export default function POSPage() {
   const [pinError, setPinError] = useState("");
 
   /* ── Data fetches ── */
-  /* Effective category for API filtering — last element of drill-down path */
-  const effectiveCategoryId = posTab === "browse" && categoryPath.length > 0
+  /* Effective category for API filtering — last element of drill-down path.
+     When a search is active, ignore the drill-down so all categories are searched. */
+  const effectiveCategoryId = posTab === "browse" && categoryPath.length > 0 && !search
     ? categoryPath[categoryPath.length - 1]
     : null;
 
@@ -317,6 +332,11 @@ export default function POSPage() {
     return result;
   }, [total]);
 
+  /* Split derived values */
+  const splitTotal = splitLegs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const splitRemaining = Math.max(0, total - splitTotal);
+  const splitComplete = Math.abs(splitTotal - total) < 0.005;
+
   /* Numpad derived — only cash and loyalty use the numpad for amount entry.
      For all other methods (EFTPOS, card, voucher, etc.) the tendered amount
      always equals the total since the terminal/processor charges exact. */
@@ -383,6 +403,7 @@ export default function POSPage() {
       setPayMethod(first?.id ?? "cash");
       setNumpadInput("");
       setReceiptMode("idle");
+      setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
     }
   }, [paymentModalOpen]);
 
@@ -1349,7 +1370,7 @@ export default function POSPage() {
                 )}
               </div>
 
-              {/* Method selector */}
+              {/* Method selector / Split legs */}
               {(() => {
                 const enabledIds = getEnabledPaymentMethods();
                 const builtIn = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id));
@@ -1363,6 +1384,71 @@ export default function POSPage() {
                   ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
                   ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
                 ];
+                const splitEligible = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id) && m.id !== "split" && m.id !== "laybuy");
+                if (payMethod === "split") {
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Split Payment Legs</p>
+                      {splitLegs.map((leg, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-4 shrink-0 text-center">{i + 1}</span>
+                          <Select
+                            value={leg.method}
+                            onValueChange={(v) => setSplitLegs(prev => prev.map((l, j) => j === i ? { ...l, method: v as PaymentMethodId } : l))}
+                          >
+                            <SelectTrigger className="flex-1 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {splitEligible.map(m => (
+                                <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="relative w-24">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>
+                            <Input
+                              type="number" min="0" step="0.01"
+                              className="h-8 text-xs pl-5"
+                              placeholder="0.00"
+                              value={leg.amount}
+                              onChange={(e) => setSplitLegs(prev => prev.map((l, j) => j === i ? { ...l, amount: e.target.value } : l))}
+                            />
+                          </div>
+                          {splitLegs.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setSplitLegs(prev => prev.filter((_, j) => j !== i))}
+                              className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {splitLegs.length < 4 && (
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          className="w-full h-7 gap-1 text-xs"
+                          onClick={() => setSplitLegs(prev => [...prev, { method: splitEligible[0]?.id ?? "cash", amount: "" }])}
+                        >
+                          <Plus className="w-3 h-3" /> Add leg
+                        </Button>
+                      )}
+                      <div className={cn(
+                        "rounded-lg px-3 py-2 flex items-center justify-between text-xs font-medium",
+                        splitComplete ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300" :
+                        splitTotal > total + 0.005 ? "bg-destructive/10 text-destructive" :
+                        "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300"
+                      )}>
+                        <span>{splitComplete ? "Fully covered" : splitTotal > total + 0.005 ? "Over by" : "Remaining"}</span>
+                        <span className="tabular-nums">
+                          {splitComplete ? "✓" : splitTotal > total + 0.005 ? formatCurrency(splitTotal - total) : formatCurrency(splitRemaining)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Payment Method</p>
@@ -1462,66 +1548,102 @@ export default function POSPage() {
 
             {/* ── Right panel ── */}
             <div className="flex-1 flex flex-col p-5 gap-3">
-              {/* Display */}
-              <div className="border rounded-xl px-4 py-3 text-right bg-muted/20">
-                <span className="text-3xl font-bold tabular-nums">
-                  {numpadInput || "0.00"}
-                </span>
-              </div>
+              {payMethod === "split" ? (
+                <div className="flex-1 flex flex-col gap-3">
+                  <div className="border rounded-xl px-4 py-4 bg-muted/20 space-y-3">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Payment Summary</p>
+                    {splitLegs.map((leg, i) => {
+                      const amt = parseFloat(leg.amount) || 0;
+                      const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === leg.method)?.label ?? leg.method;
+                      return (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{methodLabel}</span>
+                          <span className={cn("font-semibold tabular-nums", amt > 0 ? "" : "text-muted-foreground/30")}>
+                            {amt > 0 ? formatCurrency(amt) : "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="border-t pt-2.5 flex items-center justify-between">
+                      <span className="text-sm font-semibold">Total collected</span>
+                      <span className={cn(
+                        "text-lg font-bold tabular-nums",
+                        splitComplete ? "text-green-600 dark:text-green-400" :
+                        splitTotal > total + 0.005 ? "text-destructive" :
+                        "text-amber-600 dark:text-amber-500"
+                      )}>
+                        {formatCurrency(splitTotal)}
+                        {!splitComplete && <span className="text-xs font-normal text-muted-foreground ml-1">/ {formatCurrency(total)}</span>}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1" />
+                </div>
+              ) : (
+                <>
+                  {/* Display */}
+                  <div className="border rounded-xl px-4 py-3 text-right bg-muted/20">
+                    <span className="text-3xl font-bold tabular-nums">
+                      {numpadInput || "0.00"}
+                    </span>
+                  </div>
 
-              {/* Numpad grid */}
-              <div className="grid grid-cols-3 gap-2 flex-1">
-                {(["7","8","9","4","5","6","1","2","3"] as const).map(k => (
-                  <button
-                    key={k}
-                    onClick={() => handleNumpad(k)}
-                    className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
-                  >
-                    {k}
-                  </button>
-                ))}
-                {/* C */}
-                <button
-                  onClick={() => handleNumpad("C")}
-                  className="rounded-xl border bg-destructive/8 text-destructive border-destructive/20 text-lg font-bold hover:bg-destructive/15 active:scale-95 transition-all flex items-center justify-center"
-                >
-                  C
-                </button>
-                {/* 0 */}
-                <button
-                  onClick={() => handleNumpad("0")}
-                  className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
-                >
-                  0
-                </button>
-                {/* . */}
-                <button
-                  onClick={() => handleNumpad(".")}
-                  className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
-                >
-                  .
-                </button>
-                {/* Backspace */}
-                <button
-                  onClick={() => setNumpadInput(p => p.slice(0, -1))}
-                  className="rounded-xl border bg-background text-base font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
-                >
-                  ⌫
-                </button>
-                {/* Exact */}
-                <button
-                  onClick={() => setNumpadInput(total.toFixed(2))}
-                  className="col-span-2 rounded-xl border bg-muted text-sm font-semibold hover:bg-muted/60 active:scale-95 transition-all flex items-center justify-center"
-                >
-                  Exact {formatCurrency(total)}
-                </button>
-              </div>
+                  {/* Numpad grid */}
+                  <div className="grid grid-cols-3 gap-2 flex-1">
+                    {(["7","8","9","4","5","6","1","2","3"] as const).map(k => (
+                      <button
+                        key={k}
+                        onClick={() => handleNumpad(k)}
+                        className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                      >
+                        {k}
+                      </button>
+                    ))}
+                    {/* C */}
+                    <button
+                      onClick={() => handleNumpad("C")}
+                      className="rounded-xl border bg-destructive/8 text-destructive border-destructive/20 text-lg font-bold hover:bg-destructive/15 active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      C
+                    </button>
+                    {/* 0 */}
+                    <button
+                      onClick={() => handleNumpad("0")}
+                      className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      0
+                    </button>
+                    {/* . */}
+                    <button
+                      onClick={() => handleNumpad(".")}
+                      className="rounded-xl border bg-background text-xl font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      .
+                    </button>
+                    {/* Backspace */}
+                    <button
+                      onClick={() => setNumpadInput(p => p.slice(0, -1))}
+                      className="rounded-xl border bg-background text-base font-semibold hover:bg-muted active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      ⌫
+                    </button>
+                    {/* Exact */}
+                    <button
+                      onClick={() => setNumpadInput(total.toFixed(2))}
+                      className="col-span-2 rounded-xl border bg-muted text-sm font-semibold hover:bg-muted/60 active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      Exact {formatCurrency(total)}
+                    </button>
+                  </div>
+                </>
+              )}
 
               {/* Complete Sale */}
               <Button
                 className="w-full h-12 text-base font-semibold"
                 disabled={
                   createTransactionMutation.isPending ||
+                  (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
                   (payMethod === "loyalty" && selectedCustomer != null && (() => {
@@ -1548,7 +1670,18 @@ export default function POSPage() {
                     return;
                   }
                   if (payMethod === "split") {
-                    toast.error("Split payments aren't supported yet. Please choose a single payment method.");
+                    if (!splitComplete) {
+                      toast.error(`Remaining ${formatCurrency(splitRemaining)} must be covered`);
+                      return;
+                    }
+                    const legDetails = splitLegs
+                      .filter(l => parseFloat(l.amount) > 0)
+                      .map(l => {
+                        const label = ALL_PAYMENT_METHODS.find(m => m.id === l.method)?.label ?? l.method;
+                        return `${label} ${formatCurrency(parseFloat(l.amount) || 0)}`;
+                      })
+                      .join(" + ");
+                    handleCheckout("split", total, `[Split: ${legDetails}]`);
                     return;
                   }
                   // For integration methods, preserve the integration key in

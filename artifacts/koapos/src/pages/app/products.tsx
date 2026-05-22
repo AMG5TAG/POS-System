@@ -51,11 +51,11 @@ import {
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
-type FormTab   = "details" | "pricing" | "media" | "settings" | "digital_codes" | "compatibility";
+type FormTab   = "details" | "pricing" | "media" | "settings" | "digital_codes" | "compatibility" | "variants";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
-  sku: string; barcode: string; categoryId: string;
+  sku: string; barcode: string; categoryId: string; brandId: string;
   /* images */
   imageUrl: string; imageUrl2: string; imageUrl3: string; imageUrl4: string;
   videoUrl: string;
@@ -78,7 +78,7 @@ type ProductForm = {
 
 const defaultForm: ProductForm = {
   name: "", description: "", price: "", costPrice: "", sku: "", barcode: "",
-  categoryId: "",
+  categoryId: "", brandId: "",
   imageUrl: "", imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
   supplier: "", supplierCode: "",
   weight: "", weightUnit: "kg",
@@ -91,13 +91,14 @@ const defaultForm: ProductForm = {
   isEpay: false,
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "pricing",       label: "Pricing"       },
   { key: "media",         label: "Media"         },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "compatibility", label: "Compatibility" },
+  { key: "variants",      label: "Variants",     variantOnly: true },
 ];
 
 /* ─── Product types ──────────────────────────────────────────────────────── */
@@ -192,15 +193,18 @@ function buildCatTree(cats: { id: number; name: string; parentId?: number | null
 }
 
 function TreeCategorySelect({
-  categories, value, onChange, placeholder = "No Category", triggerClass,
+  categories, value, onChange, placeholder = "No Category", triggerClass, onCreateCategory,
 }: {
   categories: { id: number; name: string; parentId?: number | null }[];
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   triggerClass?: string;
+  onCreateCategory?: (name: string, onCreated: (id: number) => void) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [creatingInline, setCreatingInline] = useState(false);
+  const [newCatNameInline, setNewCatNameInline] = useState("");
   const tree = buildCatTree(categories);
   const selected = categories.find((c) => c.id.toString() === value);
 
@@ -223,8 +227,18 @@ function TreeCategorySelect({
       </div>
     ));
 
+  const commitNewCat = () => {
+    if (!newCatNameInline.trim() || !onCreateCategory) return;
+    onCreateCategory(newCatNameInline.trim(), (id) => {
+      onChange(id.toString());
+      setOpen(false);
+    });
+    setCreatingInline(false);
+    setNewCatNameInline("");
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { if (!o) { setCreatingInline(false); setNewCatNameInline(""); } setOpen(o); }}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -237,7 +251,7 @@ function TreeCategorySelect({
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-1.5 max-h-64 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
+      <PopoverContent className="p-1.5 max-h-72 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
         <button
           type="button"
           onClick={() => { onChange(""); setOpen(false); }}
@@ -249,6 +263,33 @@ function TreeCategorySelect({
           {placeholder}
         </button>
         {renderNodes(tree)}
+        {onCreateCategory && (
+          creatingInline ? (
+            <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={newCatNameInline}
+                onChange={(e) => setNewCatNameInline(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commitNewCat(); }
+                  if (e.key === "Escape") { setCreatingInline(false); setNewCatNameInline(""); }
+                }}
+                placeholder="Category name…"
+                className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
+              />
+              <button type="button" onClick={commitNewCat} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
+              <button type="button" onClick={() => { setCreatingInline(false); setNewCatNameInline(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCreatingInline(true)}
+              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Add New Category
+            </button>
+          )
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -650,6 +691,91 @@ export default function ProductsPage() {
   const [newCodeInput, setNewCodeInput]     = useState("");
   const [bulkMode, setBulkMode]             = useState(false);
 
+  /* ── Brands state ── */
+  const [brandsList, setBrandsList] = useState<{ id: number; name: string }[]>([]);
+  const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
+  const [brandCreatingInline, setBrandCreatingInline] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+
+  useEffect(() => {
+    fetch("/api/brands", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { items: [] })
+      .then((d) => setBrandsList((d as { items: { id: number; name: string }[] }).items || []));
+  }, []);
+
+  const createBrandInline = async (onCreated: (id: number) => void) => {
+    if (!newBrandName.trim()) return;
+    const r = await fetch("/api/brands", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newBrandName.trim() }),
+    });
+    if (r.ok) {
+      const brand = await r.json() as { id: number; name: string };
+      setBrandsList((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)));
+      onCreated(brand.id);
+      setNewBrandName("");
+      setBrandCreatingInline(false);
+      setBrandPopoverOpen(false);
+    } else {
+      toast.error("Failed to create brand");
+    }
+  };
+
+  const createCategoryInline = (name: string, onCreated: (id: number) => void) => {
+    createCategoryMutation.mutate({ data: { name } }, {
+      onSuccess: (cat) => {
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+        onCreated((cat as { id: number }).id);
+      },
+      onError: () => toast.error("Failed to create category"),
+    });
+  };
+
+  /* ── Variants state ── */
+  type VariantEntry = { id: number; name: string; sku: string | null; price: number | null; stockQuantity: number; isActive: boolean };
+  type VariantForm = { name: string; sku: string; price: string; stockQuantity: string };
+  const defaultVariantForm: VariantForm = { name: "", sku: "", price: "", stockQuantity: "0" };
+
+  const [variants, setVariants] = useState<VariantEntry[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [variantForm, setVariantForm] = useState<VariantForm>(defaultVariantForm);
+
+  const loadVariants = useCallback(async (productId: number) => {
+    setVariantsLoading(true);
+    try {
+      const r = await fetch(`/api/products/${productId}/variants`, { credentials: "include" });
+      if (r.ok) setVariants(await r.json() as VariantEntry[]);
+    } finally { setVariantsLoading(false); }
+  }, []);
+
+  const handleAddVariant = async (productId: number) => {
+    if (!variantForm.name.trim()) { toast.error("Variant name is required"); return; }
+    const r = await fetch(`/api/products/${productId}/variants`, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: variantForm.name,
+        sku: variantForm.sku || undefined,
+        price: variantForm.price ? parseFloat(variantForm.price) : undefined,
+        stockQuantity: parseInt(variantForm.stockQuantity) || 0,
+      }),
+    });
+    if (r.ok) {
+      const newVariant = await r.json() as VariantEntry;
+      setVariants((prev) => [...prev, newVariant]);
+      setVariantForm(defaultVariantForm);
+      setAddingVariant(false);
+    } else { toast.error("Failed to add variant"); }
+  };
+
+  const handleDeleteVariant = async (variantId: number, productId: number) => {
+    const r = await fetch(`/api/products/${productId}/variants/${variantId}`, { method: "DELETE", credentials: "include" });
+    if (r.ok) setVariants((prev) => prev.filter((v) => v.id !== variantId));
+    else toast.error("Failed to delete variant");
+  };
+
   /* Only owners and managers can see digital code values; cashiers see XXXX */
   const canViewCodes = (() => {
     try {
@@ -743,6 +869,7 @@ export default function ProductsPage() {
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
       sku: p.sku || "", barcode: ep.barcode || "",
       categoryId: p.categoryId?.toString() || "",
+      brandId: (ep as Product & { brandId?: number | null }).brandId?.toString() || "",
       imageUrl: ep.imageUrl || "",
       imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
       supplier: ep.supplier || "", supplierCode: ep.supplierCode || "",
@@ -783,6 +910,7 @@ export default function ProductsPage() {
       barcode: form.barcode || undefined,
       imageUrl: form.imageUrl || undefined,
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
+      brandId: form.brandId ? parseInt(form.brandId) : undefined,
       productType: form.productType,
       stockQuantity: parseInt(form.stockQuantity) || 0,
       lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
@@ -1193,13 +1321,14 @@ export default function ProductsPage() {
           {/* Tab nav */}
           <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
             {FORM_TABS
-              .filter(({ digitalCodeOnly }) => !digitalCodeOnly || form.productType === "digital_code")
+              .filter(({ digitalCodeOnly, variantOnly }) => (!digitalCodeOnly || form.productType === "digital_code") && (!variantOnly || form.productType === "variant"))
               .map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => {
                     setFormTab(key);
                     if (key === "digital_codes" && editingProduct) loadDigitalCodes(editingProduct.id);
+                    if (key === "variants" && editingProduct) loadVariants(editingProduct.id);
                   }}
                   className={cn(
                     "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
@@ -1315,7 +1444,64 @@ export default function ProductsPage() {
                       onChange={(v) => setField("categoryId", v)}
                       placeholder="No Category"
                       triggerClass="mt-1.5"
+                      onCreateCategory={createCategoryInline}
                     />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Brand</Label>
+                    <Popover open={brandPopoverOpen} onOpenChange={(o) => { if (!o) { setBrandCreatingInline(false); setNewBrandName(""); } setBrandPopoverOpen(o); }}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
+                        >
+                          <span className={cn("truncate", !form.brandId && "text-muted-foreground")}>
+                            {brandsList.find((b) => b.id.toString() === form.brandId)?.name ?? "No Brand"}
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-1.5 max-h-64 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
+                        <button
+                          type="button"
+                          onClick={() => { setField("brandId", ""); setBrandPopoverOpen(false); }}
+                          className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !form.brandId && "bg-primary/10 text-primary font-medium")}
+                        >No Brand</button>
+                        {brandsList.map((b) => (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => { setField("brandId", b.id.toString()); setBrandPopoverOpen(false); }}
+                            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", form.brandId === b.id.toString() && "bg-primary/10 text-primary font-medium")}
+                          >{b.name}</button>
+                        ))}
+                        {brandCreatingInline ? (
+                          <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
+                            <input
+                              autoFocus
+                              value={newBrandName}
+                              onChange={(e) => setNewBrandName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void createBrandInline((id) => setField("brandId", id.toString())); }
+                                if (e.key === "Escape") { setBrandCreatingInline(false); setNewBrandName(""); }
+                              }}
+                              placeholder="Brand name…"
+                              className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
+                            />
+                            <button type="button" onClick={() => void createBrandInline((id) => setField("brandId", id.toString()))} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
+                            <button type="button" onClick={() => { setBrandCreatingInline(false); setNewBrandName(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setBrandCreatingInline(true)}
+                            className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
+                          >
+                            <Plus className="w-3 h-3" /> Add New Brand
+                          </button>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Status</Label>
@@ -1845,6 +2031,129 @@ export default function ProductsPage() {
                   <div className="border rounded-xl p-4 bg-muted/20 text-sm text-muted-foreground">
                     Select a PC part type above to tag this product. Once tagged, it will appear in the relevant slot when building a custom PC in POS → PC Builder.
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Variants ── */}
+            {formTab === "variants" && (
+              <div className="py-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <SectionHeader label="Product Variants" />
+                    <p className="text-xs text-muted-foreground mt-1">Manage sizes, colours, or other variations of this product.</p>
+                  </div>
+                  {editingProduct && (
+                    <Button type="button" size="sm" variant="outline" className="gap-1.5 h-8 shrink-0"
+                      onClick={() => { setAddingVariant(true); setVariantForm(defaultVariantForm); }}>
+                      <Plus className="w-3.5 h-3.5" /> Add Variant
+                    </Button>
+                  )}
+                </div>
+
+                {!editingProduct && (
+                  <div className="border rounded-xl p-5 bg-muted/20 text-sm text-muted-foreground text-center">
+                    Save the product first, then come back to add variants.
+                  </div>
+                )}
+
+                {editingProduct && (
+                  <>
+                    {addingVariant && (
+                      <div className="border rounded-xl p-4 space-y-3 bg-muted/10">
+                        <p className="text-xs font-semibold text-foreground">New Variant</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <Label className="text-xs text-muted-foreground">Variant Name *</Label>
+                            <Input
+                              value={variantForm.name}
+                              onChange={(e) => setVariantForm((f) => ({ ...f, name: e.target.value }))}
+                              placeholder="e.g. Red / Large"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">SKU</Label>
+                            <Input
+                              value={variantForm.sku}
+                              onChange={(e) => setVariantForm((f) => ({ ...f, sku: e.target.value }))}
+                              placeholder="SKU-001-RED"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Price Override</Label>
+                            <div className="relative mt-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                              <Input
+                                type="number" step="0.01"
+                                value={variantForm.price}
+                                onChange={(e) => setVariantForm((f) => ({ ...f, price: e.target.value }))}
+                                placeholder={form.price || "0.00"}
+                                className="pl-7"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Stock Qty</Label>
+                            <Input
+                              type="number"
+                              value={variantForm.stockQuantity}
+                              onChange={(e) => setVariantForm((f) => ({ ...f, stockQuantity: e.target.value }))}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button type="button" size="sm" onClick={() => void handleAddVariant(editingProduct.id)}>Add</Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingVariant(false); setVariantForm(defaultVariantForm); }}>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {variantsLoading ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">Loading variants…</p>
+                    ) : variants.length === 0 && !addingVariant ? (
+                      <div className="border rounded-xl p-8 text-center text-muted-foreground text-sm bg-muted/10">
+                        <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        <p>No variants yet.</p>
+                        <p className="text-xs mt-1">Click "Add Variant" to create your first one.</p>
+                      </div>
+                    ) : variants.length > 0 ? (
+                      <div className="border rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/30">
+                              <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Name</th>
+                              <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">SKU</th>
+                              <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Price</th>
+                              <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Stock</th>
+                              <th className="px-4 py-2.5 w-8"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {variants.map((v) => (
+                              <tr key={v.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="px-4 py-2.5 font-medium">{v.name}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{v.sku || "—"}</td>
+                                <td className="px-4 py-2.5">{v.price != null ? formatCurrency(v.price) : <span className="text-muted-foreground text-xs">uses base</span>}</td>
+                                <td className="px-4 py-2.5">{v.stockQuantity}</td>
+                                <td className="px-4 py-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteVariant(v.id, editingProduct.id)}
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             )}
