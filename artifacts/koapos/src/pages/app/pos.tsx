@@ -60,6 +60,8 @@ type RegisterSession = {
   openingNotes: string;
   sales: Record<string, number>;
   txCount: number;
+  refunds?: Record<string, number>;
+  refundCount?: number;
 };
 
 const DISPLAY_KEY = "koapos_pos_display";
@@ -2269,8 +2271,10 @@ export default function POSPage() {
                 .filter(([k]) => !["cash", "card", "eftpos", "split"].includes(k))
                 .reduce((sum, [, v]) => sum + v, 0);
               const totalSales = Object.values(s?.sales ?? {}).reduce((a, b) => a + b, 0);
+              const cashRefunds = s?.refunds?.["cash"] ?? 0;
+              const totalRefunds = Object.values(s?.refunds ?? {}).reduce((a, b) => a + b, 0);
               const openingFloat = s?.openingFloat ?? 0;
-              const expectedCash = openingFloat + cashSales;
+              const expectedCash = openingFloat + cashSales - cashRefunds;
               const cashCounted = parseFloat(closeFormData.cashCounted) || 0;
               const cashVariance = cashCounted - expectedCash;
               const eftposDeclared = parseFloat(closeFormData.eftposDeclared) || 0;
@@ -2298,9 +2302,15 @@ export default function POSPage() {
                       <span>Transactions</span>
                       <span className="font-medium text-foreground">{s?.txCount ?? 0}</span>
                     </div>
+                    {totalRefunds > 0 && (
+                      <div className="flex justify-between text-destructive">
+                        <span>Refunds ({s?.refundCount ?? 0})</span>
+                        <span className="font-medium">−{formatCurrency(totalRefunds)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-muted-foreground border-t pt-1.5 mt-1">
-                      <span className="font-semibold text-foreground">Total Sales</span>
-                      <span className="font-bold text-foreground">{formatCurrency(totalSales)}</span>
+                      <span className="font-semibold text-foreground">Net Sales</span>
+                      <span className="font-bold text-foreground">{formatCurrency(totalSales - totalRefunds)}</span>
                     </div>
                   </div>
 
@@ -2312,6 +2322,9 @@ export default function POSPage() {
                     <div className="rounded-xl border p-3 space-y-2 text-sm">
                       <div className="flex justify-between text-muted-foreground"><span>Opening float</span><span>{formatCurrency(openingFloat)}</span></div>
                       <div className="flex justify-between text-muted-foreground"><span>Cash sales (POS)</span><span>{formatCurrency(cashSales)}</span></div>
+                      {cashRefunds > 0 && (
+                        <div className="flex justify-between text-destructive"><span>Cash refunds</span><span>−{formatCurrency(cashRefunds)}</span></div>
+                      )}
                       <div className="flex justify-between font-medium border-t pt-2 mt-1"><span>Expected in drawer</span><span>{formatCurrency(expectedCash)}</span></div>
                     </div>
                     <div className="space-y-1.5">

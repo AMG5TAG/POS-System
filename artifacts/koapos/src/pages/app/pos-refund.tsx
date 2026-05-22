@@ -32,10 +32,28 @@ export default function POSRefundPage() {
 
   const handleRefund = () => {
     if (!refundingTx) return;
+    const txToRefund = refundingTx;
     refundMutation.mutate(
-      { id: refundingTx.id, data: { reason: refundReason || "Customer requested refund" } },
+      { id: txToRefund.id, data: { reason: refundReason || "Customer requested refund" } },
       {
         onSuccess: () => {
+          // Deduct refund from the active register session so end-of-day cash count stays accurate
+          try {
+            const raw = localStorage.getItem("koapos_register_session");
+            if (raw) {
+              const session = JSON.parse(raw) as {
+                sales: Record<string, number>;
+                refunds?: Record<string, number>;
+                refundCount?: number;
+              };
+              const pm = (txToRefund.paymentMethod as string) ?? "cash";
+              const amount = txToRefund.total ?? 0;
+              session.refunds = session.refunds ?? {};
+              session.refunds[pm] = (session.refunds[pm] ?? 0) + amount;
+              session.refundCount = (session.refundCount ?? 0) + 1;
+              localStorage.setItem("koapos_register_session", JSON.stringify(session));
+            }
+          } catch { /* ignore */ }
           toast.success("Refund processed successfully");
           setRefundingTx(null);
           setRefundReason("");

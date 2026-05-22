@@ -28,6 +28,7 @@ import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
 } from "lucide-react";
+import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -707,6 +708,10 @@ export default function AppointmentsPage() {
             </div>
           </>
         )}
+      </div>
+
+      <div className="px-6 md:px-8 pb-8">
+        <DashboardCalendar />
       </div>
 
       <DetailDialog
