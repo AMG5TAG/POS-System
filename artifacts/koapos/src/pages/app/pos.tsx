@@ -4,9 +4,11 @@ import {
   useListProducts, useListCategories, useCreateTransaction,
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
+  useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, Transaction,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,18 +47,6 @@ type CartItem = {
 
 type WalkIn = { firstName: string; lastName: string };
 
-type ParkedSale = {
-  id: string;
-  parkedAt: string;
-  cart: CartItem[];
-  selectedCustomer: Customer | null;
-  walkIn: WalkIn | null;
-  overallDiscount: string;
-  saleNotes: string;
-  total: number;
-  label: string;
-};
-
 type RegisterSession = {
   openedAt: string;
   openedBy: string | null;
@@ -66,8 +56,7 @@ type RegisterSession = {
   txCount: number;
 };
 
-const DISPLAY_KEY      = "koapos_pos_display";
-const PARKED_SALES_KEY = "koapos_parked_sales";
+const DISPLAY_KEY = "koapos_pos_display";
 
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
@@ -103,11 +92,11 @@ export default function POSPage() {
   const [saleNotes, setSaleNotes] = useState("");
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
 
-  /* parked sales */
-  const [parkedSales, setParkedSales] = useState<ParkedSale[]>(() => {
-    try { return JSON.parse(localStorage.getItem(PARKED_SALES_KEY) ?? "[]") as ParkedSale[]; }
-    catch { return []; }
-  });
+  /* parked sales — API-backed */
+  const queryClient = useQueryClient();
+  const { data: parkedSalesData = [] } = useListParkedSales();
+  const createParkedSaleMutation = useCreateParkedSale();
+  const deleteParkedSaleMutation = useDeleteParkedSale();
   const [parkedSalesOpen, setParkedSalesOpen] = useState(false);
 
   /* payment */
@@ -475,70 +464,112 @@ export default function POSPage() {
     }));
   };
 
-  const saveParkedSales = (updated: ParkedSale[]) => {
-    setParkedSales(updated);
-    try { localStorage.setItem(PARKED_SALES_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
-  };
-
-  const parkSale = () => {
+  const parkSale = async () => {
     if (cart.length === 0) return;
     const customerLabel = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
       : selectedCustomer
         ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
-        : "No customer";
-    const sale: ParkedSale = {
-      id: Math.random().toString(36).substring(2, 10),
-      parkedAt: new Date().toISOString(),
-      cart: [...cart],
-      selectedCustomer,
-      walkIn,
-      overallDiscount,
-      saleNotes,
-      total,
-      label: customerLabel,
-    };
-    saveParkedSales([...parkedSales, sale]);
-    setCart([]); setOverallDiscount(""); setSaleNotes("");
-    setSelectedCustomer(null); setWalkIn(null);
-    toast.success("Sale parked");
+        : undefined;
+    const items = cart.map(i => ({
+      productId: i.product.id,
+      name: i.product.name ?? "",
+      quantity: i.quantity,
+      price: i.customPrice ?? (i.product.price ?? 0),
+      itemDiscount: i.itemDiscount,
+      customPrice: i.customPrice ?? null,
+      itemNote: i.itemNote ?? null,
+    }));
+    const noteParts = [customerLabel, saleNotes, overallDiscount ? `Discount:${overallDiscount}` : ""].filter(Boolean);
+    try {
+      await createParkedSaleMutation.mutateAsync({
+        data: {
+          customerId: selectedCustomer?.id ?? undefined,
+          items,
+          total,
+          note: noteParts.join(" | ") || undefined,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+      setCart([]); setOverallDiscount(""); setSaleNotes("");
+      setSelectedCustomer(null); setWalkIn(null);
+      toast.success("Sale parked");
+    } catch {
+      toast.error("Failed to park sale");
+    }
   };
 
-  const retrieveParkedSale = (sale: ParkedSale) => {
+  const retrieveParkedSale = async (sale: (typeof parkedSalesData)[number]) => {
     if (cart.length > 0) {
       /* Auto-park the current active cart so nothing is lost */
       const currentLabel = walkIn
         ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
         : selectedCustomer
           ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
-          : "No customer";
-      const currentSale: ParkedSale = {
-        id: Math.random().toString(36).substring(2, 10),
-        parkedAt: new Date().toISOString(),
-        cart: [...cart],
-        selectedCustomer,
-        walkIn,
-        overallDiscount,
-        saleNotes,
-        total,
-        label: currentLabel,
-      };
-      const withoutRetrieved = parkedSales.filter(s => s.id !== sale.id);
-      saveParkedSales([...withoutRetrieved, currentSale]);
-    } else {
-      saveParkedSales(parkedSales.filter(s => s.id !== sale.id));
+          : undefined;
+      const currentItems = cart.map(i => ({
+        productId: i.product.id,
+        name: i.product.name ?? "",
+        quantity: i.quantity,
+        price: i.customPrice ?? (i.product.price ?? 0),
+        itemDiscount: i.itemDiscount,
+        customPrice: i.customPrice ?? null,
+        itemNote: i.itemNote ?? null,
+      }));
+      await createParkedSaleMutation.mutateAsync({
+        data: {
+          customerId: selectedCustomer?.id ?? undefined,
+          items: currentItems,
+          total,
+          note: currentLabel,
+        },
+      });
     }
-    setCart(sale.cart);
-    setSelectedCustomer(sale.selectedCustomer);
-    setWalkIn(sale.walkIn);
-    setOverallDiscount(sale.overallDiscount);
-    setSaleNotes(sale.saleNotes);
+    /* Delete the retrieved sale from DB and restore the cart */
+    await deleteParkedSaleMutation.mutateAsync({ id: sale.id });
+    queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+
+    const saleItems = (sale.items ?? []) as Array<{
+      productId: number; name: string; quantity: number; price: number;
+      itemDiscount?: number; customPrice?: number | null; itemNote?: string | null;
+    }>;
+    const restoredCart: CartItem[] = saleItems.map(item => {
+      const product = allProducts.find(p => p.id === item.productId) ?? {
+        id: item.productId, name: item.name, price: item.price,
+      } as Product;
+      return {
+        product,
+        quantity: item.quantity,
+        itemDiscount: item.itemDiscount ?? 0,
+        customPrice: item.customPrice ?? undefined,
+        itemNote: item.itemNote ?? undefined,
+      };
+    });
+    setCart(restoredCart);
+    /* Restore customer if available */
+    if (sale.customerId) {
+      const customer = customers.find(c => c.id === sale.customerId);
+      if (customer) setSelectedCustomer(customer);
+    }
+    /* Restore note/discount from the note field if encoded */
+    if (sale.note) {
+      const parts = sale.note.split(" | ");
+      const discountPart = parts.find(p => p.startsWith("Discount:"));
+      if (discountPart) setOverallDiscount(discountPart.replace("Discount:", ""));
+      const notePart = parts.filter(p => !p.startsWith("Discount:") && customers.every(c => {
+        const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+        return p !== name;
+      })).join(" | ");
+      if (notePart) setSaleNotes(notePart);
+    }
     setParkedSalesOpen(false);
     toast.success("Sale retrieved");
   };
 
-  const deleteParkedSale = (id: string) => {
-    saveParkedSales(parkedSales.filter(s => s.id !== id));
+  const deleteParkedSale = (id: number) => {
+    deleteParkedSaleMutation.mutate({ id }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] }),
+    });
   };
 
   const clearCart = () => {
@@ -830,7 +861,7 @@ export default function POSPage() {
                 <User className="w-4 h-4" />
               </button>
               {/* Parked sales badge */}
-              {parkedSales.length > 0 && (
+              {parkedSalesData.length > 0 && (
                 <button
                   onClick={() => setParkedSalesOpen(o => !o)}
                   title="Parked sales"
@@ -843,7 +874,7 @@ export default function POSPage() {
                 >
                   <History className="w-4 h-4" />
                   <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[9px] flex items-center justify-center font-bold leading-none">
-                    {parkedSales.length}
+                    {parkedSalesData.length}
                   </span>
                 </button>
               )}
@@ -858,24 +889,28 @@ export default function POSPage() {
             <div className="border-b bg-amber-50/60 dark:bg-amber-900/10 shrink-0">
               <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200/60 dark:border-amber-700/30">
                 <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                  <History className="w-3 h-3" /> Parked Sales ({parkedSales.length})
+                  <History className="w-3 h-3" /> Parked Sales ({parkedSalesData.length})
                 </span>
                 <button onClick={() => setParkedSalesOpen(false)} className="text-muted-foreground hover:text-foreground">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
               <div className="max-h-48 overflow-y-auto divide-y divide-amber-100 dark:divide-amber-800/20">
-                {parkedSales.map((sale) => {
-                  const time = new Date(sale.parkedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
-                  const itemCount = sale.cart.reduce((s, i) => s + i.quantity, 0);
+                {parkedSalesData.map((sale) => {
+                  const time = new Date(sale.createdAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+                  const saleItems = (sale.items ?? []) as Array<{ quantity: number }>;
+                  const itemCount = saleItems.reduce((s, i) => s + i.quantity, 0);
+                  const label = sale.note
+                    ? sale.note.split(" | ").filter(p => !p.startsWith("Discount:"))[0] ?? "Parked sale"
+                    : "Parked sale";
                   return (
                     <div key={sale.id} className="flex items-center gap-2 px-3 py-2 hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{sale.label}</p>
-                        <p className="text-[10px] text-muted-foreground">{time} · {itemCount} item{itemCount !== 1 ? "s" : ""} · {formatCurrency(sale.total)}</p>
+                        <p className="text-xs font-medium truncate">{label}</p>
+                        <p className="text-[10px] text-muted-foreground">{time} · {itemCount} item{itemCount !== 1 ? "s" : ""} · {formatCurrency(sale.total ?? 0)}</p>
                       </div>
                       <button
-                        onClick={() => retrieveParkedSale(sale)}
+                        onClick={() => void retrieveParkedSale(sale)}
                         title="Retrieve sale"
                         className="text-xs font-medium text-primary hover:underline shrink-0 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors"
                       >
