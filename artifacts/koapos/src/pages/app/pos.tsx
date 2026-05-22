@@ -548,70 +548,94 @@ export default function POSPage() {
   };
 
   const retrieveParkedSale = async (sale: (typeof parkedSalesData)[number]) => {
-    if (cart.length > 0) {
-      /* Auto-park the current active cart so nothing is lost */
-      const currentLabel = walkIn
-        ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
-        : selectedCustomer
-          ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
-          : undefined;
-      const currentItems = cart.map(i => ({
-        productId: i.product.id,
-        name: i.product.name ?? "",
-        quantity: i.quantity,
-        price: i.customPrice ?? (i.product.price ?? 0),
-        itemDiscount: i.itemDiscount,
-        customPrice: i.customPrice ?? null,
-        itemNote: i.itemNote ?? null,
-      }));
-      await createParkedSaleMutation.mutateAsync({
-        data: {
-          customerId: selectedCustomer?.id ?? undefined,
-          items: currentItems,
-          total,
-          note: currentLabel,
-        },
-      });
-    }
-    /* Delete the retrieved sale from DB and restore the cart */
-    await deleteParkedSaleMutation.mutateAsync({ id: sale.id });
-    queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
-
+    /* Snapshot everything from the sale before any async work */
+    const saleId = sale.id;
     const saleItems = (sale.items ?? []) as Array<{
       productId: number; name: string; quantity: number; price: number;
       itemDiscount?: number; customPrice?: number | null; itemNote?: string | null;
     }>;
-    const restoredCart: CartItem[] = saleItems.map(item => {
-      const product = allProducts.find(p => p.id === item.productId) ?? {
-        id: item.productId, name: item.name, price: item.price,
-      } as Product;
-      return {
-        product,
-        quantity: item.quantity,
-        itemDiscount: item.itemDiscount ?? 0,
-        customPrice: item.customPrice ?? undefined,
-        itemNote: item.itemNote ?? undefined,
-      };
-    });
-    setCart(restoredCart);
-    /* Restore customer if available */
-    if (sale.customerId) {
-      const customer = customers.find(c => c.id === sale.customerId);
-      if (customer) setSelectedCustomer(customer);
+    const saleNote = sale.note ?? null;
+    const saleCustomerId = sale.customerId ?? null;
+
+    try {
+      if (cart.length > 0) {
+        /* Auto-park the current active cart so nothing is lost */
+        const currentLabel = walkIn
+          ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
+          : selectedCustomer
+            ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+            : undefined;
+        const currentItems = cart.map(i => ({
+          productId: i.product.id,
+          name: i.product.name ?? "",
+          quantity: i.quantity,
+          price: i.customPrice ?? (i.product.price ?? 0),
+          itemDiscount: i.itemDiscount,
+          customPrice: i.customPrice ?? null,
+          itemNote: i.itemNote ?? null,
+        }));
+        await createParkedSaleMutation.mutateAsync({
+          data: {
+            customerId: selectedCustomer?.id ?? undefined,
+            items: currentItems,
+            total,
+            note: currentLabel,
+          },
+        });
+      }
+
+      /* Delete the retrieved sale from DB */
+      await deleteParkedSaleMutation.mutateAsync({ id: saleId });
+
+      /* Restore the cart from the snapshotted sale data */
+      const restoredCart: CartItem[] = saleItems.map(item => {
+        const product = allProducts.find(p => p.id === item.productId) ?? {
+          id: item.productId, name: item.name, price: item.price,
+        } as Product;
+        return {
+          product,
+          quantity: item.quantity ?? 1,
+          itemDiscount: item.itemDiscount ?? 0,
+          customPrice: item.customPrice ?? undefined,
+          itemNote: item.itemNote ?? undefined,
+        };
+      });
+
+      /* Batch all state updates together */
+      setCart(restoredCart);
+      setOverallDiscount("");
+      setSaleNotes("");
+      setSelectedCustomer(null);
+      setWalkIn(null);
+
+      /* Restore sale note / discount if encoded */
+      if (saleNote) {
+        const parts = saleNote.split(" | ");
+        const discountPart = parts.find(p => p.startsWith("Discount:"));
+        if (discountPart) setOverallDiscount(discountPart.replace("Discount:", ""));
+        const noteParts = parts.filter(p =>
+          !p.startsWith("Discount:") &&
+          p !== "No customer" &&
+          (saleCustomerId == null || !p.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/))
+        );
+        if (noteParts.length > 0) setSaleNotes(noteParts.join(" | "));
+      }
+
+      /* Restore customer — fetch from already-loaded list if possible */
+      if (saleCustomerId) {
+        const found = customersData?.items?.find(c => c.id === saleCustomerId);
+        if (found) setSelectedCustomer(found);
+      }
+
+      setParkedSalesOpen(false);
+      toast.success("Sale retrieved");
+
+      /* Invalidate AFTER state updates to avoid flicker */
+      queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+    } catch (err) {
+      console.error("retrieveParkedSale failed:", err);
+      toast.error("Failed to retrieve parked sale");
     }
-    /* Restore note/discount from the note field if encoded */
-    if (sale.note) {
-      const parts = sale.note.split(" | ");
-      const discountPart = parts.find(p => p.startsWith("Discount:"));
-      if (discountPart) setOverallDiscount(discountPart.replace("Discount:", ""));
-      const notePart = parts.filter(p => !p.startsWith("Discount:") && customers.every(c => {
-        const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
-        return p !== name;
-      })).join(" | ");
-      if (notePart) setSaleNotes(notePart);
-    }
-    setParkedSalesOpen(false);
-    toast.success("Sale retrieved");
   };
 
   const deleteParkedSale = (id: number) => {
