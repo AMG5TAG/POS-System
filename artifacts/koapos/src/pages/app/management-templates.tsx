@@ -32,17 +32,19 @@ interface TemplateOption {
 
 interface TplOpts {
   // Text fields
-  headerText:      string;
-  footerText:      string;
-  thankYouMsg:     string;
-  customGreeting:  string;
-  customSignOff:   string;
-  paymentTerms:    string;
-  invoiceNotes:    string;
-  customMessage:   string;
-  subjectLine:     string;
-  messageText:     string;
-  bankDetails:     string;
+  headerText:           string;
+  footerText:           string;
+  thankYouMsg:          string;
+  customGreeting:       string;
+  customSignOff:        string;
+  paymentTerms:         string;
+  invoiceNotes:         string;
+  customMessage:        string;
+  subjectLine:          string;
+  messageText:          string;
+  bankDetails:          string;
+  paymentSectionHeading: string;
+  loyaltyQrText:        string;
   // Toggles
   showLogo:             boolean;
   showAbn:              boolean;
@@ -77,6 +79,8 @@ const DEFAULT_OPTS: TplOpts = {
   customMessage: "", subjectLine: "Your receipt from {{business.name}} — {{transaction.number}}",
   messageText: "Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Total: {{transaction.total}} on {{transaction.date}}. {{business.website}}",
   bankDetails: "",
+  paymentSectionHeading: "",
+  loyaltyQrText: "",
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
@@ -126,7 +130,8 @@ function useTplOpts(templateId: string) {
 interface FieldDef {
   key: keyof TplOpts;
   label: string;
-  type: "text" | "textarea" | "toggle";
+  type: "text" | "textarea" | "toggle" | "select";
+  options?: { value: string; label: string }[];
   placeholder?: string;
   hint?: string;
   quickCodes?: boolean;
@@ -145,6 +150,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
       { section: "Body",   key: "showBarcode",        label: "Show Sale Barcode",   type: "toggle", hint: "Scannable barcode to retrieve this sale" },
       { section: "Body",   key: "showCustomerQr",     label: "Show Customer QR",    type: "toggle", hint: "QR code linked to customer loyalty profile" },
+      { section: "Body",   key: "loyaltyQrText",      label: "QR Scan Label",       type: "text",   placeholder: "Scan to view customer loyalty profile" },
       { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Returns within 30 days", quickCodes: true },
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
@@ -156,10 +162,12 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showTagline",             label: "Show Tagline",            type: "toggle" },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",   type: "toggle", hint: "QR code linked to customer loyalty profile" },
+      { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",           type: "text",   placeholder: "Scan to view customer loyalty profile" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",      type: "toggle" },
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",     type: "toggle" },
       { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",       type: "toggle", hint: "Scannable barcode to retrieve this sale" },
       { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",   type: "toggle", hint: "Shows methods enabled in POS Registers" },
+      { section: "Payment",  key: "paymentSectionHeading",  label: "Payment Heading",         type: "text",     placeholder: "PAYMENT DETAILS" },
       { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",   type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
       { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",           type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",           type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
@@ -200,7 +208,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
       { section: "Header",   key: "headerText",           label: "Sheet Title",              type: "text",     placeholder: "SERVICE JOB SHEET" },
-      { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "text",     placeholder: "normal", hint: 'Enter "normal", "large", or "xlarge"' },
+      { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "select",   options: [{ value: "normal", label: "Normal" }, { value: "large", label: "Large" }, { value: "xlarge", label: "X-Large" }] },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
       { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
       { section: "Sections", key: "showWorkDescription",  label: "Show Fault / Work Req.",   type: "toggle" },
@@ -449,13 +457,23 @@ function OptionsPanel({
                 </div>
               )}
 
-              {/* Text/textarea fields */}
+              {/* Text/textarea/select fields */}
               {texts.map((f) => {
                 const val = (opts[f.key] as string) ?? "";
                 return (
                   <div key={f.key} className="space-y-1.5">
                     <Label className="text-xs">{f.label}</Label>
-                    {f.type === "textarea" ? (
+                    {f.type === "select" && f.options ? (
+                      <select
+                        value={val || f.options[0]?.value}
+                        onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
+                        className="text-xs h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        {f.options.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : f.type === "textarea" ? (
                       <Textarea
                         ref={(el) => { inputRefs.current[f.key] = el; }}
                         value={val}
@@ -645,12 +663,15 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   const footerMsg = opts.thankYouMsg || "Thank you for your purchase!";
   const footer    = opts.footerText;
 
-  const BarcodeBlock = () => opts.showBarcode ? (
-    <div className="border-t pt-1.5 mt-1"><BarcodeSVG value="TXN-1042" width={120} height={26} /></div>
+  const QrBlock = () => opts.showCustomerQr ? (
+    <div className="flex flex-col items-center border-t pt-1.5 mt-1 gap-0.5">
+      <QRCodeVisual label="CUS-0042" size={40} />
+      <p className="text-[8px] text-gray-400 text-center">{opts.loyaltyQrText || "Scan to view customer loyalty profile"}</p>
+    </div>
   ) : null;
 
-  const QrBlock = () => opts.showCustomerQr ? (
-    <div className="flex justify-center border-t pt-1.5 mt-1"><QRCodeVisual label="CUS-0042" size={40} /></div>
+  const BarcodeBlock = () => opts.showBarcode ? (
+    <div className="border-t pt-1.5 mt-1 text-center"><BarcodeSVG value="TXN-1042" width={120} height={26} /></div>
   ) : null;
 
   const LoyaltyBlock = () => opts.showLoyaltyEarned ? (
@@ -678,8 +699,8 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
-        <BarcodeBlock />
         <QrBlock />
+        <BarcodeBlock />
       </div>
     );
   }
@@ -707,8 +728,8 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           {footer    && <p className="text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
           {opts.showWebsite && website && <p className="text-blue-500">{website}</p>}
         </div>
-        <BarcodeBlock />
         <QrBlock />
+        <BarcodeBlock />
       </div>
     );
   }
@@ -736,8 +757,8 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p>{website}</p>}
       </div>
-      <BarcodeBlock />
       <QrBlock />
+      <BarcodeBlock />
     </div>
   );
 }
@@ -766,20 +787,20 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     </div>
   ) : null;
 
-  const BarcodeBlock = () => opts.showBarcode ? (
-    <div className="border-t pt-1.5 mt-1.5"><BarcodeSVG value="INV-1042" width={160} height={26} /></div>
-  ) : null;
-
   const QrBlock = () => opts.showCustomerQr ? (
     <div className="flex items-center gap-2 border-t pt-1.5 mt-1.5">
       <QRCodeVisual label="CUS-0042" size={38} />
-      <p className="text-[8px] text-gray-400">Scan to view customer loyalty profile</p>
+      <p className="text-[8px] text-gray-400">{opts.loyaltyQrText || "Scan to view customer loyalty profile"}</p>
     </div>
+  ) : null;
+
+  const BarcodeBlock = () => opts.showBarcode ? (
+    <div className="border-t pt-1.5 mt-1.5 text-center"><BarcodeSVG value="INV-1042" width={160} height={26} /></div>
   ) : null;
 
   const PaymentBlock = () => (opts.showPaymentMethods || opts.bankDetails) ? (
     <div className="border rounded p-1.5 mt-1.5 text-[9px] space-y-0.5">
-      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">Payment</p>
+      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">{opts.paymentSectionHeading || "PAYMENT DETAILS"}</p>
       {opts.showPaymentMethods && (
         <div className="flex flex-wrap gap-1">
           {["EFTPOS", "Cash", "Visa", "Mastercard"].map(m => (
@@ -823,12 +844,12 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {opts.showGstBreakdown && <div className="flex justify-between"><span>GST 10%</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL DUE</span><span>${total.toFixed(2)}</span></div>
         <LoyaltyRow />
+        <PaymentBlock />
         <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock />
-        <PaymentBlock />
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
-        <BarcodeBlock />
         <QrBlock />
+        <BarcodeBlock />
       </div>
     );
   }
@@ -871,12 +892,12 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           <div className="flex justify-between font-bold text-sm" style={{ color: brandColor }}><span>Total Due</span><span>${total.toFixed(2)}</span></div>
         </div>
         <LoyaltyRow />
+        <PaymentBlock />
         <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock className="text-[9px]" />
-        <PaymentBlock />
         <SocialsBlock />
-        <BarcodeBlock />
         <QrBlock />
+        <BarcodeBlock />
       </div>
     );
   }
@@ -907,6 +928,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <div className="flex justify-between font-bold"><span>TOTAL DUE (AUD)</span><span>${total.toFixed(2)}</span></div>
       </div>
       <LoyaltyRow />
+      <PaymentBlock />
       <div className="text-gray-400 mt-1 border-t pt-1 text-[10px] space-y-0.5">
         <p>{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock />
@@ -914,9 +936,8 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {footer && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         <SocialsBlock />
       </div>
-      <PaymentBlock />
-      <BarcodeBlock />
       <QrBlock />
+      <BarcodeBlock />
     </div>
   );
 }
@@ -1333,8 +1354,11 @@ export default function ManagementTemplatesPage() {
             </div>
 
             <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
-              {(activeCategory === "receipts" || activeCategory === "a4receipts") && (
+              {activeCategory === "receipts" && (
                 <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
+              )}
+              {activeCategory === "a4receipts" && (
+                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
               )}
               {activeCategory === "invoices" && (
                 <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>

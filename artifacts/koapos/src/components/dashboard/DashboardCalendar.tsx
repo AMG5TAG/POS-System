@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useGetDashboardCalendar, CalendarDay, CalendarAppointment, CalendarBirthday } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,9 +133,52 @@ function DayCell({
   const hasEvents = day.publicHoliday || day.sales > 0 || day.serviceJobs > 0 ||
     day.invoices > 0 || day.appointments.length > 0 || day.customerBirthdays.length > 0;
 
+  const apptCount = day.appointments.length;
+  const bdayCount = day.customerBirthdays.length;
+
+  // Build left column (sales, serviceJobs) and right column (invoices, appointments, birthdays)
+  // max 3 rows total displayed in a 2-col grid
+  const leftItems: ReactNode[] = [];
+  const rightItems: ReactNode[] = [];
+
+  if (day.sales > 0) leftItems.push(
+    <div key="sales" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.sales)}>
+      <ShoppingCart className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.sales}</span>
+    </div>
+  );
+  if (day.serviceJobs > 0) leftItems.push(
+    <div key="svc" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.serviceJobs)}>
+      <Wrench className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.serviceJobs}</span>
+    </div>
+  );
+  if (bdayCount > 0) leftItems.push(
+    <button key="bday" onClick={() => onBirthdayClick(day.customerBirthdays[0])}
+      className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate text-left w-full hover:opacity-80 transition-opacity", EVENT_COLORS.birthdays)}
+    >
+      <Cake className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{bdayCount}</span>
+    </button>
+  );
+
+  if (day.invoices > 0) rightItems.push(
+    <div key="inv" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.invoices)}>
+      <FileText className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.invoices}</span>
+    </div>
+  );
+  if (apptCount > 0) rightItems.push(
+    <button key="appt" onClick={() => onAppointmentClick(day.appointments[0])}
+      className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate text-left w-full hover:opacity-80 transition-opacity", EVENT_COLORS.appointments)}
+    >
+      <CalendarDays className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{apptCount}</span>
+    </button>
+  );
+
+  const maxRows = 3;
+  const leftSlots  = leftItems.slice(0, maxRows);
+  const rightSlots = rightItems.slice(0, maxRows);
+
   return (
     <div className={cn(
-      "min-h-[160px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
+      "min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
       isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 dark:bg-muted/20 opacity-60",
       isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60 dark:border-border",
     )}>
@@ -149,59 +193,17 @@ function DayCell({
       {!hasEvents && <div className="flex-1" />}
 
       {day.publicHoliday && (
-        <div className={cn("text-[10px] px-1.5 py-0.5 rounded border truncate font-medium", EVENT_COLORS.publicHoliday)}>
+        <div className={cn("text-[10px] px-1 py-0.5 rounded border truncate font-medium col-span-2", EVENT_COLORS.publicHoliday)}>
           🇦🇺 {day.publicHoliday}
         </div>
       )}
 
-      {day.sales > 0 && (
-        <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.sales)}>
-          <ShoppingCart className="w-2.5 h-2.5 shrink-0" />
-          {day.sales}
+      {(leftSlots.length > 0 || rightSlots.length > 0) && (
+        <div className="grid grid-cols-2 gap-0.5">
+          <div className="flex flex-col gap-0.5">{leftSlots}</div>
+          <div className="flex flex-col gap-0.5">{rightSlots}</div>
         </div>
       )}
-
-      {day.serviceJobs > 0 && (
-        <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.serviceJobs)}>
-          <Wrench className="w-2.5 h-2.5 shrink-0" />
-          {day.serviceJobs}
-        </div>
-      )}
-
-      {day.invoices > 0 && (
-        <div className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", EVENT_COLORS.invoices)}>
-          <FileText className="w-2.5 h-2.5 shrink-0" />
-          {day.invoices}
-        </div>
-      )}
-
-      {day.appointments.map((appt) => (
-        <button
-          key={appt.id}
-          onClick={() => onAppointmentClick(appt)}
-          className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity",
-            EVENT_COLORS.appointments
-          )}
-        >
-          <CalendarDays className="w-2.5 h-2.5 shrink-0" />
-          1
-        </button>
-      ))}
-
-      {day.customerBirthdays.map((b) => (
-        <button
-          key={b.id}
-          onClick={() => onBirthdayClick(b)}
-          className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity",
-            EVENT_COLORS.birthdays
-          )}
-        >
-          <Cake className="w-2.5 h-2.5 shrink-0" />
-          1
-        </button>
-      ))}
     </div>
   );
 }

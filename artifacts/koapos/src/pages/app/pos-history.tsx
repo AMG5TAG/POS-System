@@ -49,7 +49,7 @@ interface SendDialogProps {
 
 function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogProps) {
   const [mode, setMode] = useState<SendMode>(initialMode);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(tx?.customer?.email ?? "");
   const [phone, setPhone] = useState("");
   const [sent, setSent] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -475,8 +475,10 @@ export default function POSHistoryPage() {
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex items-center gap-3">
           <History className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-bold">Sale History</h1>
-          <p className="text-sm text-muted-foreground">Browse and search all past sales processed through the register.</p>
+          <div>
+            <h1 className="text-2xl font-bold">Sale History</h1>
+            <p className="text-sm text-muted-foreground">Browse and search all past sales processed through the register.</p>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
