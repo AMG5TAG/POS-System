@@ -433,7 +433,7 @@ export default function ProductsBrandsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Website</Label>
-              <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://..." />
+              <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://..." className="truncate" />
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>

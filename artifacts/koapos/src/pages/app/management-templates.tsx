@@ -757,17 +757,17 @@ function A4ReceiptPreview({ templateId, businessName, abn, website, email, brand
   }
   return (
     <div className="text-[10px] text-gray-800">
-      <div className="flex justify-between items-start border-b pb-2 mb-2">
-        <div>
+      <div className="flex justify-between items-start border-b pb-2 mb-2 gap-4">
+        <div className="min-w-0">
           {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
-          <p className="font-bold text-xs">{businessName}</p>
-          {opts.showAbn    && abn     && <p className="text-gray-400">ABN {abn}</p>}
-          {email   && <p className="text-gray-400">{email}</p>}
-          {opts.showWebsite && website && <p className="text-gray-400">{website}</p>}
+          <p className="font-bold text-xs truncate">{businessName}</p>
+          {opts.showAbn    && abn     && <p className="text-gray-400 truncate">ABN {abn}</p>}
+          {email   && <p className="text-gray-400 truncate">{email}</p>}
+          {opts.showWebsite && website && <p className="text-gray-400 truncate">{website}</p>}
         </div>
-        <div className="text-right">
-          <p className="font-bold text-xs" style={{ color: brandColor }}>TAX INVOICE / RECEIPT</p>
-          <p className="text-gray-400">#0042 · 18/05/2026</p>
+        <div className="text-right shrink-0">
+          <p className="font-bold text-xs whitespace-nowrap" style={{ color: brandColor }}>TAX INVOICE / RECEIPT</p>
+          <p className="text-gray-400 whitespace-nowrap">#0042 · 18/05/2026</p>
         </div>
       </div>
       <table className="w-full text-[10px] mb-1">
@@ -865,7 +865,7 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
   );
   return (
     <div className="flex items-end justify-end">
-      <div className="bg-green-500 text-white text-[10px] rounded-2xl rounded-br-sm px-3 py-2 max-w-[85%] leading-relaxed shadow">
+      <div className="bg-green-500 text-white text-[10px] rounded-2xl rounded-br-sm px-3 py-2 max-w-[85%] leading-relaxed shadow break-words">
         {resolveCode(raw, businessName, "", website, "")}
       </div>
     </div>

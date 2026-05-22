@@ -586,7 +586,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div className="sm:col-span-2">
                 <Label>Website</Label>
-                <Input type="url" value={ext.website} onChange={(e) => setExtField("website", e.target.value)} placeholder="https://www.yourbusiness.com.au" />
+                <Input type="url" value={ext.website} onChange={(e) => setExtField("website", e.target.value)} placeholder="https://www.yourbusiness.com.au" className="truncate" />
               </div>
             </div>
           </CardContent>
