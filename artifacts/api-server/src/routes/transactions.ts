@@ -309,7 +309,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       await tx
         .update(customersTable)
         .set({
-          totalSpent:    sql`(${customersTable.totalSpent}::numeric + ${total})::text`,
+          totalSpent:    sql`${customersTable.totalSpent} + ${total}`,
           visitCount:    sql`${customersTable.visitCount} + 1`,
           loyaltyPoints: loyaltyDelta,
         })
