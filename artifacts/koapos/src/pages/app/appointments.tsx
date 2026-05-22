@@ -16,6 +16,7 @@ import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput"
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -27,8 +28,8 @@ import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
+  ChevronLeft, ChevronRight, CalendarDays,
 } from "lucide-react";
-import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -479,6 +480,177 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   );
 }
 
+/* ─── Appointments-only Calendar ─────────────────────────────────────────── */
+
+function AppointmentsCalendar({
+  appointments,
+  onView,
+}: {
+  appointments: Appointment[];
+  onView: (a: Appointment) => void;
+}) {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+
+  // Only show upcoming (scheduled) appointments in the calendar
+  const upcomingAppts = appointments.filter((a) => a.status === "scheduled");
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString("en-AU", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const goToPrev = () => {
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else setMonth((m) => m - 1);
+  };
+  const goToNext = () => {
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else setMonth((m) => m + 1);
+  };
+  const goToToday = () => {
+    setYear(today.getFullYear());
+    setMonth(today.getMonth() + 1);
+  };
+
+  // Build grid: Monday-start weeks
+  const firstDay = new Date(year, month - 1, 1);
+  const startPad = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const totalCells = Math.ceil((startPad + daysInMonth) / 7) * 7;
+
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // Map appts by date
+  const byDate = new Map<string, Appointment[]>();
+  for (const a of upcomingAppts) {
+    const d = a.scheduledAt?.split("T")[0];
+    if (!d) continue;
+    const arr = byDate.get(d) ?? [];
+    arr.push(a);
+    byDate.set(d, arr);
+  }
+
+  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const cells: { dayNum: number | null; dateKey: string | null; appts: Appointment[] }[] = [];
+  for (let i = 0; i < totalCells; i++) {
+    const dayIndex = i - startPad + 1;
+    if (dayIndex < 1 || dayIndex > daysInMonth) {
+      cells.push({ dayNum: null, dateKey: null, appts: [] });
+    } else {
+      const key = `${year}-${String(month).padStart(2, "0")}-${String(dayIndex).padStart(2, "0")}`;
+      cells.push({ dayNum: dayIndex, dateKey: key, appts: byDate.get(key) ?? [] });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-primary" />
+            <CardTitle className="text-lg">Upcoming Appointments</CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={goToToday}>
+              Today
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrev}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-semibold min-w-[140px] text-center">{monthName}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToNext}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Only scheduled appointments are shown. Click an appointment to view full details.</p>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <div className="min-w-[700px]">
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {WEEKDAYS.map((d) => (
+                <div key={d} className="text-[11px] font-semibold text-muted-foreground text-center py-1">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {cells.map((cell, i) => {
+                if (!cell.dayNum) {
+                  return (
+                    <div
+                      key={i}
+                      className="min-h-[120px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70"
+                    />
+                  );
+                }
+                const isToday = cell.dateKey === todayStr;
+                const isPast = cell.dateKey !== null && cell.dateKey < todayStr;
+                const hasAppts = cell.appts.length > 0;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
+                      isPast ? "bg-muted/30 dark:bg-muted/20 opacity-60" : "bg-card",
+                      isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60 dark:border-border"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full shrink-0 self-start",
+                        isToday ? "bg-primary text-primary-foreground" : isPast ? "text-muted-foreground/60" : "text-foreground"
+                      )}
+                    >
+                      {cell.dayNum}
+                    </div>
+                    {!hasAppts && <div className="flex-1" />}
+                    {hasAppts && (
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {cell.appts.map((a) => {
+                          const time = a.scheduledAt
+                            ? new Date(a.scheduledAt).toLocaleTimeString("en-AU", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: "Australia/Sydney",
+                              })
+                            : "";
+                          return (
+                            <button
+                              key={a.id}
+                              onClick={() => onView(a)}
+                              className={cn(
+                                "text-[11px] px-1.5 py-0.5 rounded border text-left truncate transition-colors",
+                                "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
+                              )}
+                              title={`${a.title || "Appointment"} — ${time}`}
+                            >
+                              <span className="font-medium">{time}</span>{" "}
+                              <span className="truncate">{a.title || "Appointment"}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function AppointmentsPage() {
@@ -711,7 +883,7 @@ export default function AppointmentsPage() {
       </div>
 
       <div className="px-6 md:px-8 pb-8">
-        <DashboardCalendar />
+        <AppointmentsCalendar appointments={appts} onView={setViewing} />
       </div>
 
       <DetailDialog
