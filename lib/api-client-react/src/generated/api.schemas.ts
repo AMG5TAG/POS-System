@@ -168,6 +168,8 @@ export interface Product {
   /** @nullable */
   supplierCode?: string | null;
   isEpay?: boolean;
+  /** @maxItems 5 */
+  tags?: string[];
   createdAt: string;
 }
 
@@ -196,6 +198,8 @@ export interface ProductInput {
   supplier?: string;
   supplierCode?: string;
   isEpay?: boolean;
+  /** @maxItems 5 */
+  tags?: string[];
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -225,6 +229,8 @@ export interface ProductUpdate {
   /** @nullable */
   supplierCode?: string | null;
   isEpay?: boolean;
+  /** @maxItems 5 */
+  tags?: string[];
 }
 
 export interface ProductList {

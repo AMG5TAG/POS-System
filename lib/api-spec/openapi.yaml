@@ -2409,6 +2409,11 @@ components:
           type: ["string", "null"]
         isEpay:
           type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 5
         createdAt:
           type: string
           format: date-time
@@ -2461,6 +2466,11 @@ components:
           type: string
         isEpay:
           type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 5
 
     ProductUpdate:
       type: object
@@ -2507,6 +2517,11 @@ components:
           type: ["string", "null"]
         isEpay:
           type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 5
 
     ProductList:
       type: object

@@ -68,6 +68,7 @@ type ProductForm = {
   productType: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  tags: string[];
   /* notes */
   internalNotes: string;
   /* group pricing */
@@ -86,6 +87,7 @@ const defaultForm: ProductForm = {
   productType: "standard",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
+  tags: [],
   internalNotes: "",
   groupPrices: {},
   isEpay: false,
@@ -695,6 +697,7 @@ export default function ProductsPage() {
   const [brandsList, setBrandsList] = useState<{ id: number; name: string }[]>([]);
   const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
   const [brandCreatingInline, setBrandCreatingInline] = useState(false);
+  const [tagInput, setTagInput] = useState("");
   const [newBrandName, setNewBrandName] = useState("");
 
   useEffect(() => {
@@ -882,6 +885,7 @@ export default function ProductsPage() {
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
+      tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
@@ -920,6 +924,7 @@ export default function ProductsPage() {
       supplier: form.supplier || undefined,
       supplierCode: form.supplierCode || undefined,
       isEpay: form.isEpay,
+      tags: form.tags,
       groupPrices: Object.fromEntries(
         Object.entries(form.groupPrices)
           .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
@@ -1504,14 +1509,42 @@ export default function ProductsPage() {
                     </Popover>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={form.isActive ? "active" : "inactive"} onValueChange={(v) => setField("isActive", v === "active")}>
-                      <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs text-muted-foreground">Tags <span className="text-muted-foreground/50">(up to 5)</span></Label>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5 min-h-[36px] rounded-md border bg-background px-2.5 py-1.5">
+                      {form.tags.map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+                          {t}
+                          <button type="button" onClick={() => setField("tags", form.tags.filter((x) => x !== t))} className="hover:text-destructive leading-none">&times;</button>
+                        </span>
+                      ))}
+                      {form.tags.length < 5 && (
+                        <input
+                          className="flex-1 min-w-[80px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                          placeholder={form.tags.length === 0 ? "Type and press Enter…" : "Add tag…"}
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                              e.preventDefault();
+                              const val = tagInput.trim().replace(/,$/, "");
+                              if (val && !form.tags.includes(val) && form.tags.length < 5) {
+                                setField("tags", [...form.tags, val]);
+                              }
+                              setTagInput("");
+                            } else if (e.key === "Backspace" && !tagInput && form.tags.length > 0) {
+                              setField("tags", form.tags.slice(0, -1));
+                            }
+                          }}
+                          onBlur={() => {
+                            const val = tagInput.trim().replace(/,$/, "");
+                            if (val && !form.tags.includes(val) && form.tags.length < 5) {
+                              setField("tags", [...form.tags, val]);
+                              setTagInput("");
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1792,20 +1825,22 @@ export default function ProductsPage() {
                   )}
                 </div>
 
-                {/* Availability */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="Availability" />
-                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">Active</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                {/* Availability — only shown when editing an existing product */}
+                {editingProduct && (
+                  <div className="border-t pt-5">
+                    <SectionHeader label="Availability" />
+                    <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                      <div>
+                        <p className="text-sm font-medium">Active</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                      </div>
+                      <Switch
+                        checked={form.isActive}
+                        onCheckedChange={(v) => setField("isActive", v)}
+                      />
                     </div>
-                    <Switch
-                      checked={form.isActive}
-                      onCheckedChange={(v) => setField("isActive", v)}
-                    />
                   </div>
-                </div>
+                )}
 
                 {/* Internal Notes */}
                 <div className="border-t pt-5">

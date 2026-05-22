@@ -276,6 +276,10 @@ export const ListProductsQueryParams = zod.object({
   "offset": zod.coerce.number().optional()
 })
 
+export const listProductsResponseItemsItemTagsMax = 5;
+
+
+
 export const ListProductsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
@@ -310,6 +314,7 @@ export const ListProductsResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -321,6 +326,8 @@ export const ListProductsResponse = zod.object({
  */
 
 export const createProductBodyPriceMin = 0;
+
+export const createProductBodyTagsMax = 5;
 
 
 
@@ -344,7 +351,8 @@ export const CreateProductBody = zod.object({
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().optional(),
   "supplierCode": zod.string().optional(),
-  "isEpay": zod.boolean().optional()
+  "isEpay": zod.boolean().optional(),
+  "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional()
 })
 
 
@@ -354,6 +362,10 @@ export const CreateProductBody = zod.object({
 export const GetProductParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const getProductResponseTagsMax = 5;
+
+
 
 export const GetProductResponse = zod.object({
   "id": zod.number(),
@@ -388,6 +400,7 @@ export const GetProductResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -398,6 +411,10 @@ export const GetProductResponse = zod.object({
 export const UpdateProductParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updateProductBodyTagsMax = 5;
+
+
 
 export const UpdateProductBody = zod.object({
   "name": zod.string().optional(),
@@ -419,8 +436,13 @@ export const UpdateProductBody = zod.object({
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
-  "isEpay": zod.boolean().optional()
+  "isEpay": zod.boolean().optional(),
+  "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional()
 })
+
+export const updateProductResponseTagsMax = 5;
+
+
 
 export const UpdateProductResponse = zod.object({
   "id": zod.number(),
@@ -455,6 +477,7 @@ export const UpdateProductResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "createdAt": zod.coerce.date()
 })
 

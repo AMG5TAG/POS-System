@@ -53,6 +53,7 @@ function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof c
     supplier: p.supplier ?? null,
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
+    tags: p.tagsJson ? (() => { try { return JSON.parse(p.tagsJson!); } catch { return []; } })() : [],
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -167,7 +168,7 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, ...rest } = parsed.data;
   const [product] = await db
     .insert(productsTable)
     .values({
@@ -181,6 +182,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
       isEpay: isEpayRaw === true ? "true" : "false",
       groupPrices: groupPrices ? JSON.stringify(groupPrices) : null,
+      tagsJson: tags ? JSON.stringify(tags) : null,
     })
     .returning();
   res.status(201).json(formatProduct(product));
@@ -207,7 +209,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, ...rest } = parsed.data;
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
@@ -217,6 +219,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = JSON.stringify(groupPrices);
+  if (tags !== undefined) updates.tagsJson = JSON.stringify(tags);
   const [product] = await db
     .update(productsTable)
     .set(updates)
@@ -253,7 +256,7 @@ function formatVariant(v: typeof productVariantsTable.$inferSelect) {
 }
 
 router.get("/products/:productId/variants", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(req.params.productId);
+  const productId = parseInt(String(req.params.productId));
   if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }
   const [product] = await db.select().from(productsTable)
     .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, req.session.merchantId!)));
@@ -265,7 +268,7 @@ router.get("/products/:productId/variants", requireAuth, async (req, res): Promi
 });
 
 router.post("/products/:productId/variants", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(req.params.productId);
+  const productId = parseInt(String(req.params.productId));
   if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }
   const [product] = await db.select().from(productsTable)
     .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, req.session.merchantId!)));
@@ -287,8 +290,8 @@ router.post("/products/:productId/variants", requireAuth, async (req, res): Prom
 });
 
 router.patch("/products/:productId/variants/:id", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(req.params.productId);
-  const id = parseInt(req.params.id);
+  const productId = parseInt(String(req.params.productId));
+  const id = parseInt(String(req.params.id));
   if (isNaN(productId) || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = req.body as Record<string, unknown>;
   const update: Partial<typeof productVariantsTable.$inferInsert> = {};
@@ -310,8 +313,8 @@ router.patch("/products/:productId/variants/:id", requireAuth, async (req, res):
 });
 
 router.delete("/products/:productId/variants/:id", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(req.params.productId);
-  const id = parseInt(req.params.id);
+  const productId = parseInt(String(req.params.productId));
+  const id = parseInt(String(req.params.id));
   if (isNaN(productId) || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(productVariantsTable)
     .where(and(eq(productVariantsTable.id, id), eq(productVariantsTable.merchantId, req.session.merchantId!)));
