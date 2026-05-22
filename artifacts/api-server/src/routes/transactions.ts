@@ -104,7 +104,20 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes, loyaltyEarned, receiptNumber: providedReceiptNumber } = parsed.data;
+  const {
+    subtotal: clientSubtotal,
+    taxTotal: clientTaxTotal,
+    discountTotal: clientDiscountTotal = 0,
+    total: clientTotal,
+    amountTendered, changeDue, items: clientItems,
+    customerId, staffId, paymentMethod, notes, loyaltyEarned,
+    receiptNumber: providedReceiptNumber,
+  } = parsed.data;
+
+  if (clientItems.length === 0) {
+    res.status(400).json({ error: "Transaction must include at least one item" });
+    return;
+  }
 
   // Tenant isolation: any provided customerId must belong to this merchant.
   let scopedCustomer: typeof customersTable.$inferSelect | null = null;
@@ -119,6 +132,74 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     }
     scopedCustomer = c;
   }
+
+  // ── Recompute every monetary value from DB-authoritative product prices ──
+  // Client-supplied unitPrice / totalPrice / taxAmount are treated as hints
+  // only; the persisted record is built from product.price + product.taxRate.
+  // Client `discount` per line is honoured but clamped to [0, lineGross]
+  // so a forged discount cannot drive totals negative or below zero.
+  const productIds = [...new Set(clientItems.map((i) => i.productId))];
+  const dbProducts = await db
+    .select()
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, productIds), eq(productsTable.merchantId, req.session.merchantId!)));
+  const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+  const missing = productIds.filter((id) => !productMap.has(id));
+  if (missing.length > 0) {
+    res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` });
+    return;
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const computedItems: {
+    productId: number; productName: string; quantity: number;
+    unitPrice: number; totalPrice: number; taxAmount: number;
+    discount?: number;
+  }[] = [];
+  for (const i of clientItems) {
+    if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
+      res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
+      return;
+    }
+    const product = productMap.get(i.productId)!;
+    const unitPrice = parseFloat(product.price);
+    const taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
+    const lineGross = round2(unitPrice * i.quantity);
+    const rawDiscount = Math.max(0, i.discount ?? 0);
+    const discount = round2(Math.min(rawDiscount, lineGross));
+    const totalPrice = round2(lineGross - discount);
+    const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
+    computedItems.push({
+      productId: i.productId,
+      productName: product.name,
+      quantity: i.quantity,
+      unitPrice,
+      totalPrice,
+      taxAmount,
+      discount: discount > 0 ? discount : undefined,
+    });
+  }
+
+  // Server-authoritative totals. Convention used throughout the app:
+  //   - prices are GST-inclusive
+  //   - total === subtotal (the GST-inclusive amount the customer pays)
+  //   - taxTotal is the GST component extracted from the total (informational)
+  const total         = round2(computedItems.reduce((s, it) => s + it.totalPrice, 0));
+  const taxTotal      = round2(computedItems.reduce((s, it) => s + it.taxAmount, 0));
+  const subtotal      = total;
+  const discountTotal = round2(computedItems.reduce((s, it) => s + (it.discount ?? 0), 0));
+
+  // Reject obvious tampering on the only authoritative number: the charged
+  // total. The breakdown fields can drift by sub-cent rounding when the
+  // client sums tax pre-rounding, so we don't gate on them.
+  if (Math.abs(clientTotal - total) > 0.01) {
+    res.status(409).json({
+      error: "Sale total does not match current product pricing. Please refresh the cart and try again.",
+      expected: { subtotal, taxTotal, discountTotal, total },
+    });
+    return;
+  }
+  void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
 
   // Loyalty payment invariants — enforced server-side, not just in the UI.
   // Use ceil so a fractional total like $10.99 requires 11 points, never 10.
@@ -177,92 +258,91 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   }
   void changeDue; // client-supplied changeDue is intentionally ignored
 
-  const [transaction] = await db
-    .insert(transactionsTable)
-    .values({
-      merchantId: req.session.merchantId!,
-      customerId: customerId ?? null,
-      staffId: staffId ?? null,
-      receiptNumber,
-      status: "completed",
-      subtotal: subtotal.toString(),
-      taxTotal: taxTotal.toString(),
-      discountTotal: discountTotal.toString(),
-      total: total.toString(),
-      paymentMethod,
-      amountTendered: persistedTendered.toString(),
-      changeDue: persistedChange.toString(),
-      notes: notes ?? null,
-      loyaltyEarned: sanitizedEarned > 0 ? sanitizedEarned.toString() : null,
-      items,
-    })
-    .returning();
+  // Aggregate quantities per product so duplicate line items don't
+  // under-deduct stock (each UPDATE would otherwise read the same original
+  // value from productMap and only the last write would land).
+  const qtyByProduct = new Map<number, number>();
+  for (const it of computedItems) {
+    qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) ?? 0) + it.quantity);
+  }
 
-  // Update inventory for tracked products — one SELECT for all items, then targeted UPDATEs
-  if (items.length > 0) {
-    const productIds = items.map((i) => i.productId);
-    const inventoryProducts = await db
-      .select()
-      .from(productsTable)
-      .where(and(inArray(productsTable.id, productIds), eq(productsTable.merchantId, req.session.merchantId!)));
-    const productMap = new Map(inventoryProducts.map((p) => [p.id, p]));
-    for (const item of items) {
-      const product = productMap.get(item.productId);
+  // All side-effects (transaction row + inventory + customer stats + linked
+  // entity completion) commit together or roll back together. Prevents
+  // partial commits where a sale is recorded but stock/customer state drift.
+  const transaction = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(transactionsTable)
+      .values({
+        merchantId: req.session.merchantId!,
+        customerId: customerId ?? null,
+        staffId: staffId ?? null,
+        receiptNumber,
+        status: "completed",
+        subtotal: subtotal.toString(),
+        taxTotal: taxTotal.toString(),
+        discountTotal: discountTotal.toString(),
+        total: total.toString(),
+        paymentMethod,
+        amountTendered: persistedTendered.toString(),
+        changeDue: persistedChange.toString(),
+        notes: notes ?? null,
+        loyaltyEarned: sanitizedEarned > 0 ? sanitizedEarned.toString() : null,
+        items: computedItems,
+      })
+      .returning();
+
+    for (const [productId, qty] of qtyByProduct) {
+      const product = productMap.get(productId);
       if (product?.trackInventory === "true") {
-        await db
+        await tx
           .update(productsTable)
-          .set({ stockQuantity: Math.max(0, product.stockQuantity - item.quantity) })
-          .where(eq(productsTable.id, item.productId));
+          .set({ stockQuantity: Math.max(0, product.stockQuantity - qty) })
+          .where(eq(productsTable.id, productId));
       }
     }
-  }
 
-  // Update customer stats atomically using values sanitized above.
-  if (scopedCustomer) {
-    const redeemed = paymentMethod === "loyalty" ? requiredLoyaltyPoints : 0;
-    const loyaltyDelta = paymentMethod === "loyalty"
-      ? sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${redeemed})`
-      : sql`${customersTable.loyaltyPoints} + ${sanitizedEarned}`;
-    await db
-      .update(customersTable)
-      .set({
-        totalSpent:    sql`(${customersTable.totalSpent}::numeric + ${total})::text`,
-        visitCount:    sql`${customersTable.visitCount} + 1`,
-        loyaltyPoints: loyaltyDelta,
-      })
-      .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
-  }
+    if (scopedCustomer) {
+      const redeemed = paymentMethod === "loyalty" ? requiredLoyaltyPoints : 0;
+      const loyaltyDelta = paymentMethod === "loyalty"
+        ? sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${redeemed})`
+        : sql`${customersTable.loyaltyPoints} + ${sanitizedEarned}`;
+      await tx
+        .update(customersTable)
+        .set({
+          totalSpent:    sql`(${customersTable.totalSpent}::numeric + ${total})::text`,
+          visitCount:    sql`${customersTable.visitCount} + 1`,
+          loyaltyPoints: loyaltyDelta,
+        })
+        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+    }
 
-  // Auto-complete linked service job or appointment
-  if (notes) {
-    const serviceMatch = notes.match(/\[Service #([^:]+):/);
-    if (serviceMatch) {
-      const jobNumber = serviceMatch[1].trim();
-      await db
-        .update(serviceJobsTable)
-        .set({ status: "completed" })
-        .where(
-          and(
+    if (notes) {
+      const serviceMatch = notes.match(/\[Service #([^:]+):/);
+      if (serviceMatch) {
+        const jobNumber = serviceMatch[1].trim();
+        await tx
+          .update(serviceJobsTable)
+          .set({ status: "completed" })
+          .where(and(
             eq(serviceJobsTable.jobNumber, jobNumber),
             eq(serviceJobsTable.merchantId, req.session.merchantId!),
-          ),
-        );
-    }
-
-    const apptMatch = notes.match(/\[Appt #(\d+):/);
-    if (apptMatch) {
-      const apptId = parseInt(apptMatch[1], 10);
-      await db
-        .update(appointmentsTable)
-        .set({ status: "completed" })
-        .where(
-          and(
+          ));
+      }
+      const apptMatch = notes.match(/\[Appt #(\d+):/);
+      if (apptMatch) {
+        const apptId = parseInt(apptMatch[1], 10);
+        await tx
+          .update(appointmentsTable)
+          .set({ status: "completed" })
+          .where(and(
             eq(appointmentsTable.id, apptId),
             eq(appointmentsTable.merchantId, req.session.merchantId!),
-          ),
-        );
+          ));
+      }
     }
-  }
+
+    return row;
+  });
 
   res.status(201).json(formatTransaction(transaction));
 });
