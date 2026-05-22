@@ -1077,7 +1077,14 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     label: string; icon: React.ComponentType<{ className?: string }>; isActive: boolean; isOpen: boolean;
     onToggle: () => void; items: NavItem[]; accent?: boolean; defaultHref?: string;
   }) => {
-    const handleClick = () => { if (defaultHref) navigate(defaultHref as string); onToggle(); };
+    const { state, setOpen } = useSidebar();
+    const handleClick = () => {
+      if (state === "collapsed") {
+        setOpen(true);
+      }
+      if (defaultHref) navigate(defaultHref as string);
+      onToggle();
+    };
     return (
       <SidebarMenuItem>
         <SidebarMenuButton isActive={isActive} onClick={handleClick} tooltip={label}

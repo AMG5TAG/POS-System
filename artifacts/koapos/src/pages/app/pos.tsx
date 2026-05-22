@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
   useListCustomers, useGetLoyaltySettings, useListStaff,
@@ -479,6 +480,31 @@ export default function POSPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  /* ── Click anywhere on POS page to reveal collapsed sidebar ─────────────── */
+  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar();
+  const posPageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const posPage = posPageRef.current;
+    if (!posPage) return;
+    const handler = (e: MouseEvent) => {
+      // Only trigger on left-clicks inside the POS page area, not on interactive elements
+      const target = e.target as HTMLElement;
+      if (
+        sidebarState === "collapsed" &&
+        e.button === 0 &&
+        !target.closest("button") &&
+        !target.closest("a") &&
+        !target.closest("input") &&
+        !target.closest("textarea") &&
+        !target.closest("[data-slot=sidebar]" as never)
+      ) {
+        setSidebarOpen(true);
+      }
+    };
+    posPage.addEventListener("mousedown", handler);
+    return () => posPage.removeEventListener("mousedown", handler);
+  }, [sidebarState, setSidebarOpen]);
 
   /* Filtered customers for inline dropdown */
   const filteredCustomers = useMemo(() => {
@@ -1009,7 +1035,7 @@ export default function POSPage() {
   /* ── Render ── */
   return (
     <AppLayout hideSidebar>
-      <div className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
+      <div ref={posPageRef} className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
 
         {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
