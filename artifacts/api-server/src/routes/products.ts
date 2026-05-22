@@ -188,6 +188,99 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(formatProduct(product));
 });
 
+// ── Product Tag Management (operates on tagsJson strings across all products) ──
+
+router.get("/products/tags", requireAuth, async (req, res): Promise<void> => {
+  const products = await db
+    .select({ tagsJson: productsTable.tagsJson })
+    .from(productsTable)
+    .where(eq(productsTable.merchantId, req.session.merchantId!));
+
+  const countMap = new Map<string, number>();
+  for (const p of products) {
+    if (!p.tagsJson) continue;
+    try {
+      const tags = JSON.parse(p.tagsJson) as string[];
+      for (const t of tags) {
+        if (typeof t === "string" && t.trim()) {
+          countMap.set(t, (countMap.get(t) ?? 0) + 1);
+        }
+      }
+    } catch { /* skip malformed */ }
+  }
+  const items = [...countMap.entries()]
+    .map(([name, productCount]) => ({ name, productCount }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  res.json({ items, total: items.length });
+});
+
+router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void> => {
+  const { oldName, newName } = req.body as { oldName?: string; newName?: string };
+  if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
+  const products = await db
+    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
+    .from(productsTable)
+    .where(eq(productsTable.merchantId, req.session.merchantId!));
+
+  let updated = 0;
+  for (const p of products) {
+    if (!p.tagsJson) continue;
+    try {
+      const tags = JSON.parse(p.tagsJson) as string[];
+      if (!tags.includes(oldName)) continue;
+      const newTags = tags.map(t => (t === oldName ? newName : t));
+      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
+      updated++;
+    } catch { /* skip */ }
+  }
+  res.json({ updated });
+});
+
+router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void> => {
+  const { sourceTags, targetName } = req.body as { sourceTags?: string[]; targetName?: string };
+  if (!sourceTags?.length || !targetName) { res.status(400).json({ error: "sourceTags and targetName are required" }); return; }
+  const sourceSet = new Set(sourceTags);
+  const products = await db
+    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
+    .from(productsTable)
+    .where(eq(productsTable.merchantId, req.session.merchantId!));
+
+  let updated = 0;
+  for (const p of products) {
+    if (!p.tagsJson) continue;
+    try {
+      const tags = JSON.parse(p.tagsJson) as string[];
+      if (!tags.some(t => sourceSet.has(t))) continue;
+      const newTags = [...new Set(tags.map(t => (sourceSet.has(t) ? targetName : t)))];
+      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
+      updated++;
+    } catch { /* skip */ }
+  }
+  res.json({ updated });
+});
+
+router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void> => {
+  const { name } = req.body as { name?: string };
+  if (!name) { res.status(400).json({ error: "name is required" }); return; }
+  const products = await db
+    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
+    .from(productsTable)
+    .where(eq(productsTable.merchantId, req.session.merchantId!));
+
+  let updated = 0;
+  for (const p of products) {
+    if (!p.tagsJson) continue;
+    try {
+      const tags = JSON.parse(p.tagsJson) as string[];
+      if (!tags.includes(name)) continue;
+      const newTags = tags.filter(t => t !== name);
+      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
+      updated++;
+    } catch { /* skip */ }
+  }
+  res.json({ updated });
+});
+
 router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetProductParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }

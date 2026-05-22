@@ -265,8 +265,10 @@ export default function POSPage() {
   const activeCatId   = categoryPath.length > 0 ? categoryPath[categoryPath.length - 1] : null;
   const subCats       = activeCatId ? getChildren(activeCatId) : [];
 
-  /* Filter products: favourites mode → client-side filter by pinned IDs */
-  const products = posTab === "favourites"
+  /* Filter products: favourites mode → client-side filter by pinned IDs.
+     When a search is active, always show all products regardless of tab
+     so the cashier can find items without switching tabs first. */
+  const products = (posTab === "favourites" && !search)
     ? allProducts.filter(p => favouriteIds.has(p.id))
     : allProducts;
 
