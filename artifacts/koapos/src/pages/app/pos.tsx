@@ -242,7 +242,7 @@ export default function POSPage() {
 
   const { data: productsData } = useListProducts(
     { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
-    { query: { queryKey: ["products", search, effectiveCategoryId, posTab] } }
+    { query: { queryKey: ["products", search, effectiveCategoryId] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: customersData } = useListCustomers(
@@ -1136,7 +1136,7 @@ export default function POSPage() {
               ))}
             </div>
             {products.length === 0 && (
-              posTab === "favourites" ? (
+              posTab === "favourites" && !search ? (
                 <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm text-center">
                   <Star className="w-10 h-10 text-muted-foreground/20" />
                   <div>

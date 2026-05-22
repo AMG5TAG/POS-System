@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable } from "@workspace/db";
-import { eq, and, ilike, sql } from "drizzle-orm";
+import { eq, and, ilike, sql, or } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListProductsQueryParams,
@@ -136,7 +136,12 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
   const { search, categoryId, limit = 50, offset = 0 } = queryParams.data;
   const brandIdRaw = req.query.brandId ? parseInt(String(req.query.brandId)) : undefined;
   const conditions = [eq(productsTable.merchantId, req.session.merchantId!)];
-  if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
+  if (search) conditions.push(or(
+    ilike(productsTable.name, `%${search}%`),
+    ilike(productsTable.sku, `%${search}%`),
+    ilike(productsTable.barcode, `%${search}%`),
+    ilike(productsTable.tagsJson, `%${search}%`),
+  )!);
   if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
   if (brandIdRaw && !isNaN(brandIdRaw)) conditions.push(eq(productsTable.brandId, brandIdRaw));
 
