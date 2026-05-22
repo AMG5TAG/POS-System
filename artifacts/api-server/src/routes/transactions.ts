@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -87,7 +87,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     const customers = await db
       .select()
       .from(customersTable)
-      .where(inArray(customersTable.id, customerIds));
+      .where(and(inArray(customersTable.id, customerIds), eq(customersTable.merchantId, req.session.merchantId!)));
     customers.forEach((c) => customerMap.set(c.id, c));
   }
 
@@ -106,7 +106,76 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
 
   const { subtotal, taxTotal, discountTotal = 0, total, amountTendered, changeDue, items, customerId, staffId, paymentMethod, notes, loyaltyEarned, receiptNumber: providedReceiptNumber } = parsed.data;
 
+  // Tenant isolation: any provided customerId must belong to this merchant.
+  let scopedCustomer: typeof customersTable.$inferSelect | null = null;
+  if (customerId != null) {
+    const [c] = await db
+      .select()
+      .from(customersTable)
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+    if (!c) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    scopedCustomer = c;
+  }
+
+  // Loyalty payment invariants — enforced server-side, not just in the UI.
+  // Use ceil so a fractional total like $10.99 requires 11 points, never 10.
+  const requiredLoyaltyPoints = Math.max(0, Math.ceil(total));
+  if (paymentMethod === "loyalty") {
+    if (!scopedCustomer) {
+      res.status(400).json({ error: "Loyalty payments require a customer" });
+      return;
+    }
+    if (requiredLoyaltyPoints > scopedCustomer.loyaltyPoints) {
+      res.status(400).json({ error: "Insufficient loyalty balance" });
+      return;
+    }
+  }
+
+  // Sanitize loyaltyEarned BEFORE persisting so the stored transaction
+  // record matches what the customer balance is credited with. Never trust
+  // the client value blindly.
+  let sanitizedEarned = 0;
+  if (scopedCustomer && paymentMethod !== "loyalty" && loyaltyEarned != null) {
+    const [loyaltyRow] = await db
+      .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled })
+      .from(loyaltySettingsTable)
+      .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+    const programType = loyaltyRow?.programType ?? "cashback";
+    const isMonetary = programType === "cashback" || programType === "tiered" || programType === "custom";
+    const programOn = loyaltyRow?.isEnabled === "true";
+    if (programOn && isMonetary) {
+      sanitizedEarned = Math.max(0, Math.min(Math.floor(loyaltyEarned), Math.floor(total)));
+    }
+  }
+
   const receiptNumber = providedReceiptNumber || generateReceiptNumber();
+
+  // Persist sanitized monetary fields, never raw client input.
+  //   - Cash: cashier hands over >= total; we accept the actual tendered
+  //     amount (no upper cap) and derive change ourselves. Reject under-tender.
+  //   - Loyalty: tender equals the required points (in dollars), change = 0.
+  //   - All other methods: force tendered = total, change = 0.
+  let persistedTendered: number;
+  let persistedChange: number;
+  if (paymentMethod === "cash") {
+    const cashTendered = Math.max(0, amountTendered ?? total);
+    if (cashTendered < total - 0.009) {
+      res.status(400).json({ error: "Cash tendered is less than the sale total" });
+      return;
+    }
+    persistedTendered = cashTendered;
+    persistedChange = Math.max(0, cashTendered - total);
+  } else if (paymentMethod === "loyalty") {
+    persistedTendered = requiredLoyaltyPoints;
+    persistedChange = 0;
+  } else {
+    persistedTendered = total;
+    persistedChange = 0;
+  }
+  void changeDue; // client-supplied changeDue is intentionally ignored
 
   const [transaction] = await db
     .insert(transactionsTable)
@@ -121,10 +190,10 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       discountTotal: discountTotal.toString(),
       total: total.toString(),
       paymentMethod,
-      amountTendered: amountTendered?.toString(),
-      changeDue: changeDue?.toString(),
+      amountTendered: persistedTendered.toString(),
+      changeDue: persistedChange.toString(),
       notes: notes ?? null,
-      loyaltyEarned: loyaltyEarned?.toString() ?? null,
+      loyaltyEarned: sanitizedEarned > 0 ? sanitizedEarned.toString() : null,
       items,
     })
     .returning();
@@ -148,16 +217,20 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  // Update customer stats atomically — no pre-fetch needed
-  if (customerId) {
+  // Update customer stats atomically using values sanitized above.
+  if (scopedCustomer) {
+    const redeemed = paymentMethod === "loyalty" ? requiredLoyaltyPoints : 0;
+    const loyaltyDelta = paymentMethod === "loyalty"
+      ? sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${redeemed})`
+      : sql`${customersTable.loyaltyPoints} + ${sanitizedEarned}`;
     await db
       .update(customersTable)
       .set({
         totalSpent:    sql`(${customersTable.totalSpent}::numeric + ${total})::text`,
         visitCount:    sql`${customersTable.visitCount} + 1`,
-        loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${Math.floor(total)}`,
+        loyaltyPoints: loyaltyDelta,
       })
-      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+      .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
   }
 
   // Auto-complete linked service job or appointment
@@ -210,7 +283,7 @@ router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => 
   }
   let customer = null;
   if (transaction.customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, transaction.customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
     customer = c ?? null;
   }
   res.json(formatTransaction(transaction, customer));

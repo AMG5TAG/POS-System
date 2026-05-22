@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProducts, useListCategories, useCreateTransaction,
@@ -67,6 +68,7 @@ function formatKode(profit: number): string {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function POSPage() {
+  const [, setLocation] = useLocation();
   /* product browse */
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
@@ -101,7 +103,9 @@ export default function POSPage() {
 
   /* payment */
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState<PaymentMethodId>(getEnabledPaymentMethods()[0]);
+  const [payMethod, setPayMethod] = useState<PaymentMethodId>(
+    () => getEnabledPaymentMethods()[0] ?? "cash"
+  );
   const [numpadInput, setNumpadInput] = useState("");
 
   /* receipt */
@@ -313,10 +317,15 @@ export default function POSPage() {
     return result;
   }, [total]);
 
-  /* Numpad derived */
-  const enteredAmount = numpadInput ? (parseFloat(numpadInput) || 0) : total;
-  const changeDue = Math.max(0, enteredAmount - total);
-  const amountRemaining = Math.max(0, total - enteredAmount);
+  /* Numpad derived — only cash and loyalty use the numpad for amount entry.
+     For all other methods (EFTPOS, card, voucher, etc.) the tendered amount
+     always equals the total since the terminal/processor charges exact. */
+  const numpadIsRelevant = payMethod === "cash" || payMethod === "loyalty";
+  const enteredAmount = numpadIsRelevant
+    ? (numpadInput ? (parseFloat(numpadInput) || 0) : total)
+    : total;
+  const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - total) : 0;
+  const amountRemaining = payMethod === "cash" ? Math.max(0, total - enteredAmount) : 0;
 
   /* One-time migration: move any old localStorage parked sales into the API */
   useEffect(() => {
@@ -371,11 +380,19 @@ export default function POSPage() {
     if (paymentModalOpen) {
       const enabled = getEnabledPaymentMethods();
       const first = ALL_PAYMENT_METHODS.find(m => enabled.includes(m.id));
-      if (first) setPayMethod(first.id);
+      setPayMethod(first?.id ?? "cash");
       setNumpadInput("");
       setReceiptMode("idle");
     }
   }, [paymentModalOpen]);
+
+  /* Clear numpad when switching to a method that doesn't use it,
+     so a stale partial amount doesn't get sent for EFTPOS/card/etc. */
+  useEffect(() => {
+    if (payMethod !== "cash" && payMethod !== "loyalty") {
+      setNumpadInput("");
+    }
+  }, [payMethod]);
 
   const handleNumpad = (key: string) => {
     setNumpadInput(prev => {
@@ -671,7 +688,11 @@ export default function POSPage() {
     if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
   };
 
-  const handleCheckout = (paymentMethod: TransactionInputPaymentMethod, amountTendered: number) => {
+  const handleCheckout = (
+    paymentMethod: TransactionInputPaymentMethod,
+    amountTendered: number,
+    extraNote?: string,
+  ) => {
     const txItems = cart.map(i => ({
       productId: i.product.id,
       productName: i.product.name,
@@ -684,6 +705,7 @@ export default function POSPage() {
     const notesParts = [
       linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
       linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
+      extraNote || null,
       saleNotes || null,
     ].filter(Boolean);
 
@@ -699,6 +721,19 @@ export default function POSPage() {
     const n = Math.floor(Math.random() * Math.pow(10, receiptDigits));
     const receiptNumber = `${receiptPrefix}${String(n).padStart(receiptDigits, "0")}`;
 
+    /* Only send loyaltyEarned for monetary loyalty programs (cashback/tiered/custom).
+       For "points"/"stamp" programs the value is a count, not currency, so it
+       must not land in the loyaltyEarned decimal column. And don't credit
+       loyalty when the customer is paying WITH loyalty. */
+    const programType = loyaltySettings?.programType;
+    const isMonetaryLoyalty =
+      programType === "cashback" || programType === "tiered" || programType === "custom";
+    const sendLoyaltyEarned =
+      !walkIn &&
+      loyaltyAmount > 0 &&
+      isMonetaryLoyalty &&
+      paymentMethod !== "loyalty";
+
     createTransactionMutation.mutate({
       data: {
         items: txItems, paymentMethod, subtotal, taxTotal,
@@ -706,7 +741,7 @@ export default function POSPage() {
         total, amountTendered,
         customerId: selectedCustomer?.id,
         staffId: currentStaff?.id,
-        loyaltyEarned: !walkIn && loyaltyAmount > 0 ? loyaltyAmount : undefined,
+        loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
         receiptNumber,
       }
@@ -738,7 +773,16 @@ export default function POSPage() {
         setPaymentModalOpen(false);
         setTimeout(() => setReceiptOpen(true), 250);
       },
-      onError: () => toast.error("Failed to process transaction"),
+      onError: (err: unknown) => {
+        console.error("createTransaction failed:", err);
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "object" && err !== null && "error" in err
+              ? String((err as { error: unknown }).error)
+              : "Failed to process transaction";
+        toast.error(message);
+      },
     });
   };
 
@@ -1481,15 +1525,52 @@ export default function POSPage() {
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
                   (payMethod === "loyalty" && selectedCustomer != null && (() => {
-                    const isCashType = loyaltySettings?.programType === "cashback" || loyaltySettings?.programType === "tiered" || loyaltySettings?.programType === "custom";
+                    // Loyalty payment: must cover the full sale total. Server
+                    // requires ceil(total) points (e.g. $10.99 → 11 points),
+                    // so the entered amount must be >= required and <=
+                    // available balance.
                     const enteredLoyalty = parseFloat(numpadInput) || 0;
-                    return isCashType && enteredLoyalty > 0 && enteredLoyalty > (selectedCustomer?.loyaltyPoints ?? 0);
+                    const balance = selectedCustomer?.loyaltyPoints ?? 0;
+                    const required = Math.ceil(total);
+                    return (
+                      enteredLoyalty < required ||
+                      enteredLoyalty > balance ||
+                      required > balance
+                    );
                   })())
                 }
                 onClick={() => {
+                  // Gate flows that need a dedicated lifecycle.
+                  if (payMethod === "laybuy") {
+                    toast.info("Laybuy uses its own ledger — opening the Laybuys module.");
+                    setPaymentModalOpen(false);
+                    setLocation("/pos/laybuys");
+                    return;
+                  }
+                  if (payMethod === "split") {
+                    toast.error("Split payments aren't supported yet. Please choose a single payment method.");
+                    return;
+                  }
+                  // For integration methods, preserve the integration key in
+                  // notes so the transaction stays auditable per integration.
+                  // Compute the tag locally and pass it through handleCheckout
+                  // so we don't depend on async setState reaching the payload.
+                  const isIntegration = String(payMethod).startsWith("__intg__");
                   const apiMethod: TransactionInputPaymentMethod =
-                    String(payMethod).startsWith("__intg__") ? "other" : payMethod as TransactionInputPaymentMethod;
-                  handleCheckout(apiMethod, enteredAmount);
+                    isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
+                  let extraNote: string | undefined;
+                  if (isIntegration) {
+                    const key = String(payMethod).slice("__intg__".length);
+                    const label = INTEGRATION_PAYMENT_LABELS[key] ?? key;
+                    extraNote = `[Payment via ${label} (${key})]`;
+                  }
+                  // For loyalty payments, tender the entered loyalty amount
+                  // (not the auto-defaulted total) so the server deducts
+                  // exactly what the cashier chose to redeem.
+                  const tendered = payMethod === "loyalty"
+                    ? (parseFloat(numpadInput) || 0)
+                    : enteredAmount;
+                  handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
                 {createTransactionMutation.isPending ? "Processing…" : "Complete Sale"}
