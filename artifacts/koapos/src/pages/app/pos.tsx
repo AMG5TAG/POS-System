@@ -481,31 +481,6 @@ export default function POSPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  /* ── Click anywhere on POS page to reveal collapsed sidebar ─────────────── */
-  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar();
-  const posPageRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const posPage = posPageRef.current;
-    if (!posPage) return;
-    const handler = (e: MouseEvent) => {
-      // Only trigger on left-clicks inside the POS page area, not on interactive elements
-      const target = e.target as HTMLElement;
-      if (
-        sidebarState === "collapsed" &&
-        e.button === 0 &&
-        !target.closest("button") &&
-        !target.closest("a") &&
-        !target.closest("input") &&
-        !target.closest("textarea") &&
-        !target.closest("[data-slot=sidebar]" as never)
-      ) {
-        setSidebarOpen(true);
-      }
-    };
-    posPage.addEventListener("mousedown", handler);
-    return () => posPage.removeEventListener("mousedown", handler);
-  }, [sidebarState, setSidebarOpen]);
-
   /* Filtered customers for inline dropdown */
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.toLowerCase();
@@ -1035,7 +1010,8 @@ export default function POSPage() {
   /* ── Render ── */
   return (
     <AppLayout hideSidebar>
-      <div ref={posPageRef} className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
+      <POSPageExpander>
+      <div className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
 
         {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
@@ -2428,6 +2404,34 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
+      </POSPageExpander>
     </AppLayout>
   );
+}
+
+/* ── Click anywhere on POS page to reveal collapsed sidebar ─────────────── */
+function POSPageExpander({ children }: { children: React.ReactNode }) {
+  const { state, setOpen } = useSidebar();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        state === "collapsed" &&
+        e.button === 0 &&
+        !target.closest("button") &&
+        !target.closest("a") &&
+        !target.closest("input") &&
+        !target.closest("textarea") &&
+        !target.closest("[data-slot=sidebar]")
+      ) {
+        setOpen(true);
+      }
+    };
+    el.addEventListener("mousedown", handler);
+    return () => el.removeEventListener("mousedown", handler);
+  }, [state, setOpen]);
+  return <div ref={ref} className="contents">{children}</div>;
 }
