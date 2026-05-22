@@ -6,9 +6,11 @@ import {
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
+  useGetMerchant,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, Transaction,
 } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +63,12 @@ type RegisterSession = {
 
 const DISPLAY_KEY = "koapos_pos_display";
 
+const DEFAULT_RECEIPT_OPTS = {
+  headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
+  showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
+  showPaymentMethods: true, showGstBreakdown: true,
+};
+
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
   const sign = profit < 0 ? "-" : "";
@@ -104,6 +112,10 @@ export default function POSPage() {
   const [saleNotes, setSaleNotes] = useState("");
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
 
+  /* merchant / business data for receipts */
+  const { data: merchantData } = useGetMerchant();
+  const { profile: businessProfile } = useBusinessProfile();
+
   /* parked sales — API-backed */
   const queryClient = useQueryClient();
   const { data: parkedSalesData = [] } = useListParkedSales();
@@ -126,6 +138,10 @@ export default function POSPage() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [completedTx, setCompletedTx] = useState<Pick<Transaction, "id" | "receiptNumber"> | null>(null);
   const [completedTotal, setCompletedTotal] = useState(0);
+  const [completedCart, setCompletedCart] = useState<CartItem[]>([]);
+  const [completedPaymentMethod, setCompletedPaymentMethod] = useState<string>("card");
+  const [completedSubtotal, setCompletedSubtotal] = useState(0);
+  const [completedTaxTotal, setCompletedTaxTotal] = useState(0);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms">("idle");
@@ -687,6 +703,179 @@ export default function POSPage() {
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
   };
 
+  const printPosReceipt = () => {
+    const businessName = merchantData?.businessName ?? "Your Store";
+    const abn          = businessProfile.abn ?? "";
+    const website      = businessProfile.website ?? "";
+    const email        = businessProfile.contactEmail ?? "";
+    const brandColor   = businessProfile.brandColors?.[0] ?? "#374151";
+
+    const activeTemplates = (() => {
+      try { return JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
+    })();
+    const templateId = activeTemplates.receipts ?? "r-pro";
+    const opts = (() => {
+      try { return { ...DEFAULT_RECEIPT_OPTS, ...JSON.parse(localStorage.getItem(`koapos_tpl_opts_${templateId}`) ?? "{}") as Partial<typeof DEFAULT_RECEIPT_OPTS> }; } catch { return { ...DEFAULT_RECEIPT_OPTS }; }
+    })();
+
+    const receiptNum = completedTx?.receiptNumber ? `#${completedTx.receiptNumber}` : (completedTx ? `#${completedTx.id}` : "");
+    const now = new Date();
+    const date = now.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+
+    const resolveStr = (text: string) => text
+      .replace(/{{business\.name}}/g, businessName)
+      .replace(/{{business\.abn}}/g, abn)
+      .replace(/{{business\.email}}/g, email)
+      .replace(/{{business\.website}}/g, website)
+      .replace(/{{transaction\.total}}/g, formatCurrency(completedTotal))
+      .replace(/{{transaction\.date}}/g, date)
+      .replace(/{{transaction\.number}}/g, receiptNum)
+      .replace(/{{[^}]+}}/g, "");
+
+    const thankYou  = resolveStr(opts.thankYouMsg || "Thank you for your purchase!");
+    const footer    = opts.footerText ? resolveStr(opts.footerText) : "";
+    const header    = opts.headerText ? resolveStr(opts.headerText) : "";
+    const subtotal  = completedSubtotal;
+    const gst       = completedTaxTotal;
+    const total     = completedTotal;
+    const pmLabel   = completedPaymentMethod.toUpperCase();
+
+    const itemRows = completedCart.map((i) => {
+      const price     = i.customPrice ?? i.product.price;
+      const lineTotal = price * i.quantity;
+      const name      = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
+      return { name, qty: i.quantity, lineTotal };
+    });
+
+    let body = "";
+
+    if (templateId === "r-minimal") {
+      body = `
+        <div class="receipt mono">
+          <p class="center bold upper">${businessName}</p>
+          ${opts.showAbn && abn ? `<p class="center">ABN: ${abn}</p>` : ""}
+          <p class="center">${date}</p>
+          ${receiptNum ? `<p class="center">Receipt: ${receiptNum}</p>` : ""}
+          <p class="center divider">─────────────────────────</p>
+          ${header ? `<p class="center">${header}</p>` : ""}
+          ${itemRows.map((i) => `<div class="row"><span>${i.name} ×${i.qty}</span><span>$${i.lineTotal.toFixed(2)}</span></div>`).join("")}
+          <p class="center divider">─────────────────────────</p>
+          <div class="row"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+          ${opts.showGstBreakdown ? `<div class="row"><span>GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
+          <div class="row bold"><span>TOTAL</span><span>$${total.toFixed(2)}</span></div>
+          ${opts.showPaymentMethods ? `<div class="row"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
+          <p class="center divider">─────────────────────────</p>
+          ${thankYou ? `<p class="center">${thankYou}</p>` : ""}
+          ${footer ? `<p class="center gray">${footer}</p>` : ""}
+          ${opts.showWebsite && website ? `<p class="center gray">${website}</p>` : ""}
+        </div>`;
+    } else if (templateId === "r-casual") {
+      body = `
+        <div class="receipt">
+          <div class="center mb">
+            ${opts.showLogo ? `<div class="logo-circle" style="background:${brandColor}">${businessName.charAt(0)}</div>` : ""}
+            <p class="bold big">${businessName}</p>
+            ${opts.showTagline ? `<p class="gray small">Quality you can trust</p>` : ""}
+            ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
+            <p class="gray small">${date}</p>
+            ${receiptNum ? `<p class="gray small">Receipt: ${receiptNum}</p>` : ""}
+          </div>
+          ${header ? `<p class="center small">${header}</p>` : ""}
+          <div class="items-box">
+            ${itemRows.map((i) => `<div class="row small"><span>${i.name} ×${i.qty}</span><span>$${i.lineTotal.toFixed(2)}</span></div>`).join("")}
+          </div>
+          <div class="mt small">
+            <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+            ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST incl.</span><span>$${gst.toFixed(2)}</span></div>` : ""}
+            <div class="row bold bdr-t" style="color:${brandColor}"><span>Total</span><span>$${total.toFixed(2)}</span></div>
+            ${opts.showPaymentMethods ? `<div class="row small gray"><span>${completedPaymentMethod}</span><span>Approved</span></div>` : ""}
+          </div>
+          <div class="center gray small mt">
+            ${thankYou ? `<p>${thankYou}</p>` : ""}
+            ${footer ? `<p>${footer}</p>` : ""}
+            ${opts.showWebsite && email ? `<p class="blue">${email}</p>` : ""}
+          </div>
+        </div>`;
+    } else {
+      body = `
+        <div class="receipt">
+          <div class="center bdr-b pb mb">
+            ${opts.showLogo ? `<div class="logo-square" style="background:${brandColor}"></div>` : ""}
+            <p class="bold upper tracking">${businessName}</p>
+            ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
+            ${opts.showWebsite && website ? `<p class="gray small">${website}</p>` : ""}
+            <p class="gray small">${date}</p>
+            ${receiptNum ? `<p class="gray small">Receipt: ${receiptNum}</p>` : ""}
+          </div>
+          ${header ? `<p class="center small mb">${header}</p>` : ""}
+          <table>
+            <thead><tr><th class="left">Item</th><th class="tcenter">Qty</th><th class="right">Amt</th></tr></thead>
+            <tbody>
+              ${itemRows.map((i) => `<tr><td>${i.name}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+          <div class="bdr-t pt small">
+            <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+            ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
+            <div class="row bold"><span>TOTAL AUD</span><span>$${total.toFixed(2)}</span></div>
+            ${opts.showPaymentMethods ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
+          </div>
+          <div class="center gray small bdr-t pt mt">
+            ${thankYou ? `<p>${thankYou}</p>` : ""}
+            ${footer ? `<p>${footer}</p>` : ""}
+          </div>
+        </div>`;
+    }
+
+    const css = `
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: sans-serif; font-size: 12px; color: #1f2937; background: #fff; padding: 16px; }
+      .receipt { max-width: 300px; margin: 0 auto; }
+      .mono * { font-family: 'Courier New', monospace !important; }
+      .mono { font-family: 'Courier New', monospace; font-size: 11px; }
+      .center { text-align: center; }
+      .left { text-align: left; }
+      .right { text-align: right; }
+      .tcenter { text-align: center; }
+      .bold { font-weight: bold; }
+      .upper { text-transform: uppercase; }
+      .tracking { letter-spacing: 0.05em; }
+      .gray { color: #9ca3af; }
+      .blue { color: #3b82f6; }
+      .small { font-size: 10px; }
+      .big { font-size: 14px; }
+      .mb { margin-bottom: 8px; }
+      .mt { margin-top: 8px; }
+      .pb { padding-bottom: 8px; }
+      .pt { padding-top: 8px; }
+      .bdr-b { border-bottom: 1px solid #e5e7eb; }
+      .bdr-t { border-top: 1px solid #e5e7eb; }
+      .divider { color: #9ca3af; margin: 2px 0; letter-spacing: 0; }
+      .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+      .bdr-t.bold { padding-top: 4px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 4px 0; }
+      thead tr { border-bottom: 1px solid #e5e7eb; }
+      th { font-weight: 500; padding-bottom: 2px; font-size: 10px; color: #6b7280; }
+      td { padding: 2px 0; }
+      .items-box { background: #f9fafb; padding: 8px; border-radius: 4px; margin: 4px 0; }
+      .logo-circle { width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; }
+      .logo-square { width: 20px; height: 20px; border-radius: 2px; margin: 0 auto 4px; }
+      @media print {
+        body { padding: 0; }
+        @page { margin: 8mm; size: 80mm auto; }
+      }
+    `;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${receiptNum}</title><style>${css}</style></head><body>${body}</body></html>`;
+    const win = window.open("", "_blank", "width=400,height=600,scrollbars=yes");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => { win.print(); }, 400);
+    }
+  };
+
   const selectCustomer = (c: Customer) => {
     setSelectedCustomer(c); setWalkIn(null);
     setCustomerOpen(false); setCustomerSearch("");
@@ -780,8 +969,12 @@ export default function POSPage() {
             localStorage.setItem("koapos_register_session", JSON.stringify(s));
           }
         } catch { /* ignore */ }
-        // Capture total before cart is cleared
+        // Capture total + cart before clearing
         const saleTotal = total;
+        setCompletedCart([...cart]);
+        setCompletedPaymentMethod(paymentMethod);
+        setCompletedSubtotal(subtotal);
+        setCompletedTaxTotal(taxTotal);
         clearCart();
         setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
         setCompletedTotal(saleTotal);
@@ -1732,7 +1925,7 @@ export default function POSPage() {
           {receiptMode === "idle" && (
             <div className="space-y-2 py-1">
               <p className="text-xs font-medium text-center text-muted-foreground mb-3">How would you like to send the receipt?</p>
-              <Button variant="outline" className="w-full justify-start gap-3 h-11" onClick={() => window.print()}>
+              <Button variant="outline" className="w-full justify-start gap-3 h-11" onClick={printPosReceipt}>
                 <Printer className="w-4 h-4" /> Print Receipt
               </Button>
               <Button
