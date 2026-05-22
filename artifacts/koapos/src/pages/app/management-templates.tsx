@@ -42,6 +42,7 @@ interface TplOpts {
   customMessage:   string;
   subjectLine:     string;
   messageText:     string;
+  bankDetails:     string;
   // Toggles
   showLogo:             boolean;
   showAbn:              boolean;
@@ -50,6 +51,9 @@ interface TplOpts {
   showPaymentMethods:   boolean;
   showGstBreakdown:     boolean;
   showSocialLinks:      boolean;
+  showLoyaltyEarned:    boolean;
+  showCustomerQr:       boolean;
+  showAllCustomerDetails: boolean;
   sendAfterSale:        boolean;
   sendForLayby:         boolean;
   printCustomerCopy:    boolean;
@@ -63,6 +67,7 @@ interface TplOpts {
   showCallHistory:      boolean;
   callHistoryRows:      string;
   warrantyText:         string;
+  jobNoFontSize:        string;
 }
 
 const DEFAULT_OPTS: TplOpts = {
@@ -71,12 +76,14 @@ const DEFAULT_OPTS: TplOpts = {
   paymentTerms: "Payment due within 30 days.", invoiceNotes: "",
   customMessage: "", subjectLine: "Your receipt from {{business.name}} — {{transaction.number}}",
   messageText: "Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Total: {{transaction.total}} on {{transaction.date}}. {{business.website}}",
+  bankDetails: "",
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false,
+  showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
-  callHistoryRows: "6", warrantyText: "",
+  callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
 };
 
 function useTplOpts(templateId: string) {
@@ -129,28 +136,36 @@ interface FieldDef {
 function getOptionsConfig(category: Category): FieldDef[] {
   switch (category) {
     case "receipts": return [
-      { section: "Header", key: "showLogo",          label: "Show Logo",           type: "toggle" },
+      { section: "Header", key: "showLogo",          label: "Show Business Logo",  type: "toggle" },
       { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
       { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
       { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. Welcome to {{business.name}}", quickCodes: true },
       { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
       { section: "Body",   key: "showPaymentMethods", label: "Show Payment Method", type: "toggle" },
-      { section: "Body",   key: "showBarcode",        label: "Show Barcode",        type: "toggle" },
+      { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
+      { section: "Body",   key: "showBarcode",        label: "Show Sale Barcode",   type: "toggle", hint: "Scannable barcode to retrieve this sale" },
+      { section: "Body",   key: "showCustomerQr",     label: "Show Customer QR",    type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Returns within 30 days", quickCodes: true },
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
       { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
     ];
     case "invoices": return [
-      { section: "Header", key: "showLogo",           label: "Show Logo",           type: "toggle" },
-      { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
-      { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
-      { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
-      { section: "Body",   key: "showPaymentMethods", label: "Show Payment Methods",type: "toggle" },
-      { section: "Terms",  key: "paymentTerms",       label: "Payment Terms",       type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
-      { section: "Terms",  key: "invoiceNotes",       label: "Invoice Notes",       type: "textarea", placeholder: "e.g. Bank: ANZ · BSB: 012-345 · Account: 123456789", quickCodes: true },
-      { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
-      { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
+      { section: "Header",   key: "showLogo",                label: "Show Business Logo",      type: "toggle" },
+      { section: "Header",   key: "showAbn",                 label: "Show ABN",                type: "toggle" },
+      { section: "Header",   key: "showTagline",             label: "Show Tagline",            type: "toggle" },
+      { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
+      { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",   type: "toggle", hint: "QR code linked to customer loyalty profile" },
+      { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",      type: "toggle" },
+      { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",     type: "toggle" },
+      { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",       type: "toggle", hint: "Scannable barcode to retrieve this sale" },
+      { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",   type: "toggle", hint: "Shows methods enabled in POS Registers" },
+      { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",   type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
+      { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",           type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
+      { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",           type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
+      { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",   type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "footerText",              label: "Footer Text",             type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Footer",   key: "showWebsite",             label: "Show Website",            type: "toggle" },
     ];
     case "a4receipts": return [
       { section: "Header", key: "showLogo",           label: "Show Logo",           type: "toggle" },
@@ -185,6 +200,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
       { section: "Header",   key: "headerText",           label: "Sheet Title",              type: "text",     placeholder: "SERVICE JOB SHEET" },
+      { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "text",     placeholder: "normal", hint: 'Enter "normal", "large", or "xlarge"' },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
       { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
       { section: "Sections", key: "showWorkDescription",  label: "Show Fault / Work Req.",   type: "toggle" },
@@ -562,6 +578,65 @@ function resolveCode(text: string, businessName: string, abn: string, website: s
     .replace(/{{[^}]+}}/g,             "…");
 }
 
+/* ─── Visual Barcode (SVG, Code 128-style preview) ───────────────────────── */
+
+function BarcodeSVG({ value = "TXN-1042", width = 130, height = 28 }: { value?: string; width?: number; height?: number }) {
+  const seed = Array.from(value).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const bars: { w: number; dark: boolean }[] = [];
+  let total = 0;
+  let state = true;
+  for (let i = 0; i < 38; i++) {
+    const w = 1 + ((seed * (i + 7) * 31) % 3);
+    bars.push({ w, dark: state });
+    total += w;
+    state = !state;
+  }
+  const scale = width / total;
+  let x = 0;
+  return (
+    <div className="text-center">
+      <svg width={width} height={height - 6} viewBox={`0 0 ${width} ${height - 6}`} xmlns="http://www.w3.org/2000/svg">
+        {bars.map((b, i) => {
+          const rx = x;
+          x += b.w * scale;
+          return b.dark ? <rect key={i} x={rx} y={0} width={b.w * scale} height={height - 6} fill="#111" /> : null;
+        })}
+      </svg>
+      <p className="font-mono text-[7px] text-gray-500 tracking-[0.15em] mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+/* ─── Visual QR Code (CSS grid pattern, preview only) ────────────────────── */
+
+function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?: number }) {
+  const seed = Array.from(label).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const N = 9;
+  const cells = Array.from({ length: N * N }, (_, i) => {
+    const r = Math.floor(i / N);
+    const c = i % N;
+    const isCornerBlock = (r < 3 && c < 3) || (r < 3 && c > N - 4) || (r > N - 4 && c < 3);
+    const isCornerBorder = (r === 0 || r === 2) && (c < 3 || c > N - 4) ||
+                           (c === 0 || c === 2) && (r < 3 || r > N - 4) ||
+                           (r === N - 1 || r === N - 3) && c < 3 ||
+                           (c === N - 1 || c === N - 3) && r > N - 4;
+    if (isCornerBlock && !isCornerBorder) return true;
+    const h = Math.abs(Math.sin(seed * (r * N + c + 1) * 0.31)) > 0.45;
+    return h;
+  });
+  const cellPx = size / N;
+  return (
+    <div className="inline-block border border-gray-300 p-0.5 bg-white rounded-sm" title={label}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${N}, ${cellPx}px)`, gap: 0, width: size, height: size }}>
+        {cells.map((filled, i) => (
+          <div key={i} style={{ width: cellPx, height: cellPx, background: filled ? "#111" : "#fff" }} />
+        ))}
+      </div>
+      <p className="font-mono text-[6px] text-gray-400 text-center mt-0.5">{label}</p>
+    </div>
+  );
+}
+
 function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
@@ -570,10 +645,25 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   const footerMsg = opts.thankYouMsg || "Thank you for your purchase!";
   const footer    = opts.footerText;
 
+  const BarcodeBlock = () => opts.showBarcode ? (
+    <div className="border-t pt-1.5 mt-1"><BarcodeSVG value="TXN-1042" width={120} height={26} /></div>
+  ) : null;
+
+  const QrBlock = () => opts.showCustomerQr ? (
+    <div className="flex justify-center border-t pt-1.5 mt-1"><QRCodeVisual label="CUS-0042" size={40} /></div>
+  ) : null;
+
+  const LoyaltyBlock = () => opts.showLoyaltyEarned ? (
+    <div className="flex justify-between text-[9px] text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 mt-1">
+      <span>★ Loyalty Earned</span><span>+19 pts</span>
+    </div>
+  ) : null;
+
   if (templateId === "r-minimal") {
     return (
       <div className="font-mono text-xs text-gray-800 space-y-0.5 leading-snug">
         <p className="text-center font-bold uppercase">{businessName}</p>
+        {opts.showTagline && <p className="text-center text-[9px]">Quality you can trust</p>}
         {opts.showAbn && abn && <p className="text-center">ABN: {abn}</p>}
         <p className="text-center">{date}</p>
         <p className="text-center">─────────────────</p>
@@ -582,10 +672,14 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
         {opts.showGstBreakdown && <div className="flex justify-between"><span>GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL</span><span>${subtotal.toFixed(2)}</span></div>
+        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
+        <LoyaltyBlock />
         <p className="text-center">─────────────────</p>
         {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
+        <BarcodeBlock />
+        <QrBlock />
       </div>
     );
   }
@@ -594,8 +688,9 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
       <div className="text-xs text-gray-800 font-sans">
         <div className="text-center mb-2">
           {opts.showLogo && <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
-          <p className="font-bold text-base">{businessName} ☕</p>
+          <p className="font-bold text-base">{businessName}</p>
           {opts.showTagline && <p className="text-gray-400 text-[10px] italic">Quality you can trust</p>}
+          {opts.showAbn && abn && <p className="text-gray-400 text-[9px]">ABN {abn}</p>}
           <p className="text-gray-500 text-[10px]">{date}</p>
         </div>
         <div className="bg-gray-50 rounded p-2 space-y-1 text-[10px]">
@@ -604,12 +699,16 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <div className="mt-2 space-y-0.5 text-[10px]">
           {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST incl.</span><span>${gst.toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-sm border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>${subtotal.toFixed(2)}</span></div>
+          {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
         </div>
+        <LoyaltyBlock />
         <div className="text-center text-[10px] text-gray-400 mt-2 space-y-0.5">
           {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
           {footer    && <p className="text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
-          {opts.showWebsite && email && <p className="text-blue-500">{email}</p>}
+          {opts.showWebsite && website && <p className="text-blue-500">{website}</p>}
         </div>
+        <BarcodeBlock />
+        <QrBlock />
       </div>
     );
   }
@@ -618,6 +717,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
       <div className="text-center border-b pb-2 mb-2">
         {opts.showLogo && <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />}
         <p className="font-bold text-sm uppercase tracking-wide">{businessName}</p>
+        {opts.showTagline && <p className="text-[9px] text-gray-500 italic">Quality you can trust</p>}
         {opts.showAbn && abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
         <p className="text-[10px] text-gray-400">{date}</p>
       </div>
@@ -630,11 +730,14 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <div className="flex justify-between font-bold"><span>TOTAL AUD</span><span>${subtotal.toFixed(2)}</span></div>
         {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
       </div>
+      <LoyaltyBlock />
       <div className="text-center text-[10px] text-gray-400 border-t mt-1 pt-1 space-y-0.5">
         {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p>{website}</p>}
       </div>
+      <BarcodeBlock />
+      <QrBlock />
     </div>
   );
 }
@@ -648,6 +751,63 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const notes = opts.invoiceNotes;
   const footer = opts.footerText;
 
+  const CustomerBlock = () => opts.showAllCustomerDetails ? (
+    <div className="border rounded p-1.5 mb-1.5 text-[9px] space-y-0.5 bg-gray-50">
+      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">Customer</p>
+      <p className="font-medium">Sarah Johnson</p>
+      <p className="text-gray-500">sarah@email.com · (03) 9000 1111</p>
+      <p className="text-gray-500">42 Collins St, Melbourne VIC 3000</p>
+    </div>
+  ) : <p className="font-medium mb-1 text-[10px]">Bill To: Demo Client Pty Ltd</p>;
+
+  const LoyaltyRow = () => opts.showLoyaltyEarned ? (
+    <div className="flex justify-between text-[9px] text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 mt-1">
+      <span>★ Loyalty Earned</span><span>+96 pts</span>
+    </div>
+  ) : null;
+
+  const BarcodeBlock = () => opts.showBarcode ? (
+    <div className="border-t pt-1.5 mt-1.5"><BarcodeSVG value="INV-1042" width={160} height={26} /></div>
+  ) : null;
+
+  const QrBlock = () => opts.showCustomerQr ? (
+    <div className="flex items-center gap-2 border-t pt-1.5 mt-1.5">
+      <QRCodeVisual label="CUS-0042" size={38} />
+      <p className="text-[8px] text-gray-400">Scan to view customer loyalty profile</p>
+    </div>
+  ) : null;
+
+  const PaymentBlock = () => (opts.showPaymentMethods || opts.bankDetails) ? (
+    <div className="border rounded p-1.5 mt-1.5 text-[9px] space-y-0.5">
+      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">Payment</p>
+      {opts.showPaymentMethods && (
+        <div className="flex flex-wrap gap-1">
+          {["EFTPOS", "Cash", "Visa", "Mastercard"].map(m => (
+            <span key={m} className="border rounded px-1 py-0.5 text-[8px] text-gray-600 bg-white">{m}</span>
+          ))}
+        </div>
+      )}
+      {opts.bankDetails && (
+        <p className="text-gray-500 whitespace-pre-wrap font-mono text-[8px]">{opts.bankDetails}</p>
+      )}
+    </div>
+  ) : null;
+
+  const SocialsBlock = () => opts.showSocialLinks ? (
+    <div className="flex gap-2 text-[9px] text-gray-400 mt-1">
+      <span>fb/ YourBusiness</span>
+      <span>ig/ @yourbusiness</span>
+    </div>
+  ) : null;
+
+  const NotesBlock = ({ className }: { className?: string }) => notes ? (
+    <div className={className}>
+      {notes.split("\n").map((line, i) => (
+        <p key={i} className="text-gray-400">{resolveCode(line || " ", businessName, abn, website, email)}</p>
+      ))}
+    </div>
+  ) : null;
+
   if (templateId === "i-minimal") {
     return (
       <div className="text-[10px] font-mono text-gray-800 space-y-1.5">
@@ -655,16 +815,20 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {opts.showAbn && abn && <p className="text-gray-500">ABN: {abn}</p>}
         <p className="text-gray-500">Date: 18/05/2026 · Due: 01/06/2026</p>
         <Separator />
-        <p className="font-bold">Bill To: Demo Client Pty Ltd</p>
+        <CustomerBlock />
         <Separator />
         {items.map((i) => <div key={i.name} className="flex justify-between"><span className="flex-1">{i.name}</span><span className="w-8 text-right">{i.qty}</span><span className="w-16 text-right">${(i.qty * i.price).toFixed(2)}</span></div>)}
         <Separator />
         <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
         {opts.showGstBreakdown && <div className="flex justify-between"><span>GST 10%</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL DUE</span><span>${total.toFixed(2)}</span></div>
+        <LoyaltyRow />
         <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>
-        {notes  && <p className="text-gray-400">{resolveCode(notes, businessName, abn, website, email)}</p>}
+        <NotesBlock />
+        <PaymentBlock />
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
+        <BarcodeBlock />
+        <QrBlock />
       </div>
     );
   }
@@ -674,9 +838,29 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <div className="p-2 rounded-t text-white text-xs font-bold flex justify-between items-center mb-2" style={{ background: brandColor }}>
           <span className="text-base">{businessName}</span><span className="opacity-80">INVOICE #1042</span>
         </div>
+        {opts.showTagline && <p className="text-[9px] text-gray-400 italic mb-1.5">Quality you can trust</p>}
         <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
-          <div><p className="text-gray-400">From</p><p className="font-medium">{businessName}</p>{opts.showAbn && abn && <p className="text-gray-500">ABN {abn}</p>}</div>
-          <div><p className="text-gray-400">Bill To</p><p className="font-medium">Demo Client</p><p className="text-gray-500">18/05/2026</p></div>
+          <div>
+            <p className="text-gray-400">From</p>
+            <p className="font-medium">{businessName}</p>
+            {opts.showAbn && abn && <p className="text-gray-500">ABN {abn}</p>}
+          </div>
+          <div>
+            {opts.showAllCustomerDetails ? (
+              <>
+                <p className="text-gray-400">Bill To</p>
+                <p className="font-medium">Sarah Johnson</p>
+                <p className="text-gray-500 text-[9px]">sarah@email.com</p>
+                <p className="text-gray-500 text-[9px]">(03) 9000 1111</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400">Bill To</p>
+                <p className="font-medium">Demo Client</p>
+                <p className="text-gray-500">18/05/2026</p>
+              </>
+            )}
+          </div>
         </div>
         <table className="w-full text-[10px]">
           <thead><tr className="border-b"><th className="text-left pb-0.5">Description</th><th className="text-right">Total</th></tr></thead>
@@ -686,8 +870,13 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST</span><span>${gst.toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-sm" style={{ color: brandColor }}><span>Total Due</span><span>${total.toFixed(2)}</span></div>
         </div>
+        <LoyaltyRow />
         <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>
-        {notes  && <p className="text-gray-400 text-[9px]">{resolveCode(notes, businessName, abn, website, email)}</p>}
+        <NotesBlock className="text-[9px]" />
+        <PaymentBlock />
+        <SocialsBlock />
+        <BarcodeBlock />
+        <QrBlock />
       </div>
     );
   }
@@ -697,6 +886,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <div>
           {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
           <p className="font-bold text-xs">{businessName}</p>
+          {opts.showTagline && <p className="text-[9px] text-gray-400 italic">Quality you can trust</p>}
           {opts.showAbn    && abn     && <p className="text-gray-500">ABN {abn}</p>}
           {address && <p className="text-gray-500">{address}</p>}
           {email   && <p className="text-gray-500">{email}</p>}
@@ -707,7 +897,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           <p className="text-gray-500">Due: 01/06/2026</p>
         </div>
       </div>
-      <p className="font-medium mb-1">Bill To: Demo Client Pty Ltd</p>
+      <CustomerBlock />
       <table className="w-full text-[10px] mb-1">
         <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-center">Qty</th><th className="text-right">Rate</th><th className="text-right">Total</th></tr></thead>
         <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-center">{i.qty}</td><td className="text-right">${i.price.toFixed(2)}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>)}</tbody>
@@ -716,12 +906,17 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL DUE (AUD)</span><span>${total.toFixed(2)}</span></div>
       </div>
+      <LoyaltyRow />
       <div className="text-gray-400 mt-1 border-t pt-1 text-[10px] space-y-0.5">
         <p>{resolveCode(terms, businessName, abn, website, email)}</p>
-        {notes  && <p>{resolveCode(notes, businessName, abn, website, email)}</p>}
+        <NotesBlock />
         {opts.showWebsite && website && <p>{website}</p>}
         {footer && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
+        <SocialsBlock />
       </div>
+      <PaymentBlock />
+      <BarcodeBlock />
+      <QrBlock />
     </div>
   );
 }
@@ -877,6 +1072,8 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
 function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
+  const jobFontSize = opts.jobNoFontSize?.toLowerCase();
+  const jobNoClass = jobFontSize === "xlarge" ? "text-base font-black" : jobFontSize === "large" ? "text-sm font-bold" : "text-[9px] font-normal";
   return (
     <div className="text-[9px] text-gray-800 font-sans space-y-2">
       {/* Header */}
@@ -892,7 +1089,7 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
           <p className="font-bold text-[11px] uppercase tracking-wide" style={{ color: brandColor }}>
             {opts.headerText || "SERVICE JOB SHEET"}
           </p>
-          <p className="text-gray-500">Job No: <strong>SVC-0001</strong></p>
+          <p className={cn("text-gray-800", jobNoClass)}>Job No: <strong>SVC-0001</strong></p>
           <p className="text-gray-500">Date: {new Date().toLocaleDateString("en-AU")}</p>
           <p className="text-gray-500">Status: <strong>Pending</strong></p>
         </div>
