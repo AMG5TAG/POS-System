@@ -318,6 +318,54 @@ export default function POSPage() {
   const changeDue = Math.max(0, enteredAmount - total);
   const amountRemaining = Math.max(0, total - enteredAmount);
 
+  /* One-time migration: move any old localStorage parked sales into the API */
+  useEffect(() => {
+    const OLD_KEY = "koapos_parked_sales";
+    const raw = localStorage.getItem(OLD_KEY);
+    if (!raw) return;
+    let oldSales: Array<{
+      id: string; parkedAt: string; total: number; label?: string;
+      overallDiscount?: string; saleNotes?: string;
+      selectedCustomer?: { id?: number; firstName?: string; lastName?: string } | null;
+      cart: Array<{ product: { id: number; name?: string | null; price?: number | null }; quantity: number; itemDiscount?: number; customPrice?: number; itemNote?: string }>;
+    }>;
+    try { oldSales = JSON.parse(raw); } catch { localStorage.removeItem(OLD_KEY); return; }
+    if (!Array.isArray(oldSales) || oldSales.length === 0) { localStorage.removeItem(OLD_KEY); return; }
+    const migrate = async () => {
+      for (const sale of oldSales) {
+        const items = (sale.cart ?? []).map(i => ({
+          productId: i.product.id,
+          name: i.product.name ?? "",
+          quantity: i.quantity,
+          price: i.customPrice ?? (i.product.price ?? 0),
+          itemDiscount: i.itemDiscount ?? 0,
+          customPrice: i.customPrice ?? null,
+          itemNote: i.itemNote ?? null,
+        }));
+        const noteParts = [
+          sale.label,
+          sale.saleNotes,
+          sale.overallDiscount ? `Discount:${sale.overallDiscount}` : "",
+        ].filter(Boolean);
+        await fetch("/api/parked-sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            customerId: sale.selectedCustomer?.id ?? undefined,
+            items,
+            total: sale.total ?? 0,
+            note: noteParts.join(" | ") || undefined,
+          }),
+        });
+      }
+      localStorage.removeItem(OLD_KEY);
+      queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+    };
+    void migrate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Reset payment modal when it opens */
   useEffect(() => {
     if (paymentModalOpen) {
