@@ -336,7 +336,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementIntegrationsPage() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
@@ -437,7 +437,10 @@ export default function ManagementIntegrationsPage() {
                       busy={!!connecting[intg.key]}
                       onConnect={() => setModalTarget(intg)}
                       onDisconnect={() => handleDisconnect(intg)}
-                      onOAuth={() => { window.location.href = `/api/integrations/oauth/${intg.key}/start`; }}
+                      onOAuth={() => {
+                        if (intg.key === "xero") { setLocation("/management/xero"); return; }
+                        window.location.href = `/api/integrations/oauth/${intg.key}/start`;
+                      }}
                     />
                   ))}
                 </div>

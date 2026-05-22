@@ -135,10 +135,9 @@ export const INTEGRATIONS = [
     key: "xero",
     label: "Xero",
     category: "Accounting & Finance",
-    description: "Automatically push daily sales summaries, invoices, and refunds into your Xero accounts.",
-    authType: "credentials" as const,
-    fields: [] as { name: string; label: string; type: string }[],
-    comingSoon: true,
+    description: "Push sales, invoices, purchase orders, and contacts directly into Xero with GST mapped automatically.",
+    authType: "oauth" as const,
+    oauthProvider: "xero" as const,
   },
   {
     key: "myob",
@@ -416,6 +415,7 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
           : intg.oauthProvider === "microsoft"  ? !!process.env.MICROSOFT_CLIENT_ID
           : intg.oauthProvider === "dropbox"    ? !!process.env.DROPBOX_APP_KEY
           : intg.oauthProvider === "stripe"     ? !!process.env.STRIPE_CONNECT_CLIENT_ID
+          : intg.oauthProvider === "xero"       ? !!process.env.XERO_CLIENT_ID
           : false
           : null,
     };

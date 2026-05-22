@@ -63,6 +63,7 @@ import ManagementOverviewPage from "@/pages/app/management-overview";
 import ManagementSalesPage from "@/pages/app/management-sales";
 import ManagementRegistersPage from "@/pages/app/management-registers";
 import ManagementIntegrationsPage from "@/pages/app/management-integrations";
+import ManagementXeroPage from "@/pages/app/management-xero";
 import ManagementImportExportPage from "@/pages/app/management-import-export";
 import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
 import ManagementLaybyPage from "@/pages/app/management-layby";
@@ -282,6 +283,9 @@ function Router() {
       </Route>
       <Route path="/management/integrations">
         <ProtectedRoute component={ManagementIntegrationsPage} />
+      </Route>
+      <Route path="/management/xero">
+        <ProtectedRoute component={ManagementXeroPage} />
       </Route>
       <Route path="/management/import-export">
         <ProtectedRoute component={ManagementImportExportPage} />

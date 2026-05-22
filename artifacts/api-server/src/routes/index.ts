@@ -31,6 +31,7 @@ import emailSettingsRouter from "./email-settings";
 import formsRouter from "./forms";
 import formSubmissionsRouter from "./form-submissions";
 import laybysRouter from "./laybys";
+import xeroRouter from "./xero";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(emailSettingsRouter);
 router.use(formsRouter);
 router.use(formSubmissionsRouter);
 router.use(laybysRouter);
+router.use(xeroRouter);
 
 export default router;
