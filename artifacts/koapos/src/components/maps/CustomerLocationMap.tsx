@@ -206,10 +206,10 @@ export function CustomerLocationMap() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-4 items-stretch">
 
         {/* Map */}
-        <div className="rounded-2xl border overflow-hidden" style={{ height: 420 }}>
+        <div className="rounded-2xl border overflow-hidden min-h-[320px]">
           <MapContainer
             center={[-25.2744, 133.7751]}
             zoom={4}
