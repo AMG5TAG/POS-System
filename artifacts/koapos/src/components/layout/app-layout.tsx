@@ -76,8 +76,8 @@ const MARKETING_SUBNAV: NavItem[] = [
     name: "Loyalty",
     icon: Gift,
     children: [
-      { name: "Promotions",  href: "/marketing/loyalty/promotions",  icon: Zap   },
-      { name: "Leaderboard", href: "/marketing/loyalty/leaderboard", icon: Trophy },
+      { name: "Promos",  href: "/marketing/loyalty/promotions",  icon: Zap   },
+      { name: "Leaders", href: "/marketing/loyalty/leaderboard", icon: Trophy },
     ],
   },
 ];
@@ -216,8 +216,8 @@ const SEARCH_INDEX = [
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · QR Codes",             href: "/marketing/generators/qr-codes",      icon: QrCode,     group: "Marketing" },
   { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
-  { label: "Marketing · Loyalty Promotions",   href: "/marketing/loyalty/promotions",       icon: Zap,        group: "Marketing" },
-  { label: "Marketing · Loyalty Leaderboard",  href: "/marketing/loyalty/leaderboard",      icon: Trophy,     group: "Marketing" },
+  { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
+  { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -310,8 +310,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
-  "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promotions"],
-  "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaderboard"],
+  "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
+  "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
