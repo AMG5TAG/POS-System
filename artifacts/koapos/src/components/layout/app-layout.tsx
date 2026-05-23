@@ -16,7 +16,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send,
+  Megaphone, QrCode, BarChart2, Send, Zap,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -70,6 +70,14 @@ const MARKETING_SUBNAV: NavItem[] = [
     children: [
       { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
       { name: "Shortlinks", href: "/marketing/generators/shortlinks",  icon: Link2  },
+    ],
+  },
+  {
+    name: "Loyalty",
+    icon: Gift,
+    children: [
+      { name: "Promotions",  href: "/marketing/loyalty/promotions",  icon: Zap   },
+      { name: "Leaderboard", href: "/marketing/loyalty/leaderboard", icon: Trophy },
     ],
   },
 ];
@@ -129,14 +137,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Inventory",      href: "/management/inventory",      icon: Boxes          },
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
-  {
-    name: "Loyalty",
-    icon: Gift,
-    children: [
-      { name: "Program",     href: "/management/loyalty",             icon: Gift       },
-      { name: "Leaderboard", href: "/management/loyalty/leaderboard", icon: Trophy     },
-    ],
-  },
+  { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
@@ -157,7 +158,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Tax & Receipts", href: "/management/tax",            icon: Receipt        },
-  { name: "Templates",      href: "/management/templates",      icon: LayoutTemplate },
+  { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -206,15 +207,17 @@ const SEARCH_INDEX = [
   { label: "Account",            href: "/management/account",          icon: UserCircle,      group: "Management" },
   { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
-  { label: "Templates",          href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Sale Templates",      href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
   { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
-  { label: "Marketing · Overview",          href: "/marketing",                       icon: BarChart2,  group: "Marketing" },
-  { label: "Marketing · Campaigns",   href: "/marketing/email/campaigns",        icon: Send,       group: "Marketing" },
-  { label: "Marketing · Email Templates",   href: "/marketing/email/templates",        icon: FileText,   group: "Marketing" },
-  { label: "Marketing · QR Codes",          href: "/marketing/generators/qr-codes",    icon: QrCode,     group: "Marketing" },
-  { label: "Marketing · Shortlinks",        href: "/marketing/generators/shortlinks",  icon: Link2,      group: "Marketing" },
+  { label: "Marketing · Overview",             href: "/marketing",                          icon: BarChart2,  group: "Marketing" },
+  { label: "Marketing · Campaigns",            href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
+  { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
+  { label: "Marketing · QR Codes",             href: "/marketing/generators/qr-codes",      icon: QrCode,     group: "Marketing" },
+  { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
+  { label: "Marketing · Loyalty Promotions",   href: "/marketing/loyalty/promotions",       icon: Zap,        group: "Marketing" },
+  { label: "Marketing · Loyalty Leaderboard",  href: "/marketing/loyalty/leaderboard",      icon: Trophy,     group: "Marketing" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -288,15 +291,14 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/kpis":             ["Management", "KPIs & Targets"],
   "/management/integrations":     ["Management", "Integrations"],
   "/management/import-export":    ["Management", "Import / Export"],
-  "/management/loyalty":              ["Management", "Loyalty", "Program"],
-  "/management/loyalty/leaderboard":  ["Management", "Loyalty", "Leaderboard"],
+  "/management/loyalty":              ["Management", "Loyalty"],
   "/management/inventory":        ["Management", "Inventory"],
   "/management/discounts":        ["Management", "Discounts"],
   "/inventory/wastage":           ["Inventory", "Wastage"],
   "/settings/tax":                ["Management", "Tax & Receipts"],
   "/management/tax":              ["Management", "Tax & Receipts"],
   "/management/email":            ["Management", "Email"],
-  "/management/templates":        ["Management", "Templates"],
+  "/management/templates":        ["Management", "Sale Templates"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
   "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
   "/pos/pc-builder":                     ["POS", "PC Builder"],
@@ -308,6 +310,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
+  "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promotions"],
+  "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaderboard"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */

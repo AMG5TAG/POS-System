@@ -92,6 +92,7 @@ import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
 import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
 import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
 import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
+import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
 import NotFound from "@/pages/not-found";
@@ -389,6 +390,12 @@ function Router() {
       </Route>
       <Route path="/marketing/generators/shortlinks">
         <ProtectedRoute component={MarketingShortlinksPage} />
+      </Route>
+      <Route path="/marketing/loyalty/promotions">
+        <ProtectedRoute component={MarketingLoyaltyPromotionsPage} />
+      </Route>
+      <Route path="/marketing/loyalty/leaderboard">
+        <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
 
       <Route component={NotFound} />
