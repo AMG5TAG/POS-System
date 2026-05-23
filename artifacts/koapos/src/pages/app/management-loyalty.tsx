@@ -536,43 +536,6 @@ export default function ManagementLoyaltyPage() {
           </CardContent>
         </Card>
 
-        {/* Customer group exclusions */}
-        <Card id="excluded-groups">
-          <CardHeader>
-            <CardTitle className="text-base">Excluded Customer Groups</CardTitle>
-            <CardDescription>Customers in these groups will not earn loyalty rewards.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {customerConfig.groups.map((group) => {
-                const excluded = form.excludedCustomerGroups.includes(group.id);
-                return (
-                  <button
-                    key={group.id}
-                    onClick={() => toggleGroup(group.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all focus:outline-none",
-                      excluded
-                        ? "border-destructive/60 bg-destructive/5 text-destructive"
-                        : "border-border bg-card hover:border-primary/40"
-                    )}
-                  >
-                    <div
-                      className="w-7 h-7 rounded-full"
-                      style={{ backgroundColor: group.color + "33", border: `2px solid ${group.color}` }}
-                    />
-                    <span>{group.name}</span>
-                    {excluded && <span className="text-[10px] text-destructive font-normal">Excluded</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-3">
-              Tip: Commonly excluded groups include "Staff" to avoid staff members earning rewards on their own purchases.
-            </p>
-          </CardContent>
-        </Card>
-
         {/* Loyalty Expiry */}
         <Card id="expiry">
           <CardHeader>
@@ -665,6 +628,43 @@ export default function ManagementLoyaltyPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Customer group exclusions */}
+        <Card id="excluded-groups">
+          <CardHeader>
+            <CardTitle className="text-base">Excluded Customer Groups</CardTitle>
+            <CardDescription>Customers in these groups will not earn loyalty rewards.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {customerConfig.groups.map((group) => {
+                const excluded = form.excludedCustomerGroups.includes(group.id);
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => toggleGroup(group.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all focus:outline-none",
+                      excluded
+                        ? "border-destructive/60 bg-destructive/5 text-destructive"
+                        : "border-border bg-card hover:border-primary/40"
+                    )}
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full"
+                      style={{ backgroundColor: group.color + "33", border: `2px solid ${group.color}` }}
+                    />
+                    <span>{group.name}</span>
+                    {excluded && <span className="text-[10px] text-destructive font-normal">Excluded</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Tip: Commonly excluded groups include "Staff" to avoid staff members earning rewards on their own purchases.
+            </p>
           </CardContent>
         </Card>
 
