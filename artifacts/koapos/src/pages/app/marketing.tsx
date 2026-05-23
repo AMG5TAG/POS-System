@@ -192,7 +192,7 @@ export default function MarketingOverviewPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Marketing Tools</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <SectionCard
-              title="Email Campaigns"
+              title="Campaigns"
               description="Compose and send emails to your customer base with personalisation codes, CTA buttons and scheduling."
               href="/marketing/email/campaigns"
               icon={Send}

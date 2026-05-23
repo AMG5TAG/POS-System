@@ -429,7 +429,7 @@ export default function MarketingEmailCampaignsPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Send className="w-6 h-6 text-primary" />
-              Email Campaigns
+              Campaigns
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Compose and send targeted emails to your customer base.

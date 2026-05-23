@@ -60,7 +60,7 @@ const MARKETING_SUBNAV: NavItem[] = [
     name: "Email",
     icon: Mail,
     children: [
-      { name: "Email Campaigns", href: "/marketing/email/campaigns", icon: Send },
+      { name: "Campaigns", href: "/marketing/email/campaigns", icon: Send },
       { name: "Templates",       href: "/marketing/email/templates",  icon: FileText },
     ],
   },
@@ -204,7 +204,7 @@ const SEARCH_INDEX = [
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
   { label: "Marketing · Overview",          href: "/marketing",                       icon: BarChart2,  group: "Marketing" },
-  { label: "Marketing · Email Campaigns",   href: "/marketing/email/campaigns",        icon: Send,       group: "Marketing" },
+  { label: "Marketing · Campaigns",   href: "/marketing/email/campaigns",        icon: Send,       group: "Marketing" },
   { label: "Marketing · Email Templates",   href: "/marketing/email/templates",        icon: FileText,   group: "Marketing" },
   { label: "Marketing · QR Codes",          href: "/marketing/generators/qr-codes",    icon: QrCode,     group: "Marketing" },
   { label: "Marketing · Shortlinks",        href: "/marketing/generators/shortlinks",  icon: Link2,      group: "Marketing" },
@@ -295,7 +295,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/stickers":                  ["Management", "Stickers"],
   "/management/sticker-templates":         ["Management", "Sticker Templates"],
   "/marketing":                            ["Marketing", "Overview"],
-  "/marketing/email/campaigns":            ["Marketing", "Email Campaigns"],
+  "/marketing/email/campaigns":            ["Marketing", "Campaigns"],
   "/marketing/email/templates":            ["Marketing", "Email Templates"],
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
@@ -669,17 +669,18 @@ function TopNavBtn({
   );
 }
 
-function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, location, navigate }: {
+function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, location, navigate, defaultHref }: {
   label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[];
   isActive: boolean; isOpen: boolean; onToggle: () => void;
   location: string; navigate: (href: string) => void;
+  defaultHref?: string;
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
 
   const handleToggle = () => {
-    if (!isOpen && btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
+    if (!isOpen && containerRef.current) {
+      const r = containerRef.current.getBoundingClientRect();
       const minWidth = 220;
       const margin = 8;
       // Keep within right edge of viewport
@@ -689,6 +690,14 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
       setPos({ left, top: r.bottom + 4, maxHeight });
     }
     onToggle();
+  };
+
+  const handleMainClick = () => {
+    if (defaultHref && location !== defaultHref) {
+      navigate(defaultHref);
+    } else {
+      handleToggle();
+    }
   };
 
   const panel = isOpen && pos
@@ -729,17 +738,24 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
     : null;
 
   return (
-    <div>
+    <div ref={containerRef} className="flex items-center">
       <button
-        ref={btnRef}
-        onClick={handleToggle}
+        onClick={handleMainClick}
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-l-md text-sm font-medium transition-colors whitespace-nowrap",
           isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
         )}
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
         <span className="hidden sm:inline">{label}</span>
+      </button>
+      <button
+        onClick={handleToggle}
+        className={cn(
+          "px-1.5 py-1.5 rounded-r-md text-sm font-medium transition-colors",
+          isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+        )}
+      >
         <ChevronDown className={cn("w-3 h-3 shrink-0 transition-transform", isOpen && "rotate-180")} />
       </button>
       {panel}
@@ -792,7 +808,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavDropdown label="Staff" icon={UserSquare2} items={STAFF_SUBNAV} isActive={isStaffSection}
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
-            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} />
+            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing" />
           <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
             isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
         </nav>
@@ -1171,7 +1187,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
             onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
-            items={MARKETING_SUBNAV}
+            items={MARKETING_SUBNAV} defaultHref="/marketing"
           />
           {canManage && (
             <CollapsibleSection
