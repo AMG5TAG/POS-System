@@ -96,6 +96,7 @@ import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promot
 import MarketingSocialsPostsPage from "@/pages/app/marketing-socials-posts";
 import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
 import ManagementMarketingSocialPage from "@/pages/app/management-marketing-social";
+import MarketingOnlineAdsPage from "@/pages/app/marketing-online-ads";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
 import NotFound from "@/pages/not-found";
@@ -405,6 +406,9 @@ function Router() {
       </Route>
       <Route path="/marketing/socials/track">
         <ProtectedRoute component={MarketingSocialsTrackPage} />
+      </Route>
+      <Route path="/marketing/online-ads">
+        <ProtectedRoute component={MarketingOnlineAdsPage} />
       </Route>
       <Route path="/management/marketing/social">
         <ProtectedRoute component={ManagementMarketingSocialPage} />

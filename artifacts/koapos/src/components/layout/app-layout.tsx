@@ -55,6 +55,7 @@ const STAFF_SUBNAV: NavItem[] = [
 
 const MARKETING_SUBNAV: NavItem[] = [
   { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
+  { name: "Online Ads",    href: "/marketing/online-ads",           icon: Megaphone  },
   { name: "Landing Pages", href: "/marketing/landing-pages",        icon: LayoutTemplate },
   {
     name: "Email",
@@ -227,6 +228,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
+  { label: "Marketing · Online Ads",        href: "/marketing/online-ads",          icon: Megaphone, group: "Marketing" },
   { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
   { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
   { label: "Social Media Settings",        href: "/management/marketing/social",   icon: Share2, group: "Management" },
@@ -324,6 +326,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
   "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
   "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
+  "/marketing/online-ads":                 ["Marketing", "Online Ads"],
   "/marketing/socials/posts":              ["Marketing", "Socials", "Posts"],
   "/marketing/socials/track":              ["Marketing", "Socials", "Track"],
   "/management/marketing/social":          ["Management", "Marketing", "Social Connections"],
