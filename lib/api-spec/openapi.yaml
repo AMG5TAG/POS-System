@@ -3570,6 +3570,13 @@ components:
           type: array
           items:
             type: string
+        expiryMode:
+          type: string
+          enum: [none, daysSinceLastPurchase, fixedDays, endOfYear, fixedDate]
+          description: How loyalty points expire.
+        expiryValue:
+          type: [integer, "null"]
+          description: Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
 
     LoyaltySettingsInput:
       type: object
@@ -3602,6 +3609,13 @@ components:
           type: array
           items:
             type: string
+        expiryMode:
+          type: string
+          enum: [none, daysSinceLastPurchase, fixedDays, endOfYear, fixedDate]
+          description: How loyalty points expire.
+        expiryValue:
+          type: [integer, "null"]
+          description: Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
 
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:

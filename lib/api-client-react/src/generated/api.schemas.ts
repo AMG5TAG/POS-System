@@ -939,6 +939,20 @@ export const LoyaltySettingsProgramType = {
   custom: 'custom',
 } as const;
 
+/**
+ * How loyalty points expire.
+ */
+export type LoyaltySettingsExpiryMode = typeof LoyaltySettingsExpiryMode[keyof typeof LoyaltySettingsExpiryMode];
+
+
+export const LoyaltySettingsExpiryMode = {
+  none: 'none',
+  daysSinceLastPurchase: 'daysSinceLastPurchase',
+  fixedDays: 'fixedDays',
+  endOfYear: 'endOfYear',
+  fixedDate: 'fixedDate',
+} as const;
+
 export interface LoyaltySettings {
   programType: LoyaltySettingsProgramType;
   isEnabled: boolean;
@@ -951,6 +965,13 @@ export interface LoyaltySettings {
   customDescription?: string;
   customValue?: number;
   excludedCustomerGroups?: string[];
+  /** How loyalty points expire. */
+  expiryMode?: LoyaltySettingsExpiryMode;
+  /**
+     * Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
+     * @nullable
+     */
+  expiryValue?: number | null;
 }
 
 export type LoyaltySettingsInputProgramType = typeof LoyaltySettingsInputProgramType[keyof typeof LoyaltySettingsInputProgramType];
@@ -962,6 +983,20 @@ export const LoyaltySettingsInputProgramType = {
   tiered: 'tiered',
   stamp: 'stamp',
   custom: 'custom',
+} as const;
+
+/**
+ * How loyalty points expire.
+ */
+export type LoyaltySettingsInputExpiryMode = typeof LoyaltySettingsInputExpiryMode[keyof typeof LoyaltySettingsInputExpiryMode];
+
+
+export const LoyaltySettingsInputExpiryMode = {
+  none: 'none',
+  daysSinceLastPurchase: 'daysSinceLastPurchase',
+  fixedDays: 'fixedDays',
+  endOfYear: 'endOfYear',
+  fixedDate: 'fixedDate',
 } as const;
 
 export interface LoyaltySettingsInput {
@@ -976,6 +1011,13 @@ export interface LoyaltySettingsInput {
   customDescription?: string;
   customValue?: number;
   excludedCustomerGroups?: string[];
+  /** How loyalty points expire. */
+  expiryMode?: LoyaltySettingsInputExpiryMode;
+  /**
+     * Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
+     * @nullable
+     */
+  expiryValue?: number | null;
 }
 
 export interface CashDrawerEntry {

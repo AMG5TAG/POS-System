@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
-  Plus, Trash2, Info, Pen,
+  Plus, Trash2, Info, Pen, Clock,
 } from "lucide-react";
 
 /* ─── Loyalty naming (localStorage) ─────────────────────────────────────── */
@@ -55,6 +55,7 @@ const LOYALTY_TABS = [
   { href: "#program-settings", label: "Settings" },
   { href: "#program-identity", label: "Naming" },
   { href: "#excluded-groups",  label: "Excluded Groups" },
+  { href: "#expiry",           label: "Expiry" },
   { href: "#program-summary",  label: "Summary" },
 ];
 
@@ -131,6 +132,8 @@ function toForm(s: LoyaltySettings) {
     customDescription:      s.customDescription ?? "",
     customValue:            ((s.customValue ?? 0.01) * 100).toString(),
     excludedCustomerGroups: (s.excludedCustomerGroups ?? []) as string[],
+    expiryMode:             (s.expiryMode ?? "none") as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
+    expiryValue:            s.expiryValue ?? null,
   };
 }
 
@@ -171,6 +174,8 @@ export default function ManagementLoyaltyPage() {
     customDescription:      "",
     customValue:            "1",
     excludedCustomerGroups: [] as string[],
+    expiryMode:             "none" as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
+    expiryValue:            null as number | null,
   });
 
   useEffect(() => {
@@ -211,6 +216,8 @@ export default function ManagementLoyaltyPage() {
         customDescription:      form.customDescription,
         customValue:            parseFloat(form.customValue) / 100,
         excludedCustomerGroups: form.excludedCustomerGroups,
+        expiryMode:             form.expiryMode,
+        expiryValue:            form.expiryValue,
       },
     }, {
       onSuccess: () => {
@@ -566,6 +573,101 @@ export default function ManagementLoyaltyPage() {
           </CardContent>
         </Card>
 
+        {/* Loyalty Expiry */}
+        <Card id="expiry">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
+              <CardTitle className="text-base">Loyalty Expiry</CardTitle>
+            </div>
+            <CardDescription>Choose when customer loyalty points expire.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {([
+                { mode: "none" as const,                  label: "Never",         desc: "Points never expire." },
+                { mode: "daysSinceLastPurchase" as const, label: "Days since last purchase", desc: "Points expire if a customer hasn't made a purchase within a set number of days." },
+                { mode: "fixedDays" as const,              label: "Fixed days",    desc: "Points expire a fixed number of days after they were earned." },
+                { mode: "endOfYear" as const,              label: "End of year",   desc: "All points reset at the end of each calendar year." },
+                { mode: "fixedDate" as const,             label: "Fixed date",    desc: "Points expire on a specific date each year." },
+              ]).map(({ mode, label, desc }) => {
+                const active = form.expiryMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => set("expiryMode", mode)}
+                    className={cn(
+                      "relative text-left rounded-xl border-2 p-4 transition-all focus:outline-none focus:ring-2 focus:ring-primary/40",
+                      active
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 bg-card"
+                    )}
+                  >
+                    {active && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="w-3 h-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    <p className={cn("font-semibold text-sm", active && "text-primary")}>{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {form.expiryMode === "daysSinceLastPurchase" && (
+              <div className="space-y-2">
+                <Label>Days since last purchase</Label>
+                <p className="text-xs text-muted-foreground">If a customer hasn't purchased within this many days, their loyalty points expire.</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="1" max="3650"
+                    value={form.expiryValue ?? ""}
+                    onChange={(e) => set("expiryValue", e.target.value ? parseInt(e.target.value) : null)}
+                    className="max-w-[160px]"
+                    placeholder="e.g. 365"
+                  />
+                  <span className="text-muted-foreground text-sm">days</span>
+                </div>
+              </div>
+            )}
+
+            {form.expiryMode === "fixedDays" && (
+              <div className="space-y-2">
+                <Label>Fixed days after earning</Label>
+                <p className="text-xs text-muted-foreground">Points expire this many days after they were first earned.</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="1" max="3650"
+                    value={form.expiryValue ?? ""}
+                    onChange={(e) => set("expiryValue", e.target.value ? parseInt(e.target.value) : null)}
+                    className="max-w-[160px]"
+                    placeholder="e.g. 180"
+                  />
+                  <span className="text-muted-foreground text-sm">days</span>
+                </div>
+              </div>
+            )}
+
+            {form.expiryMode === "fixedDate" && (
+              <div className="space-y-2">
+                <Label>Day of year (1-366)</Label>
+                <p className="text-xs text-muted-foreground">All points expire on this day of each year. Use 1-366 (leap-year safe).</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="1" max="366"
+                    value={form.expiryValue ?? ""}
+                    onChange={(e) => set("expiryValue", e.target.value ? parseInt(e.target.value) : null)}
+                    className="max-w-[160px]"
+                    placeholder="e.g. 365"
+                  />
+                  <span className="text-muted-foreground text-sm">day of year</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Program summary */}
         <Card id="program-summary" className="border-primary/20 bg-primary/5">
           <CardHeader>
@@ -599,6 +701,14 @@ export default function ManagementLoyaltyPage() {
                   .map((id) => customerConfig.groups.find((g) => g.id === id)?.name ?? id)
                   .join(", ")}
               </strong>.</p>
+            )}
+            {form.isEnabled && form.expiryMode !== "none" && (
+              <p>
+                {form.expiryMode === "daysSinceLastPurchase" && <>Points expire after <strong>{form.expiryValue} days</strong> without a purchase.</>}
+                {form.expiryMode === "fixedDays" && <>Points expire <strong>{form.expiryValue} days</strong> after being earned.</>}
+                {form.expiryMode === "endOfYear" && <>All points expire at the <strong>end of each calendar year</strong>.</>}
+                {form.expiryMode === "fixedDate" && <>All points expire on day <strong>{form.expiryValue}</strong> of each year.</>}
+              </p>
             )}
             <p className="text-xs">Loyalty amounts are displayed on the POS screen and printed on receipts.</p>
           </CardContent>

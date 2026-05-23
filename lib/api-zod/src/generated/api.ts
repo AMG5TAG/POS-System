@@ -1458,7 +1458,9 @@ export const GetLoyaltySettingsResponse = zod.object({
   "stampRewardValue": zod.number().optional(),
   "customDescription": zod.string().optional(),
   "customValue": zod.number().optional(),
-  "excludedCustomerGroups": zod.array(zod.string()).optional()
+  "excludedCustomerGroups": zod.array(zod.string()).optional(),
+  "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
 })
 
 
@@ -1480,7 +1482,9 @@ export const UpdateLoyaltySettingsBody = zod.object({
   "stampRewardValue": zod.number().optional(),
   "customDescription": zod.string().optional(),
   "customValue": zod.number().optional(),
-  "excludedCustomerGroups": zod.array(zod.string()).optional()
+  "excludedCustomerGroups": zod.array(zod.string()).optional(),
+  "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
 })
 
 export const UpdateLoyaltySettingsResponse = zod.object({
@@ -1498,7 +1502,9 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "stampRewardValue": zod.number().optional(),
   "customDescription": zod.string().optional(),
   "customValue": zod.number().optional(),
-  "excludedCustomerGroups": zod.array(zod.string()).optional()
+  "excludedCustomerGroups": zod.array(zod.string()).optional(),
+  "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
 })
 
 
