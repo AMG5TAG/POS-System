@@ -1049,6 +1049,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoyaltySettings"
 
+  /loyalty/leaderboard:
+    get:
+      operationId: getLoyaltyLeaderboard
+      tags: [loyalty]
+      summary: Top loyalty earners
+      description: Returns the top 10 customers by loyalty points for the merchant.
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyLeaderboard"
+
   # ── Inventory ─────────────────────────────────────────────────────────────
   /inventory:
     get:
@@ -3520,6 +3534,28 @@ components:
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
 
+    LoyaltyLeaderboardEntry:
+      type: object
+      required: [rank, customer]
+      properties:
+        rank:
+          type: integer
+        customer:
+          $ref: "#/components/schemas/Customer"
+        currentTier:
+          type: [string, "null"]
+        pointsUntilNextTier:
+          type: [integer, "null"]
+
+    LoyaltyLeaderboard:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyLeaderboardEntry"
+
     ErrorEnvelope:
       type: object
       required: [error]
@@ -3530,14 +3566,31 @@ components:
     # ── Loyalty ───────────────────────────────────────────────────────────────
     LoyaltyTier:
       type: object
-      required: [name, minSpend, rate]
+      required: [name]
       properties:
         name:
           type: string
         minSpend:
           type: number
+          description: Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.
+        pointsRequired:
+          type: number
+          description: Minimum loyalty points required to reach this tier. Alternative to minSpend for points-based thresholds.
         rate:
           type: number
+          description: Cashback rate or earn multiplier for this tier.
+        discountPct:
+          type: number
+          description: Automatic discount percentage applied at checkout for this tier.
+        freeShipping:
+          type: boolean
+          description: Whether customers in this tier get free shipping.
+        bonusMultiplier:
+          type: number
+          description: Loyalty earn multiplier for this tier (e.g. 1.5x points).
+        description:
+          type: string
+          description: Customer-facing description of tier benefits.
 
     LoyaltyPromotion:
       type: object

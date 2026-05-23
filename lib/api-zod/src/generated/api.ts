@@ -1451,8 +1451,13 @@ export const GetLoyaltySettingsResponse = zod.object({
   "dollarPerPoint": zod.number().optional(),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
-  "minSpend": zod.number(),
-  "rate": zod.number()
+  "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),
+  "pointsRequired": zod.number().optional().describe('Minimum loyalty points required to reach this tier. Alternative to minSpend for points-based thresholds.'),
+  "rate": zod.number().optional().describe('Cashback rate or earn multiplier for this tier.'),
+  "discountPct": zod.number().optional().describe('Automatic discount percentage applied at checkout for this tier.'),
+  "freeShipping": zod.boolean().optional().describe('Whether customers in this tier get free shipping.'),
+  "bonusMultiplier": zod.number().optional().describe('Loyalty earn multiplier for this tier (e.g. 1.5x points).'),
+  "description": zod.string().optional().describe('Customer-facing description of tier benefits.')
 })).optional(),
   "stampsRequired": zod.number().optional(),
   "stampRewardValue": zod.number().optional(),
@@ -1488,8 +1493,13 @@ export const UpdateLoyaltySettingsBody = zod.object({
   "dollarPerPoint": zod.number().optional(),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
-  "minSpend": zod.number(),
-  "rate": zod.number()
+  "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),
+  "pointsRequired": zod.number().optional().describe('Minimum loyalty points required to reach this tier. Alternative to minSpend for points-based thresholds.'),
+  "rate": zod.number().optional().describe('Cashback rate or earn multiplier for this tier.'),
+  "discountPct": zod.number().optional().describe('Automatic discount percentage applied at checkout for this tier.'),
+  "freeShipping": zod.boolean().optional().describe('Whether customers in this tier get free shipping.'),
+  "bonusMultiplier": zod.number().optional().describe('Loyalty earn multiplier for this tier (e.g. 1.5x points).'),
+  "description": zod.string().optional().describe('Customer-facing description of tier benefits.')
 })).optional(),
   "stampsRequired": zod.number().optional(),
   "stampRewardValue": zod.number().optional(),
@@ -1521,8 +1531,13 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "dollarPerPoint": zod.number().optional(),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
-  "minSpend": zod.number(),
-  "rate": zod.number()
+  "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),
+  "pointsRequired": zod.number().optional().describe('Minimum loyalty points required to reach this tier. Alternative to minSpend for points-based thresholds.'),
+  "rate": zod.number().optional().describe('Cashback rate or earn multiplier for this tier.'),
+  "discountPct": zod.number().optional().describe('Automatic discount percentage applied at checkout for this tier.'),
+  "freeShipping": zod.boolean().optional().describe('Whether customers in this tier get free shipping.'),
+  "bonusMultiplier": zod.number().optional().describe('Loyalty earn multiplier for this tier (e.g. 1.5x points).'),
+  "description": zod.string().optional().describe('Customer-facing description of tier benefits.')
 })).optional(),
   "stampsRequired": zod.number().optional(),
   "stampRewardValue": zod.number().optional(),
@@ -1544,6 +1559,52 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish()
 })).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
+})
+
+
+/**
+ * Returns the top 10 customers by loyalty points for the merchant.
+ * @summary Top loyalty earners
+ */
+export const GetLoyaltyLeaderboardResponse = zod.object({
+  "items": zod.array(zod.object({
+  "rank": zod.number(),
+  "customer": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish()
+}),
+  "currentTier": zod.string().nullish(),
+  "pointsUntilNextTier": zod.number().nullish()
+}))
 })
 
 

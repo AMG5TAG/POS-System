@@ -246,11 +246,19 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           break;
         }
         case "tiered": {
-          const tiers = ((loyaltyRow?.config as Record<string, unknown>)?.tiers ?? []) as Array<{ minSpend: number; rate: number; name: string }>;
+          const tiers = ((loyaltyRow?.config as Record<string, unknown>)?.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number; name: string }>;
           const spent = parseFloat(scopedCustomer.totalSpent);
-          const sorted = [...tiers].sort((a, b) => b.minSpend - a.minSpend);
-          const tier = sorted.find((t) => spent >= t.minSpend) ?? sorted[sorted.length - 1];
-          baseEarned = total * (tier?.rate ?? 0.01);
+          const pts = scopedCustomer.loyaltyPoints ?? 0;
+          const sorted = [...tiers].sort((a, b) =>
+            (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0)
+          );
+          const tier = sorted.find((t) => {
+            if (t.pointsRequired != null) return pts >= t.pointsRequired;
+            return spent >= (t.minSpend ?? 0);
+          }) ?? sorted[sorted.length - 1];
+          const rate = tier?.rate ?? 0.01;
+          const bonusMult = tier?.bonusMultiplier ?? 1;
+          baseEarned = total * rate * bonusMult;
           break;
         }
         case "custom": {

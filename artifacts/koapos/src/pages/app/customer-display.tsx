@@ -19,6 +19,8 @@ interface DisplayPayload {
   subtotal: number;
   taxTotal: number;
   total: number;
+  tierDiscountAmt?: number;
+  customerTierName?: string;
   loyaltyAmount: number;
   loyaltyLabel: string;
   loyaltyUnit: string;
@@ -116,6 +118,12 @@ export default function CustomerDisplayPage() {
                 <div className="flex justify-between text-red-400">
                   <span>Discount</span>
                   <span>−{formatCurrency(payload!.discountTotal)}</span>
+                </div>
+              )}
+              {(payload!.tierDiscountAmt ?? 0) > 0 && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Tier discount ({payload!.customerTierName})</span>
+                  <span>−{formatCurrency(payload!.tierDiscountAmt!)}</span>
                 </div>
               )}
               <div className="flex justify-between text-white/60">

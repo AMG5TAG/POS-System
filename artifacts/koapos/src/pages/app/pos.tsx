@@ -281,16 +281,34 @@ export default function POSPage() {
   );
   const barcodeProducts = allProductsBarcodeData?.items || [];
 
+  /* ── Customer tier (used for discount & loyalty) ── */
+  const customerTier = useMemo(() => {
+    if (!selectedCustomer || loyaltySettings?.programType !== "tiered") return null;
+    const spent = selectedCustomer.totalSpent ?? 0;
+    const pts = selectedCustomer.loyaltyPoints ?? 0;
+    const tiers = [...(loyaltySettings?.tiers ?? [])].sort((a, b) =>
+      (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0)
+    );
+    return tiers.find((t) => {
+      if (t.pointsRequired != null) return pts >= t.pointsRequired;
+      return spent >= (t.minSpend ?? 0);
+    }) ?? tiers[tiers.length - 1] ?? null;
+  }, [loyaltySettings, selectedCustomer]);
+
   /* ── Computed totals (memoised — only recalculate when cart or discount changes) ── */
   const {
     cartSubtotal, itemDiscountTotal, overallDiscountAmt,
     discountTotal, subtotal, taxTotal, total, kodeProfit,
+    tierDiscountAmt,
   } = useMemo(() => {
     const cartSubtotal       = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
     const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount, 0);
     const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
     const discountTotal      = itemDiscountTotal + overallDiscountAmt;
-    const subtotal           = cartSubtotal - discountTotal;
+    const afterDiscounts     = cartSubtotal - discountTotal;
+    const tierDiscountPct    = customerTier?.discountPct ?? 0;
+    const tierDiscountAmt    = Math.min(Math.max(afterDiscounts * (tierDiscountPct / 100), 0), afterDiscounts);
+    const subtotal           = afterDiscounts - tierDiscountAmt;
     const taxTotal           = subtotal * (10 / 110);   // GST-inclusive: extract tax component
     const total              = subtotal;                 // Prices already include GST
     const kodeProfit         = Math.floor(
@@ -298,10 +316,10 @@ export default function POSPage() {
         const price = i.customPrice ?? i.product.price;
         const cost  = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
         return s + (price - cost) * i.quantity - i.itemDiscount;
-      }, 0) - overallDiscountAmt,
+      }, 0) - overallDiscountAmt - tierDiscountAmt,
     );
-    return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit };
-  }, [cart, overallDiscount]);
+    return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
+  }, [cart, overallDiscount, customerTier]);
 
   /* Loyalty — base earn + active promotion bonuses */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
@@ -377,12 +395,12 @@ export default function POSPage() {
         break;
       }
       case "tiered": {
-        const spent = selectedCustomer?.totalSpent ?? 0;
-        const tiers = [...(loyaltySettings.tiers ?? [])].sort((a, b) => b.minSpend - a.minSpend);
-        const tier = tiers.find(t => spent >= t.minSpend) ?? tiers[tiers.length - 1];
-        const r = tier?.rate ?? 0.01;
-        baseAmount = eligible * r;
-        label = `${(r * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`;
+        const tier = customerTier;
+        const r = (tier?.rate ?? 0.01);
+        const bonusMult = tier?.bonusMultiplier ?? 1;
+        baseAmount = eligible * r * bonusMult;
+        const bonusLabel = bonusMult > 1 ? ` · ${bonusMult}x bonus` : "";
+        label = `${(r * 100).toFixed(1)}% cashback (${tier?.name ?? ""})${bonusLabel}`;
         unit = "$";
         break;
       }
@@ -533,6 +551,8 @@ export default function POSPage() {
         lineTotal: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
       })),
       cartSubtotal, discountTotal, subtotal, taxTotal, total,
+      tierDiscountAmt: tierDiscountAmt > 0 ? tierDiscountAmt : undefined,
+      customerTierName: customerTier?.name,
       loyaltyAmount, loyaltyLabel, loyaltyUnit,
       customerName,
       updatedAt: Date.now(),
@@ -541,7 +561,7 @@ export default function POSPage() {
       localStorage.setItem(DISPLAY_KEY, JSON.stringify(payload));
       window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: JSON.stringify(payload) }));
     } catch { /* ignore */ }
-  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn]);
+  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier]);
 
   /* Click-outside closes customer dropdown */
   useEffect(() => {
@@ -1020,7 +1040,7 @@ export default function POSPage() {
     createTransactionMutation.mutate({
       data: {
         items: txItems, paymentMethod, subtotal, taxTotal,
-        discountTotal: discountTotal > 0 ? discountTotal : undefined,
+        discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
         total, amountTendered,
         customerId: selectedCustomer?.id,
         staffId: currentStaff?.id,
@@ -1346,7 +1366,8 @@ export default function POSPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{activeCustomerName}</p>
                     {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
-                    {!walkIn && selectedCustomer?.warningNote && <p className="text-[10px] text-destructive flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Warning on file</p>}
+                    {!walkIn && customerTier && <p className="text-[10px] font-medium text-primary">{customerTier.name} tier · {(customerTier.discountPct ?? 0) > 0 ? `${customerTier.discountPct}% off` : ""}{(customerTier.bonusMultiplier ?? 1) > 1 ? ` · ${customerTier.bonusMultiplier}x earn` : ""}</p>}
+                    {!walkIn && !customerTier && selectedCustomer?.warningNote && <p className="text-[10px] text-destructive flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Warning on file</p>}
                   </div>
                   <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
@@ -1524,6 +1545,11 @@ export default function POSPage() {
             {discountTotal > 0 && (
               <div className="flex justify-between text-xs text-destructive font-medium">
                 <span>Discount</span><span>−{formatCurrency(discountTotal)}</span>
+              </div>
+            )}
+            {tierDiscountAmt > 0 && (
+              <div className="flex justify-between text-xs text-primary font-medium">
+                <span>Tier discount ({customerTier?.name})</span><span>−{formatCurrency(tierDiscountAmt)}</span>
               </div>
             )}
             <div className="flex justify-between text-xs text-muted-foreground">

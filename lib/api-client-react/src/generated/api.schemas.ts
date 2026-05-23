@@ -918,14 +918,39 @@ export interface UploadUrlResponse {
   metadata?: UploadUrlRequest;
 }
 
+export interface LoyaltyLeaderboardEntry {
+  rank: number;
+  customer: Customer;
+  /** @nullable */
+  currentTier?: string | null;
+  /** @nullable */
+  pointsUntilNextTier?: number | null;
+}
+
+export interface LoyaltyLeaderboard {
+  items: LoyaltyLeaderboardEntry[];
+}
+
 export interface ErrorEnvelope {
   error: string;
 }
 
 export interface LoyaltyTier {
   name: string;
-  minSpend: number;
-  rate: number;
+  /** Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set. */
+  minSpend?: number;
+  /** Minimum loyalty points required to reach this tier. Alternative to minSpend for points-based thresholds. */
+  pointsRequired?: number;
+  /** Cashback rate or earn multiplier for this tier. */
+  rate?: number;
+  /** Automatic discount percentage applied at checkout for this tier. */
+  discountPct?: number;
+  /** Whether customers in this tier get free shipping. */
+  freeShipping?: boolean;
+  /** Loyalty earn multiplier for this tier (e.g. 1.5x points). */
+  bonusMultiplier?: number;
+  /** Customer-facing description of tier benefits. */
+  description?: string;
 }
 
 export type LoyaltyPromotionType = typeof LoyaltyPromotionType[keyof typeof LoyaltyPromotionType];

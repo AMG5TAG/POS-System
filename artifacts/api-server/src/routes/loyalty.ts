@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, loyaltySettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, loyaltySettingsTable, customersTable } from "@workspace/db";
+import { eq, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateLoyaltySettingsBody } from "@workspace/api-zod";
 
@@ -11,9 +11,9 @@ const DEFAULT_CONFIG = {
   pointsPerDollar: 1,
   dollarPerPoint: 0.01,
   tiers: [
-    { name: "Bronze", minSpend: 0,    rate: 0.01 },
-    { name: "Silver", minSpend: 500,  rate: 0.02 },
-    { name: "Gold",   minSpend: 1000, rate: 0.03 },
+    { name: "Bronze", minSpend: 0, rate: 0.01, pointsRequired: 0, discountPct: 0, freeShipping: false, bonusMultiplier: 1, description: "" },
+    { name: "Silver", minSpend: 500, rate: 0.02, pointsRequired: 500, discountPct: 2, freeShipping: false, bonusMultiplier: 1.2, description: "Free priority support" },
+    { name: "Gold",   minSpend: 1000, rate: 0.03, pointsRequired: 1000, discountPct: 5, freeShipping: true, bonusMultiplier: 1.5, description: "Free shipping + 5% off" },
   ],
   stampsRequired: 10,
   stampRewardValue: 10,
@@ -103,6 +103,88 @@ router.put("/loyalty/settings", requireAuth, async (req, res): Promise<void> => 
   }
 
   res.json(formatSettings(row));
+});
+
+/* — Top loyalty earners — */
+router.get("/loyalty/leaderboard", requireAuth, async (req, res): Promise<void> => {
+  const customers = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.merchantId, req.session.merchantId!))
+    .orderBy(desc(customersTable.loyaltyPoints))
+    .limit(10);
+
+  const [settingsRow] = await db
+    .select()
+    .from(loyaltySettingsTable)
+    .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+  const tiers = ((settingsRow?.config as Record<string, unknown>)?.tiers ?? []) as Array<{
+    name: string; minSpend?: number; pointsRequired?: number; rate?: number;
+    discountPct?: number; freeShipping?: boolean; bonusMultiplier?: number; description?: string;
+  }>;
+  const sortedTiers = [...tiers].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
+
+  function getTier(customer: typeof customersTable.$inferSelect) {
+    const tier = sortedTiers.find((t) => {
+      if (t.pointsRequired != null) return customer.loyaltyPoints >= t.pointsRequired;
+      return (customer.totalSpent ? parseFloat(customer.totalSpent) : 0) >= (t.minSpend ?? 0);
+    });
+    return tier ?? sortedTiers[sortedTiers.length - 1] ?? null;
+  }
+
+  function pointsUntilNext(customer: typeof customersTable.$inferSelect, currentTierName: string | null) {
+    const currentIdx = sortedTiers.findIndex((t) => t.name === currentTierName);
+    const next = sortedTiers[currentIdx - 1];
+    if (!next) return null;
+    if (next.pointsRequired != null) return Math.max(0, next.pointsRequired - customer.loyaltyPoints);
+    const minSpend = next.minSpend ?? 0;
+    const spent = customer.totalSpent ? parseFloat(customer.totalSpent) : 0;
+    return Math.max(0, Math.ceil(minSpend - spent));
+  }
+
+  const items = customers.map((c, i) => {
+    const tier = getTier(c);
+    return {
+      rank: i + 1,
+      customer: {
+        id: c.id,
+        merchantId: c.merchantId,
+        firstName: c.firstName ?? null,
+        lastName: c.lastName ?? null,
+        email: c.email ?? null,
+        phone: c.phone ?? null,
+        address: c.address ?? null,
+        notes: c.notes ?? null,
+        dateOfBirth: c.dateOfBirth ?? null,
+        loyaltyPoints: c.loyaltyPoints,
+        totalSpent: parseFloat(c.totalSpent),
+        visitCount: c.visitCount,
+        createdAt: c.createdAt.toISOString(),
+        company: c.company ?? null,
+        abn: c.abn ?? null,
+        referredBy: c.referredBy ?? null,
+        whatsappSameAsPhone: c.whatsappSameAsPhone ?? null,
+        billingStreet: c.billingStreet ?? null,
+        billingCity: c.billingCity ?? null,
+        billingState: c.billingState ?? null,
+        billingPostcode: c.billingPostcode ?? null,
+        billingCountry: c.billingCountry ?? null,
+        shippingStreet: c.shippingStreet ?? null,
+        shippingCity: c.shippingCity ?? null,
+        shippingState: c.shippingState ?? null,
+        shippingPostcode: c.shippingPostcode ?? null,
+        shippingCountry: c.shippingCountry ?? null,
+        customerGroup: c.customerGroup ?? null,
+        warningNote: c.warningNote ?? null,
+        agreedToMarketing: c.agreedToMarketing ?? null,
+        portalToken: c.portalToken ?? null,
+      },
+      currentTier: tier?.name ?? null,
+      pointsUntilNextTier: pointsUntilNext(c, tier?.name ?? null),
+    };
+  });
+
+  res.json({ items });
 });
 
 export default router;

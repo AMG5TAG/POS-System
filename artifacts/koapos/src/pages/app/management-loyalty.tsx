@@ -73,8 +73,13 @@ type PromotionType = "double_points" | "category_bonus" | "product_bonus" | "spe
 
 interface Tier {
   name: string;
-  minSpend: number;
-  rate: number;
+  minSpend?: number;
+  pointsRequired?: number;
+  rate?: number;
+  discountPct?: number;
+  freeShipping?: boolean;
+  bonusMultiplier?: number;
+  description?: string;
 }
 
 interface LoyaltyPromotion {
@@ -465,8 +470,8 @@ export default function ManagementLoyaltyPage() {
   const removeTier = (i: number) =>
     set("tiers", form.tiers.filter((_, idx) => idx !== i));
 
-  const updateTier = (i: number, key: keyof Tier, value: string | number) =>
-    set("tiers", form.tiers.map((t, idx) => idx === i ? { ...t, [key]: typeof value === "string" ? value : Number(value) } : t));
+  const updateTier = (i: number, key: keyof Tier, value: string | number | boolean) =>
+    set("tiers", form.tiers.map((t, idx) => idx === i ? { ...t, [key]: value } : t));
 
   const handleSave = () => {
     updateMutation.mutate({
@@ -476,7 +481,7 @@ export default function ManagementLoyaltyPage() {
         cashbackRate:           parseFloat(form.cashbackRate) / 100,
         pointsPerDollar:        parseFloat(form.pointsPerDollar),
         dollarPerPoint:         parseFloat(form.dollarPerPoint),
-        tiers:                  form.tiers.map(t => ({ ...t, rate: t.rate / 100 })),
+        tiers:                  form.tiers.map(t => ({ ...t, rate: (t.rate ?? 0) / 100 })),
         stampsRequired:         parseInt(form.stampsRequired),
         stampRewardValue:       parseFloat(form.stampRewardValue),
         customDescription:      form.customDescription,
@@ -639,45 +644,94 @@ export default function ManagementLoyaltyPage() {
 
             {form.programType === "tiered" && (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Set cashback rates for different customer spend tiers. Tiers are matched based on the customer's lifetime total spend.</p>
+                <p className="text-sm text-muted-foreground">
+                  Define tiers customers climb by lifetime spend or points. Each tier can offer its own cashback rate, automatic discount, bonus multiplier, and free shipping.
+                </p>
                 <div className="space-y-3">
                   {form.tiers.map((tier, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl border bg-muted/20">
-                      <div className="flex-1 grid grid-cols-3 gap-3">
+                    <div key={i} className="p-3 rounded-xl border bg-muted/20 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div>
+                            <Label className="text-xs">Tier Name</Label>
+                            <Input
+                              value={tier.name}
+                              onChange={(e) => updateTier(i, "name", e.target.value)}
+                              className="h-8 mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Min Spend ($)</Label>
+                            <Input
+                              type="number" min="0"
+                              value={tier.minSpend ?? 0}
+                              onChange={(e) => updateTier(i, "minSpend", parseFloat(e.target.value) || 0)}
+                              className="h-8 mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Points Required</Label>
+                            <Input
+                              type="number" min="0"
+                              value={tier.pointsRequired ?? 0}
+                              onChange={(e) => updateTier(i, "pointsRequired", parseFloat(e.target.value) || 0)}
+                              className="h-8 mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Cashback Rate (%)</Label>
+                            <Input
+                              type="number" min="0" max="100" step="0.1"
+                              value={tier.rate ?? 0}
+                              onChange={(e) => updateTier(i, "rate", parseFloat(e.target.value) || 0)}
+                              className="h-8 mt-1"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost" size="icon" className="shrink-0 text-destructive hover:text-destructive mt-5"
+                          onClick={() => removeTier(i)}
+                          disabled={form.tiers.length <= 1}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <div>
-                          <Label className="text-xs">Tier Name</Label>
+                          <Label className="text-xs">Discount %</Label>
                           <Input
-                            value={tier.name}
-                            onChange={(e) => updateTier(i, "name", e.target.value)}
+                            type="number" min="0" max="100" step="0.5"
+                            value={tier.discountPct ?? 0}
+                            onChange={(e) => updateTier(i, "discountPct", parseFloat(e.target.value) || 0)}
                             className="h-8 mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Min Spend ($)</Label>
+                          <Label className="text-xs">Bonus Multiplier</Label>
                           <Input
-                            type="number" min="0"
-                            value={tier.minSpend}
-                            onChange={(e) => updateTier(i, "minSpend", parseFloat(e.target.value) || 0)}
+                            type="number" min="1" step="0.1"
+                            value={tier.bonusMultiplier ?? 1}
+                            onChange={(e) => updateTier(i, "bonusMultiplier", parseFloat(e.target.value) || 1)}
                             className="h-8 mt-1"
                           />
                         </div>
+                        <div className="flex items-center gap-2 pt-5">
+                          <Switch
+                            checked={tier.freeShipping ?? false}
+                            onCheckedChange={(v) => updateTier(i, "freeShipping", v)}
+                          />
+                          <Label className="text-xs">Free Shipping</Label>
+                        </div>
                         <div>
-                          <Label className="text-xs">Cashback Rate (%)</Label>
+                          <Label className="text-xs">Description</Label>
                           <Input
-                            type="number" min="0" max="100" step="0.1"
-                            value={tier.rate}
-                            onChange={(e) => updateTier(i, "rate", parseFloat(e.target.value) || 0)}
+                            value={tier.description ?? ""}
+                            onChange={(e) => updateTier(i, "description", e.target.value)}
+                            placeholder="e.g. Priority support"
                             className="h-8 mt-1"
                           />
                         </div>
                       </div>
-                      <Button
-                        variant="ghost" size="icon" className="shrink-0 text-destructive hover:text-destructive"
-                        onClick={() => removeTier(i)}
-                        disabled={form.tiers.length <= 1}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                   ))}
                 </div>

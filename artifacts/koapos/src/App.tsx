@@ -66,6 +66,7 @@ import ManagementIntegrationsPage from "@/pages/app/management-integrations";
 import ManagementXeroPage from "@/pages/app/management-xero";
 import ManagementImportExportPage from "@/pages/app/management-import-export";
 import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
+import ManagementLoyaltyLeaderboardPage from "@/pages/app/management-loyalty-leaderboard";
 import ManagementLaybyPage from "@/pages/app/management-layby";
 import ManagementInventoryPage from "@/pages/app/management-inventory";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
@@ -295,6 +296,9 @@ function Router() {
       </Route>
       <Route path="/management/loyalty">
         <ProtectedRoute component={ManagementLoyaltyPage} />
+      </Route>
+      <Route path="/management/loyalty/leaderboard">
+        <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
       <Route path="/management/layby">
         <ProtectedRoute component={ManagementLaybyPage} />

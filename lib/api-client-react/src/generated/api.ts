@@ -78,6 +78,7 @@ import type {
   ListTransactionsParams,
   ListWastageParams,
   LoginInput,
+  LoyaltyLeaderboard,
   LoyaltySettings,
   LoyaltySettingsInput,
   Merchant,
@@ -4063,6 +4064,84 @@ export const useUpdateLoyaltySettings = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateLoyaltySettingsMutationOptions(options));
     }
+
+export const getGetLoyaltyLeaderboardUrl = () => {
+
+
+
+
+  return `/api/loyalty/leaderboard`
+}
+
+/**
+ * Returns the top 10 customers by loyalty points for the merchant.
+ * @summary Top loyalty earners
+ */
+export const getLoyaltyLeaderboard = async ( options?: RequestInit): Promise<LoyaltyLeaderboard> => {
+
+  return customFetch<LoyaltyLeaderboard>(getGetLoyaltyLeaderboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLoyaltyLeaderboardQueryKey = () => {
+    return [
+    `/api/loyalty/leaderboard`
+    ] as const;
+    }
+
+
+export const getGetLoyaltyLeaderboardQueryOptions = <TData = Awaited<ReturnType<typeof getLoyaltyLeaderboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoyaltyLeaderboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLoyaltyLeaderboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLoyaltyLeaderboard>>> = ({ signal }) => getLoyaltyLeaderboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLoyaltyLeaderboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLoyaltyLeaderboardQueryResult = NonNullable<Awaited<ReturnType<typeof getLoyaltyLeaderboard>>>
+export type GetLoyaltyLeaderboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Top loyalty earners
+ */
+
+export function useGetLoyaltyLeaderboard<TData = Awaited<ReturnType<typeof getLoyaltyLeaderboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoyaltyLeaderboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLoyaltyLeaderboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListInventoryUrl = (params?: ListInventoryParams,) => {
   const normalizedParams = new URLSearchParams();
