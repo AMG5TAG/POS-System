@@ -59,7 +59,6 @@ const LOYALTY_TABS = [
   { href: "#program-type",     label: "Program Type" },
   { href: "#program-settings", label: "Settings" },
   { href: "#program-identity", label: "Naming" },
-  { href: "#promotions",       label: "Promotions" },
   { href: "#excluded-groups",  label: "Excluded Groups" },
   { href: "#expiry",           label: "Expiry" },
   { href: "#program-summary",  label: "Summary" },
@@ -856,14 +855,6 @@ export default function ManagementLoyaltyPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Promotions */}
-        <PromotionsCard
-          promotions={form.promotions}
-          onChange={(promotions) => set("promotions", promotions)}
-          categories={categories}
-          products={products}
-        />
 
         {/* Loyalty Expiry */}
         <Card id="expiry">
