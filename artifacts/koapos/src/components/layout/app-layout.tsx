@@ -16,7 +16,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send, Zap,
+  Megaphone, QrCode, BarChart2, Send, Zap, Share2,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -80,6 +80,14 @@ const MARKETING_SUBNAV: NavItem[] = [
       { name: "Leaders", href: "/marketing/loyalty/leaderboard", icon: Trophy },
     ],
   },
+  {
+    name: "Socials",
+    icon: Share2,
+    children: [
+      { name: "Posts", href: "/marketing/socials/posts", icon: Send  },
+      { name: "Track", href: "/marketing/socials/track", icon: Target },
+    ],
+  },
 ];
 
 const INVENTORY_SUBNAV = [
@@ -138,6 +146,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
+  { name: "Marketing",      href: "/management/marketing/social", icon: Share2         },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
   {
@@ -218,6 +227,9 @@ const SEARCH_INDEX = [
   { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
+  { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
+  { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
+  { label: "Social Media Settings",        href: "/management/marketing/social",   icon: Share2, group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -312,6 +324,9 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
   "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
   "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
+  "/marketing/socials/posts":              ["Marketing", "Socials", "Posts"],
+  "/marketing/socials/track":              ["Marketing", "Socials", "Track"],
+  "/management/marketing/social":          ["Management", "Marketing", "Social Connections"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */

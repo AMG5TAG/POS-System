@@ -93,6 +93,9 @@ import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
 import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
 import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
 import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
+import MarketingSocialsPostsPage from "@/pages/app/marketing-socials-posts";
+import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
+import ManagementMarketingSocialPage from "@/pages/app/management-marketing-social";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
 import NotFound from "@/pages/not-found";
@@ -396,6 +399,15 @@ function Router() {
       </Route>
       <Route path="/marketing/loyalty/leaderboard">
         <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
+      </Route>
+      <Route path="/marketing/socials/posts">
+        <ProtectedRoute component={MarketingSocialsPostsPage} />
+      </Route>
+      <Route path="/marketing/socials/track">
+        <ProtectedRoute component={MarketingSocialsTrackPage} />
+      </Route>
+      <Route path="/management/marketing/social">
+        <ProtectedRoute component={ManagementMarketingSocialPage} />
       </Route>
 
       <Route component={NotFound} />
