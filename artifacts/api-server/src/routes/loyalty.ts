@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   excludedCustomerGroups: [] as string[],
   expiryMode: "none" as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
   expiryValue: null as number | null,
+  promotions: [] as unknown[],
 };
 
 function formatSettings(row: typeof loyaltySettingsTable.$inferSelect) {
@@ -40,6 +41,7 @@ function formatSettings(row: typeof loyaltySettingsTable.$inferSelect) {
     excludedCustomerGroups: (cfg.excludedCustomerGroups as string[]) ?? DEFAULT_CONFIG.excludedCustomerGroups,
     expiryMode:             (cfg.expiryMode as typeof DEFAULT_CONFIG.expiryMode) ?? DEFAULT_CONFIG.expiryMode,
     expiryValue:            (cfg.expiryValue as number | null)     ?? DEFAULT_CONFIG.expiryValue,
+    promotions:             (cfg.promotions as unknown[])          ?? DEFAULT_CONFIG.promotions,
   };
 }
 

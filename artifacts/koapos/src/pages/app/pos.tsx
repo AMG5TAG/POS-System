@@ -303,7 +303,7 @@ export default function POSPage() {
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit };
   }, [cart, overallDiscount]);
 
-  /* Loyalty */
+  /* Loyalty — base earn + active promotion bonuses */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
     if (walkIn || !loyaltySettings?.isEnabled || cart.length === 0)
       return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
@@ -311,34 +311,102 @@ export default function POSPage() {
     const group = (selectedCustomer?.customerGroup ?? "").toLowerCase();
     if (selectedCustomer && group && excluded.includes(group))
       return { loyaltyAmount: 0, loyaltyLabel: "No loyalty (excluded group)", loyaltyUnit: "" };
+
+    /* eligible total after exclusions + discounts */
     const eligible = cart.reduce((s, i) => {
       if (i.product.excludeFromLoyalty) return s;
       return s + (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount;
     }, 0) - overallDiscountAmt;
     if (eligible <= 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
+
+    /* promotions */
+    const promotions = (loyaltySettings.promotions ?? []) as Array<{
+      id: string; name: string; type: string; active: boolean;
+      multiplier?: number; bonusAmount?: number;
+      categoryId?: number | null; productId?: number | null;
+      minSpend?: number | null; startDate?: string | null; endDate?: string | null;
+    }>;
+    const today = new Date().toISOString().slice(0, 10);
+    const activePromos = promotions.filter((p) => {
+      if (!p.active) return false;
+      const inRange = (!p.startDate || p.startDate <= today) && (!p.endDate || p.endDate >= today);
+      if (!inRange) return false;
+      if (p.type === "spend_threshold" && (p.minSpend == null || eligible < p.minSpend)) return false;
+      if (p.type === "category_bonus" && p.categoryId != null) {
+        const hasCat = cart.some((i) => !i.product.excludeFromLoyalty && i.product.categoryId === p.categoryId);
+        if (!hasCat) return false;
+      }
+      if (p.type === "product_bonus" && p.productId != null) {
+        const hasProduct = cart.some((i) => !i.product.excludeFromLoyalty && i.product.id === p.productId);
+        if (!hasProduct) return false;
+      }
+      if (p.type === "birthday" && selectedCustomer) {
+        const dob = selectedCustomer.dateOfBirth;
+        if (!dob) return false;
+        const todayM = new Date().getMonth() + 1;
+        const todayD = new Date().getDate();
+        const d = new Date(dob);
+        if (d.getMonth() + 1 !== todayM || d.getDate() !== todayD) return false;
+      }
+      return true;
+    });
+    const bestMultiplier = activePromos.length > 0
+      ? Math.max(...activePromos.map((p) => p.multiplier ?? 1))
+      : 1;
+    const bestBonus = activePromos.length > 0
+      ? Math.max(...activePromos.map((p) => p.bonusAmount ?? 0))
+      : 0;
+    const promoNames = activePromos.map((p) => p.name);
+
+    let baseAmount = 0;
+    let label = "";
+    let unit = "";
     switch (loyaltySettings.programType) {
       case "cashback": {
         const r = loyaltySettings.cashbackRate ?? 0.01;
-        return { loyaltyAmount: eligible * r, loyaltyLabel: `${(r * 100).toFixed(1)}% cashback`, loyaltyUnit: "$" };
+        baseAmount = eligible * r;
+        label = `${(r * 100).toFixed(1)}% cashback`;
+        unit = "$";
+        break;
       }
       case "points": {
         const pts = Math.floor(eligible * (loyaltySettings.pointsPerDollar ?? 1));
-        return { loyaltyAmount: pts, loyaltyLabel: `${pts} pts earned`, loyaltyUnit: "pts" };
+        baseAmount = pts;
+        label = `${pts} pts earned`;
+        unit = "pts";
+        break;
       }
       case "tiered": {
         const spent = selectedCustomer?.totalSpent ?? 0;
         const tiers = [...(loyaltySettings.tiers ?? [])].sort((a, b) => b.minSpend - a.minSpend);
         const tier = tiers.find(t => spent >= t.minSpend) ?? tiers[tiers.length - 1];
         const r = tier?.rate ?? 0.01;
-        return { loyaltyAmount: eligible * r, loyaltyLabel: `${(r * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`, loyaltyUnit: "$" };
+        baseAmount = eligible * r;
+        label = `${(r * 100).toFixed(1)}% cashback (${tier?.name ?? ""})`;
+        unit = "$";
+        break;
       }
-      case "stamp": return { loyaltyAmount: 1, loyaltyLabel: "1 stamp earned", loyaltyUnit: "stamp" };
+      case "stamp": baseAmount = 1; label = "1 stamp earned"; unit = "stamp"; break;
       case "custom": {
         const r = loyaltySettings.customValue ?? 0.01;
-        return { loyaltyAmount: eligible * r, loyaltyLabel: "reward earned", loyaltyUnit: "$" };
+        baseAmount = eligible * r;
+        label = "reward earned";
+        unit = "$";
+        break;
       }
       default: return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
     }
+
+    /* apply best promotion bonus */
+    const finalAmount = baseAmount * bestMultiplier + bestBonus;
+    const promoLabel = promoNames.length > 0
+      ? `${promoNames.join(", ")} · ${bestMultiplier}x`
+      : "";
+    return {
+      loyaltyAmount: finalAmount,
+      loyaltyLabel: promoLabel ? `${label} — ${promoLabel}` : label,
+      loyaltyUnit: unit,
+    };
   }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt]);
 
   /* Quick cash amounts */

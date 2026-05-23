@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetLoyaltySettings, useUpdateLoyaltySettings, LoyaltySettings } from "@workspace/api-client-react";
+import {
+  useGetLoyaltySettings, useUpdateLoyaltySettings, LoyaltySettings,
+  useListCategories, useListProducts,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +17,10 @@ import { cn } from "@/lib/utils";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import {
   Gift, Percent, Star, Stamp, Wrench, Check, ChevronRight,
-  Plus, Trash2, Info, Pen, Clock,
+  Plus, Trash2, Info, Pen, Clock, Zap, Tag, CalendarDays,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /* ─── Loyalty naming (localStorage) ─────────────────────────────────────── */
 
@@ -54,6 +59,7 @@ const LOYALTY_TABS = [
   { href: "#program-type",     label: "Program Type" },
   { href: "#program-settings", label: "Settings" },
   { href: "#program-identity", label: "Naming" },
+  { href: "#promotions",       label: "Promotions" },
   { href: "#excluded-groups",  label: "Excluded Groups" },
   { href: "#expiry",           label: "Expiry" },
   { href: "#program-summary",  label: "Summary" },
@@ -63,10 +69,26 @@ const LOYALTY_TABS = [
 
 type ProgramType = "cashback" | "points" | "tiered" | "stamp" | "custom";
 
+type PromotionType = "double_points" | "category_bonus" | "product_bonus" | "spend_threshold" | "birthday";
+
 interface Tier {
   name: string;
   minSpend: number;
   rate: number;
+}
+
+interface LoyaltyPromotion {
+  id: string;
+  name: string;
+  type: PromotionType;
+  active: boolean;
+  multiplier?: number;
+  bonusAmount?: number;
+  categoryId?: number | null;
+  productId?: number | null;
+  minSpend?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 const PROGRAMS: {
@@ -117,6 +139,244 @@ const ICONS: Record<ProgramType, React.ComponentType<{ className?: string }>> = 
   custom:   Wrench,
 };
 
+const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
+  double_points:    "Double Points",
+  category_bonus:   "Category Bonus",
+  product_bonus:    "Product Bonus",
+  spend_threshold:  "Spend Threshold",
+  birthday:         "Birthday Bonus",
+};
+
+/* ─── Promotions Card component ─────────────────────────────────────────── */
+
+function PromotionsCard({
+  promotions,
+  onChange,
+  categories,
+  products,
+}: {
+  promotions: LoyaltyPromotion[];
+  onChange: (p: LoyaltyPromotion[]) => void;
+  categories: { id: number; name: string }[];
+  products: { id: number; name: string }[];
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<LoyaltyPromotion | null>(null);
+
+  const blankPromotion = (): LoyaltyPromotion => ({
+    id: Math.random().toString(36).slice(2, 10),
+    name: "",
+    type: "double_points",
+    active: true,
+    multiplier: 2,
+    bonusAmount: undefined,
+    categoryId: null,
+    productId: null,
+    minSpend: null,
+    startDate: null,
+    endDate: null,
+  });
+
+  const openNew = () => { setEditing(blankPromotion()); setDialogOpen(true); };
+  const openEdit = (p: LoyaltyPromotion) => { setEditing({ ...p }); setDialogOpen(true); };
+
+  const save = () => {
+    if (!editing || !editing.name.trim()) { toast.error("Promotion name is required"); return; }
+    const exists = promotions.find((p) => p.id === editing.id);
+    const next = exists
+      ? promotions.map((p) => (p.id === editing.id ? editing : p))
+      : [...promotions, editing];
+    onChange(next);
+    setDialogOpen(false);
+    setEditing(null);
+    toast.success("Promotion saved");
+  };
+
+  const remove = (id: string) => {
+    onChange(promotions.filter((p) => p.id !== id));
+    toast.success("Promotion removed");
+  };
+
+  const toggleActive = (id: string) => {
+    onChange(promotions.map((p) => (p.id === id ? { ...p, active: !p.active } : p)));
+  };
+
+  return (
+    <Card id="promotions">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-primary" />
+            <CardTitle className="text-base">Loyalty Promotions</CardTitle>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1" onClick={openNew}>
+            <Plus className="w-3.5 h-3.5" /> New Promotion
+          </Button>
+        </div>
+        <CardDescription>
+          Run special loyalty campaigns like Double Points, category bonuses, and spend threshold rewards.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {promotions.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center space-y-2">
+            <Zap className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">No promotions yet</p>
+            <p className="text-xs text-muted-foreground">Create promotions to boost customer engagement during special events or for specific products.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {promotions.map((p) => {
+              const active = p.active;
+              const today = new Date().toISOString().slice(0, 10);
+              const inRange = (!p.startDate || p.startDate <= today) && (!p.endDate || p.endDate >= today);
+              const status = active && inRange ? "Active" : active ? "Paused" : "Disabled";
+              const statusColor = active && inRange
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                : active ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                : "bg-muted text-muted-foreground";
+
+              return (
+                <div key={p.id} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+                  <div className={cn("rounded-lg p-2 shrink-0", active ? "bg-primary/10" : "bg-muted")}>
+                    <Zap className={cn("w-4 h-4", active ? "text-primary" : "text-muted-foreground")} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{p.name}</p>
+                      <Badge className={cn("text-[10px] border-0", statusColor)}>{status}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {PROMOTION_TYPE_LABELS[p.type]}
+                      {p.multiplier ? ` · ${p.multiplier}x multiplier` : ""}
+                      {p.bonusAmount ? ` · +${p.bonusAmount} bonus` : ""}
+                      {p.categoryId ? ` · ${categories.find((c) => c.id === p.categoryId)?.name ?? "Category"}` : ""}
+                      {p.productId ? ` · ${products.find((pr) => pr.id === p.productId)?.name ?? "Product"}` : ""}
+                      {p.minSpend ? ` · from $${p.minSpend}` : ""}
+                      {p.startDate || p.endDate ? (
+                        ` · ${p.startDate ?? ""}${p.startDate && p.endDate ? " – " : ""}${p.endDate ?? ""}`
+                      ) : ""}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={p.active}
+                    onCheckedChange={() => toggleActive(p.id)}
+                  />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}>
+                    <Pen className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => remove(p.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing && promotions.find((p) => p.id === editing.id) ? "Edit Promotion" : "New Promotion"}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Promotion Name</Label>
+                <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="e.g. Weekend Double Points" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                <Select value={editing.type} onValueChange={(v) => setEditing({ ...editing, type: v as PromotionType })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PROMOTION_TYPE_LABELS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(editing.type === "double_points" || editing.type === "category_bonus" || editing.type === "product_bonus" || editing.type === "spend_threshold" || editing.type === "birthday") && (
+                <div className="space-y-1.5">
+                  <Label>Multiplier</Label>
+                  <Input type="number" min="1" step="0.5" value={editing.multiplier ?? 1} onChange={(e) => setEditing({ ...editing, multiplier: parseFloat(e.target.value) || 1 })} />
+                  <p className="text-xs text-muted-foreground">e.g. 2 = double points, 3 = triple points</p>
+                </div>
+              )}
+
+              {(editing.type === "category_bonus") && (
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={editing.categoryId ? String(editing.categoryId) : ""} onValueChange={(v) => setEditing({ ...editing, categoryId: v ? parseInt(v) : null })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {(editing.type === "product_bonus") && (
+                <div className="space-y-1.5">
+                  <Label>Product</Label>
+                  <Select value={editing.productId ? String(editing.productId) : ""} onValueChange={(v) => setEditing({ ...editing, productId: v ? parseInt(v) : null })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select product…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((pr) => (
+                        <SelectItem key={pr.id} value={String(pr.id)}>{pr.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {(editing.type === "spend_threshold") && (
+                <div className="space-y-1.5">
+                  <Label>Minimum Spend ($)</Label>
+                  <Input type="number" min="0" step="0.01" value={editing.minSpend ?? ""} onChange={(e) => setEditing({ ...editing, minSpend: e.target.value ? parseFloat(e.target.value) : null })} placeholder="e.g. 50" />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Start Date</Label>
+                  <Input type="date" value={editing.startDate ?? ""} onChange={(e) => setEditing({ ...editing, startDate: e.target.value || null })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> End Date</Label>
+                  <Input type="date" value={editing.endDate ?? ""} onChange={(e) => setEditing({ ...editing, endDate: e.target.value || null })} />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-2">
+                  <Switch checked={editing.active} onCheckedChange={(v) => setEditing({ ...editing, active: v })} />
+                  <Label className="text-sm">Active</Label>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={save}>Save Promotion</Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
 function toForm(s: LoyaltySettings) {
@@ -134,6 +394,7 @@ function toForm(s: LoyaltySettings) {
     excludedCustomerGroups: (s.excludedCustomerGroups ?? []) as string[],
     expiryMode:             (s.expiryMode ?? "none") as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
     expiryValue:            s.expiryValue ?? null,
+    promotions:             (s.promotions ?? []) as LoyaltyPromotion[],
   };
 }
 
@@ -147,6 +408,10 @@ export default function ManagementLoyaltyPage() {
   const { data: settings, isLoading } = useGetLoyaltySettings();
   const updateMutation = useUpdateLoyaltySettings();
   const { settings: customerConfig } = useCustomerSettings();
+  const { data: categoriesData } = useListCategories();
+  const { data: productsData } = useListProducts({ limit: 500 });
+  const categories = categoriesData ?? [];
+  const products = productsData?.items ?? [];
 
   const [naming, setNaming] = useState<LoyaltyNaming>(() => loadLoyaltyNaming());
 
@@ -176,6 +441,7 @@ export default function ManagementLoyaltyPage() {
     excludedCustomerGroups: [] as string[],
     expiryMode:             "none" as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
     expiryValue:            null as number | null,
+    promotions:             [] as LoyaltyPromotion[],
   });
 
   useEffect(() => {
@@ -218,6 +484,7 @@ export default function ManagementLoyaltyPage() {
         excludedCustomerGroups: form.excludedCustomerGroups,
         expiryMode:             form.expiryMode,
         expiryValue:            form.expiryValue,
+        promotions:             form.promotions,
       },
     }, {
       onSuccess: () => {
@@ -535,6 +802,14 @@ export default function ManagementLoyaltyPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Promotions */}
+        <PromotionsCard
+          promotions={form.promotions}
+          onChange={(promotions) => set("promotions", promotions)}
+          categories={categories}
+          products={products}
+        />
 
         {/* Loyalty Expiry */}
         <Card id="expiry">

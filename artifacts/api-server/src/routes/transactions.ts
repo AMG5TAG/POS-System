@@ -226,7 +226,11 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   let sanitizedEarned = 0;
   if (scopedCustomer && paymentMethod !== "loyalty" && loyaltyEarned != null) {
     const [loyaltyRow] = await db
-      .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled })
+      .select({
+        programType: loyaltySettingsTable.programType,
+        isEnabled: loyaltySettingsTable.isEnabled,
+        config: loyaltySettingsTable.config,
+      })
       .from(loyaltySettingsTable)
       .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
     const programType = loyaltyRow?.programType ?? "cashback";
@@ -234,7 +238,71 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     // No row → default to enabled (matches GET /loyalty/settings default behaviour)
     const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
     if (programOn && isMonetary) {
-      sanitizedEarned = Math.max(0, Math.min(Math.floor(loyaltyEarned), Math.floor(total)));
+      let baseEarned = 0;
+      switch (programType) {
+        case "cashback": {
+          const rate = (loyaltyRow?.config as Record<string, unknown>)?.cashbackRate ?? 0.01;
+          baseEarned = total * (rate as number);
+          break;
+        }
+        case "tiered": {
+          const tiers = ((loyaltyRow?.config as Record<string, unknown>)?.tiers ?? []) as Array<{ minSpend: number; rate: number; name: string }>;
+          const spent = parseFloat(scopedCustomer.totalSpent);
+          const sorted = [...tiers].sort((a, b) => b.minSpend - a.minSpend);
+          const tier = sorted.find((t) => spent >= t.minSpend) ?? sorted[sorted.length - 1];
+          baseEarned = total * (tier?.rate ?? 0.01);
+          break;
+        }
+        case "custom": {
+          const rate = (loyaltyRow?.config as Record<string, unknown>)?.customValue ?? 0.01;
+          baseEarned = total * (rate as number);
+          break;
+        }
+        default: {
+          baseEarned = loyaltyEarned ?? 0;
+        }
+      }
+      // Apply active promotion multipliers / bonuses
+      const promotions = ((loyaltyRow?.config as Record<string, unknown>)?.promotions ?? []) as Array<{
+        id: string; name: string; type: string; active: boolean;
+        multiplier?: number; bonusAmount?: number;
+        categoryId?: number | null; productId?: number | null;
+        minSpend?: number | null; startDate?: string | null; endDate?: string | null;
+      }>;
+      const today = new Date().toISOString().slice(0, 10);
+      const activePromos = promotions.filter((p) => {
+        if (!p.active) return false;
+        const inRange = (!p.startDate || p.startDate <= today) && (!p.endDate || p.endDate >= today);
+        if (!inRange) return false;
+        if (p.type === "spend_threshold" && (p.minSpend == null || total < p.minSpend)) return false;
+        if (p.type === "category_bonus" && p.categoryId != null) {
+          const hasCat = computedItems.some((it) => {
+            const product = productMap.get(it.productId);
+            return product && product.categoryId === p.categoryId;
+          });
+          if (!hasCat) return false;
+        }
+        if (p.type === "product_bonus" && p.productId != null) {
+          return computedItems.some((it) => it.productId === p.productId);
+        }
+        if (p.type === "birthday" && scopedCustomer) {
+          const dob = scopedCustomer.dateOfBirth;
+          if (!dob) return false;
+          const d = new Date(dob);
+          const todayM = new Date().getMonth() + 1;
+          const todayD = new Date().getDate();
+          return d.getMonth() + 1 === todayM && d.getDate() === todayD;
+        }
+        return true;
+      });
+      const bestMultiplier = activePromos.length > 0
+        ? Math.max(...activePromos.map((p) => p.multiplier ?? 1))
+        : 1;
+      const bestBonus = activePromos.length > 0
+        ? Math.max(...activePromos.map((p) => p.bonusAmount ?? 0))
+        : 0;
+      const finalEarned = baseEarned * bestMultiplier + bestBonus;
+      sanitizedEarned = Math.max(0, Math.min(Math.floor(finalEarned), Math.floor(total)));
     }
   }
 

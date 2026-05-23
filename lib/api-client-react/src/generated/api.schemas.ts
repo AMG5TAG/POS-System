@@ -928,6 +928,36 @@ export interface LoyaltyTier {
   rate: number;
 }
 
+export type LoyaltyPromotionType = typeof LoyaltyPromotionType[keyof typeof LoyaltyPromotionType];
+
+
+export const LoyaltyPromotionType = {
+  double_points: 'double_points',
+  category_bonus: 'category_bonus',
+  product_bonus: 'product_bonus',
+  spend_threshold: 'spend_threshold',
+  birthday: 'birthday',
+} as const;
+
+export interface LoyaltyPromotion {
+  id: string;
+  name: string;
+  type: LoyaltyPromotionType;
+  active: boolean;
+  multiplier?: number;
+  bonusAmount?: number;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  minSpend?: number | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+}
+
 export type LoyaltySettingsProgramType = typeof LoyaltySettingsProgramType[keyof typeof LoyaltySettingsProgramType];
 
 
@@ -972,6 +1002,8 @@ export interface LoyaltySettings {
      * @nullable
      */
   expiryValue?: number | null;
+  /** Active loyalty promotions (Double Points, Category Bonuses, etc.). */
+  promotions?: LoyaltyPromotion[];
 }
 
 export type LoyaltySettingsInputProgramType = typeof LoyaltySettingsInputProgramType[keyof typeof LoyaltySettingsInputProgramType];
@@ -1018,6 +1050,8 @@ export interface LoyaltySettingsInput {
      * @nullable
      */
   expiryValue?: number | null;
+  /** Active loyalty promotions (Double Points, Category Bonuses, etc.). */
+  promotions?: LoyaltyPromotion[];
 }
 
 export interface CashDrawerEntry {

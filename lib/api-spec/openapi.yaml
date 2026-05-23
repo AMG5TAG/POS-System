@@ -3539,6 +3539,34 @@ components:
         rate:
           type: number
 
+    LoyaltyPromotion:
+      type: object
+      required: [id, name, type, active]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [double_points, category_bonus, product_bonus, spend_threshold, birthday]
+        active:
+          type: boolean
+        multiplier:
+          type: number
+        bonusAmount:
+          type: number
+        categoryId:
+          type: [integer, "null"]
+        productId:
+          type: [integer, "null"]
+        minSpend:
+          type: [number, "null"]
+        startDate:
+          type: [string, "null"]
+        endDate:
+          type: [string, "null"]
+
     LoyaltySettings:
       type: object
       required: [programType, isEnabled]
@@ -3577,6 +3605,11 @@ components:
         expiryValue:
           type: [integer, "null"]
           description: Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
+        promotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyPromotion"
+          description: Active loyalty promotions (Double Points, Category Bonuses, etc.).
 
     LoyaltySettingsInput:
       type: object
@@ -3616,6 +3649,11 @@ components:
         expiryValue:
           type: [integer, "null"]
           description: Numeric value for the expiry mode (e.g. days count). Null when mode is 'none' or 'endOfYear'.
+        promotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyPromotion"
+          description: Active loyalty promotions (Double Points, Category Bonuses, etc.).
 
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:

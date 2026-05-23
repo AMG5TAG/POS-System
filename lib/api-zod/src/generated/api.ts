@@ -1460,7 +1460,20 @@ export const GetLoyaltySettingsResponse = zod.object({
   "customValue": zod.number().optional(),
   "excludedCustomerGroups": zod.array(zod.string()).optional(),
   "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
-  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.'),
+  "promotions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['double_points', 'category_bonus', 'product_bonus', 'spend_threshold', 'birthday']),
+  "active": zod.boolean(),
+  "multiplier": zod.number().optional(),
+  "bonusAmount": zod.number().optional(),
+  "categoryId": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "minSpend": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish()
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
 })
 
 
@@ -1484,7 +1497,20 @@ export const UpdateLoyaltySettingsBody = zod.object({
   "customValue": zod.number().optional(),
   "excludedCustomerGroups": zod.array(zod.string()).optional(),
   "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
-  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.'),
+  "promotions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['double_points', 'category_bonus', 'product_bonus', 'spend_threshold', 'birthday']),
+  "active": zod.boolean(),
+  "multiplier": zod.number().optional(),
+  "bonusAmount": zod.number().optional(),
+  "categoryId": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "minSpend": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish()
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
 })
 
 export const UpdateLoyaltySettingsResponse = zod.object({
@@ -1504,7 +1530,20 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "customValue": zod.number().optional(),
   "excludedCustomerGroups": zod.array(zod.string()).optional(),
   "expiryMode": zod.enum(['none', 'daysSinceLastPurchase', 'fixedDays', 'endOfYear', 'fixedDate']).optional().describe('How loyalty points expire.'),
-  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.')
+  "expiryValue": zod.number().nullish().describe('Numeric value for the expiry mode (e.g. days count). Null when mode is \'none\' or \'endOfYear\'.'),
+  "promotions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['double_points', 'category_bonus', 'product_bonus', 'spend_threshold', 'birthday']),
+  "active": zod.boolean(),
+  "multiplier": zod.number().optional(),
+  "bonusAmount": zod.number().optional(),
+  "categoryId": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "minSpend": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish()
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
 })
 
 
