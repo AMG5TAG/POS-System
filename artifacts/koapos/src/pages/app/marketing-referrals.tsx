@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
-  Copy, CheckCircle2, Clock, Users, Gift, TrendingUp,
-  Search, UserPlus, Star, Settings2, BarChart2, Info,
+  Copy, CheckCircle2, Clock, Search, UserPlus, Star, Info,
 } from "lucide-react";
 
 /* ─── Storage ────────────────────────────────────────────────────────────── */
@@ -115,166 +108,16 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-/* ─── Settings panel ─────────────────────────────────────────────────────── */
-
-function SettingsPanel({ settings, onSave }: { settings: ReferralSettings; onSave: (s: ReferralSettings) => void }) {
-  const [local, setLocal] = useState<ReferralSettings>(settings);
-  const set = (patch: Partial<ReferralSettings>) => setLocal((prev) => ({ ...prev, ...patch }));
-
-  const isDirty = JSON.stringify(local) !== JSON.stringify(settings);
-
-  return (
-    <div className="space-y-5">
-      {/* Enable toggle */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <Label className="text-sm font-semibold">Enable Customer Referral Program</Label>
-          <p className="text-xs text-muted-foreground mt-0.5">Customers will receive a unique referral code when added to the system.</p>
-        </div>
-        <Switch
-          checked={local.enabled}
-          onCheckedChange={(v) => set({ enabled: v })}
-        />
-      </div>
-
-      <Separator />
-
-      {/* Qualification criteria */}
-      <div>
-        <p className="text-sm font-semibold mb-3">Qualification Criteria</p>
-        <p className="text-xs text-muted-foreground mb-4">A referred customer must meet all criteria within the qualification window to trigger a reward.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Min. Spend ($)</Label>
-            <Input
-              type="number" min={0} step={5}
-              value={local.minSpend}
-              onChange={(e) => set({ minSpend: parseFloat(e.target.value) || 0 })}
-              className="h-8"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Min. Visits</Label>
-            <Input
-              type="number" min={1} step={1}
-              value={local.minVisits}
-              onChange={(e) => set({ minVisits: parseInt(e.target.value) || 1 })}
-              className="h-8"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Qualification Window (days)</Label>
-            <Input
-              type="number" min={7} step={7}
-              value={local.qualifyDays}
-              onChange={(e) => set({ qualifyDays: parseInt(e.target.value) || 30 })}
-              className="h-8"
-            />
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Referred customer reward */}
-      <div>
-        <p className="text-sm font-semibold mb-1">Referred Customer Reward</p>
-        <p className="text-xs text-muted-foreground mb-3">What the new (referred) customer receives upon qualifying.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Reward Type</Label>
-            <Select value={local.rewardType} onValueChange={(v) => set({ rewardType: v as ReferralSettings["rewardType"] })}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="points">Loyalty Points</SelectItem>
-                <SelectItem value="discount">Discount ($)</SelectItem>
-                <SelectItem value="gift">Gift Item</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">
-              {local.rewardType === "points" ? "Points" : local.rewardType === "discount" ? "Discount Amount ($)" : "Gift Label"}
-            </Label>
-            <Input
-              type={local.rewardType === "gift" ? "text" : "number"}
-              min={0}
-              value={local.rewardType === "gift" ? local.rewardLabel : local.rewardAmount}
-              onChange={(e) =>
-                local.rewardType === "gift"
-                  ? set({ rewardLabel: e.target.value })
-                  : set({ rewardAmount: parseFloat(e.target.value) || 0 })
-              }
-              className="h-8"
-            />
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Referrer reward */}
-      <div>
-        <p className="text-sm font-semibold mb-1">Referrer Reward</p>
-        <p className="text-xs text-muted-foreground mb-3">What the existing customer (referrer) receives when their referral qualifies.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Reward Type</Label>
-            <Select value={local.referrerRewardType} onValueChange={(v) => set({ referrerRewardType: v as ReferralSettings["referrerRewardType"] })}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="points">Loyalty Points</SelectItem>
-                <SelectItem value="discount">Discount ($)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">
-              {local.referrerRewardType === "points" ? "Points" : "Discount Amount ($)"}
-            </Label>
-            <Input
-              type="number" min={0}
-              value={local.referrerRewardAmount}
-              onChange={(e) => set({ referrerRewardAmount: parseFloat(e.target.value) || 0 })}
-              className="h-8"
-            />
-          </div>
-        </div>
-      </div>
-
-      {isDirty && (
-        <div className="flex gap-2 pt-2">
-          <Button size="sm" onClick={() => { onSave(local); toast.success("Settings saved"); }}>Save Settings</Button>
-          <Button size="sm" variant="outline" onClick={() => setLocal(settings)}>Discard</Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─── Page ──────────────────────────────────────────────────────────────── */
 
-type Tab = "overview" | "settings";
-
 export default function MarketingReferralsPage() {
-  const [settings, setSettings] = useState<ReferralSettings>(() => loadSettings());
-  const [tab, setTab]           = useState<Tab>("overview");
+  const [settings] = useState<ReferralSettings>(() => loadSettings());
   const [search, setSearch]     = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
-  const handleSave = (s: ReferralSettings) => {
-    setSettings(s);
-    saveSettings(s);
-  };
 
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code).then(() => {
       setCopiedCode(code);
-      toast.success("Referral code copied");
       setTimeout(() => setCopiedCode(null), 2000);
     });
   };
@@ -312,40 +155,6 @@ export default function MarketingReferralsPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
-          {[
-            { id: "overview" as Tab, label: "Overview", icon: BarChart2  },
-            { id: "settings" as Tab, label: "Settings", icon: Settings2  },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all",
-                tab === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "settings" && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Program Configuration</CardTitle>
-              <CardDescription>Control how customer referrals work, what triggers a reward, and what rewards are earned.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SettingsPanel settings={settings} onSave={handleSave} />
-            </CardContent>
-          </Card>
-        )}
-
-        {tab === "overview" && (
-          <>
             {/* KPI row */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
@@ -482,8 +291,6 @@ export default function MarketingReferralsPage() {
                 New customers added to the system are automatically assigned a referral code based on their initials. Codes are shown on the customer profile and can be shared directly by the customer or copied from this page.
               </div>
             </div>
-          </>
-        )}
       </div>
     </AppLayout>
   );

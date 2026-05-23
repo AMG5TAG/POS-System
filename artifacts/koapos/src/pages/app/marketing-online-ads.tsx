@@ -142,7 +142,7 @@ function NotConnected() {
           Link your Google Ads account to view campaign performance, spend, and conversions directly in KoaPOS.
         </p>
       </div>
-      <Link href="/management/marketing/social">
+      <Link href="/management/marketing/socials">
         <Button className="gap-2">
           <Settings className="w-4 h-4" />
           Connect in Management → Marketing
@@ -420,7 +420,7 @@ export default function MarketingOnlineAdsPage() {
 
         <Separator />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <p>Data is simulated for demonstration. Connect your live account in <Link href="/management/marketing/social" className="underline">Management → Marketing</Link>.</p>
+          <p>Data is simulated for demonstration. Connect your live account in <Link href="/management/marketing/socials" className="underline">Management → Marketing</Link>.</p>
           <a href="https://ads.google.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground">
             Open Google Ads <ExternalLink className="w-3 h-3" />
           </a>

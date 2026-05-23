@@ -95,7 +95,9 @@ import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
 import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
 import MarketingSocialsPostsPage from "@/pages/app/marketing-socials-posts";
 import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
-import ManagementMarketingSocialPage from "@/pages/app/management-marketing-social";
+import ManagementMarketingSocialsPage from "@/pages/app/management-marketing-socials";
+import ManagementMarketingOnlineAdsPage from "@/pages/app/management-marketing-online-ads";
+import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import MarketingOnlineAdsPage from "@/pages/app/marketing-online-ads";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
@@ -418,8 +420,14 @@ function Router() {
       <Route path="/management/koapos">
         <ProtectedRoute component={ManagementKoaPOSPage} />
       </Route>
-      <Route path="/management/marketing/social">
-        <ProtectedRoute component={ManagementMarketingSocialPage} />
+      <Route path="/management/marketing/socials">
+        <ProtectedRoute component={ManagementMarketingSocialsPage} />
+      </Route>
+      <Route path="/management/marketing/online-ads">
+        <ProtectedRoute component={ManagementMarketingOnlineAdsPage} />
+      </Route>
+      <Route path="/management/marketing/referrals">
+        <ProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
 
       <Route component={NotFound} />
