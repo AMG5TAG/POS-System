@@ -191,6 +191,7 @@ export function CustomerLocationMap() {
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers]);
 
   const located   = pins.length;
@@ -270,7 +271,7 @@ export function CustomerLocationMap() {
             </div>
             {unlocated > 0 && (
               <p className="text-[11px] text-muted-foreground">
-                Add a billing city to {unlocated === 1 ? "1 customer" : `${unlocated} customers`} to place {unlocated === 1 ? "them" : "them"} on the map.
+                Add a physical address city to {unlocated === 1 ? "1 customer" : `${unlocated} customers`} to place {unlocated === 1 ? "them" : "them"} on the map.
               </p>
             )}
           </div>
@@ -304,7 +305,7 @@ export function CustomerLocationMap() {
               <Users className="w-8 h-8 text-muted-foreground/40 mx-auto" />
               <p className="text-sm font-medium">No location data</p>
               <p className="text-[11px] text-muted-foreground">
-                Add billing cities to your customers to see a suburb breakdown here.
+                Add physical address cities to your customers to see a suburb breakdown here.
               </p>
             </div>
           )}

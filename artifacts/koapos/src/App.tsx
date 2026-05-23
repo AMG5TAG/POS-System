@@ -85,9 +85,12 @@ import StaffNotesPage from "@/pages/app/staff-notes";
 import StaffKpisPage from "@/pages/app/staff-kpis";
 import StaffLinksPage from "@/pages/app/staff-links";
 
+import MarketingPage from "@/pages/app/marketing";
 import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
 import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
 import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
+import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
+import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
 import NotFound from "@/pages/not-found";
@@ -365,6 +368,15 @@ function Router() {
       <Route path="/p/:slug" component={LandingPagePublicView} />
 
       {/* Marketing section */}
+      <Route path="/marketing">
+        <ProtectedRoute component={MarketingPage} />
+      </Route>
+      <Route path="/marketing/email/campaigns">
+        <ProtectedRoute component={MarketingEmailCampaignsPage} />
+      </Route>
+      <Route path="/marketing/email/templates">
+        <ProtectedRoute component={MarketingEmailTemplatesPage} />
+      </Route>
       <Route path="/marketing/landing-pages">
         <ProtectedRoute component={MarketingLandingPagesPage} />
       </Route>

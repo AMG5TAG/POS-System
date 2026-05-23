@@ -488,7 +488,7 @@ export default function ManagementOverviewPage() {
               Map of Customers
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              See where your customer base is physically located. Pins appear for customers with a billing city saved.
+              See where your customer base is physically located. Pins appear for customers with a physical address city saved.
             </p>
           </div>
           <CustomerLocationMap />

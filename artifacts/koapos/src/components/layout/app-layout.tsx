@@ -16,7 +16,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode,
+  Megaphone, QrCode, BarChart2, Send,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -54,7 +54,16 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
-  { name: "Landing Pages", href: "/marketing/landing-pages", icon: LayoutTemplate },
+  { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
+  { name: "Landing Pages", href: "/marketing/landing-pages",        icon: LayoutTemplate },
+  {
+    name: "Email",
+    icon: Mail,
+    children: [
+      { name: "Email Campaigns", href: "/marketing/email/campaigns", icon: Send },
+      { name: "Templates",       href: "/marketing/email/templates",  icon: FileText },
+    ],
+  },
   {
     name: "Generators",
     icon: QrCode,
@@ -194,8 +203,11 @@ const SEARCH_INDEX = [
   { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
-  { label: "Marketing · QR Codes",   href: "/marketing/generators/qr-codes",  icon: QrCode, group: "Marketing" },
-  { label: "Marketing · Shortlinks", href: "/marketing/generators/shortlinks", icon: Link2,  group: "Marketing" },
+  { label: "Marketing · Overview",          href: "/marketing",                       icon: BarChart2,  group: "Marketing" },
+  { label: "Marketing · Email Campaigns",   href: "/marketing/email/campaigns",        icon: Send,       group: "Marketing" },
+  { label: "Marketing · Email Templates",   href: "/marketing/email/templates",        icon: FileText,   group: "Marketing" },
+  { label: "Marketing · QR Codes",          href: "/marketing/generators/qr-codes",    icon: QrCode,     group: "Marketing" },
+  { label: "Marketing · Shortlinks",        href: "/marketing/generators/shortlinks",  icon: Link2,      group: "Marketing" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -282,6 +294,9 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/pos/pc-builder":                     ["POS", "PC Builder"],
   "/management/stickers":                  ["Management", "Stickers"],
   "/management/sticker-templates":         ["Management", "Sticker Templates"],
+  "/marketing":                            ["Marketing", "Overview"],
+  "/marketing/email/campaigns":            ["Marketing", "Email Campaigns"],
+  "/marketing/email/templates":            ["Marketing", "Email Templates"],
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
@@ -737,7 +752,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
-  const isMarketingSection  = location.startsWith("/marketing/");
+  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1025,7 +1040,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isMarketingSection  = location.startsWith("/marketing/");
+  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
   const isManagementSection =
     location.startsWith("/management/") ||
     location === "/modules" || location.startsWith("/settings/");
