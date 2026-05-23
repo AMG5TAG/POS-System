@@ -582,7 +582,7 @@ export default function MarketingEmailTemplatesPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/marketing">
               <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                <Megaphone className="w-3.5 h-3.5" /> Marketing Hub
+                <Megaphone className="w-3.5 h-3.5" /> Overview
               </Button>
             </Link>
             <Button variant="outline" onClick={addStarterTemplates} className="gap-1.5">
