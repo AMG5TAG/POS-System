@@ -218,6 +218,11 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // Sanitize loyaltyEarned BEFORE persisting so the stored transaction
   // record matches what the customer balance is credited with. Never trust
   // the client value blindly.
+  //
+  // IMPORTANT: When no loyalty_settings row exists for a merchant the GET
+  // endpoint returns default settings with isEnabled=true. The transaction
+  // handler must mirror that same default — absence of a row means the
+  // programme is ON by default, not off.
   let sanitizedEarned = 0;
   if (scopedCustomer && paymentMethod !== "loyalty" && loyaltyEarned != null) {
     const [loyaltyRow] = await db
@@ -226,7 +231,8 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
     const programType = loyaltyRow?.programType ?? "cashback";
     const isMonetary = programType === "cashback" || programType === "tiered" || programType === "custom";
-    const programOn = loyaltyRow?.isEnabled === "true";
+    // No row → default to enabled (matches GET /loyalty/settings default behaviour)
+    const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
     if (programOn && isMonetary) {
       sanitizedEarned = Math.max(0, Math.min(Math.floor(loyaltyEarned), Math.floor(total)));
     }

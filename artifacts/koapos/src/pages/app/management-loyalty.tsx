@@ -594,7 +594,11 @@ export default function ManagementLoyaltyPage() {
               <p>{form.customDescription}</p>
             )}
             {form.excludedCustomerGroups.length > 0 && (
-              <p>Excluded groups: <strong>{form.excludedCustomerGroups.join(", ")}</strong>.</p>
+              <p>Excluded groups: <strong>
+                {form.excludedCustomerGroups
+                  .map((id) => customerConfig.groups.find((g) => g.id === id)?.name ?? id)
+                  .join(", ")}
+              </strong>.</p>
             )}
             <p className="text-xs">Loyalty amounts are displayed on the POS screen and printed on receipts.</p>
           </CardContent>
