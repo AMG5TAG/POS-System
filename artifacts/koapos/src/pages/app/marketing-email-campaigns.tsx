@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useListCustomers } from "@workspace/api-client-react";
+import type { Customer } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -46,6 +47,7 @@ interface EmailCampaign {
   opens: number;
   bounces: number;
   recipientCount: number;
+  customerId?: number | null;
   createdAt: string;
 }
 
@@ -62,6 +64,7 @@ const CAMPAIGNS_KEY = "koapos_email_campaigns";
 
 const AUDIENCE_OPTIONS = [
   { value: "all",           label: "All Customers" },
+  { value: "specific",      label: "Specific Customer" },
   { value: "loyalty",       label: "Loyalty Members" },
   { value: "new",           label: "New Customers (last 30 days)" },
   { value: "inactive",      label: "Inactive Customers (90+ days)" },
@@ -151,6 +154,7 @@ function blankCampaign(): EmailCampaign {
     opens: 0,
     bounces: 0,
     recipientCount: 0,
+    customerId: null,
     createdAt: new Date().toISOString(),
   };
 }
@@ -327,8 +331,11 @@ export default function MarketingEmailCampaignsPage() {
 
   /* Load template from localStorage if navigated from templates page */
   const { data: customerData } = useListCustomers({ limit: 500 });
-  const allCustomers = (customerData as { items?: { email?: string | null }[] } | undefined)?.items ?? [];
+  const allCustomers = (customerData?.items ?? []) as Customer[];
   const customersWithEmail = allCustomers.filter((c) => c.email).length;
+  const specificCustomer = draft.audience === "specific" && draft.customerId
+    ? allCustomers.find((c) => c.id === draft.customerId)
+    : null;
 
   const setField = useCallback(<K extends keyof EmailCampaign>(k: K, v: EmailCampaign[K]) => {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -355,13 +362,21 @@ export default function MarketingEmailCampaignsPage() {
 
   const audienceCount = (() => {
     if (draft.audience === "all") return customersWithEmail;
-    if (draft.audience === "loyalty") return allCustomers.filter((c) => c.email && (c as { loyaltyPoints?: number }).loyaltyPoints).length;
+    if (draft.audience === "specific") return specificCustomer ? 1 : 0;
+    if (draft.audience === "loyalty") return allCustomers.filter((c) => c.email && c.loyaltyPoints).length;
     if (draft.audience === "no_email") return allCustomers.filter((c) => !c.email).length;
     return Math.max(1, Math.floor(customersWithEmail * 0.3));
   })();
 
+  const resolveAudienceLabel = () => {
+    if (draft.audience === "specific" && specificCustomer) {
+      return `${specificCustomer.firstName ?? ""} ${specificCustomer.lastName ?? ""}`.trim() || specificCustomer.email || "Customer";
+    }
+    return AUDIENCE_OPTIONS.find((a) => a.value === draft.audience)?.label ?? "All Customers";
+  };
+
   const saveDraft = () => {
-    const label = AUDIENCE_OPTIONS.find((a) => a.value === draft.audience)?.label ?? "All Customers";
+    const label = resolveAudienceLabel();
     const updated = { ...draft, status: "draft" as const, audienceLabel: label, recipientCount: audienceCount };
     const existing = campaigns.findIndex((c) => c.id === draft.id);
     let next: EmailCampaign[];
@@ -378,9 +393,15 @@ export default function MarketingEmailCampaignsPage() {
   const sendCampaign = async () => {
     if (!draft.subject.trim()) { toast.error("Please enter a subject line"); return; }
     if (!draft.body.trim() || draft.body === "<br>") { toast.error("Please write a message"); return; }
+    if (draft.audience === "specific" && !specificCustomer) {
+      toast.error("Please select a customer");
+      return;
+    }
     setSending(true);
     await new Promise((r) => setTimeout(r, 1200));
-    const label = AUDIENCE_OPTIONS.find((a) => a.value === draft.audience)?.label ?? "All Customers";
+    const label = draft.audience === "specific" && specificCustomer
+      ? `${specificCustomer.firstName ?? ""} ${specificCustomer.lastName ?? ""}`.trim() || specificCustomer.email || "Customer"
+      : AUDIENCE_OPTIONS.find((a) => a.value === draft.audience)?.label ?? "All Customers";
     const sent: EmailCampaign = {
       ...draft,
       status: draft.scheduled ? "scheduled" : "sent",
@@ -521,7 +542,13 @@ export default function MarketingEmailCampaignsPage() {
                     To
                   </Label>
                   <div className="flex items-center gap-2">
-                    <Select value={draft.audience} onValueChange={(v) => setField("audience", v)}>
+                    <Select
+                      value={draft.audience}
+                      onValueChange={(v) => {
+                        setField("audience", v);
+                        if (v !== "specific") setField("customerId", null);
+                      }}
+                    >
                       <SelectTrigger className="flex-1">
                         <SelectValue />
                       </SelectTrigger>
@@ -536,6 +563,33 @@ export default function MarketingEmailCampaignsPage() {
                       <p className="text-[10px] text-muted-foreground">recipients</p>
                     </div>
                   </div>
+                  {/* Specific customer picker */}
+                  {draft.audience === "specific" && (
+                    <div className="pt-1">
+                      <Select
+                        value={draft.customerId ? String(draft.customerId) : ""}
+                        onValueChange={(v) => setField("customerId", v ? parseInt(v) : null)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a customer…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allCustomers
+                            .filter((c) => c.email)
+                            .sort((a, b) => `${a.firstName ?? ""} ${a.lastName ?? ""}`.localeCompare(`${b.firstName ?? ""} ${b.lastName ?? ""}`))
+                            .map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Unnamed"}
+                                <span className="text-muted-foreground ml-1.5">({c.email})</span>
+                              </SelectItem>
+                            ))}
+                          {allCustomers.filter((c) => c.email).length === 0 && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">No customers with email found.</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Subject */}
