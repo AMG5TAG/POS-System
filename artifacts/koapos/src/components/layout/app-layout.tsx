@@ -16,7 +16,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send, Zap, Share2,
+  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -81,6 +81,7 @@ const MARKETING_SUBNAV: NavItem[] = [
       { name: "Leaders", href: "/marketing/loyalty/leaderboard", icon: Trophy },
     ],
   },
+  { name: "Referrals",     href: "/marketing/referrals",        icon: UserPlus },
   {
     name: "Socials",
     icon: Share2,
@@ -144,6 +145,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Import / Export",href: "/management/import-export",  icon: ArrowLeftRight },
   { name: "Integrations",   href: "/management/integrations",   icon: Receipt        },
   { name: "Inventory",      href: "/management/inventory",      icon: Boxes          },
+  { name: "KoaPOS",         href: "/management/koapos",         icon: Sparkles       },
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
@@ -231,7 +233,9 @@ const SEARCH_INDEX = [
   { label: "Marketing · Online Ads",        href: "/marketing/online-ads",          icon: Megaphone, group: "Marketing" },
   { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
   { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
-  { label: "Social Media Settings",        href: "/management/marketing/social",   icon: Share2, group: "Management" },
+  { label: "KoaPOS Partner Referrals",  href: "/management/koapos",             icon: Sparkles,  group: "Management" },
+  { label: "Marketing · Referrals",     href: "/marketing/referrals",           icon: UserPlus,  group: "Marketing"  },
+  { label: "Social Media Settings",     href: "/management/marketing/social",   icon: Share2,    group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -329,6 +333,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/online-ads":                 ["Marketing", "Online Ads"],
   "/marketing/socials/posts":              ["Marketing", "Socials", "Posts"],
   "/marketing/socials/track":              ["Marketing", "Socials", "Track"],
+  "/management/koapos":                    ["Management", "KoaPOS"],
+  "/marketing/referrals":                  ["Marketing", "Referrals"],
   "/management/marketing/social":          ["Management", "Marketing", "Social Connections"],
 };
 
