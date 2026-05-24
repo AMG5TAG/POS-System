@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BrandIcon } from "@/components/brand-icon";
 import {
   Truck, Package, MapPin, Calculator, Plug, CheckCircle2,
   Clock, DollarSign, Settings2, Zap, Search, ArrowRight, ShieldCheck,
@@ -18,21 +19,20 @@ import {
 interface Carrier {
   id:        string;
   name:      string;
-  logo:      string;
   tagline:   string;
   speedRange:string;
   connected: boolean;
 }
 
 const DEFAULT_CARRIERS: Carrier[] = [
-  { id: "auspost",  name: "Australia Post",  logo: "🇦🇺", tagline: "National coverage, parcels & letters",       speedRange: "1–7 days", connected: true  },
-  { id: "startrack",name: "StarTrack",       logo: "⭐", tagline: "Premium express network (Aus Post Group)",  speedRange: "1–3 days", connected: true  },
-  { id: "couriers", name: "Couriers Please", logo: "📦", tagline: "Major metro courier network",              speedRange: "1–5 days", connected: false },
-  { id: "tnt",      name: "TNT Express",     logo: "🟧", tagline: "Domestic & international express",         speedRange: "1–10 days", connected: false },
-  { id: "dhl",      name: "DHL Express",     logo: "🟡", tagline: "International priority",                    speedRange: "1–6 days", connected: false },
-  { id: "fastway",  name: "Aramex (Fastway)",logo: "🔴", tagline: "Local franchisee courier network",         speedRange: "1–4 days", connected: true  },
-  { id: "sendle",   name: "Sendle",          logo: "🟢", tagline: "Carbon-neutral door-to-door",               speedRange: "1–5 days", connected: false },
-  { id: "shippit",  name: "Shippit",         logo: "📮", tagline: "Multi-carrier aggregator (rates & labels)",speedRange: "Varies",   connected: false },
+  { id: "auspost",  name: "Australia Post",  tagline: "National coverage, parcels & letters",       speedRange: "1–7 days", connected: true  },
+  { id: "startrack",name: "StarTrack",       tagline: "Premium express network (Aus Post Group)",  speedRange: "1–3 days", connected: true  },
+  { id: "couriers", name: "Couriers Please", tagline: "Major metro courier network",              speedRange: "1–5 days", connected: false },
+  { id: "tnt",      name: "TNT Express",     tagline: "Domestic & international express",         speedRange: "1–10 days", connected: false },
+  { id: "dhl",      name: "DHL Express",     tagline: "International priority",                    speedRange: "1–6 days", connected: false },
+  { id: "fastway",  name: "Aramex (Fastway)",tagline: "Local franchisee courier network",         speedRange: "1–4 days", connected: true  },
+  { id: "sendle",   name: "Sendle",          tagline: "Carbon-neutral door-to-door",               speedRange: "1–5 days", connected: false },
+  { id: "shippit",  name: "Shippit",         tagline: "Multi-carrier aggregator (rates & labels)",speedRange: "Varies",   connected: false },
 ];
 
 interface Quote {
@@ -302,7 +302,7 @@ export default function OnlineShippingPage() {
                               selectedQuote === id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/40",
                             )}
                           >
-                            <span className="text-2xl">{carriers.find((c) => c.id === q.carrierId)?.logo}</span>
+                            <BrandIcon name={q.carrierId} size={28} />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-semibold truncate">{q.carrier}</p>
@@ -345,7 +345,7 @@ export default function OnlineShippingPage() {
             <CardContent className="space-y-2">
               {carriers.map((c) => (
                 <div key={c.id} className={cn("flex items-center gap-3 rounded-lg border p-2.5 transition-all", c.connected && "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/10 dark:border-emerald-900")}>
-                  <span className="text-2xl shrink-0">{c.logo}</span>
+                  <BrandIcon name={c.id} size={28} className="shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-semibold truncate">{c.name}</p>

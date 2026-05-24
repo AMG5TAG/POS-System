@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BrandIcon } from "@/components/brand-icon";
 import {
   ShoppingBag, CheckCircle2, RefreshCw, Plug, Settings2, Package,
   Users, CreditCard, BarChart2, AlertCircle, ExternalLink, Loader2,
@@ -45,7 +46,6 @@ interface Marketplace {
   id:           string;
   name:         string;
   tagline:      string;
-  logo:         string;
   brandColor:   string;
   category:     "ecommerce" | "marketplace" | "social" | "food";
   features:     string[];
@@ -54,58 +54,58 @@ interface Marketplace {
 
 const MARKETPLACES: Marketplace[] = [
   // Ecommerce platforms
-  { id: "shopify",     name: "Shopify",       tagline: "All-in-one ecommerce platform",         logo: "🛒", brandColor: "#96BF47", category: "ecommerce",
+  { id: "shopify",     name: "Shopify",       tagline: "All-in-one ecommerce platform",         brandColor: "#96BF47", category: "ecommerce",
     features: ["Two-way product sync", "Order import", "Inventory updates", "Customer sync"],
     setupGuide: "Enter your Shopify store URL and Admin API access token from Settings → Apps → Develop apps." },
-  { id: "woocommerce", name: "WooCommerce",   tagline: "WordPress ecommerce plugin",            logo: "🟣", brandColor: "#7F54B3", category: "ecommerce",
+  { id: "woocommerce", name: "WooCommerce",   tagline: "WordPress ecommerce plugin",            brandColor: "#7F54B3", category: "ecommerce",
     features: ["REST API connection", "Product & stock sync", "Order webhooks", "Customer accounts"],
     setupGuide: "Install the WooCommerce REST API plugin and create consumer keys with read/write permissions." },
-  { id: "bigcommerce", name: "BigCommerce",   tagline: "Enterprise-grade SaaS commerce",        logo: "🅱️", brandColor: "#121118", category: "ecommerce",
+  { id: "bigcommerce", name: "BigCommerce",   tagline: "Enterprise-grade SaaS commerce",        brandColor: "#121118", category: "ecommerce",
     features: ["Multi-storefront support", "Real-time inventory", "Order management"],
     setupGuide: "Generate a Store API token from your BigCommerce admin → Advanced Settings → API Accounts." },
-  { id: "squarespace", name: "Squarespace",   tagline: "Design-led websites & stores",          logo: "⬛", brandColor: "#000000", category: "ecommerce",
+  { id: "squarespace", name: "Squarespace",   tagline: "Design-led websites & stores",          brandColor: "#000000", category: "ecommerce",
     features: ["Product catalogue sync", "Order import", "Inventory pushes"],
     setupGuide: "Generate an API key with Commerce → Orders, Products, and Inventory scopes." },
-  { id: "wix",         name: "Wix",           tagline: "Drag-and-drop site builder",            logo: "🟦", brandColor: "#0C6EFC", category: "ecommerce",
+  { id: "wix",         name: "Wix",           tagline: "Drag-and-drop site builder",            brandColor: "#0C6EFC", category: "ecommerce",
     features: ["Store sync via Wix App Market", "Order pulling", "Inventory levels"],
     setupGuide: "Install the KoaPOS app from the Wix App Market and authorise access." },
-  { id: "neto",        name: "Maropost (Neto)", tagline: "Australian ecommerce platform",       logo: "🦘", brandColor: "#FF6A13", category: "ecommerce",
+  { id: "neto",        name: "Maropost (Neto)", tagline: "Australian ecommerce platform",       brandColor: "#FF6A13", category: "ecommerce",
     features: ["Two-way product sync", "Multi-channel orders", "Inventory & pricing"],
     setupGuide: "Use a Maropost API user with Products, Orders, and Customers permissions." },
 
   // Marketplaces
-  { id: "ebay",        name: "eBay",          tagline: "Global online marketplace",             logo: "🅴", brandColor: "#E53238", category: "marketplace",
+  { id: "ebay",        name: "eBay",          tagline: "Global online marketplace",             brandColor: "#E53238", category: "marketplace",
     features: ["List products as eBay listings", "Order import", "Buy It Now & auction"],
     setupGuide: "Authorise via eBay OAuth. KoaPOS will list active products to your eBay seller account." },
-  { id: "amazon",      name: "Amazon",        tagline: "Largest online marketplace",            logo: "🅰️", brandColor: "#FF9900", category: "marketplace",
+  { id: "amazon",      name: "Amazon",        tagline: "Largest online marketplace",            brandColor: "#FF9900", category: "marketplace",
     features: ["Amazon Seller Central integration", "FBA & FBM support", "Buy Box monitoring"],
     setupGuide: "Connect via Amazon SP-API with your Selling Partner credentials. Approval can take 3–5 days." },
-  { id: "etsy",        name: "Etsy",          tagline: "Marketplace for unique items",          logo: "🟠", brandColor: "#F1641E", category: "marketplace",
+  { id: "etsy",        name: "Etsy",          tagline: "Marketplace for unique items",          brandColor: "#F1641E", category: "marketplace",
     features: ["List products to Etsy shop", "Order import", "Variant support"],
     setupGuide: "Generate an Etsy app and connect via OAuth 2.0 with shop_w and listings_w scopes." },
-  { id: "catch",       name: "Catch",         tagline: "Aussie marketplace (now part of Wesfarmers)", logo: "🟧", brandColor: "#0072CE", category: "marketplace",
+  { id: "catch",       name: "Catch",         tagline: "Aussie marketplace (now part of Wesfarmers)", brandColor: "#0072CE", category: "marketplace",
     features: ["Catch Marketplace listing", "Order sync", "FBC (Fulfilled by Catch) support"],
     setupGuide: "Apply as a Catch seller. Once approved you'll get an API key and seller ID." },
-  { id: "kogan",       name: "Kogan",         tagline: "Aussie ecommerce marketplace",          logo: "🟪", brandColor: "#7A1F8E", category: "marketplace",
+  { id: "kogan",       name: "Kogan",         tagline: "Aussie ecommerce marketplace",          brandColor: "#7A1F8E", category: "marketplace",
     features: ["Kogan Marketplace listing", "Order import", "Inventory sync"],
     setupGuide: "Apply via Kogan Marketplace and use your seller API token." },
-  { id: "mydeal",      name: "MyDeal",        tagline: "Aussie ecommerce marketplace",          logo: "🛍️", brandColor: "#FF6F00", category: "marketplace",
+  { id: "mydeal",      name: "MyDeal",        tagline: "Aussie ecommerce marketplace",          brandColor: "#FF6F00", category: "marketplace",
     features: ["Product listing", "Order import", "Status updates"],
     setupGuide: "Apply via MyDeal Seller Portal. KoaPOS will sync listings via the MyDeal REST API." },
 
   // Social commerce
-  { id: "facebook",    name: "Facebook Shop", tagline: "Facebook & Instagram Shops",            logo: "📘", brandColor: "#1877F2", category: "social",
+  { id: "facebook",    name: "Facebook Shop", tagline: "Facebook & Instagram Shops",            brandColor: "#1877F2", category: "social",
     features: ["Product catalogue", "Tag products in posts", "Checkout on FB/IG"],
     setupGuide: "Connect via Meta Business Suite and Commerce Manager." },
-  { id: "tiktok",      name: "TikTok Shop",   tagline: "In-app shopping on TikTok",             logo: "🎵", brandColor: "#000000", category: "social",
+  { id: "tiktok",      name: "TikTok Shop",   tagline: "In-app shopping on TikTok",             brandColor: "#000000", category: "social",
     features: ["Product catalogue", "Live shopping", "Affiliate links"],
     setupGuide: "Apply as a TikTok Shop seller and connect via Seller Center API." },
 
   // Food / delivery
-  { id: "uber",        name: "Uber Eats",     tagline: "Food delivery marketplace",             logo: "🚗", brandColor: "#06C167", category: "food",
+  { id: "uber",        name: "Uber Eats",     tagline: "Food delivery marketplace",             brandColor: "#06C167", category: "food",
     features: ["Menu sync", "Order receipt", "Status updates"],
     setupGuide: "Connect via Uber Eats Partner API. Available for hospitality merchants." },
-  { id: "doordash",    name: "DoorDash",      tagline: "Food delivery marketplace",             logo: "🍔", brandColor: "#FF3008", category: "food",
+  { id: "doordash",    name: "DoorDash",      tagline: "Food delivery marketplace",             brandColor: "#FF3008", category: "food",
     features: ["Menu sync", "Order import", "Driver dispatch"],
     setupGuide: "Connect via DoorDash Drive API." },
 ];
@@ -289,7 +289,7 @@ export default function OnlineMarketplacePage() {
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="text-3xl shrink-0">{mp.logo}</span>
+                        <BrandIcon name={mp.id} size={28} className="shrink-0" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-bold truncate" style={{ color: mp.brandColor }}>{mp.name}</p>
@@ -340,7 +340,7 @@ export default function OnlineMarketplacePage() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <span className="text-2xl">{setupOpen.logo}</span>
+                  <BrandIcon name={setupOpen.id} size={32} />
                   Connect {setupOpen.name}
                 </DialogTitle>
                 <DialogDescription>{setupOpen.tagline}</DialogDescription>
@@ -393,7 +393,7 @@ export default function OnlineMarketplacePage() {
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    <span className="text-2xl">{configOpen.logo}</span>
+                    <BrandIcon name={configOpen.id} size={32} />
                     {configOpen.name} Settings
                   </DialogTitle>
                   <DialogDescription>Configure sync direction for each data type.</DialogDescription>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BrandIcon } from "@/components/brand-icon";
 import {
   Globe, Store, Wrench, Plus, Trash2, Eye, EyeOff, GripVertical,
   Type as TypeIcon, Image as ImageIcon, Layout, ShoppingBag, CreditCard,
@@ -188,12 +189,12 @@ const DEFAULT_SITE: SiteSettings = {
 };
 
 const THIRDPARTY_PROVIDERS = [
-  { id: "shopify",      name: "Shopify",       tagline: "All-in-one ecommerce",          color: "#96BF47", logo: "🛒" },
-  { id: "woocommerce",  name: "WooCommerce",   tagline: "WordPress ecommerce plugin",    color: "#7F54B3", logo: "🟣" },
-  { id: "bigcommerce",  name: "BigCommerce",   tagline: "Enterprise-grade ecommerce",    color: "#121118", logo: "🅱️" },
-  { id: "squarespace",  name: "Squarespace",   tagline: "Design-led websites & stores",  color: "#000000", logo: "⬛" },
-  { id: "wix",          name: "Wix",           tagline: "Drag-and-drop site builder",    color: "#0C6EFC", logo: "🟦" },
-  { id: "neto",         name: "Maropost (Neto)", tagline: "Australian ecommerce platform", color: "#FF6A13", logo: "🦘" },
+  { id: "shopify",      name: "Shopify",       tagline: "All-in-one ecommerce",          color: "#96BF47" },
+  { id: "woocommerce",  name: "WooCommerce",   tagline: "WordPress ecommerce plugin",    color: "#7F54B3" },
+  { id: "bigcommerce",  name: "BigCommerce",   tagline: "Enterprise-grade ecommerce",    color: "#121118" },
+  { id: "squarespace",  name: "Squarespace",   tagline: "Design-led websites & stores",  color: "#000000" },
+  { id: "wix",          name: "Wix",           tagline: "Drag-and-drop site builder",    color: "#0C6EFC" },
+  { id: "neto",         name: "Maropost (Neto)", tagline: "Australian ecommerce platform", color: "#FF6A13" },
 ];
 
 interface ThirdParty {
@@ -728,7 +729,7 @@ export default function ManagementOnlineStorePage() {
                           isConnected ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800" : "hover:bg-muted/40",
                         )}
                       >
-                        <span className="text-2xl shrink-0">{p.logo}</span>
+                        <BrandIcon name={p.id} size={28} className="shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold truncate">{p.name}</p>
                           <p className="text-[11px] text-muted-foreground truncate">{p.tagline}</p>
@@ -1132,7 +1133,7 @@ export default function ManagementOnlineStorePage() {
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    <span className="text-2xl">{provider.logo}</span>
+                    <BrandIcon name={provider.id} size={32} />
                     Connect {provider.name}
                   </DialogTitle>
                   <DialogDescription>{provider.tagline}</DialogDescription>
