@@ -17,6 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
+  ShoppingBag,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -51,6 +52,12 @@ const STAFF_SUBNAV: NavItem[] = [
   { name: "Notes",      href: "/staff/notes",          icon: StickyNote    },
   { name: "KPIs",       href: "/staff/kpis",           icon: Target        },
   { name: "Links",      href: "/staff/links",          icon: Link2         },
+];
+
+const ONLINE_SUBNAV: NavItem[] = [
+  { name: "Delivery Orders", href: "/online/delivery-orders", icon: Package2    },
+  { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
+  { name: "Marketplace",     href: "/online/marketplace",     icon: ShoppingBag },
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
@@ -149,6 +156,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
+  { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
   {
     name: "Marketing",
     icon: Share2,
@@ -246,6 +254,10 @@ const SEARCH_INDEX = [
   { label: "Marketing · Socials Settings",  href: "/management/marketing/socials",         icon: Share2,    group: "Management" },
   { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
+  { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
+  { label: "Online · Delivery Orders",  href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
+  { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
+  { label: "Online · Marketplace",      href: "/online/marketplace",       icon: ShoppingBag,  group: "Online"     },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -347,6 +359,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/referrals":                  ["Marketing", "Referrals"],
   "/management/marketing/socials":         ["Management", "Marketing", "Socials"],
   "/management/marketing/online-ads":      ["Management", "Marketing", "Online Ads"],
+  "/management/online-store":              ["Management", "Online Store"],
+  "/online/delivery-orders":               ["Online", "Delivery Orders"],
+  "/online/shipping":                      ["Online", "Shipping"],
+  "/online/marketplace":                   ["Online", "Marketplace"],
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
 };
 
@@ -817,6 +833,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
   const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
+  const isOnlineSection     = location === "/online" || location.startsWith("/online/");
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -857,6 +874,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
             isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing" />
+          <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
+            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/delivery-orders" />
           <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
             isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
         </nav>
@@ -912,6 +931,12 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
     {
       label: "Marketing",
       items: MARKETING_SUBNAV.flatMap((item) =>
+        "children" in item ? item.children : [item as NavLeaf]
+      ),
+    },
+    {
+      label: "Online",
+      items: ONLINE_SUBNAV.flatMap((item) =>
         "children" in item ? item.children : [item as NavLeaf]
       ),
     },
@@ -982,6 +1007,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
+  const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -1031,7 +1057,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         <BottomTab href="/pos"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
         <BottomTab href="/products/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
         <BottomTab href="/customers"        icon={Users}           label="Customers" active={location === "/customers"} />
-        <BottomTab icon={Menu} label="More" active={isManagementSection || moreOpen} onClick={() => setMoreOpen(true)} />
+        <BottomTab icon={Menu} label="More" active={isManagementSection || isOnlineSection || moreOpen} onClick={() => setMoreOpen(true)} />
       </nav>
 
       <BottomMoreSheet
@@ -1109,11 +1135,13 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     location.startsWith("/management/") ||
     location === "/modules" || location.startsWith("/settings/");
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
+  const isOnlineSection     = location === "/online" || location.startsWith("/online/");
 
   const [posOpen,      setPosOpen]      = useState(isPOSSection);
   const [invOpen,      setInvOpen]      = useState(isInventorySection);
   const [staffOpen,    setStaffOpen]    = useState(isStaffSection);
   const [marketingOpen, setMarketingOpen] = useState(isMarketingSection);
+  const [onlineOpen,   setOnlineOpen]   = useState(isOnlineSection);
   const [mgmtOpen,     setMgmtOpen]     = useState(isManagementSection);
   const [custsOpen,    setCustsOpen]    = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1234,13 +1262,18 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           />
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
-            onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMgmtOpen(false); }}
+            onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setOnlineOpen(false); setMgmtOpen(false); }}
             items={MARKETING_SUBNAV} defaultHref="/marketing"
+          />
+          <CollapsibleSection
+            label="Online" icon={Globe} isActive={isOnlineSection} isOpen={onlineOpen}
+            onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
+            items={ONLINE_SUBNAV} defaultHref="/online/delivery-orders"
           />
           {canManage && (
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
-              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setMarketingOpen(false); }}
+              onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setMarketingOpen(false); setOnlineOpen(false); }}
               items={MANAGEMENT_SUBNAV} accent defaultHref="/management/overview"
             />
           )}

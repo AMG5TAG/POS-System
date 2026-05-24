@@ -98,6 +98,10 @@ import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
 import ManagementMarketingSocialsPage from "@/pages/app/management-marketing-socials";
 import ManagementMarketingOnlineAdsPage from "@/pages/app/management-marketing-online-ads";
 import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
+import ManagementOnlineStorePage from "@/pages/app/management-online-store";
+import OnlineDeliveryOrdersPage from "@/pages/app/online-delivery-orders";
+import OnlineShippingPage from "@/pages/app/online-shipping";
+import OnlineMarketplacePage from "@/pages/app/online-marketplace";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import MarketingOnlineAdsPage from "@/pages/app/marketing-online-ads";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
@@ -428,6 +432,18 @@ function Router() {
       </Route>
       <Route path="/management/marketing/referrals">
         <ProtectedRoute component={ManagementMarketingReferralsPage} />
+      </Route>
+      <Route path="/management/online-store">
+        <ProtectedRoute component={ManagementOnlineStorePage} />
+      </Route>
+      <Route path="/online/delivery-orders">
+        <ProtectedRoute component={OnlineDeliveryOrdersPage} />
+      </Route>
+      <Route path="/online/shipping">
+        <ProtectedRoute component={OnlineShippingPage} />
+      </Route>
+      <Route path="/online/marketplace">
+        <ProtectedRoute component={OnlineMarketplacePage} />
       </Route>
 
       <Route component={NotFound} />
