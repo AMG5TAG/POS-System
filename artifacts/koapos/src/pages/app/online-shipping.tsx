@@ -1,19 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/use-auth";
 import { BrandIcon } from "@/components/brand-icon";
 import {
-  Truck, Package, MapPin, Calculator, Plug, CheckCircle2,
-  Clock, DollarSign, Settings2, Zap, Search, ArrowRight, ShieldCheck,
+  Truck, MapPin, Calculator, CheckCircle2,
+  Clock, DollarSign, Settings2, Zap, Search, ShieldCheck,
+  Package, Plug, ArrowRight,
 } from "lucide-react";
 
 interface Carrier {
@@ -24,13 +26,13 @@ interface Carrier {
   connected: boolean;
 }
 
-const DEFAULT_CARRIERS: Carrier[] = [
-  { id: "auspost",  name: "Australia Post",  tagline: "National coverage, parcels & letters",       speedRange: "1–7 days", connected: true  },
-  { id: "startrack",name: "StarTrack",       tagline: "Premium express network (Aus Post Group)",  speedRange: "1–3 days", connected: true  },
+const ALL_CARRIERS: Carrier[] = [
+  { id: "auspost",  name: "Australia Post",  tagline: "National coverage, parcels & letters",       speedRange: "1–7 days", connected: false },
+  { id: "startrack",name: "StarTrack",       tagline: "Premium express network (Aus Post Group)",  speedRange: "1–3 days", connected: false },
   { id: "couriers", name: "Couriers Please", tagline: "Major metro courier network",              speedRange: "1–5 days", connected: false },
   { id: "tnt",      name: "TNT Express",     tagline: "Domestic & international express",         speedRange: "1–10 days", connected: false },
   { id: "dhl",      name: "DHL Express",     tagline: "International priority",                    speedRange: "1–6 days", connected: false },
-  { id: "fastway",  name: "Aramex (Fastway)",tagline: "Local franchisee courier network",         speedRange: "1–4 days", connected: true  },
+  { id: "fastway",  name: "Aramex (Fastway)",tagline: "Local franchisee courier network",         speedRange: "1–4 days", connected: false },
   { id: "sendle",   name: "Sendle",          tagline: "Carbon-neutral door-to-door",               speedRange: "1–5 days", connected: false },
   { id: "shippit",  name: "Shippit",         tagline: "Multi-carrier aggregator (rates & labels)",speedRange: "Varies",   connected: false },
 ];
@@ -44,26 +46,6 @@ interface Quote {
   insured:   boolean;
   tracking:  boolean;
 }
-
-interface AvailableOrder {
-  id:       string;
-  number:   string;
-  customer: string;
-  postcode: string;
-  city:     string;
-  state:    string;
-  weight:   number;
-  length:   number;
-  width:    number;
-  height:   number;
-}
-
-const AVAILABLE_ORDERS: AvailableOrder[] = [
-  { id: "o1", number: "#KP-1042", customer: "Sarah Johnson", postcode: "2000", city: "Sydney",    state: "NSW", weight: 1.2, length: 25, width: 20, height: 10 },
-  { id: "o2", number: "#KP-1041", customer: "Mike Chen",     postcode: "2026", city: "Bondi",     state: "NSW", weight: 0.4, length: 15, width: 10, height: 5  },
-  { id: "o3", number: "#KP-1040", customer: "Aisha Patel",   postcode: "3000", city: "Melbourne", state: "VIC", weight: 0.9, length: 22, width: 18, height: 8  },
-  { id: "o4", number: "#KP-1039", customer: "James O'Sull.", postcode: "6000", city: "Perth",     state: "WA",  weight: 2.5, length: 35, width: 25, height: 15 },
-];
 
 const ORIGIN = { postcode: "2010", state: "NSW", city: "Surry Hills" };
 
@@ -110,12 +92,53 @@ function calculateQuotes(
     .sort((a, b) => a.price - b.price);
 }
 
+const STORAGE_KEY = "koapos_shipping_carriers";
+
+function getStorageKey() {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    if (raw) {
+      const user = JSON.parse(raw);
+      if (user?.id) return `${STORAGE_KEY}_${user.id}`;
+    }
+  } catch { /* ignore */ }
+  return STORAGE_KEY;
+}
+
+function loadCarriers(): Carrier[] {
+  const key = getStorageKey();
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const saved: Partial<Carrier>[] = JSON.parse(raw);
+      return ALL_CARRIERS.map((c) => {
+        const s = saved.find((x) => x.id === c.id);
+        return s ? { ...c, connected: s.connected ?? false } : c;
+      });
+    }
+    // Migrate old unscoped data on first visit
+    const old = localStorage.getItem(STORAGE_KEY);
+    if (old) {
+      localStorage.setItem(key, old);
+      const saved: Partial<Carrier>[] = JSON.parse(old);
+      return ALL_CARRIERS.map((c) => {
+        const s = saved.find((x) => x.id === c.id);
+        return s ? { ...c, connected: s.connected ?? false } : c;
+      });
+    }
+    return ALL_CARRIERS;
+  } catch { return ALL_CARRIERS; }
+}
+
+function saveCarriers(carriers: Carrier[]) {
+  localStorage.setItem(getStorageKey(), JSON.stringify(carriers.map((c) => ({ id: c.id, connected: c.connected }))));
+}
+
 export default function OnlineShippingPage() {
-  const [carriers, setCarriers] = useState<Carrier[]>(DEFAULT_CARRIERS);
-  const [mode, setMode] = useState<"manual" | "order">("manual");
-  const [selectedOrderId, setSelectedOrderId] = useState<string>("o1");
+  const { user } = useAuth();
+  const [carriers, setCarriers] = useState<Carrier[]>(() => loadCarriers());
   const [form, setForm] = useState({
-    postcode: "2000",
+    postcode: "",
     state:    "NSW",
     weight:   1.0,
     length:   25,
@@ -126,24 +149,13 @@ export default function OnlineShippingPage() {
   const [loading, setLoading] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
 
+  useEffect(() => { saveCarriers(carriers); }, [carriers]);
+  useEffect(() => { setCarriers(loadCarriers()); }, [user?.id]);
+
   const toggleCarrier = (id: string) => {
     setCarriers((prev) => prev.map((c) => c.id === id ? { ...c, connected: !c.connected } : c));
     const carrier = carriers.find((c) => c.id === id);
     toast.success(`${carrier?.name} ${carrier?.connected ? "disconnected" : "connected"}`);
-  };
-
-  const loadOrder = (orderId: string) => {
-    const o = AVAILABLE_ORDERS.find((x) => x.id === orderId);
-    if (!o) return;
-    setSelectedOrderId(orderId);
-    setForm({
-      postcode: o.postcode,
-      state:    o.state,
-      weight:   o.weight,
-      length:   o.length,
-      width:    o.width,
-      height:   o.height,
-    });
   };
 
   const fetchQuotes = () => {
@@ -197,35 +209,6 @@ export default function OnlineShippingPage() {
                 <CardDescription>Choose an existing order or enter custom details for a freight quote.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
-                  {(["manual", "order"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMode(m)}
-                      className={cn("px-3 py-1 rounded text-xs font-medium transition-all", mode === m ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
-                    >
-                      {m === "manual" ? "Manual entry" : "Existing order"}
-                    </button>
-                  ))}
-                </div>
-
-                {mode === "order" && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Order</Label>
-                    <Select value={selectedOrderId} onValueChange={loadOrder}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {AVAILABLE_ORDERS.map((o) => (
-                          <SelectItem key={o.id} value={o.id}>
-                            {o.number} — {o.customer} → {o.city}, {o.state} {o.postcode}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <Separator />
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div className="space-y-1.5">

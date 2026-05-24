@@ -26,10 +26,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = (newUser: Merchant) => {
     setUser(newUser);
+    try { localStorage.setItem("koapos_auth_user", JSON.stringify(newUser)); } catch { /* ignore */ }
   };
 
   const logout = () => {
     setUser(null);
+    try { localStorage.removeItem("koapos_auth_user"); } catch { /* ignore */ }
   };
 
   const isLoading = isInitializing || meLoading;

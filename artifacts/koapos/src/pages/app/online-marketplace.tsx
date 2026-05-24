@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/use-auth";
 import { BrandIcon } from "@/components/brand-icon";
 import {
   ShoppingBag, CheckCircle2, RefreshCw, Plug, Settings2, Package,
@@ -18,6 +19,17 @@ import {
 } from "lucide-react";
 
 const STORAGE_KEY = "koapos_marketplace_connections";
+
+function getStorageKey() {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    if (raw) {
+      const user = JSON.parse(raw);
+      if (user?.id) return `${STORAGE_KEY}_${user.id}`;
+    }
+  } catch { /* ignore */ }
+  return STORAGE_KEY;
+}
 
 type SyncDirection = "two-way" | "import" | "export" | "none";
 
@@ -130,14 +142,22 @@ const DEFAULT_CONFIG: MarketplaceConfig = {
 };
 
 function loadConnections(): Record<string, Connection> {
+  const key = getStorageKey();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+    // Migrate old unscoped data on first visit
+    const old = localStorage.getItem(STORAGE_KEY);
+    if (old) {
+      localStorage.setItem(key, old);
+      return JSON.parse(old);
+    }
+    return {};
   } catch { return {}; }
 }
 
 function saveConnections(c: Record<string, Connection>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+  localStorage.setItem(getStorageKey(), JSON.stringify(c));
 }
 
 function SyncSelect({ value, onChange }: { value: SyncDirection; onChange: (v: SyncDirection) => void }) {
@@ -156,6 +176,7 @@ function SyncSelect({ value, onChange }: { value: SyncDirection; onChange: (v: S
 }
 
 export default function OnlineMarketplacePage() {
+  const { user } = useAuth();
   const [connections, setConnections] = useState<Record<string, Connection>>(() => loadConnections());
   const [setupOpen, setSetupOpen] = useState<Marketplace | null>(null);
   const [configOpen, setConfigOpen] = useState<Marketplace | null>(null);
@@ -163,6 +184,7 @@ export default function OnlineMarketplacePage() {
   const [authorizing, setAuthorizing] = useState(false);
 
   useEffect(() => { saveConnections(connections); }, [connections]);
+  useEffect(() => { setConnections(loadConnections()); }, [user?.id]);
 
   const totalConnected = Object.values(connections).filter((c) => c.connected).length;
   const totalProducts  = Object.values(connections).filter((c) => c.connected).reduce((s, c) => s + c.productsCount, 0);

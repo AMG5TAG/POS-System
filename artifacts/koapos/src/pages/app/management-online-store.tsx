@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/use-auth";
 import { BrandIcon } from "@/components/brand-icon";
 import {
   Globe, Store, Wrench, Plus, Trash2, Eye, EyeOff, GripVertical,
@@ -23,6 +24,28 @@ import {
 
 const STORAGE_KEY      = "koapos_online_store";
 const THIRDPARTY_KEY   = "koapos_online_store_thirdparty";
+
+function getStorageKey() {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    if (raw) {
+      const user = JSON.parse(raw);
+      if (user?.id) return `${STORAGE_KEY}_${user.id}`;
+    }
+  } catch { /* ignore */ }
+  return STORAGE_KEY;
+}
+
+function getThirdPartyKey() {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    if (raw) {
+      const user = JSON.parse(raw);
+      if (user?.id) return `${THIRDPARTY_KEY}_${user.id}`;
+    }
+  } catch { /* ignore */ }
+  return THIRDPARTY_KEY;
+}
 
 type StoreMode = "builder" | "thirdparty";
 
@@ -134,11 +157,11 @@ const COLOUR_PRESETS = [
 
 const DEFAULT_SITE: SiteSettings = {
   mode:       "builder",
-  storeName:  "My Online Store",
-  tagline:    "Shop our full range online",
+  storeName:  "",
+  tagline:    "",
   logoUrl:    "",
   faviconUrl: "",
-  domain:     "mystore.koapos.shop",
+  domain:     "",
   published:  false,
   theme: {
     primary: "#0EA5E9",
@@ -148,44 +171,15 @@ const DEFAULT_SITE: SiteSettings = {
     font:    "sans",
     radius:  "md",
   },
-  payments: { stripe: true, paypal: false, afterpay: false, applePay: true },
-  features: { loyalty: true, customers: true, checkout: true, quickCodes: true, reviews: false, newsletter: true },
+  payments: { stripe: false, paypal: false, afterpay: false, applePay: false },
+  features: { loyalty: false, customers: false, checkout: true, quickCodes: false, reviews: false, newsletter: false },
   pages: [
     {
-      id: "p1", name: "Home", slug: "/", visible: true,
-      blocks: [
-        { id: "b1", type: "hero",         data: { headline: "Welcome to our store", subhead: "Quality products, delivered fast", cta: "Shop now", ctaLink: "/shop", imageUrl: "" } },
-        { id: "b2", type: "product-grid", data: { columns: 4, count: 8, category: "all" } },
-        { id: "b3", type: "loyalty-banner", data: { headline: "Join our rewards program", text: "Earn 1 point per $1 spent", points: 100 } },
-        { id: "b4", type: "newsletter",   data: { headline: "Stay in the loop", text: "Sign up for new arrivals and offers" } },
-      ],
-    },
-    {
-      id: "p2", name: "Shop", slug: "/shop", visible: true,
-      blocks: [
-        { id: "b5", type: "heading",      data: { text: "All Products", size: "xl", align: "left" } },
-        { id: "b6", type: "product-grid", data: { columns: 4, count: 24, category: "all" } },
-      ],
-    },
-    {
-      id: "p3", name: "About", slug: "/about", visible: true,
-      blocks: [
-        { id: "b7", type: "heading", data: { text: "About Us", size: "xl", align: "center" } },
-        { id: "b8", type: "text",    data: { text: "Tell your story. What makes your brand unique?" } },
-      ],
-    },
-    {
-      id: "p4", name: "Contact", slug: "/contact", visible: true,
-      blocks: [
-        { id: "b9",  type: "heading", data: { text: "Get in touch", size: "xl", align: "center" } },
-        { id: "b10", type: "contact", data: { phone: "(02) 1234 5678", email: "hello@store.com", address: "123 Shop St, Sydney", hours: "Mon–Sat 9–5" } },
-      ],
+      id: "p-home", name: "Home", slug: "/", visible: true,
+      blocks: [],
     },
   ],
-  quickCodes: [
-    { id: "qc1", code: "SUMMER25", label: "Summer 25% off", url: "/shop?promo=SUMMER25" },
-    { id: "qc2", code: "WELCOME10", label: "Welcome 10% off", url: "/shop?promo=WELCOME10" },
-  ],
+  quickCodes: [],
 };
 
 const THIRDPARTY_PROVIDERS = [
@@ -206,36 +200,62 @@ interface ThirdParty {
 }
 
 function loadSite(): SiteSettings {
+  const key = getStorageKey();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SITE;
-    const parsed = JSON.parse(raw) as Partial<SiteSettings>;
-    return {
-      ...DEFAULT_SITE,
-      ...parsed,
-      theme:    { ...DEFAULT_SITE.theme, ...(parsed.theme    ?? {}) },
-      payments: { ...DEFAULT_SITE.payments, ...(parsed.payments ?? {}) },
-      features: { ...DEFAULT_SITE.features, ...(parsed.features ?? {}) },
-      pages:      parsed.pages      ?? DEFAULT_SITE.pages,
-      quickCodes: parsed.quickCodes ?? DEFAULT_SITE.quickCodes,
-    };
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<SiteSettings>;
+      return {
+        ...DEFAULT_SITE,
+        ...parsed,
+        theme:    { ...DEFAULT_SITE.theme, ...(parsed.theme    ?? {}) },
+        payments: { ...DEFAULT_SITE.payments, ...(parsed.payments ?? {}) },
+        features: { ...DEFAULT_SITE.features, ...(parsed.features ?? {}) },
+        pages:      parsed.pages      ?? DEFAULT_SITE.pages,
+        quickCodes: parsed.quickCodes ?? DEFAULT_SITE.quickCodes,
+      };
+    }
+    // Migrate old unscoped data on first visit
+    const old = localStorage.getItem(STORAGE_KEY);
+    if (old) {
+      localStorage.setItem(key, old);
+      const parsed = JSON.parse(old) as Partial<SiteSettings>;
+      return {
+        ...DEFAULT_SITE,
+        ...parsed,
+        theme:    { ...DEFAULT_SITE.theme, ...(parsed.theme    ?? {}) },
+        payments: { ...DEFAULT_SITE.payments, ...(parsed.payments ?? {}) },
+        features: { ...DEFAULT_SITE.features, ...(parsed.features ?? {}) },
+        pages:      parsed.pages      ?? DEFAULT_SITE.pages,
+        quickCodes: parsed.quickCodes ?? DEFAULT_SITE.quickCodes,
+      };
+    }
+    return DEFAULT_SITE;
   } catch { return DEFAULT_SITE; }
 }
 
 function saveSite(s: SiteSettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  localStorage.setItem(getStorageKey(), JSON.stringify(s));
 }
 
 function loadThirdParty(): ThirdParty | null {
+  const key = getThirdPartyKey();
   try {
-    const raw = localStorage.getItem(THIRDPARTY_KEY);
-    return raw ? JSON.parse(raw) as ThirdParty : null;
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as ThirdParty;
+    // Migrate old unscoped data on first visit
+    const old = localStorage.getItem(THIRDPARTY_KEY);
+    if (old) {
+      localStorage.setItem(key, old);
+      return JSON.parse(old) as ThirdParty;
+    }
+    return null;
   } catch { return null; }
 }
 
 function saveThirdParty(t: ThirdParty | null) {
-  if (t) localStorage.setItem(THIRDPARTY_KEY, JSON.stringify(t));
-  else   localStorage.removeItem(THIRDPARTY_KEY);
+  if (t) localStorage.setItem(getThirdPartyKey(), JSON.stringify(t));
+  else   localStorage.removeItem(getThirdPartyKey());
 }
 
 /* ─── Block preview ──────────────────────────────────────────────────────── */
@@ -516,6 +536,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementOnlineStorePage() {
+  const { user } = useAuth();
   const [site, setSite] = useState<SiteSettings>(() => loadSite());
   const [thirdParty, setThirdParty] = useState<ThirdParty | null>(() => loadThirdParty());
   const [activePageId, setActivePageId] = useState<string>(() => loadSite().pages[0]?.id ?? "");
@@ -528,6 +549,7 @@ export default function ManagementOnlineStorePage() {
 
   useEffect(() => { saveSite(site); }, [site]);
   useEffect(() => { saveThirdParty(thirdParty); }, [thirdParty]);
+  useEffect(() => { setSite(loadSite()); setThirdParty(loadThirdParty()); }, [user?.id]);
 
   const activePage = useMemo(() => site.pages.find((p) => p.id === activePageId) ?? site.pages[0], [site.pages, activePageId]);
   const activeBlock = useMemo(() => activePage?.blocks.find((b) => b.id === activeBlockId) ?? null, [activePage, activeBlockId]);
