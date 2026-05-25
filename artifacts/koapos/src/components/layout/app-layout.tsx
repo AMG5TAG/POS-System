@@ -17,7 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
-  ShoppingBag,
+  ShoppingBag, Map, MoreHorizontal,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useLogout } from "@workspace/api-client-react";
@@ -156,7 +156,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
-  { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
   {
     name: "Marketing",
     icon: Share2,
@@ -166,8 +165,17 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Referrals",   href: "/management/marketing/referrals",   icon: UserPlus },
     ],
   },
+  {
+    name: "Misc",
+    icon: MoreHorizontal,
+    children: [
+      { name: "Maps", href: "/management/misc", icon: Map },
+    ],
+  },
+  { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
+  { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
   {
     name: "Staff",
     icon: UserSquare2,
@@ -186,7 +194,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Tax & Receipts", href: "/management/tax",            icon: Receipt        },
-  { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -250,6 +257,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
   { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
+  { label: "Misc · Maps",                  href: "/management/misc",                       icon: Map,       group: "Management" },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Socials Settings",  href: "/management/marketing/socials",         icon: Share2,    group: "Management" },
   { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
@@ -364,6 +372,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/online/shipping":                      ["Online", "Shipping"],
   "/online/marketplace":                   ["Online", "Marketplace"],
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
+  "/management/misc":                      ["Management", "Misc", "Maps"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */

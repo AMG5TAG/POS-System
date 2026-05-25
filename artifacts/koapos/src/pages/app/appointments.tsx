@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { buildMapUrl } from "@/pages/app/management-misc";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
@@ -247,10 +248,15 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                       </a>
                     )}
                     {appt.customerAddress && (
-                      <p className="flex items-start gap-1.5 mt-0.5 text-xs text-muted-foreground">
+                      <a
+                        href={buildMapUrl(appt.customerAddress)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
                         <MapPin className="w-3 h-3 shrink-0 mt-px" />
                         {appt.customerAddress}
-                      </p>
+                      </a>
                     )}
                   </div>
                 </div>
