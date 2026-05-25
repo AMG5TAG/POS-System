@@ -866,7 +866,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   useEffect(() => { setOpenDropdown(null); }, [location]);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-muted/10">
+    <div className="h-[100dvh] flex flex-col bg-muted/10 overflow-hidden">
       <header ref={headerRef} className={cn("h-14 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-all duration-200 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80", headerScrolled ? "shadow-[0_4px_24px_-2px_rgba(0,0,0,0.10),0_1px_4px_-1px_rgba(0,0,0,0.06)] border-b border-transparent" : "border-b border-border")}>
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
@@ -1043,7 +1043,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-muted/10">
+    <div className="h-[100dvh] flex flex-col bg-muted/10 overflow-hidden">
       <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
         <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
           <Breadcrumbs location={location} />
@@ -1302,7 +1302,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
 
   return (
     <SidebarProvider key={isAutoHide ? "auto-hide" : "sidebar"} defaultOpen={isAutoHide ? false : !hideSidebar}>
-      <div className={cn("min-h-[100dvh] w-full flex bg-muted/10", isRight && "flex-row-reverse")}>
+      <div className={cn("h-[100dvh] w-full flex bg-muted/10 overflow-hidden", isRight && "flex-row-reverse")}>
 
         {isAutoHide ? <AutoHideSidebarWrapper>{sidebarEl}</AutoHideSidebarWrapper> : sidebarEl}
 
