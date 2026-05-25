@@ -367,6 +367,34 @@ export default function POSInvoicesPage() {
   };
 
   /* ── Send email ── */
+  const getEmailTemplatePayload = () => {
+    try {
+      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) ?? "{}") as Record<string, string>;
+      const tplId  = active.emails ?? "e-pro";
+      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<TplOpts>;
+      const merged = { ...TPL_DEFAULT_OPTS, ...stored };
+      return {
+        templateId: tplId,
+        subjectLine:        merged.subjectLine,
+        customGreeting:     merged.customGreeting,
+        customMessage:      merged.customMessage,
+        customSignOff:      merged.customSignOff,
+        footerText:         merged.footerText,
+        thankYouMsg:        merged.thankYouMsg,
+        showGstBreakdown:   merged.showGstBreakdown,
+        showWebsite:        merged.showWebsite,
+        showSocialLinks:    merged.showSocialLinks,
+        showLogo:           merged.showLogo,
+        brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
+        logo:               profile.logo ?? "",
+        website:            profile.website ?? "",
+        contactEmail:       profile.contactEmail ?? "",
+        tagline:            profile.tagline ?? "",
+        socialLinks:        profile.socialLinks ?? {},
+      };
+    } catch { return null; }
+  };
+
   const handleSendEmail = async () => {
     if (!emailDialog.invoiceId || !emailAddr.trim()) return;
     setSendingEmail(true);
@@ -375,7 +403,7 @@ export default function POSInvoicesPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ email: emailAddr }),
+      body: JSON.stringify({ email: emailAddr, template: getEmailTemplatePayload() }),
     });
     setSendingEmail(false);
     if (res.ok) {
@@ -429,9 +457,11 @@ export default function POSInvoicesPage() {
     const socials     = profile.socialLinks;
     const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
 
-    const termsText  = resolveStr(opts.paymentTerms, bizName, abn, website, email);
-    const notesText  = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
-    const footerText = resolveStr(opts.footerText, bizName, abn, website, email);
+    const termsText   = resolveStr(opts.paymentTerms, bizName, abn, website, email);
+    const notesText   = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
+    const footerText  = resolveStr(opts.footerText, bizName, abn, website, email);
+    const thankYouMsg = resolveStr(opts.thankYouMsg || "", bizName, abn, website, email);
+    const customMsg   = resolveStr(opts.customMessage || "", bizName, abn, website, email);
 
     /* QR code data URL */
     let qrDataUrl = "";
@@ -536,6 +566,8 @@ export default function POSInvoicesPage() {
         .bank-details{margin-top:8px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#555;background:#fff;border:1px solid #eee;border-radius:4px;padding:8px 12px}
         .loyalty-block{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;color:#065f46;background:#ecfdf5;border-radius:6px;margin-top:8px;margin-bottom:8px}
         .socials{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:11px;color:#aaa}
+        .custom-msg{margin-top:16px;padding:10px 14px;background:#fafafa;border-radius:6px;font-size:12px;color:#555;line-height:1.6}
+        .thank-you{margin-top:16px;text-align:center;font-size:13px;font-weight:600;color:${brandColor}}
         @media print{body{padding:20px}}
       </style>
     </head><body>
@@ -581,6 +613,8 @@ export default function POSInvoicesPage() {
       ${termsText ? `<div class="terms"><div class="terms-title">Payment Terms</div><div>${termsText}</div>${notesText ? `<div style="margin-top:8px;font-style:italic">${notesText}</div>` : ""}</div>` : notesText ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${notesText}</div>` : ""}
       ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
       ${socialsBlock}
+      ${customMsg ? `<div class="custom-msg">${customMsg.replace(/\n/g, "<br>")}</div>` : ""}
+      ${thankYouMsg ? `<div class="thank-you">${thankYouMsg}</div>` : ""}
       ${footerText ? `<div class="footer">${footerText}</div>` : ""}
       ${barcodeBlock}
     </body></html>`);
@@ -606,9 +640,11 @@ export default function POSInvoicesPage() {
     const socials   = profile.socialLinks;
     const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
 
-    const termsText  = resolveStr(opts.paymentTerms, bizName, abn, website, email);
-    const notesText  = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
-    const footerText = resolveStr(opts.footerText, bizName, abn, website, email);
+    const termsText   = resolveStr(opts.paymentTerms, bizName, abn, website, email);
+    const notesText   = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
+    const footerText  = resolveStr(opts.footerText, bizName, abn, website, email);
+    const thankYouMsg = resolveStr(opts.thankYouMsg || "", bizName, abn, website, email);
+    const customMsg   = resolveStr(opts.customMessage || "", bizName, abn, website, email);
 
     const hexToRgb = (hex: string): [number, number, number] => {
       const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -908,6 +944,28 @@ export default function POSInvoicesPage() {
       const socLines = doc.splitTextToSize(socParts.join("    "), CW) as string[];
       doc.text(socLines, ML, y);
       y += socLines.length * 5 + 2;
+    }
+
+    /* ── Custom message ── */
+    if (customMsg) {
+      const cmLines = doc.splitTextToSize(customMsg, CW - 10) as string[];
+      const cmH = 6 + cmLines.length * 5 + 4;
+      doc.setFillColor(250, 250, 250);
+      doc.rect(ML, y, CW, cmH, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(85, 85, 85);
+      doc.text(cmLines, ML + 4, y + 6);
+      y += cmH + 3;
+    }
+
+    /* ── Thank you message ── */
+    if (thankYouMsg) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(cr, cg, cb);
+      doc.text(thankYouMsg, W / 2, y + 5, { align: "center" });
+      y += 10;
     }
 
     /* ── Footer ── */

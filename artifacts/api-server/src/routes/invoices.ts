@@ -319,7 +319,28 @@ router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { email } = req.body as { email: string };
+  const { email, template } = req.body as {
+    email: string;
+    template?: {
+      templateId?: string;
+      subjectLine?: string;
+      customGreeting?: string;
+      customMessage?: string;
+      customSignOff?: string;
+      footerText?: string;
+      thankYouMsg?: string;
+      showGstBreakdown?: boolean;
+      showWebsite?: boolean;
+      showSocialLinks?: boolean;
+      showLogo?: boolean;
+      brandColor?: string;
+      logo?: string;
+      website?: string;
+      contactEmail?: string;
+      tagline?: string;
+      socialLinks?: Record<string, string | undefined>;
+    };
+  };
   if (!email) { res.status(400).json({ error: "Email is required" }); return; }
 
   const [row] = await db
@@ -340,6 +361,27 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   const cName = customerName(row.customerFirstName, row.customerLastName);
   const lines = (inv.items as LineItem[] | null) ?? [];
 
+  /* ── Resolve template options (with sensible defaults) ── */
+  const tpl = template ?? {};
+  const tplId            = tpl.templateId ?? "e-pro";
+  const brandColor       = tpl.brandColor ?? "#4f46e5";
+  const totalStr         = `$${parseFloat(inv.total).toFixed(2)}`;
+  const resolve = (s: string) => s
+    .replace(/{{business\.name}}/g, bizName)
+    .replace(/{{business\.email}}/g, tpl.contactEmail ?? "")
+    .replace(/{{business\.website}}/g, tpl.website ?? "")
+    .replace(/{{transaction\.total}}/g, totalStr)
+    .replace(/{{transaction\.number}}/g, inv.invoiceNumber)
+    .replace(/{{customer\.name}}/g, cName || "")
+    .replace(/{{[^}]+}}/g, "");
+
+  const subject  = resolve(tpl.subjectLine || `Invoice ${inv.invoiceNumber} from ${bizName}`);
+  const greeting = resolve(tpl.customGreeting || (cName ? `Hi ${cName.split(" ")[0]},` : "Hi,"));
+  const signOff  = resolve(tpl.customSignOff  || `— The team at ${bizName}`);
+  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage) : "";
+  const thankYou = resolve(tpl.thankYouMsg || "Thank you for your business!");
+  const footer   = tpl.footerText ? resolve(tpl.footerText) : "";
+
   const itemRows = lines.map((l) =>
     `<tr>
       <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;">${l.description}</td>
@@ -348,36 +390,63 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     </tr>`
   ).join("");
 
+  const logoBlock = (tpl.showLogo !== false && tpl.logo)
+    ? `<img src="${tpl.logo}" alt="${bizName}" style="max-height:48px;max-width:140px;display:block;margin-bottom:8px"/>`
+    : "";
+
+  const socialsBlock = tpl.showSocialLinks && tpl.socialLinks ? (() => {
+    const s = tpl.socialLinks!;
+    const parts: string[] = [];
+    if (s.facebook)  parts.push(`fb/ ${s.facebook}`);
+    if (s.instagram) parts.push(`ig/ @${s.instagram}`);
+    if (s.twitter)   parts.push(`x/ @${s.twitter}`);
+    if (s.linkedin)  parts.push(`in/ ${s.linkedin}`);
+    return parts.length ? `<p style="margin-top:12px;font-size:11px;color:#aaa;text-align:center;">${parts.join(" · ")}</p>` : "";
+  })() : "";
+
+  // Layout per template id
+  const isMinimal = tplId === "e-minimal";
+  const isCasual  = tplId === "e-casual";
+
+  const headerHtml = isMinimal
+    ? `<h2 style="margin:0 0 4px;font-family:monospace;font-size:16px;">${bizName}</h2>`
+    : isCasual
+      ? `<div style="text-align:center;margin-bottom:16px;">${logoBlock ? `<div style="display:flex;justify-content:center">${logoBlock}</div>` : ""}<h2 style="margin:0;font-size:20px;color:${brandColor};">${bizName}</h2>${tpl.tagline ? `<p style="margin:2px 0 0;color:#888;font-size:12px;font-style:italic">${tpl.tagline}</p>` : ""}</div>`
+      : `<div style="border-bottom:3px solid ${brandColor};padding-bottom:12px;margin-bottom:20px;">${logoBlock}<h2 style="margin:0;font-size:18px;">${bizName}</h2></div>`;
+
   const html = `
-    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#222;">
-      <h2 style="margin:0 0 4px;">${bizName}</h2>
-      <p style="margin:0 0 4px;color:#888;font-size:13px;">Invoice ${inv.invoiceNumber}</p>
-      ${cName ? `<p style="margin:0 0 24px;color:#888;font-size:13px;">To: ${cName}</p>` : ""}
-      ${inv.dueDate ? `<p style="margin:0 0 24px;color:#888;font-size:13px;">Due: ${new Date(inv.dueDate).toLocaleDateString()}</p>` : ""}
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#222;">
+      ${headerHtml}
+      <p style="margin:0 0 12px;font-size:14px;">${greeting}</p>
+      ${cMsg ? `<p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#444;">${cMsg.replace(/\n/g, "<br>")}</p>` : `<p style="margin:0 0 16px;font-size:13px;color:#555;">Your invoice <strong>${inv.invoiceNumber}</strong> is attached below.</p>`}
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
         <thead>
           <tr>
-            <th style="text-align:left;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;">Description</th>
-            <th style="text-align:center;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;">Qty</th>
-            <th style="text-align:right;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;">Amount</th>
+            <th style="text-align:left;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;font-size:12px;">Description</th>
+            <th style="text-align:center;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;font-size:12px;">Qty</th>
+            <th style="text-align:right;padding-bottom:8px;border-bottom:2px solid #eee;color:#555;font-size:12px;">Amount</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
       <div style="margin-top:16px;text-align:right;font-size:13px;color:#555;">
         <div>Subtotal: $${parseFloat(inv.subtotal).toFixed(2)}</div>
-        <div>Tax: $${parseFloat(inv.taxTotal).toFixed(2)}</div>
-        <div style="font-size:16px;font-weight:bold;margin-top:8px;">Total: $${parseFloat(inv.total).toFixed(2)}</div>
+        ${tpl.showGstBreakdown !== false ? `<div>GST (10%): $${parseFloat(inv.taxTotal).toFixed(2)}</div>` : ""}
+        <div style="font-size:16px;font-weight:bold;margin-top:8px;color:${brandColor};">Total: ${totalStr}</div>
       </div>
       ${inv.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${inv.notes}</p>` : ""}
-      <p style="margin-top:32px;font-size:12px;color:#aaa;text-align:center;">Thank you for your business!</p>
+      <p style="margin-top:28px;font-size:13px;color:#444;">${signOff}</p>
+      <p style="margin-top:24px;font-size:13px;font-weight:600;text-align:center;color:${brandColor};">${thankYou}</p>
+      ${tpl.showWebsite && tpl.website ? `<p style="margin-top:8px;font-size:12px;text-align:center;"><a href="${tpl.website}" style="color:${brandColor};">${tpl.website}</a></p>` : ""}
+      ${socialsBlock}
+      ${footer ? `<p style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">${footer}</p>` : ""}
     </div>`;
 
   const result = await sendEmail(merchantId, {
     to: email,
-    subject: `Invoice ${inv.invoiceNumber} from ${bizName}`,
+    subject,
     html,
-    text: `Invoice ${inv.invoiceNumber} from ${bizName}\nTotal: $${parseFloat(inv.total).toFixed(2)}\n\nThank you for your business!`,
+    text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
   });
 
   if (!result.success) {

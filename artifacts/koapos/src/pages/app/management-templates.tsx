@@ -765,6 +765,15 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const terms = opts.paymentTerms || "Payment due within 30 days.";
   const notes = opts.invoiceNotes;
   const footer = opts.footerText;
+  const thankYou = opts.thankYouMsg;
+  const customMsg = opts.customMessage;
+
+  const MessagesBlock = () => (
+    <>
+      {customMsg && <p className="text-gray-500 text-[10px] mt-1 bg-gray-50 rounded px-2 py-1 leading-relaxed">{resolveCode(customMsg, businessName, abn, website, email)}</p>}
+      {thankYou  && <p className="text-center text-[11px] font-semibold mt-1" style={{ color: brandColor }}>{resolveCode(thankYou, businessName, abn, website, email)}</p>}
+    </>
+  );
 
   const CustomerBlock = () => opts.showAllCustomerDetails ? (
     <div className="border rounded p-1.5 mb-1.5 text-[9px] space-y-0.5 bg-gray-50">
@@ -841,6 +850,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <PaymentBlock />
         <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock />
+        <MessagesBlock />
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
         <QrBlock />
         <BarcodeBlock />
@@ -889,6 +899,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <PaymentBlock />
         <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock className="text-[9px]" />
+        <MessagesBlock />
         <SocialsBlock />
         <QrBlock />
         <BarcodeBlock />
@@ -930,6 +941,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
       <div className="text-gray-400 mt-1 border-t pt-1 text-[10px] space-y-0.5">
         <p>{resolveCode(terms, businessName, abn, website, email)}</p>
         <NotesBlock />
+        <MessagesBlock />
         {opts.showWebsite && website && <p>{website}</p>}
         {footer && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         <SocialsBlock />
