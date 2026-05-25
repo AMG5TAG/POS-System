@@ -1133,22 +1133,33 @@ export default function POSPage() {
       ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>+${loyaltyEarnedPts} pts</span></div>`
       : "";
     const qrHtml = (opts.showCustomerQr && customerForReceipt)
-      ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888">CUS-${esc(String(customerForReceipt.id))}</div></div><p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText || "Scan for loyalty")}</p></div>`
+      ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888">CUS-${esc(String(customerForReceipt.id))}</div></div>${opts.loyaltyQrText ? `<p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText)}</p>` : ""}</div>`
       : "";
     const customMsgHtml = opts.customMessage
       ? `<p class="center small gray mt" style="line-height:1.5">${resolveStr(opts.customMessage).replace(/\n/g, "<br>")}</p>`
       : "";
-    const barcodeHtml = opts.showBarcode
-      ? `<div class="center mt"><p style="font-family:monospace;font-size:10px;letter-spacing:3px;color:#666;border:1px solid #ddd;display:inline-block;padding:3px 10px;border-radius:3px">${esc(receiptNum.replace(/^#/, "") || "—")}</p><p class="center gray small">SALE BARCODE</p></div>`
-      : "";
-
     /* Inject extras at the dedicated sentinel (one per template). Falls back to append if missing. */
-    const extras = `${loyaltyHtml}${customMsgHtml}${qrHtml}${barcodeHtml}`;
+    const extras = `${loyaltyHtml}${customMsgHtml}${qrHtml}`;
     body = body.includes("<!--EXTRAS-->")
       ? body.replace("<!--EXTRAS-->", extras)
       : `${body}${extras}`;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}</body></html>`;
+    const bcValue = esc(receiptNum.replace(/^#/, "") || "0");
+    const barcodeScript = opts.showBarcode
+      ? `<div class="center mt"><svg id="sale-barcode"></svg></div>
+         <script>
+           (function(){
+             var s=document.createElement('script');
+             s.src='https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js';
+             s.onload=function(){
+               JsBarcode('#sale-barcode','${bcValue}',{format:'CODE128',width:1,height:24,fontSize:8,displayValue:true,margin:0});
+             };
+             document.head.appendChild(s);
+           })();
+         </script>`
+      : "";
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${barcodeScript}</body></html>`;
     const printOnce = (label: string) => {
       const tagged = label
         ? html.replace("<body>", `<body><p style="text-align:center;font-weight:bold;font-size:11px;color:#9ca3af;letter-spacing:2px;margin-bottom:6px">${label}</p>`)
@@ -1158,12 +1169,12 @@ export default function POSPage() {
         win.document.write(tagged);
         win.document.close();
         win.focus();
-        setTimeout(() => { win.print(); }, 400);
+        setTimeout(() => { win.print(); }, 800);
       }
     };
     printOnce("");
     if (opts.printCustomerCopy) {
-      setTimeout(() => printOnce("CUSTOMER COPY"), 800);
+      setTimeout(() => printOnce("CUSTOMER COPY"), 1400);
     }
   };
 

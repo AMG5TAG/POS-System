@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import Barcode from "react-barcode";
 import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
@@ -584,35 +585,6 @@ export function resolveCode(text: string, businessName: string, abn: string, web
     .replace(/{{[^}]+}}/g,             "…");
 }
 
-/* ─── Visual Barcode (SVG, Code 128-style preview) ───────────────────────── */
-
-function BarcodeSVG({ value = "TXN-1042", width = 130, height = 28 }: { value?: string; width?: number; height?: number }) {
-  const seed = Array.from(value).reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const bars: { w: number; dark: boolean }[] = [];
-  let total = 0;
-  let state = true;
-  for (let i = 0; i < 38; i++) {
-    const w = 1 + ((seed * (i + 7) * 31) % 3);
-    bars.push({ w, dark: state });
-    total += w;
-    state = !state;
-  }
-  const scale = width / total;
-  let x = 0;
-  return (
-    <div className="text-center">
-      <svg width={width} height={height - 6} viewBox={`0 0 ${width} ${height - 6}`} xmlns="http://www.w3.org/2000/svg">
-        {bars.map((b, i) => {
-          const rx = x;
-          x += b.w * scale;
-          return b.dark ? <rect key={i} x={rx} y={0} width={b.w * scale} height={height - 6} fill="#111" /> : null;
-        })}
-      </svg>
-      <p className="font-mono text-[7px] text-gray-500 tracking-[0.15em] mt-0.5">{value}</p>
-    </div>
-  );
-}
-
 /* ─── Visual QR Code (CSS grid pattern, preview only) ────────────────────── */
 
 function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?: number }) {
@@ -654,12 +626,14 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   const QrBlock = () => opts.showCustomerQr ? (
     <div className="flex flex-col items-center border-t pt-1.5 mt-1 gap-0.5">
       <QRCodeVisual label="CUS-0042" size={40} />
-      <p className="text-[8px] text-gray-400 text-center">{opts.loyaltyQrText || "Scan to view customer loyalty profile"}</p>
+      {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400 text-center">{opts.loyaltyQrText}</p> : null}
     </div>
   ) : null;
 
   const BarcodeBlock = () => opts.showBarcode ? (
-    <div className="border-t pt-1.5 mt-1 text-center"><BarcodeSVG value="TXN-1042" width={120} height={26} /></div>
+    <div className="border-t pt-1.5 mt-1 text-center">
+      <Barcode value="TXN-1042" format="CODE128" width={1.2} height={24} fontSize={8} displayValue />
+    </div>
   ) : null;
 
   const LoyaltyBlock = () => opts.showLoyaltyEarned ? (
@@ -687,7 +661,6 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
-        <QrBlock />
         <BarcodeBlock />
       </div>
     );
@@ -719,7 +692,6 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           {footer    && <p className="text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
           {opts.showWebsite && website && <p className="text-blue-500">{website}</p>}
         </div>
-        <QrBlock />
         <BarcodeBlock />
       </div>
     );
@@ -751,7 +723,6 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p>{website}</p>}
       </div>
-      <QrBlock />
       <BarcodeBlock />
     </div>
   );
@@ -775,14 +746,32 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     </>
   );
 
-  const CustomerBlock = () => opts.showAllCustomerDetails ? (
-    <div className="border rounded p-1.5 mb-1.5 text-[9px] space-y-0.5 bg-gray-50">
-      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">Customer</p>
-      <p className="font-medium">Sarah Johnson</p>
-      <p className="text-gray-500">sarah@email.com · (03) 9000 1111</p>
-      <p className="text-gray-500">42 Collins St, Melbourne VIC 3000</p>
+  const CustomerBlock = () => (
+    <div className="mb-1.5">
+      {opts.showAllCustomerDetails ? (
+        <div className="border rounded p-1.5 text-[9px] space-y-0.5 bg-gray-50">
+          <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">Customer</p>
+          <p className="font-medium">Sarah Johnson</p>
+          <p className="text-gray-500">sarah@email.com · (03) 9000 1111</p>
+          <p className="text-gray-500">42 Collins St, Melbourne VIC 3000</p>
+          {opts.showCustomerQr && (
+            <div className="flex items-center gap-2 border-t pt-1 mt-1">
+              <QRCodeVisual label="CUS-0042" size={38} />
+              {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="font-medium text-[10px]">Bill To: Demo Client Pty Ltd</p>
+      )}
+      {!opts.showAllCustomerDetails && opts.showCustomerQr && (
+        <div className="flex items-center gap-2 mt-1">
+          <QRCodeVisual label="CUS-0042" size={38} />
+          {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
+        </div>
+      )}
     </div>
-  ) : <p className="font-medium mb-1 text-[10px]">Bill To: Demo Client Pty Ltd</p>;
+  );
 
   const LoyaltyRow = () => opts.showLoyaltyEarned ? (
     <div className="flex justify-between text-[9px] text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 mt-1">
@@ -793,12 +782,14 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const QrBlock = () => opts.showCustomerQr ? (
     <div className="flex items-center gap-2 border-t pt-1.5 mt-1.5">
       <QRCodeVisual label="CUS-0042" size={38} />
-      <p className="text-[8px] text-gray-400">{opts.loyaltyQrText || "Scan to view customer loyalty profile"}</p>
+      {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
     </div>
   ) : null;
 
   const BarcodeBlock = () => opts.showBarcode ? (
-    <div className="border-t pt-1.5 mt-1.5 text-center"><BarcodeSVG value="INV-1042" width={160} height={26} /></div>
+    <div className="border-t pt-1.5 mt-1.5 text-center">
+      <Barcode value="INV-1042" format="CODE128" width={1.5} height={26} fontSize={8} displayValue />
+    </div>
   ) : null;
 
   const PaymentBlock = () => (opts.showPaymentMethods || opts.bankDetails) ? (
@@ -852,7 +843,6 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <NotesBlock />
         <MessagesBlock />
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
-        <QrBlock />
         <BarcodeBlock />
       </div>
     );
@@ -901,7 +891,6 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <NotesBlock className="text-[9px]" />
         <MessagesBlock />
         <SocialsBlock />
-        <QrBlock />
         <BarcodeBlock />
       </div>
     );
@@ -946,7 +935,6 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {footer && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         <SocialsBlock />
       </div>
-      <QrBlock />
       <BarcodeBlock />
     </div>
   );
