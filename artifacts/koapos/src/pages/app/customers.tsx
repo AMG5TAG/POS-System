@@ -61,7 +61,8 @@ const STEPS: Step[] = ["personal", "address", "account"];
 type CustomerForm = {
   firstName: string; lastName: string; email: string; phone: string;
   whatsappSameAsPhone: boolean; dateOfBirth: string; company: string;
-  abn: string; referredBy: string; billingStreet: string; billingCity: string;
+  abn: string; referredBy: string; referralCode: string;
+  billingStreet: string; billingCity: string;
   billingState: string; billingPostcode: string; billingCountry: string;
   addShipping: boolean; shippingSameAsBilling: boolean;
   shippingStreet: string; shippingCity: string; shippingState: string;
@@ -72,7 +73,8 @@ type CustomerForm = {
 const defaultForm: CustomerForm = {
   firstName: "", lastName: "", email: "", phone: "",
   whatsappSameAsPhone: false, dateOfBirth: "", company: "",
-  abn: "", referredBy: "", billingStreet: "", billingCity: "",
+  abn: "", referredBy: "", referralCode: "",
+  billingStreet: "", billingCity: "",
   billingState: "", billingPostcode: "", billingCountry: "Australia",
   addShipping: true, shippingSameAsBilling: true,
   shippingStreet: "", shippingCity: "", shippingState: "",
@@ -542,6 +544,7 @@ function CustomerDetailInner({
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Calendar} label="Date of Birth" value={customer.dateOfBirth} />
             <InfoRow icon={Hash}     label="ABN"           value={customer.abn} />
+            <InfoRow icon={Hash}     label="Referral Code" value={customer.referralCode} />
             <InfoRow icon={User}     label="Referred By"   value={customer.referredBy} />
           </div>
           <div className="rounded-xl border bg-muted/20 divide-y">
@@ -1176,7 +1179,7 @@ export default function CustomersPage() {
       email: c.email || "", phone: c.phone || "",
       whatsappSameAsPhone: c.whatsappSameAsPhone === "true",
       dateOfBirth: c.dateOfBirth || "", company: c.company || "",
-      abn: c.abn || "", referredBy: c.referredBy || "",
+      abn: c.abn || "", referredBy: c.referredBy || "", referralCode: c.referralCode || "",
       billingStreet: c.billingStreet || "", billingCity: c.billingCity || "",
       billingState: c.billingState || "", billingPostcode: c.billingPostcode || "",
       billingCountry: c.billingCountry || "Australia",
@@ -1195,7 +1198,7 @@ export default function CustomersPage() {
     email: form.email || undefined, phone: form.phone || undefined,
     whatsappSameAsPhone: form.whatsappSameAsPhone ? "true" : "false",
     dateOfBirth: form.dateOfBirth || undefined, company: form.company || undefined,
-    abn: form.abn || undefined, referredBy: form.referredBy || undefined,
+    abn: form.abn || undefined, referredBy: form.referredBy || undefined, referralCode: form.referralCode || undefined,
     billingStreet: form.billingStreet || undefined, billingCity: form.billingCity || undefined,
     billingState: form.billingState || undefined, billingPostcode: form.billingPostcode || undefined,
     billingCountry: form.billingCountry || undefined,
@@ -1557,9 +1560,43 @@ export default function CustomersPage() {
                   <Field label="ABN">
                     <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" />
                   </Field>
+                  <Field label="Referral Code">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={form.referralCode}
+                        onChange={(e) => setField("referralCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))}
+                        placeholder="AB-1X2Y"
+                        className="font-mono"
+                      />
+                      {editingCustomer && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 h-9 px-2 text-xs"
+                          onClick={() => {
+                            const f = (form.firstName || "X")[0].toUpperCase();
+                            const l = (form.lastName || "X")[0].toUpperCase();
+                            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                            let suffix = "";
+                            for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+                            setField("referralCode", `${f}${l}-${suffix}`);
+                          }}
+                          type="button"
+                        >
+                          Regenerate
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {editingCustomer ? "Customers can share this code to refer friends." : "Auto-generated on save based on initials."}
+                    </p>
+                  </Field>
+                </FieldRow>
+                <FieldRow>
                   <Field label="Referred By">
                     <Input value={form.referredBy} onChange={(e) => setField("referredBy", e.target.value)} placeholder="No One" />
                   </Field>
+                  <div />
                 </FieldRow>
               </>
             )}

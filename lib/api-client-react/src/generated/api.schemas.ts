@@ -328,6 +328,8 @@ export interface Customer {
   agreedToMarketing?: string | null;
   /** @nullable */
   portalToken?: string | null;
+  /** @nullable */
+  referralCode?: string | null;
 }
 
 export interface CustomerInput {
@@ -355,6 +357,7 @@ export interface CustomerInput {
   customerGroup?: string;
   warningNote?: string;
   agreedToMarketing?: string;
+  referralCode?: string;
 }
 
 export interface CustomerUpdate {
@@ -382,6 +385,7 @@ export interface CustomerUpdate {
   customerGroup?: string;
   warningNote?: string;
   agreedToMarketing?: string;
+  referralCode?: string;
   loyaltyPoints?: number;
 }
 

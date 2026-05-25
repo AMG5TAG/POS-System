@@ -37,7 +37,17 @@ export const customersTable = pgTable("customers", {
   warningNote: text("warning_note"),
   agreedToMarketing: text("agreed_to_marketing"),
   portalToken: text("portal_token"),
+  referralCode: text("referral_code"),
 });
+
+export function generateReferralCode(firstName?: string | null, lastName?: string | null): string {
+  const f = (firstName ?? "X")[0].toUpperCase();
+  const l = (lastName ?? "X")[0].toUpperCase();
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+  return `${f}${l}-${suffix}`;
+}
 
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;

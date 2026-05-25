@@ -16,6 +16,26 @@ import { ObjectStorageService } from "../lib/objectStorage";
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
+function generateReferralCode(firstName?: string | null, lastName?: string | null): string {
+  const f = (firstName ?? "X")[0].toUpperCase();
+  const l = (lastName ?? "X")[0].toUpperCase();
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+  return `${f}${l}-${suffix}`;
+}
+
+async function uniqueReferralCode(merchantId: number, firstName?: string | null, lastName?: string | null): Promise<string> {
+  for (let attempts = 0; attempts < 10; attempts++) {
+    const code = generateReferralCode(firstName, lastName);
+    const existing = await db.select({ id: customersTable.id }).from(customersTable).where(
+      and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, code))
+    ).limit(1);
+    if (existing.length === 0) return code;
+  }
+  return generateReferralCode(firstName, lastName);
+}
+
 function formatCustomer(c: typeof customersTable.$inferSelect) {
   return {
     id: c.id,
@@ -49,6 +69,7 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     warningNote: c.warningNote ?? null,
     agreedToMarketing: c.agreedToMarketing ?? null,
     portalToken: c.portalToken ?? null,
+    referralCode: c.referralCode ?? null,
   };
 }
 
@@ -77,10 +98,13 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
 router.post("/customers", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateCustomerBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const merchantId = req.session.merchantId!;
+  const code = parsed.data.referralCode ?? await uniqueReferralCode(merchantId, parsed.data.firstName, parsed.data.lastName);
   const [customer] = await db.insert(customersTable).values({
     ...parsed.data,
-    merchantId: req.session.merchantId!,
+    merchantId,
     portalToken: crypto.randomUUID(),
+    referralCode: code,
   }).returning();
   res.status(201).json(formatCustomer(customer));
 });
@@ -98,7 +122,16 @@ router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateCustomerBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [customer] = await db.update(customersTable).set(parsed.data).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, req.session.merchantId!))).returning();
+  const merchantId = req.session.merchantId!;
+  const patch = { ...parsed.data };
+  if (patch.referralCode) {
+    patch.referralCode = patch.referralCode.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+    const existing = await db.select({ id: customersTable.id }).from(customersTable).where(
+      and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, patch.referralCode), sql`${customersTable.id} != ${params.data.id}`)
+    ).limit(1);
+    if (existing.length > 0) { res.status(409).json({ error: "Referral code already in use" }); return; }
+  }
+  const [customer] = await db.update(customersTable).set(patch).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId))).returning();
   if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
   res.json(formatCustomer(customer));
 });

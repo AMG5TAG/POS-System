@@ -2698,6 +2698,8 @@ components:
           type: ["string", "null"]
         portalToken:
           type: ["string", "null"]
+        referralCode:
+          type: ["string", "null"]
 
     CustomerInput:
       type: object
@@ -2751,6 +2753,8 @@ components:
           type: string
         agreedToMarketing:
           type: string
+        referralCode:
+          type: string
 
     CustomerUpdate:
       type: object
@@ -2802,6 +2806,8 @@ components:
         warningNote:
           type: string
         agreedToMarketing:
+          type: string
+        referralCode:
           type: string
         loyaltyPoints:
           type: integer

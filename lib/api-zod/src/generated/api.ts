@@ -636,7 +636,8 @@ export const ListCustomersResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 })),
   "total": zod.number()
 })
@@ -669,7 +670,8 @@ export const CreateCustomerBody = zod.object({
   "shippingCountry": zod.string().optional(),
   "customerGroup": zod.string().optional(),
   "warningNote": zod.string().optional(),
-  "agreedToMarketing": zod.string().optional()
+  "agreedToMarketing": zod.string().optional(),
+  "referralCode": zod.string().optional()
 })
 
 
@@ -711,7 +713,8 @@ export const GetCustomerResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 })
 
 
@@ -747,6 +750,7 @@ export const UpdateCustomerBody = zod.object({
   "customerGroup": zod.string().optional(),
   "warningNote": zod.string().optional(),
   "agreedToMarketing": zod.string().optional(),
+  "referralCode": zod.string().optional(),
   "loyaltyPoints": zod.number().optional()
 })
 
@@ -781,7 +785,8 @@ export const UpdateCustomerResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 })
 
 
@@ -836,7 +841,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1088,7 +1094,8 @@ export const ListTransactionsResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1187,7 +1194,8 @@ export const GetTransactionResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1269,7 +1277,8 @@ export const RefundTransactionResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1600,7 +1609,8 @@ export const GetLoyaltyLeaderboardResponse = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }),
   "currentTier": zod.string().nullish(),
   "pointsUntilNextTier": zod.number().nullish()
@@ -1736,7 +1746,8 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "customerGroup": zod.string().nullish(),
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
-  "portalToken": zod.string().nullish()
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
