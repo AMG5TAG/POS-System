@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListProducts, useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -43,6 +44,9 @@ type Invoice = {
   customerId: number | null;
   customerName: string | null;
   customerEmail: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
+  customerCompany: string | null;
   status: InvStatus;
   subtotal: number;
   taxTotal: number;
@@ -408,27 +412,34 @@ export default function POSInvoicesPage() {
     resolveCode(text || "", biz, abn, web, em);
 
   /* ── Print ── */
-  const printInvoice = (inv: Invoice) => {
-    const opts   = getInvoiceTemplateOpts();
-    const bizName = merchant?.businessName ?? "Your Business";
-    const abn     = profile.abn ?? "";
-    const website = profile.website ?? "";
-    const address = [profile.state, profile.postcode].filter(Boolean).join(" ");
-    const email   = profile.contactEmail ?? "";
-    const tagline = profile.tagline ?? "";
-    const brandColor = profile.brandColors?.[0] ?? "#4f46e5";
-    const socials = profile.socialLinks;
+  const printInvoice = async (inv: Invoice) => {
+    const opts        = getInvoiceTemplateOpts();
+    const bizName     = merchant?.businessName ?? "Your Business";
+    const abn         = profile.abn ?? "";
+    const website     = profile.website ?? "";
+    const address     = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const email       = profile.contactEmail ?? "";
+    const tagline     = profile.tagline ?? "";
+    const brandColor  = profile.brandColors?.[0] ?? "#4f46e5";
+    const logo        = profile.logo ?? "";
+    const socials     = profile.socialLinks;
     const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
 
-    const termsText    = resolveStr(opts.paymentTerms, bizName, abn, website, email);
-    const notesText    = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
-    const footerText   = resolveStr(opts.footerText, bizName, abn, website, email);
+    const termsText  = resolveStr(opts.paymentTerms, bizName, abn, website, email);
+    const notesText  = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
+    const footerText = resolveStr(opts.footerText, bizName, abn, website, email);
+
+    /* QR code data URL */
+    let qrDataUrl = "";
+    if (opts.showCustomerQr && inv.customerId) {
+      try { qrDataUrl = await QRCode.toDataURL(`CUS-${inv.customerId}`, { width: 80, margin: 1 }); } catch { /* ignore */ }
+    }
 
     const w = window.open("", "_blank", "width=800,height=900");
     if (!w) return;
 
-    const rows = (inv.items ?? []).map((l) => `
-      <tr>
+    const itemRows = (inv.items ?? []).map((l, idx) => `
+      <tr style="${idx % 2 === 1 ? "background:#fafafa" : ""}">
         <td>${l.description}</td>
         <td style="text-align:center">${l.quantity}</td>
         <td style="text-align:right">$${l.unitPrice.toFixed(2)}</td>
@@ -436,78 +447,107 @@ export default function POSInvoicesPage() {
         <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
       </tr>`).join("");
 
-    const hasCustomerDetails = inv.customerName || inv.customerEmail;
-    const customerBlock = hasCustomerDetails ? `
-      <div class="bill-to">
-        <strong>${opts.showAllCustomerDetails ? "Customer" : "Bill To"}</strong>
-        <div style="margin-top:4px">
-          ${inv.customerName ? `<p>${inv.customerName}</p>` : ""}
-          ${opts.showAllCustomerDetails && inv.customerEmail ? `<p style="color:#666">${inv.customerEmail}</p>` : ""}
-        </div>
+    /* Logo block */
+    const logoHtml = opts.showLogo
+      ? (logo
+          ? `<img src="${logo}" alt="Logo" style="max-height:56px;max-width:140px;object-fit:contain;display:block;margin-bottom:8px">`
+          : `<div style="width:44px;height:44px;border-radius:8px;background:${brandColor};margin-bottom:8px"></div>`)
+      : "";
+
+    /* Customer block */
+    const hasCustomer = inv.customerName || inv.customerEmail;
+    const customerBlock = hasCustomer ? (() => {
+      const lines: string[] = [];
+      if (inv.customerName)                              lines.push(`<p style="font-size:14px;font-weight:600;margin:0 0 2px">${inv.customerName}</p>`);
+      if (inv.customerCompany)                           lines.push(`<p style="color:#555;margin:0 0 1px">${inv.customerCompany}</p>`);
+      if (opts.showAllCustomerDetails && inv.customerEmail)   lines.push(`<p style="color:#666;margin:0 0 1px">${inv.customerEmail}</p>`);
+      if (opts.showAllCustomerDetails && inv.customerPhone)   lines.push(`<p style="color:#666;margin:0 0 1px">${inv.customerPhone}</p>`);
+      if (opts.showAllCustomerDetails && inv.customerAddress) lines.push(`<p style="color:#666;margin:0">${inv.customerAddress}</p>`);
+      return `<div class="bill-to"><strong>${opts.showAllCustomerDetails ? "CUSTOMER" : "BILL TO"}</strong><div style="margin-top:6px">${lines.join("")}</div></div>`;
+    })() : "";
+
+    /* QR + barcode block (next to customer or after) */
+    const qrBlock = qrDataUrl ? `
+      <div style="display:inline-block;text-align:center;margin-left:16px;vertical-align:top;padding-top:4px">
+        <img src="${qrDataUrl}" style="width:72px;height:72px">
+        <p style="font-size:9px;color:#aaa;margin:2px 0 0">${opts.loyaltyQrText || "Scan for loyalty"}</p>
       </div>` : "";
 
+    const barcodeBlock = opts.showBarcode ? `
+      <div style="margin:12px 0;text-align:center">
+        <p style="font-family:monospace;font-size:11px;letter-spacing:4px;color:#888;border:1px solid #ddd;display:inline-block;padding:4px 12px;border-radius:4px">${inv.invoiceNumber}</p>
+        <p style="font-size:9px;color:#aaa;margin:2px 0 0">INVOICE BARCODE</p>
+      </div>` : "";
+
+    /* Customer + QR combined row */
+    const customerQrRow = (hasCustomer || qrDataUrl) ? `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+        ${customerBlock}
+        ${qrDataUrl ? qrBlock : ""}
+      </div>` : "";
+
+    /* Payment block */
     const paymentBlock = (opts.showPaymentMethods || opts.bankDetails) ? `
       <div class="payment-block">
         <div class="terms-title">${opts.paymentSectionHeading || "PAYMENT DETAILS"}</div>
-        ${opts.showPaymentMethods ? `
-          <div class="payment-methods">
-            ${paymentTypes.map(m => `<span class="pm-badge">${m}</span>`).join("")}
-          </div>` : ""}
+        ${opts.showPaymentMethods ? `<div class="payment-methods">${paymentTypes.map(m => `<span class="pm-badge">${m}</span>`).join("")}</div>` : ""}
         ${opts.bankDetails ? `<pre class="bank-details">${opts.bankDetails}</pre>` : ""}
       </div>` : "";
 
-    const socialsBlock = opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter) ? `
+    /* Socials */
+    const socialsBlock = opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin) ? `
       <div class="socials">
-        ${socials.facebook ? `<span>fb/ ${socials.facebook}</span>` : ""}
+        ${socials.facebook  ? `<span>fb/ ${socials.facebook}</span>` : ""}
         ${socials.instagram ? `<span>ig/ @${socials.instagram}</span>` : ""}
-        ${socials.twitter ? `<span>x/ @${socials.twitter}</span>` : ""}
-        ${socials.linkedin ? `<span>in/ ${socials.linkedin}</span>` : ""}
+        ${socials.twitter   ? `<span>x/ @${socials.twitter}</span>` : ""}
+        ${socials.linkedin  ? `<span>in/ ${socials.linkedin}</span>` : ""}
+        ${socials.youtube   ? `<span>yt/ ${socials.youtube}</span>` : ""}
+        ${socials.tiktok    ? `<span>tt/ @${socials.tiktok}</span>` : ""}
       </div>` : "";
 
     w.document.write(`<!DOCTYPE html><html><head>
       <title>Invoice ${inv.invoiceNumber}</title>
       <style>
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:720px;margin:0 auto}
+        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:760px;margin:0 auto}
         .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${brandColor};padding-bottom:16px;margin-bottom:24px}
-        .logo-box{width:40px;height:40px;border-radius:6px;background:${brandColor};display:inline-block;margin-bottom:6px}
         .biz-name{font-size:20px;font-weight:700;margin:0}
-        .biz-meta{font-size:12px;color:#666;margin-top:4px;line-height:1.6}
+        .biz-meta{font-size:12px;color:#666;margin-top:4px;line-height:1.7}
         .inv-title{font-size:28px;font-weight:800;color:${brandColor};text-align:right;margin:0}
-        .inv-meta{font-size:13px;color:#666;text-align:right;margin-top:4px;line-height:1.7}
-        .bill-to{background:#f7f7f7;border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:13px}
-        .bill-to strong{display:block;margin-bottom:2px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888}
+        .inv-meta{font-size:13px;color:#666;text-align:right;margin-top:4px;line-height:1.8}
+        .bill-to{background:#f7f7f7;border-radius:6px;padding:12px 16px;font-size:13px;flex:1}
+        .bill-to strong{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#999}
         table{width:100%;border-collapse:collapse;margin:0 0 16px}
-        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.5px}
-        td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px}
-        .totals{margin-left:auto;width:240px;margin-top:4px}
+        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+        td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
+        .totals{margin-left:auto;width:260px;margin-top:4px}
         .totals .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}
         .totals .grand{font-weight:700;border-top:2px solid #ddd;padding-top:8px;margin-top:4px;font-size:16px;color:#111;display:flex;justify-content:space-between}
-        .terms{margin-top:28px;padding:14px 16px;background:#f9f9f9;border-left:3px solid ${brandColor};border-radius:0 6px 6px 0;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
-        .terms-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:6px}
+        .terms{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-left:3px solid ${brandColor};border-radius:0 6px 6px 0;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
+        .terms-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#aaa;margin-bottom:6px}
         .inv-notes{margin-top:12px;padding:12px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
-        .footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}
+        .footer{margin-top:28px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}
         .payment-block{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555}
-        .payment-methods{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-        .pm-badge{border:1px solid #ddd;border-radius:4px;padding:2px 8px;font-size:11px;color:#666;background:#fff}
-        .bank-details{margin-top:6px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#666}
-        .socials{display:flex;gap:12px;margin-top:8px;font-size:11px;color:#aaa}
+        .payment-methods{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+        .pm-badge{border:1px solid #ddd;border-radius:4px;padding:3px 9px;font-size:11px;color:#555;background:#fff;white-space:nowrap}
+        .bank-details{margin-top:8px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#555;background:#fff;border:1px solid #eee;border-radius:4px;padding:8px 12px}
+        .socials{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:11px;color:#aaa}
         @media print{body{padding:20px}}
       </style>
     </head><body>
       <div class="header">
         <div>
-          ${opts.showLogo ? `<div class="logo-box"></div>` : ""}
+          ${logoHtml}
           <p class="biz-name">${bizName}</p>
-          ${opts.showTagline && tagline ? `<p style="font-size:12px;color:#888;font-style:italic;margin:2px 0 0">${tagline}</p>` : ""}
+          ${opts.showTagline && tagline ? `<p style="font-size:12px;color:#888;font-style:italic;margin:2px 0 4px">${tagline}</p>` : ""}
           <div class="biz-meta">
             ${opts.showAbn && abn ? `ABN ${abn}<br>` : ""}
             ${address ? `${address}<br>` : ""}
             ${email ? `${email}<br>` : ""}
-            ${opts.showWebsite && website ? `${website}` : ""}
+            ${opts.showWebsite && website ? `<a href="${website}" style="color:${brandColor}">${website}</a>` : ""}
           </div>
         </div>
-        <div>
+        <div style="text-align:right">
           <p class="inv-title">INVOICE</p>
           <div class="inv-meta">
             <strong>${inv.invoiceNumber}</strong><br>
@@ -517,7 +557,8 @@ export default function POSInvoicesPage() {
           </div>
         </div>
       </div>
-      ${customerBlock}
+      ${customerQrRow}
+      ${barcodeBlock}
       <table>
         <thead><tr>
           <th>Description</th>
@@ -526,7 +567,7 @@ export default function POSInvoicesPage() {
           <th style="text-align:right">Tax</th>
           <th style="text-align:right">Amount</th>
         </tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${itemRows}</tbody>
       </table>
       <div class="totals">
         <div class="row"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
@@ -546,19 +587,20 @@ export default function POSInvoicesPage() {
     </body></html>`);
     w.document.close();
     w.focus();
-    setTimeout(() => { w.print(); }, 300);
+    setTimeout(() => { w.print(); }, 400);
   };
 
-  const downloadInvoicePDF = (inv: Invoice) => {
-    const opts    = getInvoiceTemplateOpts();
-    const bizName = merchant?.businessName ?? "Your Business";
-    const abn     = profile.abn ?? "";
-    const website = profile.website ?? "";
-    const address = [profile.state, profile.postcode].filter(Boolean).join(" ");
-    const email   = profile.contactEmail ?? "";
-    const tagline = profile.tagline ?? "";
-    const rawColor = profile.brandColors?.[0] ?? "#4f46e5";
-    const socials = profile.socialLinks;
+  const downloadInvoicePDF = async (inv: Invoice) => {
+    const opts      = getInvoiceTemplateOpts();
+    const bizName   = merchant?.businessName ?? "Your Business";
+    const abn       = profile.abn ?? "";
+    const website   = profile.website ?? "";
+    const address   = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const email     = profile.contactEmail ?? "";
+    const tagline   = profile.tagline ?? "";
+    const rawColor  = profile.brandColors?.[0] ?? "#4f46e5";
+    const logo      = profile.logo ?? "";
+    const socials   = profile.socialLinks;
     const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
 
     const termsText  = resolveStr(opts.paymentTerms, bizName, abn, website, email);
@@ -571,18 +613,38 @@ export default function POSInvoicesPage() {
     };
     const [cr, cg, cb] = hexToRgb(rawColor);
 
+    /* QR code data URL */
+    let qrDataUrl = "";
+    if (opts.showCustomerQr && inv.customerId) {
+      try { qrDataUrl = await QRCode.toDataURL(`CUS-${inv.customerId}`, { width: 80, margin: 1 }); } catch { /* ignore */ }
+    }
+
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const W = 210, ML = 20, MR = 20, CW = W - ML - MR;
     let y = 22;
 
     /* ── Header ── */
+    let logoH = 0;
     if (opts.showLogo) {
-      doc.setFillColor(cr, cg, cb);
-      doc.roundedRect(ML, y, 8, 8, 1.5, 1.5, "F");
+      if (logo) {
+        try {
+          const imgFormat = logo.startsWith("data:image/png") ? "PNG" : "JPEG";
+          doc.addImage(logo, imgFormat, ML, y, 22, 22);
+          logoH = 26;
+        } catch {
+          doc.setFillColor(cr, cg, cb);
+          doc.roundedRect(ML, y, 10, 10, 2, 2, "F");
+          logoH = 14;
+        }
+      } else {
+        doc.setFillColor(cr, cg, cb);
+        doc.roundedRect(ML, y, 10, 10, 2, 2, "F");
+        logoH = 14;
+      }
     }
-    const bizY = opts.showLogo ? y + 11 : y;
+    const bizY = y + logoH;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
+    doc.setFontSize(14);
     doc.setTextColor(30, 30, 30);
     doc.text(bizName, ML, bizY);
     if (opts.showTagline && tagline) {
@@ -593,13 +655,13 @@ export default function POSInvoicesPage() {
     }
     let metaY = bizY + (opts.showTagline && tagline ? 9 : 5.5);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(100, 100, 100);
     const metaLines: string[] = [];
-    if (opts.showAbn && abn)          metaLines.push(`ABN ${abn}`);
-    if (address)                      metaLines.push(address);
-    if (email)                        metaLines.push(email);
-    if (opts.showWebsite && website)   metaLines.push(website);
+    if (opts.showAbn && abn)         metaLines.push(`ABN ${abn}`);
+    if (address)                     metaLines.push(address);
+    if (email)                       metaLines.push(email);
+    if (opts.showWebsite && website) metaLines.push(website);
     metaLines.forEach((l) => { doc.text(l, ML, metaY); metaY += 4.5; });
 
     doc.setFont("helvetica", "bold");
@@ -624,31 +686,66 @@ export default function POSInvoicesPage() {
     doc.line(ML, y, W - MR, y);
     y += 8;
 
-    /* ── Customer ── */
-    if (inv.customerName) {
-      const custHeight = opts.showAllCustomerDetails && inv.customerEmail ? 20 : 14;
+    /* ── Customer + QR ── */
+    if (inv.customerName || inv.customerEmail) {
+      const custLines: { text: string; bold?: boolean; small?: boolean }[] = [];
+      if (inv.customerName)    custLines.push({ text: inv.customerName, bold: true });
+      if (inv.customerCompany) custLines.push({ text: inv.customerCompany, small: true });
+      if (opts.showAllCustomerDetails && inv.customerEmail)   custLines.push({ text: inv.customerEmail, small: true });
+      if (opts.showAllCustomerDetails && inv.customerPhone)   custLines.push({ text: inv.customerPhone, small: true });
+      if (opts.showAllCustomerDetails && inv.customerAddress) custLines.push({ text: inv.customerAddress, small: true });
+
+      const lineH = 4.8;
+      const custH = Math.max(16, 4 + custLines.length * lineH + 4);
+      const qrSize = qrDataUrl ? 22 : 0;
+      const custW  = CW - (qrSize > 0 ? qrSize + 4 : 0);
+
       doc.setFillColor(247, 247, 247);
       doc.setDrawColor(220, 220, 220);
       doc.setLineWidth(0.3);
-      doc.rect(ML, y - 3, CW, custHeight, "FD");
+      doc.rect(ML, y - 3, CW, custH + (qrSize > 0 ? Math.max(0, qrSize - custH + 6) : 0), "FD");
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
+      doc.setTextColor(120, 120, 120);
       doc.text(opts.showAllCustomerDetails ? "CUSTOMER" : "BILL TO", ML + 4, y + 2);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      doc.setTextColor(30, 30, 30);
-      doc.text(inv.customerName, ML + 4, y + 7);
-      if (opts.showAllCustomerDetails && inv.customerEmail) {
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(inv.customerEmail, ML + 4, y + 12);
+
+      let cy = y + 7;
+      custLines.forEach((cl) => {
+        doc.setFont("helvetica", cl.bold ? "bold" : "normal");
+        doc.setFontSize(cl.small ? 8.5 : 10.5);
+        doc.setTextColor(cl.bold ? 30 : 80, cl.bold ? 30 : 80, cl.bold ? 30 : 80);
+        doc.text(cl.text, ML + 4, cy, { maxWidth: custW - 6 });
+        cy += lineH;
+      });
+
+      if (qrDataUrl) {
+        try {
+          doc.addImage(qrDataUrl, "PNG", W - MR - qrSize, y - 1, qrSize, qrSize);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.setTextColor(160, 160, 160);
+          const qrLabel = opts.loyaltyQrText || "Scan for loyalty";
+          doc.text(qrLabel, W - MR - qrSize / 2, y + qrSize + 1, { align: "center", maxWidth: qrSize + 2 });
+        } catch { /* ignore */ }
       }
-      y += custHeight + 6;
+
+      y += custH + (qrSize > 0 ? Math.max(0, qrSize - custH + 8) : 6);
+    }
+
+    /* ── Barcode ── */
+    if (opts.showBarcode) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(130, 130, 130);
+      doc.text(inv.invoiceNumber, W / 2, y + 4, { align: "center", charSpace: 3 });
+      doc.setFontSize(7);
+      doc.text("INVOICE BARCODE", W / 2, y + 8.5, { align: "center" });
+      y += 14;
     }
 
     /* ── Line items table ── */
-    const COL = { desc: 78, qty: 18, unit: 30, tax: 24, amt: 20 };
+    const COL = { desc: 76, qty: 18, unit: 30, tax: 22, amt: 24 };
     doc.setFillColor(245, 245, 245);
     doc.rect(ML, y - 3, CW, 8, "F");
     doc.setFont("helvetica", "bold");
@@ -674,7 +771,7 @@ export default function POSInvoicesPage() {
       }
       cx = ML + 2;
       doc.setTextColor(30, 30, 30);
-      const desc = item.description.length > 42 ? item.description.slice(0, 40) + "…" : item.description;
+      const desc = item.description.length > 44 ? item.description.slice(0, 42) + "…" : item.description;
       doc.text(desc, cx, y + 1);                               cx += COL.desc;
       doc.setTextColor(80, 80, 80);
       doc.text(String(item.quantity), cx + COL.qty / 2, y + 1, { align: "center" }); cx += COL.qty;
@@ -691,11 +788,11 @@ export default function POSInvoicesPage() {
     y += 5;
 
     /* ── Totals ── */
-    const totX = W - MR - 62;
+    const totX = W - MR - 66;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(80, 80, 80);
-    doc.text("Subtotal",  totX + 2, y); doc.text(`$${inv.subtotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
+    doc.text("Subtotal", totX + 2, y); doc.text(`$${inv.subtotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
     if (opts.showGstBreakdown) {
       doc.text("GST (10%)", totX + 2, y); doc.text(`$${inv.taxTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
     }
@@ -711,7 +808,13 @@ export default function POSInvoicesPage() {
 
     /* ── Payment block ── */
     if (opts.showPaymentMethods || opts.bankDetails) {
-      const blockH = 8 + (opts.showPaymentMethods ? 6 : 0) + (opts.bankDetails ? 14 : 0);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const bankLines = opts.bankDetails ? opts.bankDetails.split("\n").filter(Boolean) : [];
+      const pmLineCount = opts.showPaymentMethods
+        ? Math.ceil(doc.splitTextToSize(paymentTypes.join("  ·  "), CW - 10).length)
+        : 0;
+      const blockH = 8 + (opts.showPaymentMethods ? pmLineCount * 5.5 + 2 : 0) + (bankLines.length * 4.5) + (bankLines.length ? 2 : 0);
       doc.setFillColor(249, 249, 249);
       doc.setDrawColor(220, 220, 220);
       doc.rect(ML, y, CW, blockH, "FD");
@@ -724,15 +827,14 @@ export default function POSInvoicesPage() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.setTextColor(80, 80, 80);
-        const pmText = paymentTypes.join("  ·  ");
-        doc.text(pmText, ML + 4, py);
-        py += 6;
+        const pmLines = doc.splitTextToSize(paymentTypes.join("  ·  "), CW - 10);
+        doc.text(pmLines as string[], ML + 4, py);
+        py += (pmLines as string[]).length * 5.5 + 2;
       }
-      if (opts.bankDetails) {
+      if (bankLines.length) {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(80, 80, 80);
-        const bankLines = opts.bankDetails.split("\n");
         bankLines.forEach((ln) => { doc.text(ln, ML + 4, py); py += 4.5; });
       }
       y += blockH + 4;
@@ -740,7 +842,9 @@ export default function POSInvoicesPage() {
 
     /* ── Terms ── */
     if (termsText || notesText) {
-      const termsH = 8 + (termsText ? 8 : 0) + (notesText ? 8 : 0);
+      const tLines  = termsText ? (doc.splitTextToSize(termsText, CW - 14) as string[]) : [];
+      const nLines  = notesText ? (doc.splitTextToSize(notesText, CW - 14) as string[]) : [];
+      const termsH  = 8 + tLines.length * 5 + (nLines.length ? nLines.length * 5 + 2 : 0) + 4;
       doc.setFillColor(cr, cg, cb);
       doc.rect(ML, y, 1.5, termsH, "F");
       doc.setFillColor(249, 249, 249);
@@ -750,18 +854,29 @@ export default function POSInvoicesPage() {
       doc.setTextColor(130, 130, 130);
       doc.text("TERMS", ML + 5, y + 4.5);
       let ty = y + 9;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(80, 80, 80);
-      if (termsText) { doc.text(termsText, ML + 5, ty, { maxWidth: CW - 10 }); ty += 8; }
-      if (notesText) { doc.setFont("helvetica", "italic"); doc.text(notesText, ML + 5, ty, { maxWidth: CW - 10 }); ty += 8; }
+      if (tLines.length) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.text(tLines, ML + 5, ty);
+        ty += tLines.length * 5 + 2;
+      }
+      if (nLines.length) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 100);
+        doc.text(nLines, ML + 5, ty);
+        ty += nLines.length * 5;
+      }
       y += termsH + 4;
     }
 
     /* ── Invoice notes ── */
     if (inv.notes) {
+      const noteLines = doc.splitTextToSize(inv.notes, CW - 10) as string[];
+      const noteH = 8 + noteLines.length * 5 + 4;
       doc.setFillColor(249, 249, 249);
-      doc.rect(ML, y, CW, 14, "F");
+      doc.rect(ML, y, CW, noteH, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(130, 130, 130);
@@ -769,12 +884,12 @@ export default function POSInvoicesPage() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(80, 80, 80);
-      doc.text(inv.notes, ML + 4, y + 10, { maxWidth: CW - 8 });
-      y += 18;
+      doc.text(noteLines, ML + 4, y + 10);
+      y += noteH + 4;
     }
 
     /* ── Socials ── */
-    if (opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin)) {
+    if (opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin || socials?.youtube || socials?.tiktok)) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       doc.setTextColor(160, 160, 160);
@@ -783,8 +898,11 @@ export default function POSInvoicesPage() {
       if (socials.instagram) socParts.push(`ig/ @${socials.instagram}`);
       if (socials.twitter)   socParts.push(`x/ @${socials.twitter}`);
       if (socials.linkedin)  socParts.push(`in/ ${socials.linkedin}`);
-      doc.text(socParts.join("    "), ML, y);
-      y += 6;
+      if (socials.youtube)   socParts.push(`yt/ ${socials.youtube}`);
+      if (socials.tiktok)    socParts.push(`tt/ @${socials.tiktok}`);
+      const socLines = doc.splitTextToSize(socParts.join("    "), CW) as string[];
+      doc.text(socLines, ML, y);
+      y += socLines.length * 5 + 2;
     }
 
     /* ── Footer ── */
@@ -968,11 +1086,11 @@ export default function POSInvoicesPage() {
                       <MessageSquare className="w-3.5 h-3.5" /> SMS
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
+                      onClick={() => { void downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
                       <Download className="w-3.5 h-3.5" /> PDF
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
+                      onClick={() => { void printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
                       <Printer className="w-3.5 h-3.5" /> Print
                     </Button>
                   </div>

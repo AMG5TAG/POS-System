@@ -15,12 +15,27 @@ function customerName(first: string | null, last: string | null): string | null 
   return n || null;
 }
 
-function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLast?: string | null, cEmail?: string | null) {
+function fmt(
+  inv: typeof invoicesTable.$inferSelect,
+  cFirst?: string | null,
+  cLast?: string | null,
+  cEmail?: string | null,
+  cPhone?: string | null,
+  cAddress?: string | null,
+  cCompany?: string | null,
+  cBillingStreet?: string | null,
+  cBillingCity?: string | null,
+  cBillingState?: string | null,
+  cBillingPostcode?: string | null,
+) {
   const isRecurring = inv.isRecurring === "true";
   const nextSendDate =
     isRecurring && inv.recurringStartDate
       ? computeNextSendDate(inv.recurringStartDate, inv.recurringFrequency ?? "monthly").toISOString()
       : null;
+
+  const billingParts = [cBillingStreet, cBillingCity, cBillingState, cBillingPostcode].filter(Boolean);
+  const customerAddress = billingParts.length ? billingParts.join(", ") : (cAddress ?? null);
 
   return {
     ...inv,
@@ -41,6 +56,9 @@ function fmt(inv: typeof invoicesTable.$inferSelect, cFirst?: string | null, cLa
     updatedAt: inv.updatedAt.toISOString(),
     customerName: customerName(cFirst ?? null, cLast ?? null),
     customerEmail: cEmail ?? null,
+    customerPhone: cPhone ?? null,
+    customerAddress,
+    customerCompany: cCompany ?? null,
   };
 }
 
@@ -72,6 +90,13 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
@@ -81,7 +106,7 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .offset(parseInt(String(offset)));
 
   res.json({
-    items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName, r.customerEmail)),
+    items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName, r.customerEmail, r.customerPhone, r.customerAddress, r.customerCompany, r.customerBillingStreet, r.customerBillingCity, r.customerBillingState, r.customerBillingPostcode)),
     total: Number(countResult.count),
   });
 });
@@ -97,13 +122,20 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
 });
 
 // POST /invoices
@@ -159,19 +191,26 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
   }).returning();
 
-  // Fetch with customer name + email
+  // Fetch with full customer details
   const [row] = await db
     .select({
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(eq(invoicesTable.id, inv.id));
 
-  res.status(201).json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail) : fmt(inv));
+  res.status(201).json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode) : fmt(inv));
 });
 
 // PATCH /invoices/:id/viewed
@@ -200,12 +239,19 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
 });
 
 // PATCH /invoices/:id
@@ -376,12 +422,19 @@ router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> 
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail));
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
 });
 
 export default router;
