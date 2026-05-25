@@ -152,6 +152,9 @@ export default function POSPage() {
   const [completedPaymentMethod, setCompletedPaymentMethod] = useState<string>("card");
   const [completedSubtotal, setCompletedSubtotal] = useState(0);
   const [completedTaxTotal, setCompletedTaxTotal] = useState(0);
+  const [completedCustomer, setCompletedCustomer] = useState<Customer | null>(null);
+  const [completedLoyaltyAmount, setCompletedLoyaltyAmount] = useState(0);
+  const [completedLoyaltyUnit, setCompletedLoyaltyUnit] = useState("");
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms">("idle");
@@ -1126,11 +1129,19 @@ export default function POSPage() {
       }
     `;
 
-    /* Extra blocks: loyalty / customer QR / barcode / custom message — appended to selected body */
-    const customerForReceipt = selectedCustomer;
-    const loyaltyEarnedPts   = Math.round(total);
-    const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt)
-      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>+${loyaltyEarnedPts} pts</span></div>`
+    /* Extra blocks: loyalty / customer QR / barcode / custom message — appended to selected body.
+       Use the snapshot captured at sale time (customer + loyalty are nulled
+       after the mutation succeeds, so referencing live state would be empty). */
+    const customerForReceipt = completedCustomer;
+    const earnedAmt   = completedLoyaltyAmount;
+    const earnedUnit  = completedLoyaltyUnit;
+    const earnedDisplay =
+      earnedUnit === "$"     ? `+${formatCurrency(earnedAmt)}` :
+      earnedUnit === "pts"   ? `+${Math.round(earnedAmt)} pts` :
+      earnedUnit === "stamp" ? `+${Math.round(earnedAmt)} stamp${earnedAmt === 1 ? "" : "s"}` :
+      `+${earnedAmt}`;
+    const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt && earnedAmt > 0)
+      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>${earnedDisplay}</span></div>`
       : "";
     const qrHtml = (opts.showCustomerQr && customerForReceipt)
       ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888">CUS-${esc(String(customerForReceipt.id))}</div></div>${opts.loyaltyQrText ? `<p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText)}</p>` : ""}</div>`
@@ -1246,17 +1257,13 @@ export default function POSPage() {
     const n = Math.floor(Math.random() * Math.pow(10, receiptDigits));
     const receiptNumber = `${receiptPrefix}${String(n).padStart(receiptDigits, "0")}`;
 
-    /* Only send loyaltyEarned for monetary loyalty programs (cashback/tiered/custom).
-       For "points"/"stamp" programs the value is a count, not currency, so it
-       must not land in the loyaltyEarned decimal column. And don't credit
-       loyalty when the customer is paying WITH loyalty. */
-    const programType = loyaltySettings?.programType;
-    const isMonetaryLoyalty =
-      programType === "cashback" || programType === "tiered" || programType === "custom";
+    /* Send loyaltyEarned for every program type — the server is authoritative
+       and will recompute the credited amount itself, but persisting our
+       calculated value keeps the transaction record in sync with the UI
+       preview. Suppress only when the customer is paying WITH loyalty. */
     const sendLoyaltyEarned =
       !walkIn &&
       loyaltyAmount > 0 &&
-      isMonetaryLoyalty &&
       paymentMethod !== "loyalty";
 
     createTransactionMutation.mutate({
@@ -1290,6 +1297,9 @@ export default function POSPage() {
         setCompletedPaymentMethod(paymentMethod);
         setCompletedSubtotal(subtotal);
         setCompletedTaxTotal(taxTotal);
+        setCompletedCustomer(selectedCustomer);
+        setCompletedLoyaltyAmount(sendLoyaltyEarned ? loyaltyAmount : 0);
+        setCompletedLoyaltyUnit(loyaltyUnit);
         clearCart();
         setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
         setCompletedTotal(saleTotal);
@@ -2021,17 +2031,31 @@ export default function POSPage() {
                     </div>
                   );
                 }
+                const programType = loyaltySettings?.programType;
+                if (programType === "stamp") {
+                  return (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 space-y-1">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Stamp programs can't be redeemed at checkout</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">Stamp rewards are issued out-of-band once the card is full.</p>
+                    </div>
+                  );
+                }
                 const availablePts = selectedCustomer?.loyaltyPoints ?? 0;
-                const isCashType = loyaltySettings?.programType === "cashback" || loyaltySettings?.programType === "tiered" || loyaltySettings?.programType === "custom";
+                const isCashType = programType === "cashback" || programType === "tiered" || programType === "custom";
+                const dpp = (loyaltySettings?.dollarPerPoint ?? 0.01) || 0.01;
+                /* For points programs, balance is in points and 1 pt = dpp dollars.
+                   For cash types, balance is dollars (1 unit = $1). */
+                const requiredUnits = isCashType ? Math.ceil(total) : Math.ceil(total / dpp);
                 const availableDisplay = isCashType ? formatCurrency(availablePts) : `${availablePts} pts`;
+                const requiredDisplay  = isCashType ? formatCurrency(requiredUnits) : `${requiredUnits} pts`;
                 const enteredLoyalty = parseFloat(numpadInput) || 0;
-                const isInsufficient = isCashType && enteredLoyalty > availablePts;
+                const isInsufficient = enteredLoyalty > availablePts;
                 return (
                   <div className="rounded-xl border bg-primary/5 border-primary/20 px-4 py-3 space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Loyalty Balance</p>
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-2xl font-bold tabular-nums">{availableDisplay}</span>
-                      <span className="text-xs text-muted-foreground">available</span>
+                      <span className="text-xs text-muted-foreground">available · need {requiredDisplay}</span>
                     </div>
                     {enteredLoyalty > 0 && (
                       <p className={`text-xs font-medium tabular-nums ${isInsufficient ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
@@ -2041,14 +2065,14 @@ export default function POSPage() {
                       </p>
                     )}
                     {enteredLoyalty === 0 && (
-                      <p className="text-xs text-muted-foreground">Use numpad to enter amount to redeem</p>
+                      <p className="text-xs text-muted-foreground">Use numpad to enter {isCashType ? "amount" : "points"} to redeem</p>
                     )}
-                    {isCashType && availablePts > 0 && (
+                    {availablePts >= requiredUnits && requiredUnits > 0 && (
                       <button
-                        onClick={() => setNumpadInput(Math.min(availablePts, total).toFixed(2))}
+                        onClick={() => setNumpadInput(isCashType ? requiredUnits.toFixed(2) : String(requiredUnits))}
                         className="text-xs font-medium text-primary hover:underline"
                       >
-                        Use all available ({formatCurrency(Math.min(availablePts, total))})
+                        Cover sale ({requiredDisplay})
                       </button>
                     )}
                   </div>
@@ -2161,14 +2185,18 @@ export default function POSPage() {
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
+                  (payMethod === "loyalty" && loyaltySettings?.programType === "stamp") ||
                   (payMethod === "loyalty" && selectedCustomer != null && (() => {
-                    // Loyalty payment: must cover the full sale total. Server
-                    // requires ceil(total) points (e.g. $10.99 → 11 points),
-                    // so the entered amount must be >= required and <=
-                    // available balance.
+                    // Loyalty payment: must cover the full sale total. Required
+                    // balance units depend on program type:
+                    //   - cashback/tiered/custom: ceil(total) dollars
+                    //   - points: ceil(total / dollarPerPoint) points
+                    const programType = loyaltySettings?.programType;
+                    const isCashType = programType === "cashback" || programType === "tiered" || programType === "custom";
+                    const dpp = (loyaltySettings?.dollarPerPoint ?? 0.01) || 0.01;
                     const enteredLoyalty = parseFloat(numpadInput) || 0;
                     const balance = selectedCustomer?.loyaltyPoints ?? 0;
-                    const required = Math.ceil(total);
+                    const required = isCashType ? Math.ceil(total) : Math.ceil(total / dpp);
                     return (
                       enteredLoyalty < required ||
                       enteredLoyalty > balance ||

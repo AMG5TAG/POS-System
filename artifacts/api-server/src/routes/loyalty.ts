@@ -6,6 +6,15 @@ import { UpdateLoyaltySettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+const DEFAULT_NAMING = {
+  programName:  "",
+  cashbackUnit: "Credits",
+  pointsUnit:   "Points",
+  stampUnit:    "Stamps",
+  tieredUnit:   "Credits",
+  customUnit:   "Rewards",
+};
+
 const DEFAULT_CONFIG = {
   cashbackRate: 0.01,
   pointsPerDollar: 1,
@@ -23,6 +32,7 @@ const DEFAULT_CONFIG = {
   expiryMode: "none" as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
   expiryValue: null as number | null,
   promotions: [] as unknown[],
+  naming: DEFAULT_NAMING,
 };
 
 function formatSettings(row: typeof loyaltySettingsTable.$inferSelect) {
@@ -42,6 +52,7 @@ function formatSettings(row: typeof loyaltySettingsTable.$inferSelect) {
     expiryMode:             (cfg.expiryMode as typeof DEFAULT_CONFIG.expiryMode) ?? DEFAULT_CONFIG.expiryMode,
     expiryValue:            (cfg.expiryValue as number | null)     ?? DEFAULT_CONFIG.expiryValue,
     promotions:             (cfg.promotions as unknown[])          ?? DEFAULT_CONFIG.promotions,
+    naming:                 { ...DEFAULT_NAMING, ...((cfg.naming as Partial<typeof DEFAULT_NAMING>) ?? {}) },
   };
 }
 

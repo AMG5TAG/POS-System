@@ -1487,7 +1487,15 @@ export const GetLoyaltySettingsResponse = zod.object({
   "minSpend": zod.number().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish()
-})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).'),
+  "naming": zod.object({
+  "programName": zod.string().optional().describe('Shown on receipts and customer screens. Blank uses the default program type label.'),
+  "cashbackUnit": zod.string().optional(),
+  "pointsUnit": zod.string().optional(),
+  "stampUnit": zod.string().optional(),
+  "tieredUnit": zod.string().optional(),
+  "customUnit": zod.string().optional()
+}).optional().describe('Custom names for the program and its reward units. Synced across all staff devices.')
 })
 
 
@@ -1529,7 +1537,15 @@ export const UpdateLoyaltySettingsBody = zod.object({
   "minSpend": zod.number().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish()
-})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).'),
+  "naming": zod.object({
+  "programName": zod.string().optional().describe('Shown on receipts and customer screens. Blank uses the default program type label.'),
+  "cashbackUnit": zod.string().optional(),
+  "pointsUnit": zod.string().optional(),
+  "stampUnit": zod.string().optional(),
+  "tieredUnit": zod.string().optional(),
+  "customUnit": zod.string().optional()
+}).optional()
 })
 
 export const UpdateLoyaltySettingsResponse = zod.object({
@@ -1567,7 +1583,15 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "minSpend": zod.number().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish()
-})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).')
+})).optional().describe('Active loyalty promotions (Double Points, Category Bonuses, etc.).'),
+  "naming": zod.object({
+  "programName": zod.string().optional().describe('Shown on receipts and customer screens. Blank uses the default program type label.'),
+  "cashbackUnit": zod.string().optional(),
+  "pointsUnit": zod.string().optional(),
+  "stampUnit": zod.string().optional(),
+  "tieredUnit": zod.string().optional(),
+  "customUnit": zod.string().optional()
+}).optional().describe('Custom names for the program and its reward units. Synced across all staff devices.')
 })
 
 

@@ -249,7 +249,12 @@ router.get("/portal/:token", async (req, res): Promise<void> => {
     totalSpent: parseFloat(customer.totalSpent),
     visitCount: customer.visitCount,
     merchant: { businessName: merchant?.businessName ?? "Our Store", logoUrl: merchant?.logoUrl ?? null },
-    loyalty: { programType: loyalty?.programType ?? "cashback", isEnabled: loyalty?.isEnabled === "true" },
+    loyalty: {
+      programType: loyalty?.programType ?? "cashback",
+      // Default to enabled when no settings row exists yet (matches
+      // /loyalty/settings default behaviour returned by the management UI).
+      isEnabled: loyalty ? loyalty.isEnabled === "true" : true,
+    },
   });
 });
 

@@ -201,10 +201,46 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
 
-  // Loyalty payment invariants — enforced server-side, not just in the UI.
-  // Use ceil so a fractional total like $10.99 requires 11 points, never 10.
-  const requiredLoyaltyPoints = Math.max(0, Math.ceil(total));
+  // Loyalty redemption — enforced server-side, not just in the UI.
+  // The conversion from "balance units" to "dollars covered" depends on the
+  // program type:
+  //   - cashback / tiered / custom: balance is stored in dollars (1 unit = $1)
+  //   - points: balance is points; redemption rate = `dollarPerPoint` from config
+  //   - stamp: redemption disabled (stamps redeem out-of-band as a reward)
+  // We fetch the loyalty settings here once and reuse for the earning block.
+  const [loyaltyRow] = await db
+    .select({
+      programType: loyaltySettingsTable.programType,
+      isEnabled:   loyaltySettingsTable.isEnabled,
+      config:      loyaltySettingsTable.config,
+    })
+    .from(loyaltySettingsTable)
+    .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+  const programType = loyaltyRow?.programType ?? "cashback";
+  const loyaltyConfig = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
+  // No row → default to enabled (matches GET /loyalty/settings default behaviour)
+  const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
+
+  // requiredLoyaltyPoints = how many BALANCE UNITS are needed to cover `total`.
+  // Use ceil so the customer never under-pays the sale.
+  let requiredLoyaltyPoints = 0;
+  if (programType === "points") {
+    const dpp = Math.max(0.000001, (loyaltyConfig.dollarPerPoint as number) ?? 0.01);
+    requiredLoyaltyPoints = Math.max(0, Math.ceil(total / dpp));
+  } else {
+    // monetary balance (cashback/tiered/custom): 1 unit = $1
+    requiredLoyaltyPoints = Math.max(0, Math.ceil(total));
+  }
+
   if (paymentMethod === "loyalty") {
+    if (!programOn) {
+      res.status(400).json({ error: "Loyalty program is disabled" });
+      return;
+    }
+    if (programType === "stamp") {
+      res.status(400).json({ error: "Stamp programs cannot be redeemed at checkout" });
+      return;
+    }
     if (!scopedCustomer) {
       res.status(400).json({ error: "Loyalty payments require a customer" });
       return;
@@ -219,34 +255,43 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // record matches what the customer balance is credited with. Never trust
   // the client value blindly.
   //
-  // IMPORTANT: When no loyalty_settings row exists for a merchant the GET
-  // endpoint returns default settings with isEnabled=true. The transaction
-  // handler must mirror that same default — absence of a row means the
-  // programme is ON by default, not off.
+  // Earned units depend on program type:
+  //   - cashback/tiered/custom: dollars (capped at sale total)
+  //   - points: integer points (pointsPerDollar × eligible spend)
+  //   - stamp: 1 stamp per visit (no per-item math)
+  //
+  // Earning is suppressed when the customer pays with loyalty, and when
+  // the customer's group is in the excluded list.
   let sanitizedEarned = 0;
-  if (scopedCustomer && paymentMethod !== "loyalty" && loyaltyEarned != null) {
-    const [loyaltyRow] = await db
-      .select({
-        programType: loyaltySettingsTable.programType,
-        isEnabled: loyaltySettingsTable.isEnabled,
-        config: loyaltySettingsTable.config,
-      })
-      .from(loyaltySettingsTable)
-      .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
-    const programType = loyaltyRow?.programType ?? "cashback";
-    const isMonetary = programType === "cashback" || programType === "tiered" || programType === "custom";
-    // No row → default to enabled (matches GET /loyalty/settings default behaviour)
-    const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
-    if (programOn && isMonetary) {
+  if (scopedCustomer && paymentMethod !== "loyalty" && programOn) {
+    const excluded = ((loyaltyConfig.excludedCustomerGroups as string[]) ?? []).map((g) => g.toLowerCase());
+    const groupName = (scopedCustomer.customerGroup ?? "").toLowerCase();
+    const customerExcluded = !!groupName && excluded.includes(groupName);
+
+    if (!customerExcluded) {
+      // Eligible spend = sale total minus any line items whose product is
+      // flagged excludeFromLoyalty. Matches POS preview logic so the credited
+      // amount equals what the cashier saw on screen.
+      const eligibleTotal = round2(computedItems.reduce((s, it) => {
+        const p = productMap.get(it.productId);
+        if (p?.excludeFromLoyalty === "true") return s;
+        return s + it.totalPrice;
+      }, 0));
+
       let baseEarned = 0;
       switch (programType) {
         case "cashback": {
-          const rate = (loyaltyRow?.config as Record<string, unknown>)?.cashbackRate ?? 0.01;
-          baseEarned = total * (rate as number);
+          const rate = (loyaltyConfig.cashbackRate as number) ?? 0.01;
+          baseEarned = eligibleTotal * rate;
+          break;
+        }
+        case "points": {
+          const ppd = (loyaltyConfig.pointsPerDollar as number) ?? 1;
+          baseEarned = eligibleTotal * ppd;
           break;
         }
         case "tiered": {
-          const tiers = ((loyaltyRow?.config as Record<string, unknown>)?.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number; name: string }>;
+          const tiers = (loyaltyConfig.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number; name: string }>;
           const spent = parseFloat(scopedCustomer.totalSpent);
           const pts = scopedCustomer.loyaltyPoints ?? 0;
           const sorted = [...tiers].sort((a, b) =>
@@ -258,20 +303,24 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           }) ?? sorted[sorted.length - 1];
           const rate = tier?.rate ?? 0.01;
           const bonusMult = tier?.bonusMultiplier ?? 1;
-          baseEarned = total * rate * bonusMult;
+          baseEarned = eligibleTotal * rate * bonusMult;
+          break;
+        }
+        case "stamp": {
+          // 1 stamp per sale (only if at least one eligible item was bought).
+          baseEarned = eligibleTotal > 0 ? 1 : 0;
           break;
         }
         case "custom": {
-          const rate = (loyaltyRow?.config as Record<string, unknown>)?.customValue ?? 0.01;
-          baseEarned = total * (rate as number);
+          const rate = (loyaltyConfig.customValue as number) ?? 0.01;
+          baseEarned = eligibleTotal * rate;
           break;
         }
-        default: {
-          baseEarned = loyaltyEarned ?? 0;
-        }
+        default: baseEarned = 0;
       }
+
       // Apply active promotion multipliers / bonuses
-      const promotions = ((loyaltyRow?.config as Record<string, unknown>)?.promotions ?? []) as Array<{
+      const promotions = (loyaltyConfig.promotions ?? []) as Array<{
         id: string; name: string; type: string; active: boolean;
         multiplier?: number; bonusAmount?: number;
         categoryId?: number | null; productId?: number | null;
@@ -310,9 +359,17 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         ? Math.max(...activePromos.map((p) => p.bonusAmount ?? 0))
         : 0;
       const finalEarned = baseEarned * bestMultiplier + bestBonus;
-      sanitizedEarned = Math.max(0, Math.min(Math.floor(finalEarned), Math.floor(total)));
+
+      // Cap monetary earnings at the sale total so cashback never exceeds
+      // the amount paid. Points and stamps have no such cap (they're a count).
+      if (programType === "cashback" || programType === "tiered" || programType === "custom") {
+        sanitizedEarned = Math.max(0, Math.min(Math.floor(finalEarned), Math.floor(total)));
+      } else {
+        sanitizedEarned = Math.max(0, Math.floor(finalEarned));
+      }
     }
   }
+  void loyaltyEarned; // client value is purely informational — server is authoritative
 
   const receiptNumber = providedReceiptNumber || generateReceiptNumber();
 

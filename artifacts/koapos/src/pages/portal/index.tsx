@@ -113,8 +113,11 @@ function LoyaltyTab({ data, token, businessUsername }: { data: PortalData; token
   const [walletLoading, setWalletLoading] = useState<"apple" | "google" | null>(null);
   const qrRef = useRef<SVGSVGElement>(null);
 
-  const isPoints = data.loyalty.programType === "points";
-  const balanceLabel = isPoints ? `${data.loyaltyPoints} pts` : `$${data.loyaltyPoints.toFixed(2)}`;
+  const programType = data.loyalty.programType;
+  const balanceLabel =
+    programType === "points" ? `${data.loyaltyPoints} pts`
+    : programType === "stamp" ? `${data.loyaltyPoints} ${data.loyaltyPoints === 1 ? "stamp" : "stamps"}`
+    : `$${data.loyaltyPoints.toFixed(2)}`;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(portalUrl);

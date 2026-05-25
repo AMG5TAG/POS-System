@@ -3669,6 +3669,19 @@ components:
           items:
             $ref: "#/components/schemas/LoyaltyPromotion"
           description: Active loyalty promotions (Double Points, Category Bonuses, etc.).
+        naming:
+          $ref: "#/components/schemas/LoyaltyNaming"
+          description: Custom names for the program and its reward units. Synced across all staff devices.
+
+    LoyaltyNaming:
+      type: object
+      properties:
+        programName:  { type: string, description: "Shown on receipts and customer screens. Blank uses the default program type label." }
+        cashbackUnit: { type: string }
+        pointsUnit:   { type: string }
+        stampUnit:    { type: string }
+        tieredUnit:   { type: string }
+        customUnit:   { type: string }
 
     LoyaltySettingsInput:
       type: object
@@ -3713,6 +3726,8 @@ components:
           items:
             $ref: "#/components/schemas/LoyaltyPromotion"
           description: Active loyalty promotions (Double Points, Category Bonuses, etc.).
+        naming:
+          $ref: "#/components/schemas/LoyaltyNaming"
 
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:

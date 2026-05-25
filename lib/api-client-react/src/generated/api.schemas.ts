@@ -1012,6 +1012,16 @@ export const LoyaltySettingsExpiryMode = {
   fixedDate: 'fixedDate',
 } as const;
 
+export interface LoyaltyNaming {
+  /** Shown on receipts and customer screens. Blank uses the default program type label. */
+  programName?: string;
+  cashbackUnit?: string;
+  pointsUnit?: string;
+  stampUnit?: string;
+  tieredUnit?: string;
+  customUnit?: string;
+}
+
 export interface LoyaltySettings {
   programType: LoyaltySettingsProgramType;
   isEnabled: boolean;
@@ -1033,6 +1043,8 @@ export interface LoyaltySettings {
   expiryValue?: number | null;
   /** Active loyalty promotions (Double Points, Category Bonuses, etc.). */
   promotions?: LoyaltyPromotion[];
+  /** Custom names for the program and its reward units. Synced across all staff devices. */
+  naming?: LoyaltyNaming;
 }
 
 export type LoyaltySettingsInputProgramType = typeof LoyaltySettingsInputProgramType[keyof typeof LoyaltySettingsInputProgramType];
@@ -1081,6 +1093,7 @@ export interface LoyaltySettingsInput {
   expiryValue?: number | null;
   /** Active loyalty promotions (Double Points, Category Bonuses, etc.). */
   promotions?: LoyaltyPromotion[];
+  naming?: LoyaltyNaming;
 }
 
 export interface CashDrawerEntry {

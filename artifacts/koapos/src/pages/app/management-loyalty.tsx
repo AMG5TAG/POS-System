@@ -20,11 +20,13 @@ import {
   Plus, Trash2, Info, Pen, Clock, Zap, Tag, CalendarDays,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-/* ─── Loyalty naming (localStorage) ─────────────────────────────────────── */
-
-const LOYALTY_NAMING_KEY = "koapos_loyalty_naming";
+/* ─── Loyalty naming (synced via API → loyalty_settings.config.naming) ──── */
 
 interface LoyaltyNaming {
   programName:      string;
@@ -43,17 +45,6 @@ const NAMING_DEFAULTS: LoyaltyNaming = {
   tieredUnit:   "Credits",
   customUnit:   "Rewards",
 };
-
-function loadLoyaltyNaming(): LoyaltyNaming {
-  try {
-    const raw = localStorage.getItem(LOYALTY_NAMING_KEY);
-    return raw ? { ...NAMING_DEFAULTS, ...JSON.parse(raw) } : NAMING_DEFAULTS;
-  } catch { return NAMING_DEFAULTS; }
-}
-
-function saveLoyaltyNaming(s: LoyaltyNaming) {
-  localStorage.setItem(LOYALTY_NAMING_KEY, JSON.stringify(s));
-}
 
 const LOYALTY_TABS = [
   { href: "#program-type",     label: "Program Type" },
@@ -399,13 +390,13 @@ function toForm(s: LoyaltySettings) {
     expiryMode:             (s.expiryMode ?? "none") as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
     expiryValue:            s.expiryValue ?? null,
     promotions:             (s.promotions ?? []) as LoyaltyPromotion[],
+    naming:                 { ...NAMING_DEFAULTS, ...(s.naming ?? {}) } as LoyaltyNaming,
   };
 }
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
-/* Export so other pages can read the naming */
-export { loadLoyaltyNaming, type LoyaltyNaming };
+export type { LoyaltyNaming };
 
 export default function ManagementLoyaltyPage() {
   const queryClient = useQueryClient();
@@ -416,16 +407,6 @@ export default function ManagementLoyaltyPage() {
   const { data: productsData } = useListProducts({ limit: 500 });
   const categories = categoriesData ?? [];
   const products = productsData?.items ?? [];
-
-  const [naming, setNaming] = useState<LoyaltyNaming>(() => loadLoyaltyNaming());
-
-  const setNamingField = <K extends keyof LoyaltyNaming>(key: K, value: string) =>
-    setNaming((prev) => ({ ...prev, [key]: value }));
-
-  const handleSaveNaming = () => {
-    saveLoyaltyNaming(naming);
-    toast.success("Loyalty program naming saved");
-  };
 
   const [form, setForm] = useState({
     programType:            "cashback" as ProgramType,
@@ -446,7 +427,14 @@ export default function ManagementLoyaltyPage() {
     expiryMode:             "none" as "none" | "daysSinceLastPurchase" | "fixedDays" | "endOfYear" | "fixedDate",
     expiryValue:            null as number | null,
     promotions:             [] as LoyaltyPromotion[],
+    naming:                 NAMING_DEFAULTS,
   });
+
+  const naming = form.naming;
+  const setNamingField = <K extends keyof LoyaltyNaming>(key: K, value: string) =>
+    setForm((prev) => ({ ...prev, naming: { ...prev.naming, [key]: value } }));
+
+  const [typeChangeConfirmOpen, setTypeChangeConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (settings) setForm(toForm(settings));
@@ -472,7 +460,7 @@ export default function ManagementLoyaltyPage() {
   const updateTier = (i: number, key: keyof Tier, value: string | number | boolean) =>
     set("tiers", form.tiers.map((t, idx) => idx === i ? { ...t, [key]: value } : t));
 
-  const handleSave = () => {
+  const doSave = () => {
     updateMutation.mutate({
       data: {
         programType:            form.programType,
@@ -489,6 +477,7 @@ export default function ManagementLoyaltyPage() {
         expiryMode:             form.expiryMode,
         expiryValue:            form.expiryValue,
         promotions:             form.promotions,
+        naming:                 form.naming,
       },
     }, {
       onSuccess: () => {
@@ -497,6 +486,18 @@ export default function ManagementLoyaltyPage() {
       },
       onError: () => toast.error("Failed to save loyalty settings"),
     });
+  };
+
+  /* Switching program types changes the meaning of customer.loyaltyPoints
+     (e.g. points → cashback: 100 "points" become $100 store credit). Warn
+     the merchant before persisting. */
+  const handleSave = () => {
+    const originalType = settings?.programType;
+    if (originalType && originalType !== form.programType) {
+      setTypeChangeConfirmOpen(true);
+      return;
+    }
+    doSave();
   };
 
   if (isLoading) {
@@ -850,9 +851,7 @@ export default function ManagementLoyaltyPage() {
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveNaming}>Save Naming</Button>
-            </div>
+            <p className="text-xs text-muted-foreground italic">Saved together with the rest of your loyalty settings using the Save Changes button at the top.</p>
           </CardContent>
         </Card>
 
@@ -1035,6 +1034,28 @@ export default function ManagementLoyaltyPage() {
         </Card>
         </div>{/* end 2-col grid */}
       </div>
+
+      {/* Program-type change warning */}
+      <AlertDialog open={typeChangeConfirmOpen} onOpenChange={setTypeChangeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change program type?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You're switching from <strong>{settings?.programType}</strong> to <strong>{form.programType}</strong>.
+              <br /><br />
+              Customer loyalty balances will keep their numeric value, but the <strong>unit</strong> changes
+              (e.g. dollars vs points vs stamps). For example, a customer with 100 points will now show as
+              100 of whatever the new unit is. Please notify your customers and update signage before saving.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setTypeChangeConfirmOpen(false); doSave(); }}>
+              Yes, change program type
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

@@ -318,9 +318,18 @@ function CustomerDetailInner({
   const requestUploadMutation = useRequestUploadUrl();
   const loyaltyUpdateMutation = useUpdateCustomer();
 
-  const isPointsProgram = loyaltySettings?.programType === "points";
-  const loyaltyLabel    = isPointsProgram ? "Loyalty Points" : "Loyalty Dollars";
-  const loyaltyIcon     = isPointsProgram ? "⭐" : "$";
+  const programType     = loyaltySettings?.programType ?? "cashback";
+  const isPointsProgram = programType === "points";
+  const isStampProgram  = programType === "stamp";
+  const loyaltyLabel    =
+    isPointsProgram ? "Loyalty Points"
+    : isStampProgram ? "Loyalty Stamps"
+    : "Loyalty Dollars";
+  const loyaltyIcon     = isPointsProgram ? "⭐" : isStampProgram ? "🎟" : "$";
+  const formatBalance = (n: number) =>
+    isPointsProgram ? `${n} pts`
+    : isStampProgram ? `${n} ${n === 1 ? "stamp" : "stamps"}`
+    : `$${n}`;
 
   const handleLoyaltySave = () => {
     const n = parseFloat(loyaltyAmount);
@@ -565,7 +574,7 @@ function CustomerDetailInner({
                 <p className="text-sm font-semibold">{loyaltyLabel}</p>
               </div>
               <span className="text-xl font-bold tabular-nums text-amber-600">
-                {isPointsProgram ? `${localLoyaltyPts} pts` : `$${localLoyaltyPts}`}
+                {formatBalance(localLoyaltyPts)}
               </span>
             </div>
 
@@ -618,9 +627,9 @@ function CustomerDetailInner({
             {loyaltyAmount && !isNaN(parseFloat(loyaltyAmount)) && (
               <p className="text-xs text-muted-foreground">
                 {loyaltyMode === "add"
-                  ? `Balance will become ${isPointsProgram ? `${localLoyaltyPts + Math.round(parseFloat(loyaltyAmount))} pts` : `$${localLoyaltyPts + Math.round(parseFloat(loyaltyAmount))}`}`
+                  ? `Balance will become ${formatBalance(localLoyaltyPts + Math.round(parseFloat(loyaltyAmount)))}`
                   : loyaltyMode === "deduct"
-                  ? `Balance will become ${isPointsProgram ? `${Math.max(0, localLoyaltyPts - Math.round(parseFloat(loyaltyAmount)))} pts` : `$${Math.max(0, localLoyaltyPts - Math.round(parseFloat(loyaltyAmount)))}`}`
+                  ? `Balance will become ${formatBalance(Math.max(0, localLoyaltyPts - Math.round(parseFloat(loyaltyAmount))))}`
                   : `Balance will be set to ${isPointsProgram ? `${Math.round(parseFloat(loyaltyAmount))} pts` : `$${Math.round(parseFloat(loyaltyAmount))}`}`
                 }
               </p>
