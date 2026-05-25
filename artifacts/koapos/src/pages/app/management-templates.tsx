@@ -75,7 +75,7 @@ export interface TplOpts {
 export const DEFAULT_OPTS: TplOpts = {
   headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
   customGreeting: "Hi {{customer.first_name}},", customSignOff: "— The team at {{business.name}}",
-  paymentTerms: "Payment due within 30 days.", invoiceNotes: "",
+  paymentTerms: "", invoiceNotes: "",
   customMessage: "", subjectLine: "Your receipt from {{business.name}} — {{transaction.number}}",
   messageText: "Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Total: {{transaction.total}} on {{transaction.date}}. {{business.website}}",
   bankDetails: "",
@@ -577,7 +577,7 @@ export const ACTIVE_STORAGE_KEY = "koapos_active_templates";
 interface PreviewProps {
   templateId: string;
   businessName: string; abn: string; tagline: string; website: string;
-  email: string; address: string; brandColor: string;
+  email: string; address: string; brandColor: string; logo?: string;
   opts: TplOpts;
 }
 
@@ -655,7 +655,7 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, logo, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
@@ -708,7 +708,10 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
     return (
       <div className="text-xs text-gray-800 font-sans">
         <div className="text-center mb-2">
-          {opts.showLogo && <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="Logo" className="w-10 h-10 rounded-full object-contain mx-auto mb-1" />
+            : <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          )}
           <p className="font-bold text-base">{businessName}</p>
           {opts.showTagline && <p className="text-gray-400 text-[10px] italic">Quality you can trust</p>}
           {opts.showAbn && abn && <p className="text-gray-400 text-[9px]">ABN {abn}</p>}
@@ -736,7 +739,10 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   return (
     <div className="text-xs text-gray-800 font-sans">
       <div className="text-center border-b pb-2 mb-2">
-        {opts.showLogo && <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />}
+        {opts.showLogo && (logo
+          ? <img src={logo} alt="Logo" className="w-10 h-8 object-contain mx-auto mb-1" />
+          : <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />
+        )}
         <p className="font-bold text-sm uppercase tracking-wide">{businessName}</p>
         {opts.showTagline && <p className="text-[9px] text-gray-500 italic">Quality you can trust</p>}
         {opts.showAbn && abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
@@ -763,7 +769,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   );
 }
 
-function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, opts }: PreviewProps) {
+function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, logo, opts }: PreviewProps) {
   const items = [{ name: "Product Design Services", qty: 3, price: 150 }, { name: "Logo Package", qty: 1, price: 450 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
@@ -905,12 +911,16 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     <div className="text-[10px] text-gray-800">
       <div className="flex justify-between items-start border-b pb-2 mb-2">
         <div>
-          {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="Logo" className="max-h-8 max-w-[80px] object-contain mb-1" />
+            : <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />
+          )}
           <p className="font-bold text-xs">{businessName}</p>
           {opts.showTagline && <p className="text-[9px] text-gray-400 italic">Quality you can trust</p>}
           {opts.showAbn    && abn     && <p className="text-gray-500">ABN {abn}</p>}
           {address && <p className="text-gray-500">{address}</p>}
           {email   && <p className="text-gray-500">{email}</p>}
+          {opts.showWebsite && website && <p className="text-gray-400">{website}</p>}
         </div>
         <div className="text-right">
           <p className="font-bold text-sm" style={{ color: brandColor }}>INVOICE</p>
@@ -942,7 +952,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   );
 }
 
-function A4ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, opts }: PreviewProps) {
+function A4ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, opts }: PreviewProps) {
   const items = [{ name: "Flat White ×2", price: 8.00 }, { name: "Banana Bread ×1", price: 6.50 }];
   const total = items.reduce((s, i) => s + i.price, 0);
   const thankYou = opts.thankYouMsg || "Thank you so much!";
@@ -953,7 +963,10 @@ function A4ReceiptPreview({ templateId, businessName, abn, website, email, brand
     return (
       <div className="text-[10px] text-gray-800">
         <div className="text-center mb-3 p-2 rounded-t" style={{ background: `${brandColor}18` }}>
-          {opts.showLogo && <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="Logo" className="w-10 h-10 rounded-full object-contain mx-auto mb-1" />
+            : <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          )}
           <p className="font-bold text-sm">{businessName}</p>
           {opts.showTagline && tagline && <p className="text-[10px] text-gray-500 italic">{tagline}</p>}
           {opts.showAbn && abn && <p className="text-[10px] text-gray-400">ABN {abn}</p>}
@@ -1003,7 +1016,7 @@ function A4ReceiptPreview({ templateId, businessName, abn, website, email, brand
   );
 }
 
-function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, opts }: PreviewProps) {
+function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, logo, opts }: PreviewProps) {
   const greeting = opts.customGreeting || "Hi Sarah,";
   const signOff  = opts.customSignOff  || `— The team at ${businessName}`;
   const footer   = opts.footerText;
@@ -1028,7 +1041,10 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
     return (
       <div className="text-[10px] text-gray-800">
         <div className="p-2 rounded-t text-center mb-2" style={{ background: `${brandColor}22` }}>
-          {opts.showLogo && <div className="w-7 h-7 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>}
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="Logo" className="w-9 h-9 rounded-full object-contain mx-auto mb-1" />
+            : <div className="w-7 h-7 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
+          )}
           <p className="font-bold">{businessName}</p>
           {tagline && <p className="text-gray-500 text-[9px] italic">{tagline}</p>}
         </div>
@@ -1048,7 +1064,10 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
   return (
     <div className="text-[10px] text-gray-800">
       <div className="p-2 text-white mb-2 flex items-center gap-2 rounded-t" style={{ background: brandColor }}>
-        {opts.showLogo && <div className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>}
+        {opts.showLogo && (logo
+          ? <img src={logo} alt="Logo" className="w-7 h-7 object-contain rounded" />
+          : <div className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>
+        )}
         <div><p className="font-bold text-xs">{businessName}</p>{opts.showAbn && abn && <p className="opacity-70 text-[9px]">ABN {abn}</p>}</div>
         <span className="ml-auto opacity-70">Receipt</span>
       </div>
@@ -1090,7 +1109,7 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */
 
-function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, opts }: PreviewProps) {
+function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
   const jobFontSize = opts.jobNoFontSize?.toLowerCase();
@@ -1100,7 +1119,10 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
       {/* Header */}
       <div className="flex justify-between items-start border-b-2 border-gray-800 pb-2 mb-2">
         <div className="space-y-0.5">
-          {opts.showLogo && <div className="w-5 h-5 rounded mb-0.5" style={{ background: brandColor }} />}
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="Logo" className="max-h-7 max-w-[70px] object-contain mb-0.5" />
+            : <div className="w-5 h-5 rounded mb-0.5" style={{ background: brandColor }} />
+          )}
           <p className="font-bold text-[11px]">{businessName}</p>
           {opts.showAbn && abn && <p className="text-gray-400">ABN {abn}</p>}
           {address && <p className="text-gray-400">{address}</p>}
@@ -1238,8 +1260,14 @@ export default function ManagementTemplatesPage() {
     tagline:  profile.tagline  || "",
     website:  profile.website  || "www.yourbusiness.com.au",
     email:    profile.contactEmail || merchant?.email || "",
-    address:  [profile.state, profile.postcode].filter(Boolean).join(" "),
-    brandColor, opts,
+    address:  [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      profile.state, profile.postcode,
+    ].filter(Boolean).join(", "),
+    brandColor,
+    logo: profile.logo || "",
+    opts,
   };
 
   const quickCodeGroups = buildQuickCodeGroups(

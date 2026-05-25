@@ -417,7 +417,11 @@ export default function POSInvoicesPage() {
     const bizName     = merchant?.businessName ?? "Your Business";
     const abn         = profile.abn ?? "";
     const website     = profile.website ?? "";
-    const address     = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const address     = [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      profile.state, profile.postcode,
+    ].filter(Boolean).join(", ");
     const email       = profile.contactEmail ?? "";
     const tagline     = profile.tagline ?? "";
     const brandColor  = profile.brandColors?.[0] ?? "#4f46e5";
@@ -443,7 +447,6 @@ export default function POSInvoicesPage() {
         <td>${l.description}</td>
         <td style="text-align:center">${l.quantity}</td>
         <td style="text-align:right">$${l.unitPrice.toFixed(2)}</td>
-        <td style="text-align:right">$${(l.quantity * l.unitPrice * (l.taxRate / 100)).toFixed(2)}</td>
         <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
       </tr>`).join("");
 
@@ -531,6 +534,7 @@ export default function POSInvoicesPage() {
         .payment-methods{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
         .pm-badge{border:1px solid #ddd;border-radius:4px;padding:3px 9px;font-size:11px;color:#555;background:#fff;white-space:nowrap}
         .bank-details{margin-top:8px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#555;background:#fff;border:1px solid #eee;border-radius:4px;padding:8px 12px}
+        .loyalty-block{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;color:#065f46;background:#ecfdf5;border-radius:6px;margin-top:8px;margin-bottom:8px}
         .socials{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:11px;color:#aaa}
         @media print{body{padding:20px}}
       </style>
@@ -558,14 +562,12 @@ export default function POSInvoicesPage() {
         </div>
       </div>
       ${customerQrRow}
-      ${barcodeBlock}
       <table>
         <thead><tr>
           <th>Description</th>
           <th style="text-align:center">Qty</th>
           <th style="text-align:right">Unit Price</th>
-          <th style="text-align:right">Tax</th>
-          <th style="text-align:right">Amount</th>
+          <th style="text-align:right">Total</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
@@ -574,16 +576,13 @@ export default function POSInvoicesPage() {
         ${opts.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
         <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
       </div>
+      ${opts.showLoyaltyEarned ? `<div class="loyalty-block"><span>&#9733; Loyalty Earned</span><span>+${Math.round(inv.total)} pts</span></div>` : ""}
       ${paymentBlock}
-      ${termsText || notesText ? `
-        <div class="terms">
-          <div class="terms-title">Terms</div>
-          ${termsText ? `<div>${termsText}</div>` : ""}
-          ${notesText ? `<div style="margin-top:8px">${notesText}</div>` : ""}
-        </div>` : ""}
+      ${termsText ? `<div class="terms"><div class="terms-title">Payment Terms</div><div>${termsText}</div>${notesText ? `<div style="margin-top:8px;font-style:italic">${notesText}</div>` : ""}</div>` : notesText ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${notesText}</div>` : ""}
       ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
       ${socialsBlock}
       ${footerText ? `<div class="footer">${footerText}</div>` : ""}
+      ${barcodeBlock}
     </body></html>`);
     w.document.close();
     w.focus();
@@ -595,7 +594,11 @@ export default function POSInvoicesPage() {
     const bizName   = merchant?.businessName ?? "Your Business";
     const abn       = profile.abn ?? "";
     const website   = profile.website ?? "";
-    const address   = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const address   = [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      profile.state, profile.postcode,
+    ].filter(Boolean).join(", ");
     const email     = profile.contactEmail ?? "";
     const tagline   = profile.tagline ?? "";
     const rawColor  = profile.brandColors?.[0] ?? "#4f46e5";
@@ -733,30 +736,18 @@ export default function POSInvoicesPage() {
       y += custH + (qrSize > 0 ? Math.max(0, qrSize - custH + 8) : 6);
     }
 
-    /* ── Barcode ── */
-    if (opts.showBarcode) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(130, 130, 130);
-      doc.text(inv.invoiceNumber, W / 2, y + 4, { align: "center", charSpace: 3 });
-      doc.setFontSize(7);
-      doc.text("INVOICE BARCODE", W / 2, y + 8.5, { align: "center" });
-      y += 14;
-    }
-
     /* ── Line items table ── */
-    const COL = { desc: 76, qty: 18, unit: 30, tax: 22, amt: 24 };
+    const COL = { desc: 98, qty: 18, unit: 32, amt: 22 };
     doc.setFillColor(245, 245, 245);
     doc.rect(ML, y - 3, CW, 8, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(80, 80, 80);
     let cx = ML + 2;
-    doc.text("DESCRIPTION", cx, y + 2);        cx += COL.desc;
-    doc.text("QTY",  cx + COL.qty / 2, y + 2, { align: "center" }); cx += COL.qty;
-    doc.text("UNIT PRICE", cx + COL.unit, y + 2, { align: "right" }); cx += COL.unit;
-    doc.text("TAX",  cx + COL.tax,  y + 2, { align: "right" }); cx += COL.tax;
-    doc.text("AMOUNT", cx + COL.amt, y + 2, { align: "right" });
+    doc.text("DESCRIPTION", cx, y + 2);                                        cx += COL.desc;
+    doc.text("QTY",    cx + COL.qty  / 2, y + 2, { align: "center" });         cx += COL.qty;
+    doc.text("UNIT PRICE", cx + COL.unit, y + 2, { align: "right" });           cx += COL.unit;
+    doc.text("TOTAL", cx + COL.amt,       y + 2, { align: "right" });
     doc.setDrawColor(210, 210, 210);
     doc.setLineWidth(0.35);
     doc.line(ML, y + 4, W - MR, y + 4);
@@ -771,13 +762,11 @@ export default function POSInvoicesPage() {
       }
       cx = ML + 2;
       doc.setTextColor(30, 30, 30);
-      const desc = item.description.length > 44 ? item.description.slice(0, 42) + "…" : item.description;
-      doc.text(desc, cx, y + 1);                               cx += COL.desc;
+      const desc = item.description.length > 54 ? item.description.slice(0, 52) + "…" : item.description;
+      doc.text(desc, cx, y + 1);                                                cx += COL.desc;
       doc.setTextColor(80, 80, 80);
       doc.text(String(item.quantity), cx + COL.qty / 2, y + 1, { align: "center" }); cx += COL.qty;
       doc.text(`$${item.unitPrice.toFixed(2)}`, cx + COL.unit, y + 1, { align: "right" }); cx += COL.unit;
-      const tax = item.quantity * item.unitPrice * (item.taxRate / 100);
-      doc.text(`$${tax.toFixed(2)}`, cx + COL.tax, y + 1, { align: "right" }); cx += COL.tax;
       doc.setTextColor(30, 30, 30);
       doc.text(`$${(item.quantity * item.unitPrice).toFixed(2)}`, cx + COL.amt, y + 1, { align: "right" });
       doc.setDrawColor(235, 235, 235);
@@ -804,7 +793,23 @@ export default function POSInvoicesPage() {
     doc.setFontSize(12);
     doc.setTextColor(30, 30, 30);
     doc.text("Total Due (AUD)", totX + 2, y); doc.text(`$${inv.total.toFixed(2)}`, W - MR, y, { align: "right" });
-    y += 12;
+    y += 10;
+
+    /* ── Loyalty Earned ── */
+    if (opts.showLoyaltyEarned) {
+      doc.setFillColor(236, 253, 245);
+      doc.setDrawColor(167, 243, 208);
+      doc.setLineWidth(0.3);
+      doc.rect(ML, y, CW, 9, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(6, 95, 70);
+      doc.text("★ Loyalty Earned", ML + 4, y + 5.5);
+      doc.text(`+${Math.round(inv.total)} pts`, W - MR - 2, y + 5.5, { align: "right" });
+      y += 13;
+    } else {
+      y += 2;
+    }
 
     /* ── Payment block ── */
     if (opts.showPaymentMethods || opts.bankDetails) {
@@ -914,6 +919,16 @@ export default function POSInvoicesPage() {
       doc.setFontSize(9);
       doc.setTextColor(170, 170, 170);
       doc.text(footerText, W / 2, 287, { align: "center" });
+    }
+
+    /* ── Barcode (bottom of document) ── */
+    if (opts.showBarcode) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(160, 160, 160);
+      doc.text(inv.invoiceNumber, W / 2, y + 4, { align: "center", charSpace: 3 });
+      doc.setFontSize(7);
+      doc.text("INVOICE BARCODE", W / 2, y + 8.5, { align: "center" });
     }
 
     doc.save(`${inv.invoiceNumber}.pdf`);
