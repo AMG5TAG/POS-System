@@ -919,7 +919,7 @@ export default function POSInvoicesPage() {
                         {inv.status === "sent" && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
                             onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            💵
                           </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
@@ -1110,7 +1110,7 @@ export default function POSInvoicesPage() {
                   {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
                       onClick={() => updateStatus(detailInvoice.id, "paid")}>
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Paid
+                      💵 Mark as Paid
                     </Button>
                   )}
                   {detailInvoice.status === "paid" && (
