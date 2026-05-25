@@ -754,35 +754,23 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           <p className="font-medium">Sarah Johnson</p>
           <p className="text-gray-500">sarah@email.com · (03) 9000 1111</p>
           <p className="text-gray-500">42 Collins St, Melbourne VIC 3000</p>
-          {opts.showCustomerQr && (
-            <div className="flex items-center gap-2 border-t pt-1 mt-1">
-              <QRCodeVisual label="CUS-0042" size={38} />
-              {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
-            </div>
-          )}
         </div>
       ) : (
         <p className="font-medium text-[10px]">Bill To: Demo Client Pty Ltd</p>
       )}
-      {!opts.showAllCustomerDetails && opts.showCustomerQr && (
-        <div className="flex items-center gap-2 mt-1">
-          <QRCodeVisual label="CUS-0042" size={38} />
-          {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
-        </div>
-      )}
     </div>
   );
+
+  const CustomerQrBlock = () => opts.showCustomerQr ? (
+    <div className="text-center shrink-0">
+      <p className="text-[8px] text-gray-400 uppercase tracking-wide mb-1">Customer Profile</p>
+      <QRCodeVisual label="CUS-0042" size={42} />
+    </div>
+  ) : null;
 
   const LoyaltyRow = () => opts.showLoyaltyEarned ? (
     <div className="flex justify-between text-[9px] text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 mt-1">
       <span>★ Loyalty Earned</span><span>+96 pts</span>
-    </div>
-  ) : null;
-
-  const QrBlock = () => opts.showCustomerQr ? (
-    <div className="flex items-center gap-2 border-t pt-1.5 mt-1.5">
-      <QRCodeVisual label="CUS-0042" size={38} />
-      {opts.loyaltyQrText ? <p className="text-[8px] text-gray-400">{opts.loyaltyQrText}</p> : null}
     </div>
   ) : null;
 
@@ -830,7 +818,10 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {opts.showAbn && abn && <p className="text-gray-500">ABN: {abn}</p>}
         <p className="text-gray-500">Date: 18/05/2026 · Due: 01/06/2026</p>
         <Separator />
-        <CustomerBlock />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0"><CustomerBlock /></div>
+          <CustomerQrBlock />
+        </div>
         <Separator />
         {items.map((i) => <div key={i.name} className="flex justify-between"><span className="flex-1">{i.name}</span><span className="w-8 text-right">{i.qty}</span><span className="w-16 text-right">${(i.qty * i.price).toFixed(2)}</span></div>)}
         <Separator />
@@ -860,21 +851,24 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
             <p className="font-medium">{businessName}</p>
             {opts.showAbn && abn && <p className="text-gray-500">ABN {abn}</p>}
           </div>
-          <div>
-            {opts.showAllCustomerDetails ? (
-              <>
-                <p className="text-gray-400">Bill To</p>
-                <p className="font-medium">Sarah Johnson</p>
-                <p className="text-gray-500 text-[9px]">sarah@email.com</p>
-                <p className="text-gray-500 text-[9px]">(03) 9000 1111</p>
-              </>
-            ) : (
-              <>
-                <p className="text-gray-400">Bill To</p>
-                <p className="font-medium">Demo Client</p>
-                <p className="text-gray-500">18/05/2026</p>
-              </>
-            )}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              {opts.showAllCustomerDetails ? (
+                <>
+                  <p className="text-gray-400">Bill To</p>
+                  <p className="font-medium">Sarah Johnson</p>
+                  <p className="text-gray-500 text-[9px]">sarah@email.com</p>
+                  <p className="text-gray-500 text-[9px]">(03) 9000 1111</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-400">Bill To</p>
+                  <p className="font-medium">Demo Client</p>
+                  <p className="text-gray-500">18/05/2026</p>
+                </>
+              )}
+            </div>
+            <CustomerQrBlock />
           </div>
         </div>
         <table className="w-full text-[10px]">
@@ -916,7 +910,10 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
           <p className="text-gray-500">Due: 01/06/2026</p>
         </div>
       </div>
-      <CustomerBlock />
+      <div className="flex items-start justify-between gap-3 mb-1.5">
+        <div className="flex-1 min-w-0"><CustomerBlock /></div>
+        <CustomerQrBlock />
+      </div>
       <table className="w-full text-[10px] mb-1">
         <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-center">Qty</th><th className="text-right">Rate</th><th className="text-right">Total</th></tr></thead>
         <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-center">{i.qty}</td><td className="text-right">${i.price.toFixed(2)}</td><td className="text-right">${(i.qty * i.price).toFixed(2)}</td></tr>)}</tbody>

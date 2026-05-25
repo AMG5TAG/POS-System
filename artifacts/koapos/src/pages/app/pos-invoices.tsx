@@ -502,8 +502,8 @@ export default function POSInvoicesPage() {
     /* QR + barcode block (next to customer or after) */
     const qrBlock = qrDataUrl ? `
       <div style="display:inline-block;text-align:center;margin-left:16px;vertical-align:top;padding-top:4px">
+        <p style="font-size:9px;color:#999;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.6px">Customer Profile</p>
         <img src="${qrDataUrl}" style="width:72px;height:72px">
-        <p style="font-size:9px;color:#aaa;margin:2px 0 0">${opts.loyaltyQrText || "Scan for loyalty"}</p>
       </div>` : "";
 
     const barcodeBlock = opts.showBarcode ? `
