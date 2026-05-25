@@ -28,6 +28,7 @@ import {
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
+  Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -919,7 +920,7 @@ export default function POSInvoicesPage() {
                         {inv.status === "sent" && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
                             onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
-                            💵
+                            <Banknote className="w-4 h-4" />
                           </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
@@ -1110,7 +1111,7 @@ export default function POSInvoicesPage() {
                   {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
                       onClick={() => updateStatus(detailInvoice.id, "paid")}>
-                      💵 Mark as Paid
+                      <Banknote className="w-4 h-4" /> Mark as Paid
                     </Button>
                   )}
                   {detailInvoice.status === "paid" && (
