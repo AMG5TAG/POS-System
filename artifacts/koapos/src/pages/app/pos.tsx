@@ -987,7 +987,7 @@ export default function POSPage() {
         .replace(/{{[^}]+}}/g, "")
     );
 
-    const thankYou  = resolveStr(opts.thankYouMsg || "Thank you for your purchase!");
+    const thankYou  = resolveStr(opts.thankYouMsg || "");
     const footer    = opts.footerText ? resolveStr(opts.footerText) : "";
     const header    = opts.headerText ? resolveStr(opts.headerText) : "";
     const escReceiptNum = esc(receiptNum);

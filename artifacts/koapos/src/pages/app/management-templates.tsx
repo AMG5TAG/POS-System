@@ -74,11 +74,11 @@ export interface TplOpts {
 }
 
 export const DEFAULT_OPTS: TplOpts = {
-  headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
-  customGreeting: "Hi {{customer.first_name}},", customSignOff: "— The team at {{business.name}}",
+  headerText: "", footerText: "", thankYouMsg: "",
+  customGreeting: "", customSignOff: "",
   paymentTerms: "", invoiceNotes: "",
-  customMessage: "", subjectLine: "Your receipt from {{business.name}} — {{transaction.number}}",
-  messageText: "Hi {{customer.first_name}}! Thanks for visiting {{business.name}}. Total: {{transaction.total}} on {{transaction.date}}. {{business.website}}",
+  customMessage: "", subjectLine: "",
+  messageText: "",
   bankDetails: "",
   paymentSectionHeading: "",
   loyaltyQrText: "",
@@ -618,7 +618,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
   const date = "18/05/2026 10:42 AM";
-  const footerMsg = opts.thankYouMsg || "Thank you for your purchase!";
+  const footerMsg = opts.thankYouMsg;
   const footer    = opts.footerText;
 
   const QrBlock = () => opts.showCustomerQr ? (
@@ -731,7 +731,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
-  const terms = opts.paymentTerms || "Payment due within 30 days.";
+  const terms = opts.paymentTerms;
   const notes = opts.invoiceNotes;
   const footer = opts.footerText;
   const thankYou = opts.thankYouMsg;
@@ -780,7 +780,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
 
   const PaymentBlock = () => (opts.showPaymentMethods || opts.bankDetails) ? (
     <div className="border rounded p-1.5 mt-1.5 text-[9px] space-y-0.5">
-      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">{opts.paymentSectionHeading || "PAYMENT DETAILS"}</p>
+      <p className="font-semibold text-[8px] uppercase text-gray-400 tracking-wide">{opts.paymentSectionHeading || ""}</p>
       {opts.showPaymentMethods && (
         <div className="flex flex-wrap gap-1">
           {["EFTPOS", "Cash", "Visa", "Mastercard"].map(m => (
@@ -804,7 +804,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const NotesBlock = ({ className }: { className?: string }) => notes ? (
     <div className={className}>
       {notes.split("\n").map((line, i) => (
-        <p key={i} className="text-gray-400">{resolveCode(line || " ", businessName, abn, website, email)}</p>
+        <p key={i} className="text-gray-400">{resolveCode(line, businessName, abn, website, email)}</p>
       ))}
     </div>
   ) : null;
@@ -828,7 +828,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <div className="flex justify-between font-bold"><span>TOTAL DUE</span><span>${total.toFixed(2)}</span></div>
         <LoyaltyRow />
         <PaymentBlock />
-        <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>
+        {terms && <p className="text-gray-400 pt-1">{resolveCode(terms, businessName, abn, website, email)}</p>}
         <NotesBlock />
         <MessagesBlock />
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
@@ -879,7 +879,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         </div>
         <LoyaltyRow />
         <PaymentBlock />
-        <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>
+        {terms && <p className="text-gray-400 mt-1 text-[9px]">{resolveCode(terms, businessName, abn, website, email)}</p>}
         <NotesBlock className="text-[9px]" />
         <MessagesBlock />
         <SocialsBlock />
@@ -923,7 +923,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
       <LoyaltyRow />
       <PaymentBlock />
       <div className="text-gray-400 mt-1 border-t pt-1 text-[10px] space-y-0.5">
-        <p>{resolveCode(terms, businessName, abn, website, email)}</p>
+        {terms && <p>{resolveCode(terms, businessName, abn, website, email)}</p>}
         <NotesBlock />
         <MessagesBlock />
         {opts.showWebsite && website && <p>{website}</p>}
@@ -936,8 +936,8 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
 }
 
 function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, logo, opts }: PreviewProps) {
-  const greeting = opts.customGreeting || "Hi Sarah,";
-  const signOff  = opts.customSignOff  || `— The team at ${businessName}`;
+  const greeting = opts.customGreeting;
+  const signOff  = opts.customSignOff;
   const footer   = opts.footerText;
   const customMsg= opts.customMessage;
   const total    = "$19.50";
@@ -945,13 +945,13 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
   if (templateId === "e-minimal") {
     return (
       <div className="text-[10px] font-mono text-gray-800 space-y-1">
-        <p className="font-medium">{opts.subjectLine ? resolveCode(opts.subjectLine, businessName, abn, website, contactEmail) : `Your receipt from ${businessName}`}</p>
+        {opts.subjectLine && <p className="font-medium">{resolveCode(opts.subjectLine, businessName, abn, website, contactEmail)}</p>}
         <Separator />
-        <p>{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+        {greeting && <p>{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
         {customMsg && <p className="text-gray-600">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
         <p>Thanks for your purchase on 18/05/2026. Total: {total}</p>
         {opts.showAbn && abn && <p className="text-gray-400">ABN: {abn}</p>}
-        <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {signOff && <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
       </div>
     );
@@ -967,14 +967,14 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
           <p className="font-bold">{businessName}</p>
           {tagline && <p className="text-gray-500 text-[9px] italic">{tagline}</p>}
         </div>
-        <p className="text-[10px] mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+        {greeting && <p className="text-[10px] mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
         {customMsg && <p className="text-[10px] text-gray-600 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
         <div className="bg-gray-50 rounded p-1.5 text-[10px] space-y-0.5 mb-2">
           <div className="flex justify-between"><span>Flat White ×2</span><span>$8.00</span></div>
           <div className="flex justify-between"><span>Banana Bread ×1</span><span>$6.50</span></div>
           <div className="flex justify-between font-bold border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>{total}</span></div>
         </div>
-        <p className="text-[10px] text-gray-500">{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {signOff && <p className="text-[10px] text-gray-500">{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
         {footer && <p className="text-[10px] text-gray-400 mt-1">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
         {opts.showWebsite && website && <p className="text-[10px] text-blue-500 mt-1">{website}</p>}
       </div>
@@ -990,7 +990,7 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
         <div><p className="font-bold text-xs">{businessName}</p>{opts.showAbn && abn && <p className="opacity-70 text-[9px]">ABN {abn}</p>}</div>
         <span className="ml-auto opacity-70">Receipt</span>
       </div>
-      <p className="text-[10px] px-1 mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>
+      {greeting && <p className="text-[10px] px-1 mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
       {customMsg && <p className="text-[10px] text-gray-500 px-1 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
       <table className="w-full text-[10px] px-1">
         <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
@@ -1001,7 +1001,7 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
         {opts.showGstBreakdown && <div className="flex justify-between text-gray-400"><span>GST Included</span><span>$1.77</span></div>}
       </div>
       <div className="border-t mt-2 pt-1 px-1 space-y-0.5 text-[9px] text-gray-400">
-        <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>
+        {signOff && <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
         {footer && <p>{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
         {opts.showWebsite && website && <p>{website}</p>}
       </div>
@@ -1010,20 +1010,14 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
 }
 
 function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
-  const raw = opts.messageText || (
-    templateId === "s-appt"
-      ? `Reminder: appointment at ${businessName} on 20 May at 2:00 PM. Reply CANCEL to cancel.`
-      : templateId === "s-layby"
-      ? `Hi Sarah, your layby at ${businessName} has $45.00 due by 25/05/2026. Balance: $120.00. Pop in or call us!`
-      : `Hi Sarah! Thanks for visiting ${businessName}. Total: $19.50 on 18/05/2026. ${website}`
-  );
-  return (
+  const raw = opts.messageText;
+  return raw ? (
     <div className="flex items-end justify-end">
       <div className="bg-green-500 text-white text-[10px] rounded-2xl rounded-br-sm px-3 py-2 max-w-[85%] leading-relaxed shadow break-words">
         {resolveCode(raw, businessName, "", website, "")}
       </div>
     </div>
-  );
+  ) : null;
 }
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */

@@ -522,7 +522,7 @@ export default function POSInvoicesPage() {
     /* Payment block */
     const paymentBlock = (opts.showPaymentMethods || opts.bankDetails) ? `
       <div class="payment-block">
-        <div class="terms-title">${opts.paymentSectionHeading || "PAYMENT DETAILS"}</div>
+        ${opts.paymentSectionHeading ? `<div class="terms-title">${opts.paymentSectionHeading}</div>` : ""}
         ${opts.showPaymentMethods ? `<div class="payment-methods">${paymentTypes.map(m => `<span class="pm-badge">${m}</span>`).join("")}</div>` : ""}
         ${opts.bankDetails ? `<pre class="bank-details">${opts.bankDetails}</pre>` : ""}
       </div>` : "";
@@ -862,7 +862,7 @@ export default function POSInvoicesPage() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(130, 130, 130);
-      doc.text((opts.paymentSectionHeading || "PAYMENT DETAILS").toUpperCase(), ML + 4, y + 4.5);
+      if (opts.paymentSectionHeading) { doc.text(opts.paymentSectionHeading.toUpperCase(), ML + 4, y + 4.5); }
       let py = y + 9;
       if (opts.showPaymentMethods) {
         doc.setFont("helvetica", "normal");
