@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, brandsTable, productsTable } from "@workspace/db";
-import { eq, and, ilike, count, sum, sql } from "drizzle-orm";
+import { eq, and, ilike, count, sum, sql, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -29,6 +29,8 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
         eq(productsTable.brandId, brandsTable.id),
         eq(productsTable.merchantId, req.session.merchantId!),
         eq(productsTable.isActive, "true"),
+        ne(productsTable.productType, "service"),
+        ne(productsTable.productType, "digital_code"),
       ),
     )
     .where(and(...conditions))
