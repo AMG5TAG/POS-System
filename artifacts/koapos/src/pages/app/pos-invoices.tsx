@@ -20,6 +20,12 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
 import {
+  DEFAULT_OPTS as TPL_DEFAULT_OPTS,
+  resolveCode,
+  ACTIVE_STORAGE_KEY,
+  type TplOpts,
+} from "@/pages/app/management-templates";
+import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
 } from "lucide-react";
@@ -393,35 +399,37 @@ export default function POSInvoicesPage() {
     }
   };
 
+  /* ── Helpers ── */
+  function getInvoiceTemplateOpts(): TplOpts {
+    try {
+      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) ?? "{}") as Record<string, string>;
+      const tplId  = active.invoices ?? "i-pro";
+      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<TplOpts>;
+      return { ...TPL_DEFAULT_OPTS, ...stored };
+    } catch {
+      return { ...TPL_DEFAULT_OPTS };
+    }
+  }
+
+  const resolveStr = (text: string, biz: string, abn: string, web: string, em: string) =>
+    resolveCode(text || "", biz, abn, web, em);
+
   /* ── Print ── */
   const printInvoice = (inv: Invoice) => {
-    /* Read active invoice template settings from Management > Templates */
-    let tpl = {
-      showLogo: true, showAbn: true, showGstBreakdown: true, showWebsite: true,
-      paymentTerms: "Payment due within 30 days.",
-      invoiceNotes: "", footerText: "",
-    };
-    try {
-      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
-      const tplId  = active.invoices ?? "i-pro";
-      const opts   = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Record<string, unknown>;
-      tpl = {
-        showLogo:         opts.showLogo         !== false,
-        showAbn:          opts.showAbn          !== false,
-        showGstBreakdown: opts.showGstBreakdown !== false,
-        showWebsite:      opts.showWebsite      !== false,
-        paymentTerms:     (opts.paymentTerms  as string) || "Payment due within 30 days.",
-        invoiceNotes:     (opts.invoiceNotes  as string) || "",
-        footerText:       (opts.footerText    as string) || "",
-      };
-    } catch { /* use defaults */ }
-
-    const bizName  = merchant?.businessName ?? "Your Business";
-    const abn      = profile.abn ?? "";
-    const website  = profile.website ?? "";
-    const address  = [profile.state, profile.postcode].filter(Boolean).join(" ");
-    const email    = profile.contactEmail ?? "";
+    const opts   = getInvoiceTemplateOpts();
+    const bizName = merchant?.businessName ?? "Your Business";
+    const abn     = profile.abn ?? "";
+    const website = profile.website ?? "";
+    const address = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const email   = profile.contactEmail ?? "";
+    const tagline = profile.tagline ?? "";
     const brandColor = profile.brandColors?.[0] ?? "#4f46e5";
+    const socials = profile.socialLinks;
+    const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
+
+    const termsText    = resolveStr(opts.paymentTerms, bizName, abn, website, email);
+    const notesText    = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
+    const footerText   = resolveStr(opts.footerText, bizName, abn, website, email);
 
     const w = window.open("", "_blank", "width=800,height=900");
     if (!w) return;
@@ -435,6 +443,34 @@ export default function POSInvoicesPage() {
         <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
       </tr>`).join("");
 
+    const hasCustomerDetails = inv.customerName || inv.customerEmail;
+    const customerBlock = hasCustomerDetails ? `
+      <div class="bill-to">
+        <strong>${opts.showAllCustomerDetails ? "Customer" : "Bill To"}</strong>
+        <div style="margin-top:4px">
+          ${inv.customerName ? `<p>${inv.customerName}</p>` : ""}
+          ${opts.showAllCustomerDetails && inv.customerEmail ? `<p style="color:#666">${inv.customerEmail}</p>` : ""}
+        </div>
+      </div>` : "";
+
+    const paymentBlock = (opts.showPaymentMethods || opts.bankDetails) ? `
+      <div class="payment-block">
+        <div class="terms-title">${opts.paymentSectionHeading || "PAYMENT DETAILS"}</div>
+        ${opts.showPaymentMethods ? `
+          <div class="payment-methods">
+            ${paymentTypes.map(m => `<span class="pm-badge">${m}</span>`).join("")}
+          </div>` : ""}
+        ${opts.bankDetails ? `<pre class="bank-details">${opts.bankDetails}</pre>` : ""}
+      </div>` : "";
+
+    const socialsBlock = opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter) ? `
+      <div class="socials">
+        ${socials.facebook ? `<span>fb/ ${socials.facebook}</span>` : ""}
+        ${socials.instagram ? `<span>ig/ @${socials.instagram}</span>` : ""}
+        ${socials.twitter ? `<span>x/ @${socials.twitter}</span>` : ""}
+        ${socials.linkedin ? `<span>in/ ${socials.linkedin}</span>` : ""}
+      </div>` : "";
+
     w.document.write(`<!DOCTYPE html><html><head>
       <title>Invoice ${inv.invoiceNumber}</title>
       <style>
@@ -447,7 +483,7 @@ export default function POSInvoicesPage() {
         .inv-title{font-size:28px;font-weight:800;color:${brandColor};text-align:right;margin:0}
         .inv-meta{font-size:13px;color:#666;text-align:right;margin-top:4px;line-height:1.7}
         .bill-to{background:#f7f7f7;border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:13px}
-        .bill-to strong{display:block;margin-bottom:2px}
+        .bill-to strong{display:block;margin-bottom:2px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888}
         table{width:100%;border-collapse:collapse;margin:0 0 16px}
         th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.5px}
         td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px}
@@ -458,18 +494,24 @@ export default function POSInvoicesPage() {
         .terms-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:6px}
         .inv-notes{margin-top:12px;padding:12px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
         .footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}
+        .payment-block{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555}
+        .payment-methods{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+        .pm-badge{border:1px solid #ddd;border-radius:4px;padding:2px 8px;font-size:11px;color:#666;background:#fff}
+        .bank-details{margin-top:6px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#666}
+        .socials{display:flex;gap:12px;margin-top:8px;font-size:11px;color:#aaa}
         @media print{body{padding:20px}}
       </style>
     </head><body>
       <div class="header">
         <div>
-          ${tpl.showLogo ? `<div class="logo-box"></div>` : ""}
+          ${opts.showLogo ? `<div class="logo-box"></div>` : ""}
           <p class="biz-name">${bizName}</p>
+          ${opts.showTagline && tagline ? `<p style="font-size:12px;color:#888;font-style:italic;margin:2px 0 0">${tagline}</p>` : ""}
           <div class="biz-meta">
-            ${tpl.showAbn && abn ? `ABN ${abn}<br>` : ""}
+            ${opts.showAbn && abn ? `ABN ${abn}<br>` : ""}
             ${address ? `${address}<br>` : ""}
             ${email ? `${email}<br>` : ""}
-            ${tpl.showWebsite && website ? `${website}` : ""}
+            ${opts.showWebsite && website ? `${website}` : ""}
           </div>
         </div>
         <div>
@@ -482,7 +524,7 @@ export default function POSInvoicesPage() {
           </div>
         </div>
       </div>
-      ${inv.customerName ? `<div class="bill-to"><strong>Bill To</strong>${inv.customerName}</div>` : ""}
+      ${customerBlock}
       <table>
         <thead><tr>
           <th>Description</th>
@@ -495,17 +537,19 @@ export default function POSInvoicesPage() {
       </table>
       <div class="totals">
         <div class="row"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
-        ${tpl.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
+        ${opts.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
         <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
       </div>
-      ${tpl.paymentTerms || tpl.invoiceNotes ? `
+      ${paymentBlock}
+      ${termsText || notesText ? `
         <div class="terms">
           <div class="terms-title">Terms</div>
-          ${tpl.paymentTerms ? `<div>${tpl.paymentTerms}</div>` : ""}
-          ${tpl.invoiceNotes ? `<div style="margin-top:8px">${tpl.invoiceNotes}</div>` : ""}
+          ${termsText ? `<div>${termsText}</div>` : ""}
+          ${notesText ? `<div style="margin-top:8px">${notesText}</div>` : ""}
         </div>` : ""}
       ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
-      ${tpl.footerText ? `<div class="footer">${tpl.footerText}</div>` : ""}
+      ${socialsBlock}
+      ${footerText ? `<div class="footer">${footerText}</div>` : ""}
     </body></html>`);
     w.document.close();
     w.focus();
@@ -513,32 +557,20 @@ export default function POSInvoicesPage() {
   };
 
   const downloadInvoicePDF = (inv: Invoice) => {
-    let tpl = {
-      showLogo: true, showAbn: true, showGstBreakdown: true, showWebsite: true,
-      paymentTerms: "Payment due within 30 days.",
-      invoiceNotes: "", footerText: "",
-    };
-    try {
-      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
-      const tplId  = active.invoices ?? "i-pro";
-      const opts   = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Record<string, unknown>;
-      tpl = {
-        showLogo:         opts.showLogo         !== false,
-        showAbn:          opts.showAbn          !== false,
-        showGstBreakdown: opts.showGstBreakdown !== false,
-        showWebsite:      opts.showWebsite      !== false,
-        paymentTerms:     (opts.paymentTerms  as string) || "Payment due within 30 days.",
-        invoiceNotes:     (opts.invoiceNotes  as string) || "",
-        footerText:       (opts.footerText    as string) || "",
-      };
-    } catch { /* use defaults */ }
+    const opts    = getInvoiceTemplateOpts();
+    const bizName = merchant?.businessName ?? "Your Business";
+    const abn     = profile.abn ?? "";
+    const website = profile.website ?? "";
+    const address = [profile.state, profile.postcode].filter(Boolean).join(" ");
+    const email   = profile.contactEmail ?? "";
+    const tagline = profile.tagline ?? "";
+    const rawColor = profile.brandColors?.[0] ?? "#4f46e5";
+    const socials = profile.socialLinks;
+    const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
 
-    const bizName   = merchant?.businessName ?? "Your Business";
-    const abn       = profile.abn ?? "";
-    const website   = profile.website ?? "";
-    const address   = [profile.state, profile.postcode].filter(Boolean).join(" ");
-    const email     = profile.contactEmail ?? "";
-    const rawColor  = profile.brandColors?.[0] ?? "#4f46e5";
+    const termsText  = resolveStr(opts.paymentTerms, bizName, abn, website, email);
+    const notesText  = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
+    const footerText = resolveStr(opts.footerText, bizName, abn, website, email);
 
     const hexToRgb = (hex: string): [number, number, number] => {
       const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -551,24 +583,30 @@ export default function POSInvoicesPage() {
     let y = 22;
 
     /* ── Header ── */
-    if (tpl.showLogo) {
+    if (opts.showLogo) {
       doc.setFillColor(cr, cg, cb);
       doc.roundedRect(ML, y, 8, 8, 1.5, 1.5, "F");
     }
-    const bizY = tpl.showLogo ? y + 11 : y;
+    const bizY = opts.showLogo ? y + 11 : y;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(15);
     doc.setTextColor(30, 30, 30);
     doc.text(bizName, ML, bizY);
-    let metaY = bizY + 5.5;
+    if (opts.showTagline && tagline) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(130, 130, 130);
+      doc.text(tagline, ML, bizY + 4.5);
+    }
+    let metaY = bizY + (opts.showTagline && tagline ? 9 : 5.5);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
     const metaLines: string[] = [];
-    if (tpl.showAbn && abn)          metaLines.push(`ABN ${abn}`);
+    if (opts.showAbn && abn)          metaLines.push(`ABN ${abn}`);
     if (address)                      metaLines.push(address);
     if (email)                        metaLines.push(email);
-    if (tpl.showWebsite && website)   metaLines.push(website);
+    if (opts.showWebsite && website)   metaLines.push(website);
     metaLines.forEach((l) => { doc.text(l, ML, metaY); metaY += 4.5; });
 
     doc.setFont("helvetica", "bold");
@@ -593,21 +631,27 @@ export default function POSInvoicesPage() {
     doc.line(ML, y, W - MR, y);
     y += 8;
 
-    /* ── Bill To ── */
+    /* ── Customer ── */
     if (inv.customerName) {
+      const custHeight = opts.showAllCustomerDetails && inv.customerEmail ? 20 : 14;
       doc.setFillColor(247, 247, 247);
       doc.setDrawColor(220, 220, 220);
       doc.setLineWidth(0.3);
-      doc.rect(ML, y - 3, CW, 14, "FD");
+      doc.rect(ML, y - 3, CW, custHeight, "FD");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
-      doc.text("BILL TO", ML + 4, y + 2);
+      doc.text(opts.showAllCustomerDetails ? "CUSTOMER" : "BILL TO", ML + 4, y + 2);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(30, 30, 30);
       doc.text(inv.customerName, ML + 4, y + 7);
-      y += 20;
+      if (opts.showAllCustomerDetails && inv.customerEmail) {
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 100);
+        doc.text(inv.customerEmail, ML + 4, y + 12);
+      }
+      y += custHeight + 6;
     }
 
     /* ── Line items table ── */
@@ -659,7 +703,7 @@ export default function POSInvoicesPage() {
     doc.setFontSize(10);
     doc.setTextColor(80, 80, 80);
     doc.text("Subtotal",  totX + 2, y); doc.text(`$${inv.subtotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
-    if (tpl.showGstBreakdown) {
+    if (opts.showGstBreakdown) {
       doc.text("GST (10%)", totX + 2, y); doc.text(`$${inv.taxTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
     }
     doc.setDrawColor(200, 200, 200);
@@ -672,27 +716,53 @@ export default function POSInvoicesPage() {
     doc.text("Total Due (AUD)", totX + 2, y); doc.text(`$${inv.total.toFixed(2)}`, W - MR, y, { align: "right" });
     y += 12;
 
-    /* ── Terms ── */
-    if (tpl.paymentTerms || tpl.invoiceNotes) {
-      doc.setFillColor(cr, cg, cb);
-      doc.rect(ML, y, 1.5, 14, "F");
+    /* ── Payment block ── */
+    if (opts.showPaymentMethods || opts.bankDetails) {
+      const blockH = 8 + (opts.showPaymentMethods ? 6 : 0) + (opts.bankDetails ? 14 : 0);
       doc.setFillColor(249, 249, 249);
-      doc.rect(ML + 1.5, y, CW - 1.5, 14, "F");
+      doc.setDrawColor(220, 220, 220);
+      doc.rect(ML, y, CW, blockH, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(130, 130, 130);
+      doc.text((opts.paymentSectionHeading || "PAYMENT DETAILS").toUpperCase(), ML + 4, y + 4.5);
+      let py = y + 9;
+      if (opts.showPaymentMethods) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        const pmText = paymentTypes.join("  ·  ");
+        doc.text(pmText, ML + 4, py);
+        py += 6;
+      }
+      if (opts.bankDetails) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(80, 80, 80);
+        const bankLines = opts.bankDetails.split("\n");
+        bankLines.forEach((ln) => { doc.text(ln, ML + 4, py); py += 4.5; });
+      }
+      y += blockH + 4;
+    }
+
+    /* ── Terms ── */
+    if (termsText || notesText) {
+      const termsH = 8 + (termsText ? 8 : 0) + (notesText ? 8 : 0);
+      doc.setFillColor(cr, cg, cb);
+      doc.rect(ML, y, 1.5, termsH, "F");
+      doc.setFillColor(249, 249, 249);
+      doc.rect(ML + 1.5, y, CW - 1.5, termsH, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(130, 130, 130);
       doc.text("TERMS", ML + 5, y + 4.5);
+      let ty = y + 9;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(80, 80, 80);
-      if (tpl.paymentTerms) doc.text(tpl.paymentTerms, ML + 5, y + 10, { maxWidth: CW - 10 });
-      y += 18;
-      if (tpl.invoiceNotes) {
-        doc.setFont("helvetica", "italic");
-        doc.text(tpl.invoiceNotes, ML + 5, y, { maxWidth: CW - 10 });
-        y += 8;
-      }
-      y += 3;
+      if (termsText) { doc.text(termsText, ML + 5, ty, { maxWidth: CW - 10 }); ty += 8; }
+      if (notesText) { doc.setFont("helvetica", "italic"); doc.text(notesText, ML + 5, ty, { maxWidth: CW - 10 }); ty += 8; }
+      y += termsH + 4;
     }
 
     /* ── Invoice notes ── */
@@ -710,15 +780,29 @@ export default function POSInvoicesPage() {
       y += 18;
     }
 
+    /* ── Socials ── */
+    if (opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin)) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(160, 160, 160);
+      const socParts: string[] = [];
+      if (socials.facebook)  socParts.push(`fb/ ${socials.facebook}`);
+      if (socials.instagram) socParts.push(`ig/ @${socials.instagram}`);
+      if (socials.twitter)   socParts.push(`x/ @${socials.twitter}`);
+      if (socials.linkedin)  socParts.push(`in/ ${socials.linkedin}`);
+      doc.text(socParts.join("    "), ML, y);
+      y += 6;
+    }
+
     /* ── Footer ── */
-    if (tpl.footerText) {
+    if (footerText) {
       doc.setDrawColor(230, 230, 230);
       doc.setLineWidth(0.3);
       doc.line(ML, 281, W - MR, 281);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(170, 170, 170);
-      doc.text(tpl.footerText, W / 2, 287, { align: "center" });
+      doc.text(footerText, W / 2, 287, { align: "center" });
     }
 
     doc.save(`${inv.invoiceNumber}.pdf`);

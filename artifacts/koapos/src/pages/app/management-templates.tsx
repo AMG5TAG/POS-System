@@ -30,7 +30,7 @@ interface TemplateOption {
 
 /* ─── Per-template options ─────────────────────────────────────────────────── */
 
-interface TplOpts {
+export interface TplOpts {
   // Text fields
   headerText:           string;
   footerText:           string;
@@ -72,7 +72,7 @@ interface TplOpts {
   jobNoFontSize:        string;
 }
 
-const DEFAULT_OPTS: TplOpts = {
+export const DEFAULT_OPTS: TplOpts = {
   headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
   customGreeting: "Hi {{customer.first_name}},", customSignOff: "— The team at {{business.name}}",
   paymentTerms: "Payment due within 30 days.", invoiceNotes: "",
@@ -570,7 +570,7 @@ const STYLE_COLORS: Record<string, string> = {
   bold:         "bg-violet-50 text-violet-700 border-violet-200",
 };
 
-const ACTIVE_STORAGE_KEY = "koapos_active_templates";
+export const ACTIVE_STORAGE_KEY = "koapos_active_templates";
 
 /* ─── Preview components ─────────────────────────────────────────────────── */
 
@@ -581,7 +581,7 @@ interface PreviewProps {
   opts: TplOpts;
 }
 
-function resolveCode(text: string, businessName: string, abn: string, website: string, email: string): string {
+export function resolveCode(text: string, businessName: string, abn: string, website: string, email: string): string {
   return text
     .replace(/{{business\.name}}/g,    businessName)
     .replace(/{{business\.abn}}/g,     abn)
