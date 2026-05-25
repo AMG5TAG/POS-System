@@ -187,6 +187,7 @@ export default function POSPage() {
   const [registerOpen, setRegisterOpen] = useState(() => localStorage.getItem("koapos_register_open") === "true");
   const [openRegisterDialogOpen, setOpenRegisterDialogOpen] = useState(false);
   const [closeRegisterDialogOpen, setCloseRegisterDialogOpen] = useState(false);
+  const [cashMovementPrintOpen, setCashMovementPrintOpen] = useState(false);
   const [openFloat, setOpenFloat] = useState("");
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
@@ -210,9 +211,54 @@ export default function POSPage() {
     localStorage.setItem("koapos_register_open", "true");
     setRegisterOpen(true);
     setOpenRegisterDialogOpen(false);
-    setOpenFloat("");
-    setOpenNotes("");
+    setCashMovementPrintOpen(true);
     toast.success("Register opened");
+  };
+
+  const printCashMovement = () => {
+    const bizName = businessProfile.abn
+      ? `${merchantData?.businessName ?? "Your Business"} · ABN ${businessProfile.abn}`
+      : (merchantData?.businessName ?? "Your Business");
+    const s = getSession();
+    const openedAt = s?.openedAt ? new Date(s.openedAt) : new Date();
+    const dateStr = openedAt.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+    const timeStr = openedAt.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+    const staff = s?.openedBy ?? currentStaff?.name ?? "—";
+    const float = s?.openingFloat ?? 0;
+    const note = s?.openingNotes ?? "";
+
+    const w = window.open("", "_blank", "width=400,height=600");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head>
+      <title>Cash Movement</title>
+      <style>
+        *{box-sizing:border-box}
+        body{font-family:'Courier New',monospace;padding:16px;color:#222;max-width:320px;margin:0 auto;font-size:12px}
+        .center{text-align:center}
+        .bold{font-weight:bold}
+        .upper{text-transform:uppercase}
+        .bdr-b{border-bottom:1px dashed #999;padding-bottom:6px;margin-bottom:6px}
+        .bdr-t{border-top:1px dashed #999;padding-top:6px;margin-top:6px}
+        .row{display:flex;justify-content:space-between;margin-bottom:2px}
+        .mt{margin-top:8px}
+        .mb{margin-bottom:8px}
+        .small{font-size:10px}
+        .gray{color:#666}
+        @media print{body{padding:8px}}
+      </style>
+    </head><body>
+      <p class="center bold upper">${bizName}</p>
+      <p class="center small gray">${dateStr} · ${timeStr}</p>
+      <p class="center bdr-b mb">CASH MOVEMENT</p>
+      <div class="row"><span class="gray">Type</span><span class="bold">OPENING FLOAT</span></div>
+      <div class="row"><span class="gray">Staff</span><span>${staff}</span></div>
+      <div class="row bdr-t mt"><span class="gray">Amount</span><span class="bold">$${float.toFixed(2)}</span></div>
+      ${note ? `<p class="small gray mt">Note: ${note}</p>` : ""}
+      <p class="center small gray mt bdr-t">Keep this receipt for your records.</p>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
   };
 
   const handleCloseRegister = () => {
@@ -2405,6 +2451,26 @@ export default function POSPage() {
             <Button variant="outline" onClick={() => setOpenRegisterDialogOpen(false)}>Cancel</Button>
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister}>
               <DoorOpen className="w-4 h-4 mr-1.5" /> Open Register
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Cash Movement Print Prompt ─── */}
+      <Dialog open={cashMovementPrintOpen} onOpenChange={(o) => { if (!o) setCashMovementPrintOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-primary" /> Print Cash Movement
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>The till has been opened. Would you like to print the opening float receipt for your records?</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCashMovementPrintOpen(false)}>No Thanks</Button>
+            <Button onClick={() => { printCashMovement(); setCashMovementPrintOpen(false); }}>
+              <Printer className="w-4 h-4 mr-1.5" /> Print Receipt
             </Button>
           </DialogFooter>
         </DialogContent>
