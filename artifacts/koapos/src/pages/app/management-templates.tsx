@@ -1,18 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant } from "@workspace/api-client-react";
+import {
+  useGetMerchant,
+  useGetTaxSettings,
+  useUpdateTaxSettings,
+} from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Barcode from "react-barcode";
 import {
-  Receipt, FileText, Mail, MessageSquare, Tag, Printer,
+  Receipt, FileText, Mail, MessageSquare, Tag, Printer, Info,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
   Settings2, ClipboardList,
@@ -372,6 +378,93 @@ function QuickCodesBar({
 }
 
 /* ─── Template Options Panel ─────────────────────────────────────────────── */
+
+function NotificationsPanel() {
+  const { data: settings } = useGetTaxSettings();
+  const update = useUpdateTaxSettings();
+  const [email, setEmail] = useState("false");
+  const [sms, setSms] = useState("false");
+
+  useEffect(() => {
+    if (settings) {
+      setEmail(settings.emailReceiptsEnabled ?? "false");
+      setSms(settings.smsReceiptsEnabled ?? "false");
+    }
+  }, [settings]);
+
+  const bool = (v: string) => v === "true";
+  const toggleStr = (v: string) => v === "true" ? "false" : "true";
+
+  function saveEmail(next: string) {
+    setEmail(next);
+    update.mutate({ data: { emailReceiptsEnabled: next } }, {
+      onSuccess: () => toast.success("Email receipt setting saved"),
+      onError: () => toast.error("Failed to save"),
+    });
+  }
+
+  function saveSms(next: string) {
+    setSms(next);
+    update.mutate({ data: { smsReceiptsEnabled: next } }, {
+      onSuccess: () => toast.success("SMS receipt setting saved"),
+      onError: () => toast.error("Failed to save"),
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Mail className="w-4 h-4" /> Email & SMS Receipts
+        </CardTitle>
+        <CardDescription>Send receipts automatically to customers after a sale</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-start gap-3">
+            <Mail className="w-4 h-4 text-muted-foreground mt-0.5" />
+            <div>
+              <p className="font-medium text-sm">Email Receipts</p>
+              <p className="text-xs text-muted-foreground">Send receipts to customers via email</p>
+            </div>
+          </div>
+          <Switch checked={bool(email)}
+            onCheckedChange={() => saveEmail(toggleStr(email))} />
+        </div>
+        {bool(email) && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Email delivery requires an email integration. Connect Mailchimp or another email provider in
+              <strong> Management → Integrations</strong> to enable automatic email receipts.
+            </span>
+          </div>
+        )}
+        <Separator />
+        <div className="flex items-center justify-between">
+          <div className="flex items-start gap-3">
+            <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5" />
+            <div>
+              <p className="font-medium text-sm">SMS Receipts</p>
+              <p className="text-xs text-muted-foreground">Send receipts to customers via SMS</p>
+            </div>
+          </div>
+          <Switch checked={bool(sms)}
+            onCheckedChange={() => saveSms(toggleStr(sms))} />
+        </div>
+        {bool(sms) && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              SMS delivery requires a Twilio or similar integration. Configure it in
+              <strong> Management → Integrations</strong>.
+            </span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function OptionsPanel({
   category,
@@ -1225,6 +1318,8 @@ export default function ManagementTemplatesPage() {
             <span>Showing: <strong className="text-foreground">{businessName}</strong></span>
           </div>
         </div>
+
+        <NotificationsPanel />
 
         {/* 3-column layout */}
         <div className="flex gap-4 items-start min-w-0">

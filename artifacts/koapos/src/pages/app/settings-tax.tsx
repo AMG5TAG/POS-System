@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Receipt, Percent, Mail, MessageSquare, Info, Hash, Calendar, DollarSign, Copy } from "lucide-react";
+import { Receipt, Percent, Info, Hash, Calendar, DollarSign, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -163,7 +163,6 @@ const TAX_TABS = [
   { href: "#gst-settings", label: "GST Settings",    icon: Percent },
   { href: "#receipt",      label: "Receipt",          icon: Receipt },
   { href: "#code-prefixes",label: "Document Codes",   icon: Hash    },
-  { href: "#email-sms",    label: "Email & SMS",      icon: Mail    },
 ];
 
 export default function SettingsTaxPage() {
@@ -199,8 +198,6 @@ export default function SettingsTaxPage() {
     taxName: "GST",
     receiptHeader: "",
     receiptFooter: "",
-    emailReceiptsEnabled: "false",
-    smsReceiptsEnabled: "false",
   });
 
   useEffect(() => {
@@ -215,8 +212,6 @@ export default function SettingsTaxPage() {
         taxName: settings.taxName ?? "GST",
         receiptHeader: settings.receiptHeader ?? "",
         receiptFooter: settings.receiptFooter ?? "",
-        emailReceiptsEnabled: settings.emailReceiptsEnabled ?? "false",
-        smsReceiptsEnabled: settings.smsReceiptsEnabled ?? "false",
       });
     }
   }, [settings]);
@@ -231,7 +226,7 @@ export default function SettingsTaxPage() {
         receiptFooter: form.receiptFooter || undefined,
       } },
       {
-        onSuccess: () => toast.success("Tax & receipt settings saved"),
+        onSuccess: () => toast.success("Tax settings saved"),
         onError: () => toast.error("Failed to save settings"),
       }
     );
@@ -257,7 +252,7 @@ export default function SettingsTaxPage() {
         <div className="flex items-center gap-3">
           <Percent className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">GST / Tax Configuration</h1>
+            <h1 className="text-2xl font-bold">Tax Settings</h1>
             <p className="text-sm text-muted-foreground">Configure tax rates, receipt settings, and notification preferences</p>
           </div>
         </div>
@@ -365,60 +360,6 @@ export default function SettingsTaxPage() {
                     onCheckedChange={() => setForm({ ...form, showTaxOnReceipt: toggleStr(form.showTaxOnReceipt) })} />
                 </div>
               </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Email & SMS Receipts */}
-        <Card id="email-sms">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Mail className="w-4 h-4" /> Email & SMS Receipts
-            </CardTitle>
-            <CardDescription>Send receipts automatically to customers after a sale</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-start gap-3">
-                <Mail className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="font-medium text-sm">Email Receipts</p>
-                  <p className="text-xs text-muted-foreground">Send receipts to customers via email</p>
-                </div>
-              </div>
-              <Switch checked={bool(form.emailReceiptsEnabled)}
-                onCheckedChange={() => setForm({ ...form, emailReceiptsEnabled: toggleStr(form.emailReceiptsEnabled) })} />
-            </div>
-            {bool(form.emailReceiptsEnabled) && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Email delivery requires an email integration. Connect Mailchimp or another email provider in
-                  <strong> Management → Integrations</strong> to enable automatic email receipts.
-                  You can still manually send receipts from the Transactions page.
-                </span>
-              </div>
-            )}
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="flex items-start gap-3">
-                <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="font-medium text-sm">SMS Receipts</p>
-                  <p className="text-xs text-muted-foreground">Send receipts to customers via SMS</p>
-                </div>
-              </div>
-              <Switch checked={bool(form.smsReceiptsEnabled)}
-                onCheckedChange={() => setForm({ ...form, smsReceiptsEnabled: toggleStr(form.smsReceiptsEnabled) })} />
-            </div>
-            {bool(form.smsReceiptsEnabled) && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  SMS delivery requires a Twilio or similar integration. Configure it in
-                  <strong> Management → Integrations</strong>.
-                </span>
-              </div>
             )}
           </CardContent>
         </Card>

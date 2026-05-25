@@ -193,7 +193,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Templates", href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
-  { name: "Tax & Receipts", href: "/management/tax",            icon: Receipt        },
+  { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -227,7 +227,7 @@ const SEARCH_INDEX = [
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Email Settings",      href: "/management/email",                      icon: Mail,         group: "Management" },
-  { label: "Tax & Receipts",     href: "/management/tax",                        icon: Receipt,      group: "Management" },
+  { label: "Tax Settings",       href: "/management/tax",                        icon: Receipt,      group: "Management" },
   { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
   { label: "Calculators · 3D",       href: "/management/calculators/3d-printing",  icon: Calculator,  group: "Management" },
   { label: "Calculators · PC Builder", href: "/management/calculators/pc-builder", icon: HardDrive,   group: "Management" },
@@ -343,8 +343,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/inventory":        ["Management", "Inventory"],
   "/management/discounts":        ["Management", "Discounts"],
   "/inventory/wastage":           ["Inventory", "Wastage"],
-  "/settings/tax":                ["Management", "Tax & Receipts"],
-  "/management/tax":              ["Management", "Tax & Receipts"],
+  "/settings/tax":                ["Management", "Tax Settings"],
+  "/management/tax":              ["Management", "Tax Settings"],
   "/management/email":            ["Management", "Email"],
   "/management/templates":        ["Management", "Sale Templates"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
