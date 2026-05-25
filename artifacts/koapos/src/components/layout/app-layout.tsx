@@ -867,7 +867,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
-      <header ref={headerRef} className={cn("h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-shadow", headerScrolled && "shadow-md")}>
+      <header ref={headerRef} className={cn("h-14 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-all duration-200 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80", headerScrolled ? "shadow-[0_4px_24px_-2px_rgba(0,0,0,0.10),0_1px_4px_-1px_rgba(0,0,0,0.06)] border-b border-transparent" : "border-b border-border")}>
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
           <img src="/logo.png" alt="KoaPOS" className="w-7 h-7 object-contain" />

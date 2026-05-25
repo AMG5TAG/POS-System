@@ -1347,8 +1347,13 @@ export default function ProductsPage() {
               ))}
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto px-6">
+          {/* Tab content — tabIndex allows mouse-wheel scroll immediately on dialog open */}
+          <div
+            className="flex-1 overflow-y-auto px-6"
+            tabIndex={-1}
+            style={{ outline: "none" }}
+            ref={(el) => { if (el && dialogOpen) el.focus(); }}
+          >
 
             {/* ── Details ── */}
             {formTab === "details" && (

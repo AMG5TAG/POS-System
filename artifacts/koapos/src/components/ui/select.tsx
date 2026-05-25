@@ -90,6 +90,13 @@ const SelectContent = React.forwardRef<
           position === "popper" &&
             "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
+        onWheel={(e) => {
+          /* Allow mouse-wheel scrolling inside the dropdown without closing it
+             or accidentally scrolling the page / dialog behind it. */
+          e.stopPropagation();
+          const el = e.currentTarget as HTMLElement;
+          el.scrollTop += e.deltaY;
+        }}
       >
         {children}
       </SelectPrimitive.Viewport>
