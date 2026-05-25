@@ -29,7 +29,7 @@ import {
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote,
+  Banknote, Percent, DollarSign, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 type InvStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
+type DiscountType = "fixed" | "percent";
 type Invoice = {
   id: number;
   invoiceNumber: string;
@@ -51,6 +52,9 @@ type Invoice = {
   subtotal: number;
   taxTotal: number;
   total: number;
+  discountType:  DiscountType | null;
+  discountValue: number | null;
+  discountTotal: number | null;
   items: LineItem[];
   events: InvoiceEvent[];
   dueDate: string | null;
@@ -136,6 +140,12 @@ export default function POSInvoicesPage() {
     startDate: "",
     occurrences: 1,
   });
+  const [discount, setDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
+    enabled: false, type: "percent", value: "",
+  });
+  const [editDiscount, setEditDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
+    enabled: false, type: "percent", value: "",
+  });
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
@@ -198,8 +208,17 @@ export default function POSInvoicesPage() {
     !q.trim() ? allProducts.slice(0, 8) : allProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
 
   // Prices are GST-inclusive (Australian standard): extract tax from the total
-  const invTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const taxTotal  = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const linesGross  = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const rawTaxTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const discountAmt = (() => {
+    if (!discount.enabled || !discount.value) return 0;
+    const v = parseFloat(discount.value);
+    if (isNaN(v) || v <= 0) return 0;
+    if (discount.type === "fixed")   return Math.min(v, linesGross);
+    return Math.min(v, 100) / 100 * linesGross;
+  })();
+  const invTotal  = Math.max(0, linesGross - discountAmt);
+  const taxTotal  = linesGross > 0 ? rawTaxTotal * (invTotal / linesGross) : 0;
   const subtotal  = invTotal - taxTotal;
 
   /* ── Edit line helpers ── */
@@ -221,8 +240,17 @@ export default function POSInvoicesPage() {
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
 
-  const editInvTotal  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const editTaxTotal  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const editLinesGross  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const editRawTaxTotal = editLines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)), 0);
+  const editDiscountAmt = (() => {
+    if (!editDiscount.enabled || !editDiscount.value) return 0;
+    const v = parseFloat(editDiscount.value);
+    if (isNaN(v) || v <= 0) return 0;
+    if (editDiscount.type === "fixed") return Math.min(v, editLinesGross);
+    return Math.min(v, 100) / 100 * editLinesGross;
+  })();
+  const editInvTotal  = Math.max(0, editLinesGross - editDiscountAmt);
+  const editTaxTotal  = editLinesGross > 0 ? editRawTaxTotal * (editInvTotal / editLinesGross) : 0;
   const editSubtotal  = editInvTotal - editTaxTotal;
 
   /* ── Open edit dialog ── */
@@ -243,6 +271,10 @@ export default function POSInvoicesPage() {
     setEditLines(items);
     setEditLineSearch(items.map(() => ""));
     setEditLineDropOpen(items.map(() => false));
+    setEditDiscount(inv.discountType && inv.discountValue
+      ? { enabled: true, type: inv.discountType, value: String(inv.discountValue) }
+      : { enabled: false, type: "percent", value: "" }
+    );
     setEditOpen(true);
   };
 
@@ -261,6 +293,9 @@ export default function POSInvoicesPage() {
         dueDate: editForm.dueDate || null,
         notes: editForm.notes || null,
         items: validLines,
+        discount: editDiscount.enabled && editDiscount.value
+          ? { type: editDiscount.type, value: parseFloat(editDiscount.value) }
+          : null,
         recurring: {
           enabled: editRecurring.enabled,
           frequency: editRecurring.frequency,
@@ -285,6 +320,7 @@ export default function POSInvoicesPage() {
     setLineSearch([""]);
     setLineDropOpen([false]);
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });
+    setDiscount({ enabled: false, type: "percent", value: "" });
   };
 
   /* ── Create invoice ── */
@@ -300,6 +336,9 @@ export default function POSInvoicesPage() {
       items: validLines,
       invoicePrefix: prefixSettings.invoicePrefix,
       invoiceDigits: prefixSettings.invoiceDigits,
+      discount: discount.enabled && discount.value
+        ? { type: discount.type, value: parseFloat(discount.value) }
+        : null,
       ...(recurring.enabled && {
         recurring: {
           frequency: recurring.frequency,
@@ -606,6 +645,7 @@ export default function POSInvoicesPage() {
       <div class="totals">
         <div class="row"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
         ${opts.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
+        ${inv.discountTotal ? `<div class="row" style="color:#b45309"><span>Discount</span><span>-$${inv.discountTotal.toFixed(2)}</span></div>` : ""}
         <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
       </div>
       ${opts.showLoyaltyEarned ? `<div class="loyalty-block"><span>&#9733; Loyalty Earned</span><span>+${Math.round(inv.total)} pts</span></div>` : ""}
@@ -820,6 +860,11 @@ export default function POSInvoicesPage() {
     doc.text("Subtotal", totX + 2, y); doc.text(`$${inv.subtotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
     if (opts.showGstBreakdown) {
       doc.text("GST (10%)", totX + 2, y); doc.text(`$${inv.taxTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
+    }
+    if (inv.discountTotal) {
+      doc.setTextColor(180, 80, 0);
+      doc.text("Discount", totX + 2, y); doc.text(`-$${inv.discountTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
+      doc.setTextColor(80, 80, 80);
     }
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
@@ -1238,6 +1283,17 @@ export default function POSInvoicesPage() {
                     <div className="flex justify-between text-muted-foreground">
                       <span>Tax</span><span>{formatCurrency(detailInvoice.taxTotal)}</span>
                     </div>
+                    {detailInvoice.discountTotal ? (
+                      <div className="flex justify-between text-amber-700">
+                        <span className="flex items-center gap-1">
+                          <Tag className="w-3 h-3" />
+                          Discount{detailInvoice.discountType === "percent" && detailInvoice.discountValue
+                            ? ` (${detailInvoice.discountValue}%)`
+                            : ""}
+                        </span>
+                        <span>−{formatCurrency(detailInvoice.discountTotal)}</span>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between font-semibold border-t pt-1.5 text-base">
                       <span>Total</span><span>{formatCurrency(detailInvoice.total)}</span>
                     </div>
@@ -1467,11 +1523,61 @@ export default function POSInvoicesPage() {
               </div>
             </div>
 
+            {/* Discount */}
+            <div className="rounded-xl border p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>Discount</span>
+                </div>
+                <Switch checked={discount.enabled} onCheckedChange={(v) => setDiscount((d) => ({ ...d, enabled: v }))} />
+              </div>
+              {discount.enabled && (
+                <div className="flex items-center gap-2 pt-1 border-t">
+                  <div className="flex rounded-md border overflow-hidden text-sm shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDiscount((d) => ({ ...d, type: "fixed" }))}
+                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      <DollarSign className="w-3 h-3" /> $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscount((d) => ({ ...d, type: "percent" }))}
+                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      <Percent className="w-3 h-3" /> %
+                    </button>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={discount.type === "percent" ? 100 : undefined}
+                    step="0.01"
+                    placeholder={discount.type === "percent" ? "e.g. 10" : "e.g. 5.00"}
+                    value={discount.value}
+                    onChange={(e) => setDiscount((d) => ({ ...d, value: e.target.value }))}
+                    className="h-8 text-sm"
+                  />
+                  {discountAmt > 0 && (
+                    <span className="text-xs text-amber-700 font-medium shrink-0">−{formatCurrency(discountAmt)}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Totals */}
             <div className="flex justify-end">
               <div className="w-52 space-y-1 text-sm">
                 <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex-GST)</span><span>{formatCurrency(subtotal)}</span></div>
                 <div className="flex justify-between text-muted-foreground"><span>GST included</span><span>{formatCurrency(taxTotal)}</span></div>
+                {discountAmt > 0 && (
+                  <div className="flex justify-between text-amber-700">
+                    <span className="flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span>
+                    <span>−{formatCurrency(discountAmt)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold border-t pt-1"><span>Total (inc-GST)</span><span>{formatCurrency(invTotal)}</span></div>
               </div>
             </div>
@@ -1642,11 +1748,61 @@ export default function POSInvoicesPage() {
               </div>
             </div>
 
+            {/* Discount */}
+            <div className="rounded-xl border p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>Discount</span>
+                </div>
+                <Switch checked={editDiscount.enabled} onCheckedChange={(v) => setEditDiscount((d) => ({ ...d, enabled: v }))} />
+              </div>
+              {editDiscount.enabled && (
+                <div className="flex items-center gap-2 pt-1 border-t">
+                  <div className="flex rounded-md border overflow-hidden text-sm shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEditDiscount((d) => ({ ...d, type: "fixed" }))}
+                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      <DollarSign className="w-3 h-3" /> $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditDiscount((d) => ({ ...d, type: "percent" }))}
+                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      <Percent className="w-3 h-3" /> %
+                    </button>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={editDiscount.type === "percent" ? 100 : undefined}
+                    step="0.01"
+                    placeholder={editDiscount.type === "percent" ? "e.g. 10" : "e.g. 5.00"}
+                    value={editDiscount.value}
+                    onChange={(e) => setEditDiscount((d) => ({ ...d, value: e.target.value }))}
+                    className="h-8 text-sm"
+                  />
+                  {editDiscountAmt > 0 && (
+                    <span className="text-xs text-amber-700 font-medium shrink-0">−{formatCurrency(editDiscountAmt)}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Totals */}
             <div className="flex justify-end">
               <div className="w-52 space-y-1 text-sm">
                 <div className="flex justify-between text-muted-foreground"><span>Subtotal (ex-GST)</span><span>{formatCurrency(editSubtotal)}</span></div>
                 <div className="flex justify-between text-muted-foreground"><span>GST included</span><span>{formatCurrency(editTaxTotal)}</span></div>
+                {editDiscountAmt > 0 && (
+                  <div className="flex justify-between text-amber-700">
+                    <span className="flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span>
+                    <span>−{formatCurrency(editDiscountAmt)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold border-t pt-1"><span>Total (inc-GST)</span><span>{formatCurrency(editInvTotal)}</span></div>
               </div>
             </div>

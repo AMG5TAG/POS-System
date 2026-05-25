@@ -8,6 +8,25 @@ import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 const router: IRouter = Router();
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
+type Discount = { type: "fixed" | "percent"; value: number };
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function computeTotals(lines: LineItem[], discount?: Discount | null) {
+  const linesGross = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const rawTax     = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / (100 + (i.taxRate ?? 0))), 0);
+
+  let discountAmount = 0;
+  if (discount?.type === "fixed")   discountAmount = Math.min(discount.value, linesGross);
+  else if (discount?.type === "percent") discountAmount = linesGross * Math.min(Math.max(discount.value, 0), 100) / 100;
+  discountAmount = round2(discountAmount);
+
+  const total    = round2(linesGross - discountAmount);
+  const taxTotal = linesGross > 0 ? round2(rawTax * (total / linesGross)) : 0;
+  const subtotal = round2(total - taxTotal);
+
+  return { total, taxTotal, subtotal, discountAmount };
+}
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 
 function customerName(first: string | null, last: string | null): string | null {
@@ -42,6 +61,9 @@ function fmt(
     subtotal: parseFloat(inv.subtotal),
     taxTotal: parseFloat(inv.taxTotal),
     total: parseFloat(inv.total),
+    discountType:  inv.discountType  ?? null,
+    discountValue: inv.discountValue  ? parseFloat(inv.discountValue)  : null,
+    discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
     items: (inv.items as LineItem[] | null) ?? [],
     events: (inv.events as InvoiceEvent[] | null) ?? [],
     dueDate: inv.dueDate?.toISOString() ?? null,
@@ -160,10 +182,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 
   const merchantId = req.session.merchantId!;
   const lines: LineItem[] = lineItems ?? [];
-  // Prices are GST-inclusive (Australian standard): extract tax from price
-  const total    = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const taxTotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / (100 + (i.taxRate ?? 0))), 0);
-  const subtotal = total - taxTotal;
+  const discountInput = (req.body as { discount?: Discount | null }).discount ?? null;
+  const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
   const [countRow] = await db
     .select({ count: sql<number>`count(*)` })
@@ -182,6 +202,9 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     subtotal: String(subtotal),
     taxTotal: String(taxTotal),
     total: String(total),
+    discountType:  discountInput?.type ?? null,
+    discountValue: discountInput?.value != null ? String(discountInput.value) : null,
+    discountTotal: discountAmount > 0 ? String(discountAmount) : null,
     items: lines.length ? lines : null,
     dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ?? null,
@@ -257,9 +280,10 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
 // PATCH /invoices/:id
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { status, notes, dueDate, customerId, items, recurring } = req.body as {
+  const { status, notes, dueDate, customerId, items, recurring, discount } = req.body as {
     status?: string; notes?: string; dueDate?: string;
     customerId?: number | null; items?: LineItem[];
+    discount?: Discount | null;
     recurring?: { enabled: boolean; frequency?: string; startDate?: string | null; occurrences?: number } | null;
   };
   const updates: Record<string, unknown> = {};
@@ -271,15 +295,26 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
-  if (items !== undefined) {
-    const lines: LineItem[] = items;
-    const total    = lines.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-    const taxTotal = lines.reduce((s, i) => s + i.quantity * i.unitPrice * ((i.taxRate ?? 0) / (100 + (i.taxRate ?? 0))), 0);
-    const subtotal = total - taxTotal;
-    updates.items    = lines.length ? lines : null;
-    updates.subtotal = String(subtotal);
-    updates.taxTotal = String(taxTotal);
-    updates.total    = String(total);
+  if (items !== undefined || discount !== undefined) {
+    // Fetch existing items/discount if only one was sent
+    const [existing] = await db
+      .select({ items: invoicesTable.items, discountType: invoicesTable.discountType, discountValue: invoicesTable.discountValue })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
+    const lines: LineItem[] = items ?? ((existing?.items as LineItem[] | null) ?? []);
+    const discountInput: Discount | null = discount !== undefined ? discount : (
+      existing?.discountType && existing?.discountValue
+        ? { type: existing.discountType as "fixed" | "percent", value: parseFloat(existing.discountValue) }
+        : null
+    );
+    const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
+    updates.items         = lines.length ? lines : null;
+    updates.subtotal      = String(subtotal);
+    updates.taxTotal      = String(taxTotal);
+    updates.total         = String(total);
+    updates.discountType  = discountInput?.type ?? null;
+    updates.discountValue = discountInput?.value != null ? String(discountInput.value) : null;
+    updates.discountTotal = discountAmount > 0 ? String(discountAmount) : null;
   }
   if (recurring !== undefined) {
     updates.isRecurring = recurring?.enabled ? "true" : "false";
@@ -432,6 +467,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
       <div style="margin-top:16px;text-align:right;font-size:13px;color:#555;">
         <div>Subtotal: $${parseFloat(inv.subtotal).toFixed(2)}</div>
         ${tpl.showGstBreakdown !== false ? `<div>GST (10%): $${parseFloat(inv.taxTotal).toFixed(2)}</div>` : ""}
+        ${inv.discountTotal ? `<div style="color:#d97706;">Discount: −$${parseFloat(inv.discountTotal).toFixed(2)}</div>` : ""}
         <div style="font-size:16px;font-weight:bold;margin-top:8px;color:${brandColor};">Total: ${totalStr}</div>
       </div>
       ${inv.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${inv.notes}</p>` : ""}
