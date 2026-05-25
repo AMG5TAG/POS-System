@@ -429,7 +429,7 @@ export default function ManagementOverviewPage() {
                   </p>
                 </div>
                 <div className="rounded-2xl border bg-card p-5 space-y-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Previous {actPeriodLabel}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Previous {actPeriodLabel.replace(/^This /, "")}</p>
                   <div className="grid grid-cols-3 gap-4">
                     {[
                       { label: "Service Jobs",  val: prevServices  },
