@@ -29,7 +29,7 @@ import {
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Percent, DollarSign, Tag,
+  Banknote, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1540,16 +1540,16 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                     >
-                      <DollarSign className="w-3 h-3" /> $
+                      $
                     </button>
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                     >
-                      <Percent className="w-3 h-3" /> %
+                      %
                     </button>
                   </div>
                   <Input
@@ -1765,16 +1765,16 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                     >
-                      <DollarSign className="w-3 h-3" /> $
+                      $
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                     >
-                      <Percent className="w-3 h-3" /> %
+                      %
                     </button>
                   </div>
                   <Input
