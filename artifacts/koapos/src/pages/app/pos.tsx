@@ -188,6 +188,8 @@ export default function POSPage() {
   const [openRegisterDialogOpen, setOpenRegisterDialogOpen] = useState(false);
   const [closeRegisterDialogOpen, setCloseRegisterDialogOpen] = useState(false);
   const [cashMovementPrintOpen, setCashMovementPrintOpen] = useState(false);
+  const [eodPrintOpen, setEodPrintOpen] = useState(false);
+  const [lastZReport, setLastZReport] = useState<RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string } | null>(null);
   const [openFloat, setOpenFloat] = useState("");
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
@@ -280,7 +282,97 @@ export default function POSPage() {
     setRegisterOpen(false);
     setCloseRegisterDialogOpen(false);
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
+    setLastZReport(zReport as RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string });
+    setEodPrintOpen(true);
     toast.success("Register closed — Z-report saved");
+  };
+
+  const printEodReport = () => {
+    const z = lastZReport;
+    if (!z) return;
+    const bizName = businessProfile.abn
+      ? `${merchantData?.businessName ?? "Your Business"} · ABN ${businessProfile.abn}`
+      : (merchantData?.businessName ?? "Your Business");
+    const openedAt = z.openedAt ? new Date(z.openedAt) : null;
+    const closedAt = z.closedAt ? new Date(z.closedAt) : null;
+    const dateStr = closedAt?.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) ?? "—";
+    const timeStr = closedAt?.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) ?? "—";
+    const openTime = openedAt?.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) ?? "—";
+    const cashSales = z.sales?.["cash"] ?? 0;
+    const cardSales = (z.sales?.["card"] ?? 0) + (z.sales?.["eftpos"] ?? 0);
+    const splitSales = z.sales?.["split"] ?? 0;
+    const otherSales = Object.entries(z.sales ?? {})
+      .filter(([k]) => !["cash", "card", "eftpos", "split"].includes(k))
+      .reduce((sum, [, v]) => sum + v, 0);
+    const totalSales = Object.values(z.sales ?? {}).reduce((a, b) => a + b, 0);
+    const cashRefunds = z.refunds?.["cash"] ?? 0;
+    const totalRefunds = Object.values(z.refunds ?? {}).reduce((a, b) => a + b, 0);
+    const netSales = totalSales - totalRefunds;
+    const openingFloat = z.openingFloat ?? 0;
+    const expectedCash = openingFloat + cashSales - cashRefunds;
+    const cashCounted = z.cashCounted ?? 0;
+    const cashVariance = cashCounted - expectedCash;
+    const eftposDeclared = z.eftposDeclared ?? 0;
+    const eftposVariance = eftposDeclared - (cardSales + splitSales);
+    const staff = z.openedBy ?? currentStaff?.name ?? "—";
+    const note = z.closingNotes ?? "";
+
+    const w = window.open("", "_blank", "width=420,height=800");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head>
+      <title>End-of-Day Reconciliation</title>
+      <style>
+        *{box-sizing:border-box}
+        body{font-family:'Courier New',monospace;padding:16px;color:#222;max-width:360px;margin:0 auto;font-size:12px}
+        .center{text-align:center}
+        .bold{font-weight:bold}
+        .upper{text-transform:uppercase}
+        .bdr-b{border-bottom:1px dashed #999;padding-bottom:6px;margin-bottom:6px}
+        .bdr-t{border-top:1px dashed #999;padding-top:6px;margin-top:6px}
+        .row{display:flex;justify-content:space-between;margin-bottom:2px}
+        .mt{margin-top:8px}
+        .mb{margin-bottom:8px}
+        .small{font-size:10px}
+        .gray{color:#666}
+        .head{background:#f3f3f3;padding:4px 6px;margin:8px -6px 4px;font-weight:bold;letter-spacing:0.5px}
+        @media print{body{padding:8px}}
+      </style>
+    </head><body>
+      <p class="center bold upper">${bizName}</p>
+      <p class="center small gray">${dateStr} · ${timeStr}</p>
+      <p class="center bdr-b mb">END-OF-DAY RECONCILIATION</p>
+      <div class="row"><span class="gray">Session</span><span>${openTime} — ${timeStr}</span></div>
+      <div class="row"><span class="gray">Staff</span><span>${staff}</span></div>
+      <div class="row"><span class="gray">Transactions</span><span>${z.txCount ?? 0}</span></div>
+
+      <div class="head bdr-t">SALES</div>
+      ${cashSales > 0 ? `<div class="row"><span class="gray">Cash</span><span>$${cashSales.toFixed(2)}</span></div>` : ""}
+      ${cardSales > 0 ? `<div class="row"><span class="gray">Card / EFTPOS</span><span>$${cardSales.toFixed(2)}</span></div>` : ""}
+      ${splitSales > 0 ? `<div class="row"><span class="gray">Split</span><span>$${splitSales.toFixed(2)}</span></div>` : ""}
+      ${otherSales > 0 ? `<div class="row"><span class="gray">Other</span><span>$${otherSales.toFixed(2)}</span></div>` : ""}
+      ${totalRefunds > 0 ? `<div class="row"><span class="gray">Refunds</span><span>−$${totalRefunds.toFixed(2)}</span></div>` : ""}
+      <div class="row bold bdr-t"><span>Net Sales</span><span>$${netSales.toFixed(2)}</span></div>
+
+      <div class="head bdr-t">CASH DRAWER</div>
+      <div class="row"><span class="gray">Opening float</span><span>$${openingFloat.toFixed(2)}</span></div>
+      <div class="row"><span class="gray">Cash sales</span><span>$${cashSales.toFixed(2)}</span></div>
+      ${cashRefunds > 0 ? `<div class="row"><span class="gray">Cash refunds</span><span>−$${cashRefunds.toFixed(2)}</span></div>` : ""}
+      <div class="row bold"><span>Expected</span><span>$${expectedCash.toFixed(2)}</span></div>
+      <div class="row bdr-t"><span class="gray">Counted</span><span>$${cashCounted.toFixed(2)}</span></div>
+      <div class="row bold ${cashVariance === 0 ? "" : cashVariance > 0 ? "gray" : "gray"}"><span>Variance</span><span>${cashVariance >= 0 ? "+" : ""}$${cashVariance.toFixed(2)}</span></div>
+
+      <div class="head bdr-t">EFTPOS / CARD</div>
+      <div class="row"><span class="gray">Card sales (POS)</span><span>$${cardSales.toFixed(2)}</span></div>
+      ${splitSales > 0 ? `<div class="row"><span class="gray">Split (POS)</span><span>$${splitSales.toFixed(2)}</span></div>` : ""}
+      <div class="row"><span class="gray">Terminal total</span><span>$${eftposDeclared.toFixed(2)}</span></div>
+      <div class="row bold"><span>Variance</span><span>${eftposVariance >= 0 ? "+" : ""}$${eftposVariance.toFixed(2)}</span></div>
+
+      ${note ? `<p class="small gray mt">Note: ${note}</p>` : ""}
+      <p class="center small gray mt bdr-t">Keep this receipt for your records.</p>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
   };
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
@@ -2643,6 +2735,26 @@ export default function POSPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── End-of-Day Print Prompt ─── */}
+      <Dialog open={eodPrintOpen} onOpenChange={(o) => { if (!o) setEodPrintOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-primary" /> End-of-Day Reconciliation
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>The till has been closed for the day. Would you like to print the End-of-Day Reconciliation report?</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEodPrintOpen(false)}>No Thanks</Button>
+            <Button onClick={() => { printEodReport(); setEodPrintOpen(false); }}>
+              <Printer className="w-4 h-4 mr-1.5" /> Print Report
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
