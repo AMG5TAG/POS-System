@@ -398,6 +398,7 @@ export default function ServiceJobNewPage() {
   const hasTotalWarning = totalPhotoBytes >= TOTAL_WARN_BYTES;
 
   function handleSubmit() {
+    if (!customerId) { toast.error("Please select a customer"); return; }
     let jobNumberPrefix = "KS", jobNumberDigits = 4;
     try {
       const raw = localStorage.getItem("koapos_code_prefixes");
@@ -471,8 +472,7 @@ export default function ServiceJobNewPage() {
               value={customerId}
               onChange={(id, customer) => { setCustomerId(id); setSelectedCustomer(customer); }}
               placeholder="Search customer..."
-              allowNone
-              noneLabel="No customer (walk-in)"
+              invalid={!customerId}
             />
           </div>
         </div>

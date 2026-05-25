@@ -375,7 +375,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const safeStaff = Array.isArray(staff) ? staff : [];
 
   const handleSubmit = () => {
-    if (!editing && !form.customerId) { toast.error("Please select a customer"); return; }
+    if (!form.customerId) { toast.error("Please select a customer"); return; }
     if (!form.startTime || !form.endTime) { toast.error("Please set start and end times"); return; }
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
@@ -415,21 +415,16 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
           {/* Customer */}
           <div className="space-y-1.5">
             <Label>
-              Customer{" "}
-              {editing
-                ? <span className="text-muted-foreground font-normal">(optional)</span>
-                : <span className="text-destructive">*</span>}
+              Customer <span className="text-destructive">*</span>
             </Label>
             <CustomerSearchInput
               value={form.customerId}
               onChange={(id) => setField("customerId", id)}
               placeholder="Search customer..."
-              allowNone={!!editing}
-              noneLabel="No customer"
-              invalid={!editing && !form.customerId}
+              invalid={!form.customerId}
             />
-            {!editing && !form.customerId && (
-              <p className="text-xs text-muted-foreground">A customer is required to book an on-site appointment.</p>
+            {!form.customerId && (
+              <p className="text-xs text-muted-foreground">A customer is required to book an appointment.</p>
             )}
           </div>
 

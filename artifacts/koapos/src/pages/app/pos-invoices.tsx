@@ -281,6 +281,7 @@ export default function POSInvoicesPage() {
   /* ── Save edits ── */
   const handleUpdate = async () => {
     if (!editingInvoice) return;
+    if (!editForm.customerId) { toast.error("Please select a customer"); return; }
     const validLines = editLines.filter((l) => l.description.trim());
     if (!validLines.length) { toast.error("Add at least one line item"); return; }
     setEditSaving(true);
@@ -325,6 +326,7 @@ export default function POSInvoicesPage() {
 
   /* ── Create invoice ── */
   const handleSave = async () => {
+    if (!form.customerId) { toast.error("Please select a customer"); return; }
     const validLines = lines.filter((l) => l.description.trim());
     if (!validLines.length) { toast.error("Add at least one line item"); return; }
     setSaving(true);
@@ -1439,12 +1441,12 @@ export default function POSInvoicesPage() {
             {/* Customer + Due Date */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Customer (optional)</Label>
+                <Label>Customer <span className="text-destructive">*</span></Label>
                 <CustomerSearchInput
                   value={form.customerId}
                   onChange={(id) => setForm({ ...form, customerId: id })}
-                  allowNone
-                  placeholder="Walk-in customer"
+                  placeholder="Search customer..."
+                  invalid={!form.customerId}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1660,12 +1662,12 @@ export default function POSInvoicesPage() {
             {/* Customer + Due Date */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Customer (optional)</Label>
+                <Label>Customer <span className="text-destructive">*</span></Label>
                 <CustomerSearchInput
                   value={editForm.customerId}
                   onChange={(id) => setEditForm({ ...editForm, customerId: id })}
-                  allowNone
-                  placeholder="Walk-in customer"
+                  placeholder="Search customer..."
+                  invalid={!editForm.customerId}
                 />
               </div>
               <div className="space-y-1.5">
