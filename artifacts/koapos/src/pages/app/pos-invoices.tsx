@@ -333,17 +333,9 @@ export default function POSInvoicesPage() {
     }
   };
 
-  /* ── Row click: open detail + mark viewed ── */
-  const openDetail = async (inv: Invoice) => {
+  /* ── Row click: open detail ── */
+  const openDetail = (inv: Invoice) => {
     setDetailInvoice(inv);
-    if (!inv.viewedAt) {
-      const res = await fetch(`${API}/${inv.id}/viewed`, { method: "PATCH", credentials: "include" });
-      if (res.ok) {
-        const updated = await res.json() as Invoice;
-        setInvoices((prev) => prev.map((i) => i.id === inv.id ? updated : i));
-        setDetailInvoice(updated);
-      }
-    }
   };
 
   /* ── Status update ── */
@@ -977,7 +969,7 @@ export default function POSInvoicesPage() {
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
                       onClick={() => { downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
-                      <Download className="w-3.5 h-3.5" /> Download PDF
+                      <Download className="w-3.5 h-3.5" /> PDF
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
                       onClick={() => { printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
