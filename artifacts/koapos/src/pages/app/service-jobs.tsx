@@ -590,6 +590,28 @@ export default function ServiceJobsPage() {
     return () => clearTimeout(t);
   }, [printState]);
 
+  /* Read active service-sheet template + opts from Management > Sale Templates */
+  const serviceOpts = (() => {
+    const defaults = {
+      showLogo: true, showAbn: true, headerText: "SERVICE JOB SHEET",
+      jobNoFontSize: "normal" as "normal" | "large" | "xlarge",
+      showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
+      showPhotos: true, showSignature: true, showCallHistory: true,
+      callHistoryRows: "6", warrantyText: "", footerText: "",
+    };
+    try {
+      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
+      const tplId  = active.service ?? "ss-standard";
+      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<typeof defaults>;
+      return { ...defaults, ...stored, templateId: tplId };
+    } catch { return { ...defaults, templateId: "ss-standard" }; }
+  })();
+  const isCompact = serviceOpts.templateId === "ss-compact";
+  const callRows  = Math.max(1, Math.min(20, parseInt(serviceOpts.callHistoryRows || "5", 10) || 5));
+  const jobNoSize = serviceOpts.jobNoFontSize === "xlarge" ? 26 : serviceOpts.jobNoFontSize === "large" ? 22 : 18;
+  const abn       = (profile as { abn?: string }).abn ?? "";
+  const logo      = (profile as { logo?: string }).logo ?? "";
+
   const jobs   = Array.isArray(jobsData) ? jobsData : [];
   const active = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled").length;
 
@@ -910,14 +932,20 @@ export default function ServiceJobsPage() {
               style={{ width: "100%", maxWidth: 794, background: "white", padding: "48px 48px 48px 48px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: 12, color: "#111", lineHeight: 1.6 }}
             >
               {/* Header */}
-              <div style={{ borderBottom: `4px solid ${brandColor}`, paddingBottom: 16, marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ fontSize: 20, fontWeight: "bold" }}>{businessName}</div>
-                    <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>Service Job Record</div>
+              <div style={{ borderBottom: `4px solid ${brandColor}`, paddingBottom: isCompact ? 8 : 16, marginBottom: isCompact ? 12 : 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    {serviceOpts.showLogo && logo && (
+                      <img src={logo} alt="Logo" style={{ maxHeight: 42, maxWidth: 80, objectFit: "contain" }} />
+                    )}
+                    <div>
+                      <div style={{ fontSize: isCompact ? 16 : 20, fontWeight: "bold" }}>{businessName}</div>
+                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{serviceOpts.headerText || "SERVICE JOB SHEET"}</div>
+                      {serviceOpts.showAbn && abn && <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>ABN {abn}</div>}
+                    </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 18, fontWeight: "bold", fontFamily: "monospace", color: brandColor }}>{pj.jobNumber}</div>
+                    <div style={{ fontSize: jobNoSize, fontWeight: "bold", fontFamily: "monospace", color: brandColor }}>{pj.jobNumber}</div>
                     <div style={{ fontSize: 11, color: "#666" }}>{pj.bookInDate ? formatDate(pj.bookInDate) : ""}</div>
                     <div style={{ display: "inline-block", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: "bold", marginTop: 4, color: "#334155" }}>
                       {getStatus(pj.status).label}
@@ -927,23 +955,29 @@ export default function ServiceJobsPage() {
               </div>
 
               {/* Customer / Device */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 20 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Customer</div>
-                  <div style={{ fontWeight: "bold" }}>{pj.customerName || "—"}</div>
-                  {pj.customerPhone && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>📞 {pj.customerPhone}</div>}
-                  {pj.customerEmail && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>✉ {pj.customerEmail}</div>}
+              {(serviceOpts.showCustomerDetails || serviceOpts.showDeviceDetails) && (
+                <div style={{ display: "grid", gridTemplateColumns: serviceOpts.showCustomerDetails && serviceOpts.showDeviceDetails ? "1fr 1fr" : "1fr", gap: 24, marginBottom: isCompact ? 12 : 20 }}>
+                  {serviceOpts.showCustomerDetails && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Customer</div>
+                      <div style={{ fontWeight: "bold" }}>{pj.customerName || "—"}</div>
+                      {pj.customerPhone && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>📞 {pj.customerPhone}</div>}
+                      {pj.customerEmail && <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>✉ {pj.customerEmail}</div>}
+                    </div>
+                  )}
+                  {serviceOpts.showDeviceDetails && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Device</div>
+                      {pj.deviceType && <div style={{ fontWeight: "bold" }}>{pj.deviceType}</div>}
+                      {pj.deviceDescription && <div>{pj.deviceDescription}</div>}
+                      {pj.serialNumber && <div style={{ color: "#666", fontSize: 11 }}>SN: {pj.serialNumber}</div>}
+                      {pj.condition && <div style={{ color: "#666", fontSize: 11 }}>Condition: {pj.condition}</div>}
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Device</div>
-                  {pj.deviceType && <div style={{ fontWeight: "bold" }}>{pj.deviceType}</div>}
-                  {pj.deviceDescription && <div>{pj.deviceDescription}</div>}
-                  {pj.serialNumber && <div style={{ color: "#666", fontSize: 11 }}>SN: {pj.serialNumber}</div>}
-                  {pj.condition && <div style={{ color: "#666", fontSize: 11 }}>Condition: {pj.condition}</div>}
-                </div>
-              </div>
+              )}
 
-              {(pj.workDescription || pj.additionalEquipment || pj.passwordOrPin || pj.accounts) && (
+              {serviceOpts.showWorkDescription && (pj.workDescription || pj.additionalEquipment || pj.passwordOrPin || pj.accounts) && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Work Details</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -991,7 +1025,7 @@ export default function ServiceJobsPage() {
                 </div>
               )}
 
-              {Array.isArray(pj.photos) && (pj.photos as string[]).filter(Boolean).length > 0 && (() => {
+              {serviceOpts.showPhotos && Array.isArray(pj.photos) && (pj.photos as string[]).filter(Boolean).length > 0 && (() => {
                 const photoCount = (pj.photos as string[]).filter(Boolean).length;
                 return (
                   <div style={{ marginBottom: 20 }}>
@@ -1005,7 +1039,7 @@ export default function ServiceJobsPage() {
                 );
               })()}
 
-              {pj.signature && (
+              {serviceOpts.showSignature && pj.signature && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Customer Signature</div>
                   <img src={pj.signature} style={{ maxHeight: 80, background: "white", border: "1px solid #e2e8f0", borderRadius: 4, padding: 8 }} />
@@ -1013,27 +1047,44 @@ export default function ServiceJobsPage() {
               )}
 
               {/* Call history table */}
-              <div style={{ marginTop: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Call History</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                  <thead>
-                    <tr style={{ background: "#f8fafc" }}>
-                      {["Date", "Staff", "Notes"].map((h) => (
-                        <th key={h} style={{ border: "1px solid #e2e8f0", padding: "4px 8px", textAlign: "left", fontWeight: "bold", color: "#555" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
-                        <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
-                        <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
+              {serviceOpts.showCallHistory && (
+                <div style={{ marginTop: isCompact ? 12 : 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666", borderBottom: "1px solid #e2e8f0", paddingBottom: 4, marginBottom: 8 }}>Call History</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        {["Date", "Staff", "Notes"].map((h) => (
+                          <th key={h} style={{ border: "1px solid #e2e8f0", padding: "4px 8px", textAlign: "left", fontWeight: "bold", color: "#555" }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: callRows }).map((_, i) => (
+                        <tr key={i}>
+                          <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
+                          <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
+                          <td style={{ border: "1px solid #e2e8f0", padding: "6px 8px", height: 28 }} />
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Warranty / terms */}
+              {serviceOpts.warrantyText && (
+                <div style={{ marginTop: 16, padding: "10px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 4, fontSize: 11, color: "#92400e", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                  <strong style={{ display: "block", marginBottom: 4, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>Warranty / Terms</strong>
+                  {serviceOpts.warrantyText}
+                </div>
+              )}
+
+              {/* Footer */}
+              {serviceOpts.footerText && (
+                <div style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid #e5e7eb", textAlign: "center", fontSize: 10, color: "#999" }}>
+                  {serviceOpts.footerText}
+                </div>
+              )}
             </div>
 
             {/* Sticker */}

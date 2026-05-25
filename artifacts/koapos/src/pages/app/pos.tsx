@@ -72,8 +72,11 @@ const DISPLAY_KEY = "koapos_pos_display";
 
 const DEFAULT_RECEIPT_OPTS = {
   headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
+  customMessage: "", loyaltyQrText: "",
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true,
+  showLoyaltyEarned: false, showBarcode: false, showCustomerQr: false,
+  printCustomerCopy: false,
 };
 
 function formatKode(profit: number): string {
@@ -944,11 +947,20 @@ export default function POSPage() {
   };
 
   const printPosReceipt = () => {
-    const businessName = merchantData?.businessName ?? "Your Store";
-    const abn          = businessProfile.abn ?? "";
-    const website      = businessProfile.website ?? "";
-    const email        = businessProfile.contactEmail ?? "";
-    const brandColor   = businessProfile.brandColors?.[0] ?? "#374151";
+    const esc = (s: string) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+      c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;"
+    ));
+    const rawBusinessName = merchantData?.businessName ?? "Your Store";
+    const rawAbn          = businessProfile.abn ?? "";
+    const rawWebsite      = businessProfile.website ?? "";
+    const rawEmail        = businessProfile.contactEmail ?? "";
+    const rawBrandColor   = businessProfile.brandColors?.[0] ?? "#374151";
+    const businessName = esc(rawBusinessName);
+    const abn          = esc(rawAbn);
+    const website      = esc(rawWebsite);
+    const email        = esc(rawEmail);
+    /* Restrict brandColor to a safe hex literal to prevent CSS injection via the inline style attribute */
+    const brandColor   = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
 
     const activeTemplates = (() => {
       try { return JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
@@ -962,19 +974,23 @@ export default function POSPage() {
     const now = new Date();
     const date = now.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
 
-    const resolveStr = (text: string) => text
-      .replace(/{{business\.name}}/g, businessName)
-      .replace(/{{business\.abn}}/g, abn)
-      .replace(/{{business\.email}}/g, email)
-      .replace(/{{business\.website}}/g, website)
-      .replace(/{{transaction\.total}}/g, formatCurrency(completedTotal))
-      .replace(/{{transaction\.date}}/g, date)
-      .replace(/{{transaction\.number}}/g, receiptNum)
-      .replace(/{{[^}]+}}/g, "");
+    /* Resolve merge tags against RAW values, then escape the final string for HTML insertion */
+    const resolveStr = (text: string) => esc(
+      String(text ?? "")
+        .replace(/{{business\.name}}/g, rawBusinessName)
+        .replace(/{{business\.abn}}/g, rawAbn)
+        .replace(/{{business\.email}}/g, rawEmail)
+        .replace(/{{business\.website}}/g, rawWebsite)
+        .replace(/{{transaction\.total}}/g, formatCurrency(completedTotal))
+        .replace(/{{transaction\.date}}/g, date)
+        .replace(/{{transaction\.number}}/g, receiptNum)
+        .replace(/{{[^}]+}}/g, "")
+    );
 
     const thankYou  = resolveStr(opts.thankYouMsg || "Thank you for your purchase!");
     const footer    = opts.footerText ? resolveStr(opts.footerText) : "";
     const header    = opts.headerText ? resolveStr(opts.headerText) : "";
+    const escReceiptNum = esc(receiptNum);
     const subtotal  = completedSubtotal;
     const gst       = completedTaxTotal;
     const total     = completedTotal;
@@ -983,7 +999,8 @@ export default function POSPage() {
     const itemRows = completedCart.map((i) => {
       const price     = i.customPrice ?? i.product.price;
       const lineTotal = price * i.quantity;
-      const name      = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
+      const rawName   = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
+      const name      = esc(rawName);
       return { name, qty: i.quantity, lineTotal };
     });
 
@@ -995,7 +1012,7 @@ export default function POSPage() {
           <p class="center bold upper">${businessName}</p>
           ${opts.showAbn && abn ? `<p class="center">ABN: ${abn}</p>` : ""}
           <p class="center">${date}</p>
-          ${receiptNum ? `<p class="center">Receipt: ${receiptNum}</p>` : ""}
+          ${receiptNum ? `<p class="center">Receipt: ${escReceiptNum}</p>` : ""}
           <p class="center divider">─────────────────────────</p>
           ${header ? `<p class="center">${header}</p>` : ""}
           ${itemRows.map((i) => `<div class="row"><span>${i.name} ×${i.qty}</span><span>$${i.lineTotal.toFixed(2)}</span></div>`).join("")}
@@ -1008,17 +1025,18 @@ export default function POSPage() {
           ${thankYou ? `<p class="center">${thankYou}</p>` : ""}
           ${footer ? `<p class="center gray">${footer}</p>` : ""}
           ${opts.showWebsite && website ? `<p class="center gray">${website}</p>` : ""}
+          <!--EXTRAS-->
         </div>`;
     } else if (templateId === "r-casual") {
       body = `
         <div class="receipt">
           <div class="center mb">
-            ${opts.showLogo ? `<div class="logo-circle" style="background:${brandColor}">${businessName.charAt(0)}</div>` : ""}
+            ${opts.showLogo ? `<div class="logo-circle" style="background:${brandColor}">${esc(rawBusinessName.charAt(0))}</div>` : ""}
             <p class="bold big">${businessName}</p>
             ${opts.showTagline ? `<p class="gray small">Quality you can trust</p>` : ""}
             ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
             <p class="gray small">${date}</p>
-            ${receiptNum ? `<p class="gray small">Receipt: ${receiptNum}</p>` : ""}
+            ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
           </div>
           ${header ? `<p class="center small">${header}</p>` : ""}
           <div class="items-box">
@@ -1035,6 +1053,7 @@ export default function POSPage() {
             ${footer ? `<p>${footer}</p>` : ""}
             ${opts.showWebsite && email ? `<p class="blue">${email}</p>` : ""}
           </div>
+          <!--EXTRAS-->
         </div>`;
     } else {
       body = `
@@ -1045,7 +1064,7 @@ export default function POSPage() {
             ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
             ${opts.showWebsite && website ? `<p class="gray small">${website}</p>` : ""}
             <p class="gray small">${date}</p>
-            ${receiptNum ? `<p class="gray small">Receipt: ${receiptNum}</p>` : ""}
+            ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
           </div>
           ${header ? `<p class="center small mb">${header}</p>` : ""}
           <table>
@@ -1064,6 +1083,7 @@ export default function POSPage() {
             ${thankYou ? `<p>${thankYou}</p>` : ""}
             ${footer ? `<p>${footer}</p>` : ""}
           </div>
+          <!--EXTRAS-->
         </div>`;
     }
 
@@ -1106,13 +1126,44 @@ export default function POSPage() {
       }
     `;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${receiptNum}</title><style>${css}</style></head><body>${body}</body></html>`;
-    const win = window.open("", "_blank", "width=400,height=600,scrollbars=yes");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => { win.print(); }, 400);
+    /* Extra blocks: loyalty / customer QR / barcode / custom message — appended to selected body */
+    const customerForReceipt = selectedCustomer;
+    const loyaltyEarnedPts   = Math.round(total);
+    const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt)
+      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>+${loyaltyEarnedPts} pts</span></div>`
+      : "";
+    const qrHtml = (opts.showCustomerQr && customerForReceipt)
+      ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888">CUS-${esc(String(customerForReceipt.id))}</div></div><p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText || "Scan for loyalty")}</p></div>`
+      : "";
+    const customMsgHtml = opts.customMessage
+      ? `<p class="center small gray mt" style="line-height:1.5">${resolveStr(opts.customMessage).replace(/\n/g, "<br>")}</p>`
+      : "";
+    const barcodeHtml = opts.showBarcode
+      ? `<div class="center mt"><p style="font-family:monospace;font-size:10px;letter-spacing:3px;color:#666;border:1px solid #ddd;display:inline-block;padding:3px 10px;border-radius:3px">${esc(receiptNum.replace(/^#/, "") || "—")}</p><p class="center gray small">SALE BARCODE</p></div>`
+      : "";
+
+    /* Inject extras at the dedicated sentinel (one per template). Falls back to append if missing. */
+    const extras = `${loyaltyHtml}${customMsgHtml}${qrHtml}${barcodeHtml}`;
+    body = body.includes("<!--EXTRAS-->")
+      ? body.replace("<!--EXTRAS-->", extras)
+      : `${body}${extras}`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}</body></html>`;
+    const printOnce = (label: string) => {
+      const tagged = label
+        ? html.replace("<body>", `<body><p style="text-align:center;font-weight:bold;font-size:11px;color:#9ca3af;letter-spacing:2px;margin-bottom:6px">${label}</p>`)
+        : html;
+      const win = window.open("", "_blank", "width=400,height=600,scrollbars=yes");
+      if (win) {
+        win.document.write(tagged);
+        win.document.close();
+        win.focus();
+        setTimeout(() => { win.print(); }, 400);
+      }
+    };
+    printOnce("");
+    if (opts.printCustomerCopy) {
+      setTimeout(() => printOnce("CUSTOMER COPY"), 800);
     }
   };
 
