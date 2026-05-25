@@ -60,31 +60,34 @@ export function DashboardClockBar({ onCustomize }: { onCustomize?: () => void })
   const displayName = user?.ownerName || user?.businessName || "there";
 
   return (
-    <div className="rounded-2xl border bg-card px-5 py-3 flex items-center gap-5">
-      {/* Live clock */}
-      <div className="flex items-baseline gap-0.5 shrink-0">
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
-          {hours}
-        </span>
-        <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
-          {minutes}
-        </span>
-        <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
-        <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
-          {seconds}
-        </span>
-        <span className="ml-1.5 text-sm font-semibold text-primary/70 self-end pb-0.5">{ampm}</span>
+    <div className="rounded-2xl border bg-card px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+      {/* Top row on mobile: clock + date */}
+      <div className="flex items-center gap-5">
+        {/* Live clock */}
+        <div className="flex items-baseline gap-0.5 shrink-0">
+          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+            {hours}
+          </span>
+          <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
+          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+            {minutes}
+          </span>
+          <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
+          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+            {seconds}
+          </span>
+          <span className="ml-1.5 text-sm font-semibold text-primary/70 self-end pb-0.5">{ampm}</span>
+        </div>
+
+        {/* Day + date */}
+        <div className="shrink-0 border-l pl-5">
+          <p className="text-sm font-bold text-foreground leading-tight">{day}</p>
+          <p className="text-xs text-muted-foreground">{date}</p>
+        </div>
       </div>
 
-      {/* Day + date */}
-      <div className="shrink-0 border-l pl-5">
-        <p className="text-sm font-bold text-foreground leading-tight">{day}</p>
-        <p className="text-xs text-muted-foreground">{date}</p>
-      </div>
-
-      {/* Welcome + hours */}
-      <div className="flex-1 min-w-0 pl-1">
+      {/* Welcome + hours — full width on mobile */}
+      <div className="flex-1 min-w-0">
         <p className="text-sm text-foreground">
           Welcome, <span className="font-semibold">{displayName}</span>
         </p>
@@ -96,7 +99,7 @@ export function DashboardClockBar({ onCustomize }: { onCustomize?: () => void })
       {/* Customise button */}
       <button
         onClick={onCustomize}
-        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-auto"
+        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors self-start sm:self-auto"
         title="Customise dashboard"
       >
         <Settings2 className="w-4 h-4" />

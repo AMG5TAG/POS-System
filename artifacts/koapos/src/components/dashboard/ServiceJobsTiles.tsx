@@ -4,6 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, TrendingUp, FileText, Truck, Users2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,14 +79,28 @@ interface MetricTileProps {
   sub?: React.ReactNode;
 }
 
-function MetricTile({ icon, value, label, iconColor, valueColor, sub }: MetricTileProps) {
+function MetricTile({ icon, value, label, iconColor, valueColor, sub, href }: MetricTileProps & { href?: string }) {
+  const [, navigate] = useLocation();
+  const clickable = !!href;
+  const Wrapper = clickable ? "button" : "div";
   return (
-    <div className="rounded-2xl border bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px]">
+    <Wrapper
+      onClick={clickable ? () => {
+        if (href === "/online/delivery-orders") {
+          sessionStorage.setItem("koapos_deliveries_preselect", "new");
+        }
+        navigate(href);
+      } : undefined}
+      className={cn(
+        "rounded-2xl border bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full",
+        clickable && "cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+      )}
+    >
       <span className={cn("text-xl mb-0.5", iconColor)}>{icon}</span>
       <span className={cn("text-3xl font-bold tabular-nums", valueColor)}>{value}</span>
       <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">{label}</span>
       {sub && <div className="mt-0.5">{sub}</div>}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -225,6 +240,7 @@ export function ServiceJobsTiles({
             label="Pending Deliveries"
             iconColor="text-teal-500"
             valueColor="text-foreground"
+            href="/online/delivery-orders"
           />
           <MetricTile
             icon={<Users2 className="w-5 h-5" />}

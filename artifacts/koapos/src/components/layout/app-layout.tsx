@@ -55,7 +55,7 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
-  { name: "Delivery Orders", href: "/online/delivery-orders", icon: Package2    },
+  { name: "Deliveries", href: "/online/delivery-orders", icon: Package2    },
   { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
   { name: "Marketplace",     href: "/online/marketplace",     icon: ShoppingBag },
 ];
@@ -255,7 +255,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
   { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
-  { label: "Online · Delivery Orders",  href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
+  { label: "Online · Deliveries",     href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
   { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
   { label: "Online · Marketplace",      href: "/online/marketplace",       icon: ShoppingBag,  group: "Online"     },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
@@ -360,7 +360,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/marketing/socials":         ["Management", "Marketing", "Socials"],
   "/management/marketing/online-ads":      ["Management", "Marketing", "Online Ads"],
   "/management/online-store":              ["Management", "Online Store"],
-  "/online/delivery-orders":               ["Online", "Delivery Orders"],
+  "/online/delivery-orders":               ["Online", "Deliveries"],
   "/online/shipping":                      ["Online", "Shipping"],
   "/online/marketplace":                   ["Online", "Marketplace"],
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
@@ -827,6 +827,19 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   );
 }
 
+function useHeaderScrollShadow() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const main = document.getElementById("main-content");
+    if (!main) return;
+    const onScroll = () => setScrolled(main.scrollTop > 4);
+    onScroll();
+    main.addEventListener("scroll", onScroll, { passive: true });
+    return () => main.removeEventListener("scroll", onScroll);
+  }, []);
+  return scrolled;
+}
+
 function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
@@ -838,6 +851,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+  const headerScrolled = useHeaderScrollShadow();
 
   const toggle = (key: string) => setOpenDropdown((d) => (d === key ? null : key));
 
@@ -853,7 +867,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
-      <header ref={headerRef} className="h-14 border-b bg-background flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30">
+      <header ref={headerRef} className={cn("h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-shadow", headerScrolled && "shadow-md")}>
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
           <img src="/logo.png" alt="KoaPOS" className="w-7 h-7 object-contain" />
@@ -1030,7 +1044,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-muted/10">
-      <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
+      <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
         <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
           <Breadcrumbs location={location} />
         </div>
@@ -1293,7 +1307,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
         {isAutoHide ? <AutoHideSidebarWrapper>{sidebarEl}</AutoHideSidebarWrapper> : sidebarEl}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <header className="h-14 flex items-center gap-3 px-4 border-b bg-background shrink-0">
+          <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
             <SidebarTrigger className="md:hidden shrink-0" />
 
             <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>

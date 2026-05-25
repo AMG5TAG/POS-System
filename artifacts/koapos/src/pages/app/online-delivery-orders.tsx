@@ -11,6 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BrandIcon } from "@/components/brand-icon";
+import { useAuth } from "@/lib/use-auth";
 import {
   Package2, Truck, Search, MapPin, Clock, CheckCircle2, AlertCircle,
   Printer, Tag, Package, ShoppingBag, Eye, RefreshCw, FileText,
@@ -46,14 +48,14 @@ interface Order {
   notes?:       string;
 }
 
-const CHANNELS: Record<Channel, { label: string; icon: string; color: string }> = {
-  website:     { label: "Website",      icon: "🌐", color: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"            },
-  shopify:     { label: "Shopify",      icon: "🛒", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"    },
-  woocommerce: { label: "WooCommerce",  icon: "🟣", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"},
-  ebay:        { label: "eBay",         icon: "🅴", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"},
-  amazon:      { label: "Amazon",       icon: "🅰️", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"},
-  uber:        { label: "Uber Eats",    icon: "🚗", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"},
-  doordash:    { label: "DoorDash",     icon: "🍔", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"            },
+const CHANNELS: Record<Channel, { label: string; iconBrand: string; color: string }> = {
+  website:     { label: "Website",      iconBrand: "google",      color: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400" },
+  shopify:     { label: "Shopify",      iconBrand: "shopify",     color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  woocommerce: { label: "WooCommerce",  iconBrand: "woocommerce", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  ebay:        { label: "eBay",         iconBrand: "ebay",        color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  amazon:      { label: "Amazon",       iconBrand: "amazon",      color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  uber:        { label: "Uber Eats",    iconBrand: "ubereats",    color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  doordash:    { label: "DoorDash",     iconBrand: "doordash",    color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
 
 const STATUS_META: Record<OrderStatus, { label: string; color: string; next?: OrderStatus }> = {
@@ -65,74 +67,34 @@ const STATUS_META: Record<OrderStatus, { label: string; color: string; next?: Or
   delivered: { label: "Delivered", color: "bg-muted text-muted-foreground" },
 };
 
-const MOCK_ORDERS: Order[] = [
-  {
-    id: "o1", number: "#KP-1042", channel: "website",
-    customer: "Sarah Johnson", customerEmail: "sarah@example.com", phone: "0412 345 678",
-    address: "12 Park Lane", city: "Sydney", postcode: "2000", state: "NSW",
-    shippingMethod: "Standard (3–5 days)", status: "new",
-    placedAt: "2026-05-24T08:14:00", total: 142.50,
-    items: [
-      { sku: "BEV-001", name: "Organic Coffee Beans 500g", qty: 2, price: 24.00, picked: false },
-      { sku: "SNK-014", name: "Macadamia Cookies", qty: 3, price: 8.50,  picked: false },
-      { sku: "BEV-007", name: "Loose Leaf Tea Sampler",  qty: 1, price: 69.00, picked: false },
-    ],
-  },
-  {
-    id: "o2", number: "#KP-1041", channel: "shopify",
-    customer: "Mike Chen", customerEmail: "mike@example.com", phone: "0423 456 789",
-    address: "44 Beach Rd", city: "Bondi", postcode: "2026", state: "NSW",
-    shippingMethod: "Express (1–2 days)", status: "picking",
-    placedAt: "2026-05-24T07:42:00", total: 89.99,
-    items: [
-      { sku: "ELC-021", name: "Bluetooth Earbuds", qty: 1, price: 89.99, picked: true },
-    ],
-    notes: "Leave at front door if no answer",
-  },
-  {
-    id: "o3", number: "#KP-1040", channel: "woocommerce",
-    customer: "Aisha Patel", customerEmail: "aisha@example.com", phone: "0434 567 890",
-    address: "9 Riverside Dr", city: "Melbourne", postcode: "3000", state: "VIC",
-    shippingMethod: "Standard (3–5 days)", status: "packed",
-    placedAt: "2026-05-23T16:30:00", total: 56.20,
-    items: [
-      { sku: "SNK-001", name: "Mixed Nuts 200g", qty: 4, price: 12.00, picked: true },
-      { sku: "BEV-002", name: "Cold Brew 1L",    qty: 1, price: 8.20,  picked: true },
-    ],
-  },
-  {
-    id: "o4", number: "#KP-1039", channel: "ebay",
-    customer: "James O'Sullivan", customerEmail: "james@example.com", phone: "0445 678 901",
-    address: "210 Hay St", city: "Perth", postcode: "6000", state: "WA",
-    shippingMethod: "Standard (4–7 days)", status: "ready",
-    placedAt: "2026-05-23T11:05:00", total: 215.00,
-    items: [
-      { sku: "ELC-005", name: "USB-C Hub 8-in-1", qty: 1, price: 65.00, picked: true },
-      { sku: "ELC-009", name: "Mechanical Keyboard", qty: 1, price: 150.00, picked: true },
-    ],
-  },
-  {
-    id: "o5", number: "#KP-1038", channel: "amazon",
-    customer: "Lucy Tran", customerEmail: "lucy@example.com", phone: "0456 789 012",
-    address: "5 Queen St", city: "Brisbane", postcode: "4000", state: "QLD",
-    shippingMethod: "Express (1–2 days)", status: "new",
-    placedAt: "2026-05-24T06:15:00", total: 38.50,
-    items: [
-      { sku: "SNK-014", name: "Macadamia Cookies", qty: 2, price: 8.50,  picked: false },
-      { sku: "BEV-001", name: "Organic Coffee Beans 500g", qty: 1, price: 24.00, picked: false },
-    ],
-  },
-  {
-    id: "o6", number: "#KP-1037", channel: "uber",
-    customer: "Daniel Kowalski", customerEmail: "daniel@example.com", phone: "0467 890 123",
-    address: "88 Smith St", city: "Adelaide", postcode: "5000", state: "SA",
-    shippingMethod: "Same-day local", status: "shipped",
-    placedAt: "2026-05-24T05:50:00", total: 24.00,
-    items: [
-      { sku: "BEV-001", name: "Organic Coffee Beans 500g", qty: 1, price: 24.00, picked: true },
-    ],
-  },
-];
+const STORAGE_KEY = "koapos_delivery_orders";
+
+function getStorageKey(): string {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    const user = raw ? JSON.parse(raw) : null;
+    if (user?.id) return `${STORAGE_KEY}_${user.id}`;
+  } catch { /* ignore */ }
+  return STORAGE_KEY;
+}
+
+function loadOrders(): Order[] {
+  const key = getStorageKey();
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+    const old = localStorage.getItem(STORAGE_KEY);
+    if (old) {
+      localStorage.setItem(key, old);
+      return JSON.parse(old);
+    }
+    return [];
+  } catch { return []; }
+}
+
+function saveOrders(orders: Order[]) {
+  localStorage.setItem(getStorageKey(), JSON.stringify(orders));
+}
 
 const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
   { value: "all",      label: "All" },
@@ -144,8 +106,13 @@ const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
 ];
 
 export default function OnlineDeliveryOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  const { user } = useAuth();
+  const preselectFilter = typeof window !== "undefined" ? sessionStorage.getItem("koapos_deliveries_preselect") : null;
+  const initialFilter = preselectFilter as OrderStatus | "all" || "all";
+  if (typeof window !== "undefined") sessionStorage.removeItem("koapos_deliveries_preselect");
+
+  const [orders, setOrders] = useState<Order[]>(loadOrders);
+  const [filter, setFilter] = useState<OrderStatus | "all">(initialFilter);
   const [channelFilter, setChannelFilter] = useState<Channel | "all">("all");
   const [search, setSearch] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -166,23 +133,31 @@ export default function OnlineDeliveryOrdersPage() {
   }), [orders]);
 
   const advance = (orderId: string) => {
-    setOrders((prev) => prev.map((o) => {
-      if (o.id !== orderId) return o;
-      const next = STATUS_META[o.status].next;
-      if (!next) return o;
-      toast.success(`Order ${o.number} moved to ${STATUS_META[next].label}`);
-      return { ...o, status: next };
-    }));
+    setOrders((prev) => {
+      const next = prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const nxt = STATUS_META[o.status].next;
+        if (!nxt) return o;
+        toast.success(`Order ${o.number} moved to ${STATUS_META[nxt].label}`);
+        return { ...o, status: nxt };
+      });
+      saveOrders(next);
+      return next;
+    });
     if (selectedOrder?.id === orderId) {
-      const next = STATUS_META[selectedOrder.status].next;
-      if (next) setSelectedOrder({ ...selectedOrder, status: next });
+      const nxt = STATUS_META[selectedOrder.status].next;
+      if (nxt) setSelectedOrder({ ...selectedOrder, status: nxt });
     }
   };
 
   const togglePicked = (orderId: string, sku: string) => {
-    setOrders((prev) => prev.map((o) =>
-      o.id === orderId ? { ...o, items: o.items.map((it) => it.sku === sku ? { ...it, picked: !it.picked } : it) } : o
-    ));
+    setOrders((prev) => {
+      const next = prev.map((o) =>
+        o.id === orderId ? { ...o, items: o.items.map((it) => it.sku === sku ? { ...it, picked: !it.picked } : it) } : o
+      );
+      saveOrders(next);
+      return next;
+    });
     if (selectedOrder?.id === orderId) {
       setSelectedOrder({ ...selectedOrder, items: selectedOrder.items.map((it) => it.sku === sku ? { ...it, picked: !it.picked } : it) });
     }
@@ -200,7 +175,7 @@ export default function OnlineDeliveryOrdersPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Package2 className="w-6 h-6 text-primary" />
-              Delivery Orders
+              Deliveries
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Online orders ready for picking, packing and dispatch.
@@ -265,7 +240,13 @@ export default function OnlineDeliveryOrdersPage() {
               <SelectTrigger className="h-8 w-36"><SelectValue placeholder="All channels" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All channels</SelectItem>
-                {Object.entries(CHANNELS).map(([id, c]) => <SelectItem key={id} value={id}>{c.icon} {c.label}</SelectItem>)}
+                {Object.entries(CHANNELS).map(([id, c]) => (
+                  <SelectItem key={id} value={id}>
+                    <span className="flex items-center gap-1.5">
+                      <BrandIcon name={c.iconBrand} size={16} /> {c.label}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </CardContent>
@@ -310,7 +291,7 @@ export default function OnlineDeliveryOrdersPage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <Badge variant="secondary" className={cn("text-[10px] border-0 gap-1", ch.color)}>
-                            <span>{ch.icon}</span>{ch.label}
+                            <BrandIcon name={ch.iconBrand} size={14} />{ch.label}
                           </Badge>
                         </td>
                         <td className="px-4 py-2.5">
@@ -358,7 +339,7 @@ export default function OnlineDeliveryOrdersPage() {
                   <div className="flex items-center gap-2">
                     <DialogTitle className="font-mono">{selectedOrder.number}</DialogTitle>
                     <Badge variant="secondary" className={cn("text-[10px] border-0 gap-1", ch.color)}>
-                      <span>{ch.icon}</span>{ch.label}
+                      <BrandIcon name={ch.iconBrand} size={14} />{ch.label}
                     </Badge>
                     <Badge className={cn("text-[10px] border-0 ml-auto", st.color)}>{st.label}</Badge>
                   </div>

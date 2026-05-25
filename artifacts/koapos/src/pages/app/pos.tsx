@@ -22,6 +22,8 @@ import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
   getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
   ACTIVE_REGISTER_KEY,
+  getStaffLoginMessage, setStaffAcknowledged, hasStaffAcknowledged,
+  type StaffLoginMessage,
 } from "@/pages/app/management-registers";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,7 +40,9 @@ import {
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
+  MessageSquareWarning,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -234,6 +238,11 @@ export default function POSPage() {
   };
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
+
+  /* staff login message */
+  const [loginMsg, setLoginMsg] = useState<StaffLoginMessage | null>(null);
+  const [loginMsgOpen, setLoginMsgOpen] = useState(false);
+  const [msgAckChecked, setMsgAckChecked] = useState(false);
 
   /* ── Data fetches ── */
   /* Effective category for API filtering — last element of drill-down path.
@@ -988,6 +997,19 @@ export default function POSPage() {
     try { localStorage.setItem("koapos_pos_staff", JSON.stringify(staff)); } catch { /* ignore */ }
     setPinDialogOpen(false); setPinInput(""); setPinError("");
     toast.success(`Signed in as ${staff.name}`);
+
+    /* staff login message */
+    const msg = getStaffLoginMessage();
+    if (msg?.enabled && msg.text.trim()) {
+      const merchantId = merchantData?.id ?? 0;
+      const alreadyAcked = msg.requireAck ? hasStaffAcknowledged(merchantId, staff.id, msg) : false;
+      if (!alreadyAcked) {
+        setLoginMsg(msg);
+        setMsgAckChecked(false);
+        setLoginMsgOpen(true);
+      }
+    }
+
     if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
   };
 
@@ -2270,6 +2292,51 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(false); }}>Cancel</Button>
             <Button onClick={handlePinSubmit} disabled={!pinInput}>Sign In</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Staff Login Message Dialog ─── */}
+      <Dialog open={loginMsgOpen} onOpenChange={(o) => { if (!o) { setLoginMsgOpen(false); setMsgAckChecked(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquareWarning className="w-5 h-5 text-amber-500" /> Important Notice
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+              {loginMsg?.text}
+            </div>
+            {loginMsg?.requireAck && (
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="msg-ack"
+                  checked={msgAckChecked}
+                  onCheckedChange={(c) => setMsgAckChecked(c === true)}
+                />
+                <Label htmlFor="msg-ack" className="text-xs leading-relaxed cursor-pointer">
+                  I acknowledge I have read this message and understand its contents. I must tick this box before continuing.
+                </Label>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (loginMsg?.requireAck && !msgAckChecked) {
+                  toast.error("Please tick the acknowledgment box to continue.");
+                  return;
+                }
+                if (loginMsg && currentStaff && merchantData) {
+                  setStaffAcknowledged(merchantData.id, currentStaff.id, loginMsg);
+                }
+                setLoginMsgOpen(false);
+                setMsgAckChecked(false);
+              }}
+            >
+              {loginMsg?.requireAck ? "Acknowledge & Continue" : "Continue"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -4,6 +4,7 @@ import { useListStaff } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -26,6 +27,53 @@ const REGISTER_TABS = [
 
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
+export const STAFF_LOGIN_MSG_KEY = "koapos_staff_login_msg";
+
+export interface StaffLoginMessage {
+  text: string;
+  requireAck: boolean;
+  enabled: boolean;
+}
+
+function getMsgStorageKey(): string {
+  try {
+    const raw = localStorage.getItem("koapos_auth_user");
+    const user = raw ? JSON.parse(raw) : null;
+    if (user?.id) return `${STAFF_LOGIN_MSG_KEY}_${user.id}`;
+  } catch { /* ignore */ }
+  return STAFF_LOGIN_MSG_KEY;
+}
+
+export function getStaffLoginMessage(): StaffLoginMessage | null {
+  try {
+    const raw = localStorage.getItem(getMsgStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function saveStaffLoginMessage(msg: StaffLoginMessage | null) {
+  if (msg) localStorage.setItem(getMsgStorageKey(), JSON.stringify(msg));
+  else localStorage.removeItem(getMsgStorageKey());
+}
+
+export function hasStaffAcknowledged(merchantId: number | string, staffId: number | string, msg: StaffLoginMessage): boolean {
+  try {
+    const key = `koapos_staff_ack_${merchantId}_${staffId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const ack = JSON.parse(raw) as { hash: string; at: string };
+    const hash = btoa(msg.text).slice(0, 16);
+    return ack.hash === hash && msg.requireAck;
+  } catch { return false; }
+}
+
+export function setStaffAcknowledged(merchantId: number | string, staffId: number | string, msg: StaffLoginMessage) {
+  try {
+    const key = `koapos_staff_ack_${merchantId}_${staffId}`;
+    const hash = btoa(msg.text).slice(0, 16);
+    localStorage.setItem(key, JSON.stringify({ hash, at: new Date().toISOString() }));
+  } catch { /* ignore */ }
+}
 
 export const ALL_PAYMENT_METHODS = [
   { id: "cash",           label: "Cash",                description: "Physical cash and change",                icon: Banknote },
@@ -451,6 +499,77 @@ function ForceStaffLoginToggle() {
   );
 }
 
+function StaffLoginMessageToggle() {
+  const [msg, setMsg] = useState<StaffLoginMessage>(() => getStaffLoginMessage() ?? { text: "", requireAck: false, enabled: false });
+  const [editing, setEditing] = useState(false);
+
+  const toggle = (v: boolean) => {
+    const next = { ...msg, enabled: v };
+    setMsg(next);
+    saveStaffLoginMessage(next);
+  };
+
+  const save = () => {
+    saveStaffLoginMessage(msg);
+    setEditing(false);
+    toast.success("Staff login message saved");
+  };
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Staff Login Message</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Show a message to staff when they sign in at the POS.
+          </p>
+        </div>
+        <Switch checked={msg.enabled} onCheckedChange={toggle} />
+      </div>
+      {msg.enabled && (
+        <div className="space-y-3 pt-1">
+          {editing ? (
+            <>
+              <Textarea
+                value={msg.text}
+                onChange={(e) => setMsg((m) => ({ ...m, text: e.target.value }))}
+                placeholder="Enter the message staff will see on login..."
+                rows={3}
+              />
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={msg.requireAck}
+                  onCheckedChange={(v) => setMsg((m) => ({ ...m, requireAck: v }))}
+                  id="ack-switch"
+                />
+                <Label htmlFor="ack-switch" className="text-xs cursor-pointer">
+                  Require staff to tick a box acknowledging they have read this message
+                </Label>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={save}>Save Message</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setMsg(getStaffLoginMessage() ?? { text: "", requireAck: false, enabled: false }); setEditing(false); }}>Cancel</Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              {msg.text ? (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">{msg.text}</div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No message set yet.</p>
+              )}
+              <div className="flex items-center gap-2">
+                {msg.requireAck && <Badge variant="outline" className="text-[10px]">Acknowledgment Required</Badge>}
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit Message</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Hardware section ───────────────────────────────────────────────────── */
 
 const HARDWARE_KEY = "koapos_hardware_settings";
@@ -852,6 +971,7 @@ export default function ManagementRegistersPage() {
           <GridLayoutSection />
           <div className="rounded-xl border divide-y">
             <ForceStaffLoginToggle />
+            <StaffLoginMessageToggle />
           </div>
           <div id="hardware">
             <HardwareSection />

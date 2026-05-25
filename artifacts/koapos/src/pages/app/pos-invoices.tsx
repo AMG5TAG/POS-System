@@ -1151,7 +1151,7 @@ export default function POSInvoicesPage() {
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                         <Input
-                          value={lineSearch[i] !== undefined ? lineSearch[i] : line.description}
+                          value={(lineSearch[i] ?? "") !== "" ? lineSearch[i] : line.description}
                           placeholder="Search or type description..."
                           className="h-8 text-sm pl-6"
                           onFocus={() => setLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
