@@ -615,7 +615,7 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, logo, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
@@ -646,7 +646,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
     return (
       <div className="font-mono text-xs text-gray-800 space-y-0.5 leading-snug">
         <p className="text-center font-bold uppercase">{businessName}</p>
-        {opts.showTagline && <p className="text-center text-[9px]">Quality you can trust</p>}
+        {opts.showTagline && tagline && <p className="text-center text-[9px]">{tagline}</p>}
         {opts.showAbn && abn && <p className="text-center">ABN: {abn}</p>}
         <p className="text-center">{date}</p>
         <p className="text-center">─────────────────</p>
@@ -674,7 +674,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
             : <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-lg font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
           )}
           <p className="font-bold text-base">{businessName}</p>
-          {opts.showTagline && <p className="text-gray-400 text-[10px] italic">Quality you can trust</p>}
+          {opts.showTagline && tagline && <p className="text-gray-400 text-[10px] italic">{tagline}</p>}
           {opts.showAbn && abn && <p className="text-gray-400 text-[9px]">ABN {abn}</p>}
           <p className="text-gray-500 text-[10px]">{date}</p>
         </div>
@@ -704,7 +704,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           : <div className="w-6 h-6 rounded mx-auto mb-1" style={{ background: brandColor }} />
         )}
         <p className="font-bold text-sm uppercase tracking-wide">{businessName}</p>
-        {opts.showTagline && <p className="text-[9px] text-gray-500 italic">Quality you can trust</p>}
+        {opts.showTagline && tagline && <p className="text-[9px] text-gray-500 italic">{tagline}</p>}
         {opts.showAbn && abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
         <p className="text-[10px] text-gray-400">{date}</p>
       </div>
@@ -728,7 +728,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   );
 }
 
-function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, logo, opts }: PreviewProps) {
+function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, tagline, logo, opts }: PreviewProps) {
   const items = [{ name: "Product Design Services", qty: 3, price: 150 }, { name: "Logo Package", qty: 1, price: 450 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
@@ -853,7 +853,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <div className="p-2 rounded-t text-white text-xs font-bold flex justify-between items-center mb-2" style={{ background: brandColor }}>
           <span className="text-base">{businessName}</span><span className="opacity-80">INVOICE #1042</span>
         </div>
-        {opts.showTagline && <p className="text-[9px] text-gray-400 italic mb-1.5">Quality you can trust</p>}
+        {opts.showTagline && tagline && <p className="text-[9px] text-gray-400 italic mb-1.5">{tagline}</p>}
         <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
           <div>
             <p className="text-gray-400">From</p>
@@ -904,7 +904,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
             : <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />
           )}
           <p className="font-bold text-xs">{businessName}</p>
-          {opts.showTagline && <p className="text-[9px] text-gray-400 italic">Quality you can trust</p>}
+          {opts.showTagline && tagline && <p className="text-[9px] text-gray-400 italic">{tagline}</p>}
           {opts.showAbn    && abn     && <p className="text-gray-500">ABN {abn}</p>}
           {address && <p className="text-gray-500">{address}</p>}
           {email   && <p className="text-gray-500">{email}</p>}
