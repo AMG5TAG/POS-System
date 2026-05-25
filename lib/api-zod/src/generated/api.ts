@@ -880,6 +880,9 @@ export const GetCustomerHistoryResponse = zod.object({
   "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
   "notes": zod.string().nullish(),
   "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
   "staffName": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -1852,6 +1855,9 @@ export const ListAppointmentsResponseItem = zod.object({
   "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
   "notes": zod.string().nullish(),
   "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
   "staffName": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -1910,6 +1916,9 @@ export const UpdateAppointmentResponse = zod.object({
   "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
   "notes": zod.string().nullish(),
   "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
   "staffName": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })

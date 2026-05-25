@@ -793,6 +793,12 @@ export interface Appointment {
   /** @nullable */
   customerName?: string | null;
   /** @nullable */
+  customerPhone?: string | null;
+  /** @nullable */
+  customerEmail?: string | null;
+  /** @nullable */
+  customerAddress?: string | null;
+  /** @nullable */
   staffName?: string | null;
   createdAt: string;
 }

@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
-  ChevronLeft, ChevronRight, CalendarDays,
+  ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -223,11 +223,35 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           {(appt.customerName || appt.staffName) && (
             <div className="rounded-xl border bg-muted/20 divide-y">
               {appt.customerName && (
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="text-sm">
-                    <p className="text-xs text-muted-foreground">Customer</p>
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <User className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="text-sm min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Customer</p>
                     <p className="font-medium">{appt.customerName}</p>
+                    {appt.customerPhone && (
+                      <a
+                        href={`tel:${appt.customerPhone}`}
+                        className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Phone className="w-3 h-3 shrink-0" />
+                        {appt.customerPhone}
+                      </a>
+                    )}
+                    {appt.customerEmail && (
+                      <a
+                        href={`mailto:${appt.customerEmail}`}
+                        className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Mail className="w-3 h-3 shrink-0" />
+                        {appt.customerEmail}
+                      </a>
+                    )}
+                    {appt.customerAddress && (
+                      <p className="flex items-start gap-1.5 mt-0.5 text-xs text-muted-foreground">
+                        <MapPin className="w-3 h-3 shrink-0 mt-px" />
+                        {appt.customerAddress}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

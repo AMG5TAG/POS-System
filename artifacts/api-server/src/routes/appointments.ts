@@ -6,14 +6,25 @@ import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, 
 
 const router: IRouter = Router();
 
+type CustomerRow = typeof customersTable.$inferSelect;
+
 async function formatAppointment(
   a: typeof appointmentsTable.$inferSelect,
-  customerMap: Map<number, { firstName: string | null; lastName: string | null }>,
+  customerMap: Map<number, CustomerRow>,
   staffMap: Map<number, { name: string }>,
 ) {
   const customer = a.customerId ? customerMap.get(a.customerId) : null;
   const staff = a.staffId ? staffMap.get(a.staffId) : null;
   const endAt = new Date(a.scheduledAt.getTime() + a.durationMinutes * 60 * 1000);
+
+  const billingParts = [
+    customer?.billingStreet, customer?.billingCity,
+    customer?.billingState, customer?.billingPostcode,
+  ].filter(Boolean);
+  const customerAddress = billingParts.length
+    ? billingParts.join(", ")
+    : (customer?.address ?? null);
+
   return {
     id: a.id,
     merchantId: a.merchantId,
@@ -26,7 +37,10 @@ async function formatAppointment(
     durationMinutes: a.durationMinutes,
     status: a.status,
     notes: a.notes ?? null,
-    customerName: customer ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null : null,
+    customerName:    customer ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null : null,
+    customerPhone:   customer?.phone   ?? null,
+    customerEmail:   customer?.email   ?? null,
+    customerAddress: customerAddress,
     staffName: staff?.name ?? null,
     createdAt: a.createdAt.toISOString(),
   };

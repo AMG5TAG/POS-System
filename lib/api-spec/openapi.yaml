@@ -3313,6 +3313,12 @@ components:
           type: ["string", "null"]
         customerName:
           type: ["string", "null"]
+        customerPhone:
+          type: ["string", "null"]
+        customerEmail:
+          type: ["string", "null"]
+        customerAddress:
+          type: ["string", "null"]
         staffName:
           type: ["string", "null"]
         createdAt:
