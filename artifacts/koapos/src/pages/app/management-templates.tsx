@@ -521,8 +521,6 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "i-pro",     name: "Professional", style: "professional", description: "Logo, payment terms, itemised table"                 },
     { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"               },
     { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"               },
-    { id: "a4-pro",    name: "A4 Receipt — Pro",    style: "professional", description: "Full-page receipt: logo, totals, thank-you" },
-    { id: "a4-casual", name: "A4 Receipt — Casual", style: "casual",       description: "Friendly A4 receipt with message and socials" },
   ],
   emails:     [
     { id: "e-pro",     name: "Professional", style: "professional", description: "HTML email with header banner, itemised receipt"    },
@@ -937,70 +935,6 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   );
 }
 
-function A4ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, opts }: PreviewProps) {
-  const items = [{ name: "Flat White ×2", price: 8.00 }, { name: "Banana Bread ×1", price: 6.50 }];
-  const total = items.reduce((s, i) => s + i.price, 0);
-  const thankYou = opts.thankYouMsg || "Thank you so much!";
-  const customMsg = opts.customMessage;
-  const footer    = opts.footerText;
-
-  if (templateId === "a4-casual") {
-    return (
-      <div className="text-[10px] text-gray-800">
-        <div className="text-center mb-3 p-2 rounded-t" style={{ background: `${brandColor}18` }}>
-          {opts.showLogo && (logo
-            ? <img src={logo} alt="Logo" className="w-10 h-10 rounded-full object-contain mx-auto mb-1" />
-            : <div className="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
-          )}
-          <p className="font-bold text-sm">{businessName}</p>
-          {opts.showTagline && tagline && <p className="text-[10px] text-gray-500 italic">{tagline}</p>}
-          {opts.showAbn && abn && <p className="text-[10px] text-gray-400">ABN {abn}</p>}
-        </div>
-        <p className="text-center text-gray-500 mb-2 text-[10px]">18 May 2026 · 10:42 AM · Receipt #0042</p>
-        <div className="bg-gray-50 rounded p-2 space-y-1 text-[10px] mb-2">
-          {items.map((i) => <div key={i.name} className="flex justify-between"><span>{i.name}</span><span>${i.price.toFixed(2)}</span></div>)}
-        </div>
-        <div className="flex justify-between font-bold text-xs mb-2" style={{ color: brandColor }}><span>Total Paid</span><span>${total.toFixed(2)}</span></div>
-        <Separator className="my-2" />
-        <p className="text-center font-bold text-xs mb-1">{resolveCode(thankYou, businessName, abn, website, email)}</p>
-        {customMsg && <p className="text-center text-[10px] text-gray-500 mb-1">{resolveCode(customMsg, businessName, abn, website, email)}</p>}
-        {footer    && <p className="text-center text-[10px] text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
-        {opts.showWebsite && website && <p className="text-center text-[10px] text-blue-500 mt-1">{website}</p>}
-      </div>
-    );
-  }
-  return (
-    <div className="text-[10px] text-gray-800">
-      <div className="flex justify-between items-start border-b pb-2 mb-2 gap-4">
-        <div className="min-w-0">
-          {opts.showLogo && <div className="w-5 h-5 rounded mb-1" style={{ background: brandColor }} />}
-          <p className="font-bold text-xs truncate">{businessName}</p>
-          {opts.showAbn    && abn     && <p className="text-gray-400 truncate">ABN {abn}</p>}
-          {email   && <p className="text-gray-400 truncate">{email}</p>}
-          {opts.showWebsite && website && <p className="text-gray-400 truncate">{website}</p>}
-        </div>
-        <div className="text-right shrink-0">
-          <p className="font-bold text-xs whitespace-nowrap" style={{ color: brandColor }}>TAX INVOICE / RECEIPT</p>
-          <p className="text-gray-400 whitespace-nowrap">#0042 · 18/05/2026</p>
-        </div>
-      </div>
-      <table className="w-full text-[10px] mb-1">
-        <thead><tr className="border-b"><th className="text-left">Description</th><th className="text-right">Amount</th></tr></thead>
-        <tbody>{items.map((i) => <tr key={i.name}><td className="py-0.5">{i.name}</td><td className="text-right">${i.price.toFixed(2)}</td></tr>)}</tbody>
-      </table>
-      <div className="border-t pt-1 space-y-0.5 text-[10px]">
-        {opts.showGstBreakdown && <div className="flex justify-between text-gray-500"><span>GST Included</span><span>${(total / 11).toFixed(2)}</span></div>}
-        <div className="flex justify-between font-bold"><span>TOTAL PAID (AUD)</span><span>${total.toFixed(2)}</span></div>
-      </div>
-      <div className="text-center text-[10px] text-gray-400 border-t mt-2 pt-1 space-y-0.5">
-        <p>{resolveCode(thankYou, businessName, abn, website, email)}</p>
-        {customMsg && <p>{resolveCode(customMsg, businessName, abn, website, email)}</p>}
-        {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
-      </div>
-    </div>
-  );
-}
-
 function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, logo, opts }: PreviewProps) {
   const greeting = opts.customGreeting || "Hi Sarah,";
   const signOff  = opts.customSignOff  || `— The team at ${businessName}`;
@@ -1273,10 +1207,7 @@ export default function ManagementTemplatesPage() {
   const renderPreview = () => {
     switch (activeCategory) {
       case "receipts": return <ReceiptPreview    {...previewProps} />;
-      case "invoices":
-        return previewId.startsWith("a4-")
-          ? <A4ReceiptPreview {...previewProps} />
-          : <InvoicePreview  {...previewProps} />;
+      case "invoices": return <InvoicePreview {...previewProps} />;
       case "emails":  return <EmailPreview       {...previewProps} />;
       case "sms":     return <SMSPreview          {...previewProps} />;
       case "service": return <ServiceSheetPreview {...previewProps} />;
