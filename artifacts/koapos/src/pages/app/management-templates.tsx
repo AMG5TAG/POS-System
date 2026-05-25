@@ -19,7 +19,7 @@ import {
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "receipts" | "invoices" | "a4receipts" | "emails" | "sms" | "service";
+type Category = "receipts" | "invoices" | "emails" | "sms" | "service";
 
 interface TemplateOption {
   id: string;
@@ -157,35 +157,26 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
     ];
     case "invoices": return [
-      { section: "Header",   key: "showLogo",                label: "Show Business Logo",      type: "toggle" },
-      { section: "Header",   key: "showAbn",                 label: "Show ABN",                type: "toggle" },
-      { section: "Header",   key: "showTagline",             label: "Show Tagline",            type: "toggle" },
+      { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
+      { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
+      { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
+      { section: "Header",   key: "headerText",              label: "Custom Header Text",        type: "text",     placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
-      { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",   type: "toggle", hint: "QR code linked to customer loyalty profile" },
-      { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",           type: "text",   placeholder: "Scan to view customer loyalty profile" },
-      { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",      type: "toggle" },
-      { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",     type: "toggle" },
-      { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",       type: "toggle", hint: "Scannable barcode to retrieve this sale" },
-      { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",   type: "toggle", hint: "Shows methods enabled in POS Registers" },
-      { section: "Payment",  key: "paymentSectionHeading",  label: "Payment Heading",         type: "text",     placeholder: "PAYMENT DETAILS" },
-      { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",   type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
-      { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",           type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
-      { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",           type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
-      { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",   type: "toggle", hint: "Pulls social links from Business Info" },
-      { section: "Footer",   key: "footerText",              label: "Footer Text",             type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
-      { section: "Footer",   key: "showWebsite",             label: "Show Website",            type: "toggle" },
-    ];
-    case "a4receipts": return [
-      { section: "Header", key: "showLogo",           label: "Show Logo",           type: "toggle" },
-      { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
-      { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
-      { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
-      { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
-      { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
-      { section: "Footer", key: "customMessage",      label: "Custom Message",      type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
-      { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Visit us again at {{business.website}}", quickCodes: true },
-      { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
-      { section: "Footer", key: "showSocialLinks",    label: "Show Social Links",   type: "toggle" },
+      { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
+      { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
+      { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
+      { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
+      { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",         type: "toggle", hint: "Scannable barcode to retrieve this sale" },
+      { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",     type: "toggle", hint: "Shows methods enabled in POS Registers" },
+      { section: "Payment",  key: "paymentSectionHeading",   label: "Payment Heading",           type: "text",     placeholder: "PAYMENT DETAILS" },
+      { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",     type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
+      { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
+      { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",             type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
+      { section: "Footer",   key: "thankYouMsg",             label: "Thank You Message",         type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
+      { section: "Footer",   key: "customMessage",           label: "Custom Message",            type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
+      { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
     ];
     case "emails": return [
       { section: "Subject", key: "subjectLine",       label: "Subject Line",        type: "text",     placeholder: "Your receipt from {{business.name}}", quickCodes: true },
@@ -526,13 +517,11 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "r-minimal", name: "Minimal",      style: "minimal",      description: "Text-only, ultra-compact, fast printing"            },
   ],
   invoices:   [
-    { id: "i-pro",     name: "Professional", style: "professional", description: "Logo, payment terms, itemised table"                },
-    { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"              },
-    { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"              },
-  ],
-  a4receipts: [
-    { id: "a4-pro",    name: "Professional", style: "professional", description: "Full-page receipt with logo and business details"   },
-    { id: "a4-casual", name: "Casual",       style: "casual",       description: "Friendly A4 with thank you message and socials"    },
+    { id: "i-pro",     name: "Professional", style: "professional", description: "Logo, payment terms, itemised table"                 },
+    { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"               },
+    { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"               },
+    { id: "a4-pro",    name: "A4 Receipt — Pro",    style: "professional", description: "Full-page receipt: logo, totals, thank-you" },
+    { id: "a4-casual", name: "A4 Receipt — Casual", style: "casual",       description: "Friendly A4 receipt with message and socials" },
   ],
   emails:     [
     { id: "e-pro",     name: "Professional", style: "professional", description: "HTML email with header banner, itemised receipt"    },
@@ -551,10 +540,9 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
-  receipts:   { label: "Receipts",    icon: Receipt,       color: "text-blue-500"    },
-  invoices:   { label: "Invoices",    icon: FileText,      color: "text-violet-500"  },
-  a4receipts: { label: "A4 Receipts", icon: Printer,       color: "text-emerald-500" },
-  emails:     { label: "Emails",      icon: Mail,          color: "text-amber-500"   },
+  receipts:   { label: "Receipts",     icon: Receipt,       color: "text-blue-500"    },
+  invoices:   { label: "Invoices",     icon: FileText,      color: "text-violet-500"  },
+  emails:     { label: "Emails",       icon: Mail,          color: "text-amber-500"   },
   sms:        { label: "SMS",          icon: MessageSquare, color: "text-rose-500"    },
   service:    { label: "Service Sheet", icon: ClipboardList, color: "text-cyan-500"    },
 };
@@ -1246,7 +1234,7 @@ export default function ManagementTemplatesPage() {
 
   useEffect(() => {
     const defaults: Record<Category, string> = {
-      receipts: "r-pro", invoices: "i-pro", a4receipts: "a4-pro", emails: "e-pro", sms: "s-receipt", service: "ss-standard",
+      receipts: "r-pro", invoices: "i-pro", emails: "e-pro", sms: "s-receipt", service: "ss-standard",
     };
     setPreviewId(activeTemplates[activeCategory] ?? defaults[activeCategory]);
   }, [activeCategory, activeTemplates]);
@@ -1287,12 +1275,14 @@ export default function ManagementTemplatesPage() {
 
   const renderPreview = () => {
     switch (activeCategory) {
-      case "receipts":   return <ReceiptPreview   {...previewProps} />;
-      case "invoices":   return <InvoicePreview   {...previewProps} />;
-      case "a4receipts": return <A4ReceiptPreview {...previewProps} />;
-      case "emails":     return <EmailPreview     {...previewProps} />;
-      case "sms":        return <SMSPreview        {...previewProps} />;
-      case "service":    return <ServiceSheetPreview {...previewProps} />;
+      case "receipts": return <ReceiptPreview    {...previewProps} />;
+      case "invoices":
+        return previewId.startsWith("a4-")
+          ? <A4ReceiptPreview {...previewProps} />
+          : <InvoicePreview  {...previewProps} />;
+      case "emails":  return <EmailPreview       {...previewProps} />;
+      case "sms":     return <SMSPreview          {...previewProps} />;
+      case "service": return <ServiceSheetPreview {...previewProps} />;
     }
   };
 
@@ -1384,9 +1374,6 @@ export default function ManagementTemplatesPage() {
             <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
               {activeCategory === "receipts" && (
                 <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
-              )}
-              {activeCategory === "a4receipts" && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
               )}
               {activeCategory === "invoices" && (
                 <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
