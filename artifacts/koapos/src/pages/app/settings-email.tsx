@@ -23,6 +23,16 @@ import { cn } from "@/lib/utils";
 
 type Provider = "none" | "smtp" | "resend" | "sendgrid";
 
+const SI = (slug: string, hex: string) => `https://cdn.simpleicons.org/${slug}/${hex}`;
+
+function ProviderLogo({ src, bg, alt }: { src: string; bg: string; alt: string }) {
+  return (
+    <span className={`inline-flex items-center justify-center w-5 h-5 rounded overflow-hidden shrink-0 ${bg}`}>
+      <img src={src} alt={alt} className="w-3.5 h-3.5 object-contain" />
+    </span>
+  );
+}
+
 const PROVIDERS: { id: Provider; label: string; description: string; icon: React.ReactNode; usesKey: boolean }[] = [
   {
     id: "none",
@@ -42,14 +52,14 @@ const PROVIDERS: { id: Provider; label: string; description: string; icon: React
     id: "resend",
     label: "Resend",
     description: "Simple API-key based email delivery",
-    icon: <Zap className="w-4 h-4 text-orange-500" />,
+    icon: <ProviderLogo src={SI("resend", "ffffff")} bg="bg-black" alt="Resend" />,
     usesKey: true,
   },
   {
     id: "sendgrid",
     label: "SendGrid",
     description: "Twilio SendGrid transactional email",
-    icon: <Key className="w-4 h-4 text-indigo-500" />,
+    icon: <ProviderLogo src={SI("sendgrid", "ffffff")} bg="bg-[#1A82E2]" alt="SendGrid" />,
     usesKey: true,
   },
 ];

@@ -27,11 +27,13 @@ import { useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { cn } from "@/lib/utils";
 
-const CLOUD_META: Record<string, { label: string; bg: string; text: string }> = {
-  google_drive: { label: "Google Drive", bg: "bg-[#4285F4]", text: "G" },
-  onedrive:     { label: "OneDrive",     bg: "bg-[#0078D4]", text: "O" },
-  dropbox:      { label: "Dropbox",      bg: "bg-[#0061FF]", text: "D" },
-  proton_drive: { label: "Proton Drive", bg: "bg-[#6D4AFF]", text: "P" },
+const _SI = (slug: string, hex: string) => `https://cdn.simpleicons.org/${slug}/${hex}`;
+
+const CLOUD_META: Record<string, { label: string; bg: string; text: string; src?: string }> = {
+  google_drive: { label: "Google Drive", bg: "bg-[#4285F4]", text: "G", src: _SI("googledrive", "ffffff") },
+  onedrive:     { label: "OneDrive",     bg: "bg-[#0078D4]", text: "O", src: _SI("onedrive",    "ffffff") },
+  dropbox:      { label: "Dropbox",      bg: "bg-[#0061FF]", text: "D", src: _SI("dropbox",     "ffffff") },
+  proton_drive: { label: "Proton Drive", bg: "bg-[#6D4AFF]", text: "P", src: _SI("proton",      "ffffff") },
 };
 
 // ── Save form as PDF ──────────────────────────────────────────────────────
@@ -726,8 +728,10 @@ export default function ManagementFormsPage() {
                         <div key={intg.key} className="rounded-xl border bg-card overflow-hidden">
                           <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                             <div className="flex items-center gap-2.5">
-                              <div className={cn("w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-white shrink-0", meta.bg)}>
-                                {meta.text}
+                              <div className={cn("w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden", meta.bg)}>
+                                {meta.src
+                                  ? <img src={meta.src} alt={meta.label} className="w-4 h-4 object-contain" />
+                                  : meta.text}
                               </div>
                               <span className="font-semibold text-sm">{meta.label}</span>
                               <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">Connected</Badge>
@@ -766,8 +770,10 @@ export default function ManagementFormsPage() {
                             const meta = CLOUD_META[intg.key] ?? { label: intg.label, bg: "bg-muted", text: intg.label[0] };
                             return (
                               <div key={intg.key} className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
-                                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0 opacity-40", meta.bg)}>
-                                  {meta.text}
+                                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0 opacity-40 overflow-hidden", meta.bg)}>
+                                  {meta.src
+                                    ? <img src={meta.src} alt={meta.label} className="w-5 h-5 object-contain" />
+                                    : meta.text}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium">{meta.label}</p>

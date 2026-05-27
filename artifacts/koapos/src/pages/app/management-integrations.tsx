@@ -66,7 +66,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   wechat_alipay:      { type: "img",  bg: "bg-[#07C160]",    src: SI("wechat",      "ffffff") },
   /* Buy Now Pay Later */
   afterpay:           { type: "img",  bg: "bg-[#B2FCE4]",    src: SI("afterpay",    "000000") },
-  zip:                { type: "text", bg: "bg-[#AA8FFF]",    color: "text-white",   label: "ZIP",  cls: "text-[11px] font-black tracking-tight" },
+  zip:                { type: "img",  bg: "bg-[#1A0826]",    src: SI("zippay",      "ffffff") },
   klarna:             { type: "img",  bg: "bg-[#FFB3C7]",    src: SI("klarna",      "000000") },
   /* Digital Wallets */
   apple_wallet:       { type: "img",  bg: "bg-black",         src: SI("apple",       "ffffff") },
@@ -75,9 +75,9 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   xero:               { type: "img",  bg: "bg-[#13B5EA]",    src: SI("xero",        "ffffff") },
   myob:               { type: "img",  bg: "bg-[#6A1F70]",    src: SI("myob",        "ffffff") },
   /* Payroll */
-  deputy:             { type: "text", bg: "bg-[#006FEE]",    color: "text-white",   label: "DEP",  cls: "text-[10px] font-black tracking-tight" },
+  deputy:             { type: "img",  bg: "bg-[#FF8C00]",    src: SI("deputy",      "ffffff") },
   /* Shipping */
-  australia_post:     { type: "text", bg: "bg-[#DC1928]",    color: "text-white",   label: "AP",   cls: "text-sm font-black" },
+  australia_post:     { type: "img",  bg: "bg-[#DC1928]",    src: SI("australiapost","ffffff"),   pad: true },
   sendle:             { type: "text", bg: "bg-[#00BFA5]",    color: "text-white",   label: "SND",  cls: "text-[10px] font-black tracking-tight" },
   /* Marketing */
   google_business:    { type: "img",  bg: "bg-white border",  src: SI("google",      "4285F4") },
