@@ -1484,12 +1484,36 @@ export interface CameraSettings {
   pipEnabled: string;
   pipCameraId?: number | null;
   allowedRoles: string;
+  posWebcamEnabled?: string;
+  posWebcamDeviceId?: string | null;
 }
 
 export interface CameraSettingsInput {
   pipEnabled?: string;
   pipCameraId?: number | null;
   allowedRoles?: string;
+  posWebcamEnabled?: string;
+  posWebcamDeviceId?: string | null;
+}
+
+export interface PosSecurityCapture {
+  id: number;
+  type: string;
+  imageData?: string | null;
+  filename?: string | null;
+  deviceLabel?: string | null;
+  takenAt: string;
+  takenBy?: string | null;
+  storedLocally: boolean;
+}
+
+export interface PosSecurityCaptureInput {
+  type: string;
+  imageData?: string;
+  filename?: string;
+  deviceLabel?: string;
+  takenBy?: string;
+  storedLocally?: boolean;
 }
 
 export interface CameraSnapshot {

@@ -3225,7 +3225,9 @@ export const CreateCameraBody = zod.object({
 export const GetCameraSettingsResponse = zod.object({
   "pipEnabled": zod.string(),
   "pipCameraId": zod.number().nullish(),
-  "allowedRoles": zod.string()
+  "allowedRoles": zod.string(),
+  "posWebcamEnabled": zod.string().optional(),
+  "posWebcamDeviceId": zod.string().nullish()
 })
 
 
@@ -3235,13 +3237,17 @@ export const GetCameraSettingsResponse = zod.object({
 export const UpdateCameraSettingsBody = zod.object({
   "pipEnabled": zod.string().optional(),
   "pipCameraId": zod.number().nullish(),
-  "allowedRoles": zod.string().optional()
+  "allowedRoles": zod.string().optional(),
+  "posWebcamEnabled": zod.string().optional(),
+  "posWebcamDeviceId": zod.string().nullish()
 })
 
 export const UpdateCameraSettingsResponse = zod.object({
   "pipEnabled": zod.string(),
   "pipCameraId": zod.number().nullish(),
-  "allowedRoles": zod.string()
+  "allowedRoles": zod.string(),
+  "posWebcamEnabled": zod.string().optional(),
+  "posWebcamDeviceId": zod.string().nullish()
 })
 
 
@@ -3318,6 +3324,43 @@ export const CreateCameraSnapshotBody = zod.object({
  * @summary Delete a snapshot
  */
 export const DeleteCameraSnapshotParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List POS security captures
+ */
+export const ListPosSecurityCapturesResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "imageData": zod.string().nullish(),
+  "filename": zod.string().nullish(),
+  "deviceLabel": zod.string().nullish(),
+  "takenAt": zod.string(),
+  "takenBy": zod.string().nullish(),
+  "storedLocally": zod.boolean()
+})
+export const ListPosSecurityCapturesResponse = zod.array(ListPosSecurityCapturesResponseItem)
+
+
+/**
+ * @summary Save a POS security capture
+ */
+export const CreatePosSecurityCaptureBody = zod.object({
+  "type": zod.string(),
+  "imageData": zod.string().optional(),
+  "filename": zod.string().optional(),
+  "deviceLabel": zod.string().optional(),
+  "takenBy": zod.string().optional(),
+  "storedLocally": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Delete a POS security capture
+ */
+export const DeletePosSecurityCaptureParams = zod.object({
   "id": zod.coerce.number()
 })
 

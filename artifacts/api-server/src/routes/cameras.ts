@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, ipCamerasTable, cameraSnapshotsTable, cameraSettingsTable } from "@workspace/db";
+import { db, ipCamerasTable, cameraSnapshotsTable, cameraSettingsTable, posSecurityCapturesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
@@ -15,7 +15,7 @@ router.get("/cameras", async (req, res) => {
     .from(ipCamerasTable)
     .where(eq(ipCamerasTable.merchantId, merchantId))
     .orderBy(ipCamerasTable.sortOrder, ipCamerasTable.createdAt);
-  res.json(cameras);
+  return res.json(cameras);
 });
 
 /* ── Create camera ──────────────────────────────────────────────────────── */
@@ -35,7 +35,7 @@ router.post("/cameras", async (req, res) => {
     status: status ?? "active",
     sortOrder: sortOrder ?? 0,
   }).returning();
-  res.status(201).json(camera);
+  return res.status(201).json(camera);
 });
 
 /* ── Get camera settings ────────────────────────────────────────────────── */
@@ -46,20 +46,29 @@ router.get("/cameras/settings", async (req, res) => {
     .from(cameraSettingsTable)
     .where(eq(cameraSettingsTable.merchantId, merchantId));
   if (!settings) {
-    return res.json({ pipEnabled: "false", pipCameraId: null, allowedRoles: "admin,manager,cashier" });
+    return res.json({
+      pipEnabled: "false",
+      pipCameraId: null,
+      allowedRoles: "admin,manager,cashier",
+      posWebcamEnabled: "false",
+      posWebcamDeviceId: null,
+    });
   }
   return res.json({
     pipEnabled: settings.pipEnabled,
     pipCameraId: settings.pipCameraId ?? null,
     allowedRoles: settings.allowedRoles,
+    posWebcamEnabled: settings.posWebcamEnabled,
+    posWebcamDeviceId: settings.posWebcamDeviceId ?? null,
   });
 });
 
 /* ── Update camera settings ─────────────────────────────────────────────── */
 router.put("/cameras/settings", async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const { pipEnabled, pipCameraId, allowedRoles } = req.body as {
+  const { pipEnabled, pipCameraId, allowedRoles, posWebcamEnabled, posWebcamDeviceId } = req.body as {
     pipEnabled?: string; pipCameraId?: number | null; allowedRoles?: string;
+    posWebcamEnabled?: string; posWebcamDeviceId?: string | null;
   };
   const existing = await db
     .select()
@@ -72,8 +81,13 @@ router.put("/cameras/settings", async (req, res) => {
       pipEnabled: pipEnabled ?? "false",
       pipCameraId: pipCameraId ?? null,
       allowedRoles: allowedRoles ?? "admin,manager,cashier",
+      posWebcamEnabled: posWebcamEnabled ?? "false",
+      posWebcamDeviceId: posWebcamDeviceId ?? null,
     }).returning();
-    return res.json({ pipEnabled: s.pipEnabled, pipCameraId: s.pipCameraId ?? null, allowedRoles: s.allowedRoles });
+    return res.json({
+      pipEnabled: s.pipEnabled, pipCameraId: s.pipCameraId ?? null, allowedRoles: s.allowedRoles,
+      posWebcamEnabled: s.posWebcamEnabled, posWebcamDeviceId: s.posWebcamDeviceId ?? null,
+    });
   }
 
   const [s] = await db.update(cameraSettingsTable)
@@ -81,10 +95,15 @@ router.put("/cameras/settings", async (req, res) => {
       ...(pipEnabled !== undefined ? { pipEnabled } : {}),
       ...(pipCameraId !== undefined ? { pipCameraId: pipCameraId ?? null } : {}),
       ...(allowedRoles !== undefined ? { allowedRoles } : {}),
+      ...(posWebcamEnabled !== undefined ? { posWebcamEnabled } : {}),
+      ...(posWebcamDeviceId !== undefined ? { posWebcamDeviceId: posWebcamDeviceId ?? null } : {}),
     })
     .where(eq(cameraSettingsTable.merchantId, merchantId))
     .returning();
-  return res.json({ pipEnabled: s.pipEnabled, pipCameraId: s.pipCameraId ?? null, allowedRoles: s.allowedRoles });
+  return res.json({
+    pipEnabled: s.pipEnabled, pipCameraId: s.pipCameraId ?? null, allowedRoles: s.allowedRoles,
+    posWebcamEnabled: s.posWebcamEnabled, posWebcamDeviceId: s.posWebcamDeviceId ?? null,
+  });
 });
 
 /* ── Update camera ──────────────────────────────────────────────────────── */
@@ -117,7 +136,7 @@ router.delete("/cameras/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   await db.delete(ipCamerasTable)
     .where(and(eq(ipCamerasTable.id, id), eq(ipCamerasTable.merchantId, merchantId)));
-  res.status(204).end();
+  return res.status(204).end();
 });
 
 /* ── List snapshots ─────────────────────────────────────────────────────── */
@@ -129,16 +148,17 @@ router.get("/camera-snapshots", async (req, res) => {
     .select({
       id: cameraSnapshotsTable.id,
       cameraId: cameraSnapshotsTable.cameraId,
-      cameraName: ipCamerasTable.name,
+      merchantId: cameraSnapshotsTable.merchantId,
       imageData: cameraSnapshotsTable.imageData,
       takenAt: cameraSnapshotsTable.takenAt,
       takenBy: cameraSnapshotsTable.takenBy,
       source: cameraSnapshotsTable.source,
+      cameraName: ipCamerasTable.name,
     })
     .from(cameraSnapshotsTable)
     .leftJoin(ipCamerasTable, eq(cameraSnapshotsTable.cameraId, ipCamerasTable.id))
     .where(
-      cameraId
+      cameraId !== undefined
         ? and(eq(cameraSnapshotsTable.merchantId, merchantId), eq(cameraSnapshotsTable.cameraId, cameraId))
         : eq(cameraSnapshotsTable.merchantId, merchantId)
     )
@@ -166,7 +186,7 @@ router.post("/camera-snapshots", async (req, res) => {
     .from(ipCamerasTable)
     .where(eq(ipCamerasTable.id, cameraId));
 
-  res.status(201).json({
+  return res.status(201).json({
     ...snap,
     cameraName: camera[0]?.name ?? "Unknown",
   });
@@ -178,7 +198,47 @@ router.delete("/camera-snapshots/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   await db.delete(cameraSnapshotsTable)
     .where(and(eq(cameraSnapshotsTable.id, id), eq(cameraSnapshotsTable.merchantId, merchantId)));
-  res.status(204).end();
+  return res.status(204).end();
+});
+
+/* ── List POS security captures ─────────────────────────────────────────── */
+router.get("/pos-security-captures", async (req, res) => {
+  const merchantId = req.session.merchantId!;
+  const rows = await db
+    .select()
+    .from(posSecurityCapturesTable)
+    .where(eq(posSecurityCapturesTable.merchantId, merchantId))
+    .orderBy(desc(posSecurityCapturesTable.takenAt))
+    .limit(200);
+  return res.json(rows);
+});
+
+/* ── Create POS security capture ────────────────────────────────────────── */
+router.post("/pos-security-captures", async (req, res) => {
+  const merchantId = req.session.merchantId!;
+  const { type, imageData, filename, deviceLabel, takenBy, storedLocally } = req.body as {
+    type: string; imageData?: string; filename?: string;
+    deviceLabel?: string; takenBy?: string; storedLocally?: boolean;
+  };
+  const [row] = await db.insert(posSecurityCapturesTable).values({
+    merchantId,
+    type: type ?? "photo",
+    imageData: imageData ?? null,
+    filename: filename ?? null,
+    deviceLabel: deviceLabel ?? null,
+    takenBy: takenBy ?? null,
+    storedLocally: storedLocally ?? true,
+  }).returning();
+  return res.status(201).json(row);
+});
+
+/* ── Delete POS security capture ────────────────────────────────────────── */
+router.delete("/pos-security-captures/:id", async (req, res) => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id, 10);
+  await db.delete(posSecurityCapturesTable)
+    .where(and(eq(posSecurityCapturesTable.id, id), eq(posSecurityCapturesTable.merchantId, merchantId)));
+  return res.status(204).end();
 });
 
 export default router;

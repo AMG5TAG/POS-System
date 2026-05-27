@@ -94,6 +94,8 @@ import type {
   ParkedSale,
   ParkedSaleInput,
   Plan,
+  PosSecurityCapture,
+  PosSecurityCaptureInput,
   PriceTier,
   PriceTierInput,
   Product,
@@ -9441,5 +9443,223 @@ export const useDeleteCameraSnapshot = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCameraSnapshotMutationOptions(options));
+    }
+
+export const getListPosSecurityCapturesUrl = () => {
+
+
+
+
+  return `/api/pos-security-captures`
+}
+
+/**
+ * @summary List POS security captures
+ */
+export const listPosSecurityCaptures = async ( options?: RequestInit): Promise<PosSecurityCapture[]> => {
+
+  return customFetch<PosSecurityCapture[]>(getListPosSecurityCapturesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPosSecurityCapturesQueryKey = () => {
+    return [
+    `/api/pos-security-captures`
+    ] as const;
+    }
+
+
+export const getListPosSecurityCapturesQueryOptions = <TData = Awaited<ReturnType<typeof listPosSecurityCaptures>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPosSecurityCaptures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPosSecurityCapturesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPosSecurityCaptures>>> = ({ signal }) => listPosSecurityCaptures({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPosSecurityCaptures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPosSecurityCapturesQueryResult = NonNullable<Awaited<ReturnType<typeof listPosSecurityCaptures>>>
+export type ListPosSecurityCapturesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List POS security captures
+ */
+
+export function useListPosSecurityCaptures<TData = Awaited<ReturnType<typeof listPosSecurityCaptures>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPosSecurityCaptures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPosSecurityCapturesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreatePosSecurityCaptureUrl = () => {
+
+
+
+
+  return `/api/pos-security-captures`
+}
+
+/**
+ * @summary Save a POS security capture
+ */
+export const createPosSecurityCapture = async (posSecurityCaptureInput: PosSecurityCaptureInput, options?: RequestInit): Promise<PosSecurityCapture> => {
+
+  return customFetch<PosSecurityCapture>(getCreatePosSecurityCaptureUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      posSecurityCaptureInput,)
+  }
+);}
+
+
+
+
+export const getCreatePosSecurityCaptureMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPosSecurityCapture>>, TError,{data: BodyType<PosSecurityCaptureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPosSecurityCapture>>, TError,{data: BodyType<PosSecurityCaptureInput>}, TContext> => {
+
+const mutationKey = ['createPosSecurityCapture'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPosSecurityCapture>>, {data: BodyType<PosSecurityCaptureInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPosSecurityCapture(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePosSecurityCaptureMutationResult = NonNullable<Awaited<ReturnType<typeof createPosSecurityCapture>>>
+    export type CreatePosSecurityCaptureMutationBody = BodyType<PosSecurityCaptureInput>
+    export type CreatePosSecurityCaptureMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save a POS security capture
+ */
+export const useCreatePosSecurityCapture = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPosSecurityCapture>>, TError,{data: BodyType<PosSecurityCaptureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPosSecurityCapture>>,
+        TError,
+        {data: BodyType<PosSecurityCaptureInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePosSecurityCaptureMutationOptions(options));
+    }
+
+export const getDeletePosSecurityCaptureUrl = (id: number,) => {
+
+
+
+
+  return `/api/pos-security-captures/${id}`
+}
+
+/**
+ * @summary Delete a POS security capture
+ */
+export const deletePosSecurityCapture = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePosSecurityCaptureUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeletePosSecurityCaptureMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePosSecurityCapture>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePosSecurityCapture>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deletePosSecurityCapture'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePosSecurityCapture>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePosSecurityCapture(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePosSecurityCaptureMutationResult = NonNullable<Awaited<ReturnType<typeof deletePosSecurityCapture>>>
+
+    export type DeletePosSecurityCaptureMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a POS security capture
+ */
+export const useDeletePosSecurityCapture = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePosSecurityCapture>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePosSecurityCapture>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeletePosSecurityCaptureMutationOptions(options));
     }
 

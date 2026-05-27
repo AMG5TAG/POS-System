@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
+import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
@@ -1417,6 +1418,7 @@ export default function POSPage() {
                 <Package className="w-4 h-4" />
                 <span className="hidden sm:inline">Custom</span>
               </Button>
+              <PosWebcamCapture />
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="flex w-max space-x-1.5 pb-1">

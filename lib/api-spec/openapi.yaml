@@ -2444,6 +2444,52 @@ paths:
         "204":
           description: Deleted
 
+  /pos-security-captures:
+    get:
+      operationId: listPosSecurityCaptures
+      tags: [cameras]
+      summary: List POS security captures
+      responses:
+        "200":
+          description: Capture list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PosSecurityCapture"
+    post:
+      operationId: createPosSecurityCapture
+      tags: [cameras]
+      summary: Save a POS security capture
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PosSecurityCaptureInput"
+      responses:
+        "201":
+          description: Saved capture
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosSecurityCapture"
+
+  /pos-security-captures/{id}:
+    delete:
+      operationId: deletePosSecurityCapture
+      tags: [cameras]
+      summary: Delete a POS security capture
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -4449,16 +4495,44 @@ components:
       type: object
       required: [pipEnabled, allowedRoles]
       properties:
-        pipEnabled:   { type: string }
-        pipCameraId:  { type: integer, nullable: true }
-        allowedRoles: { type: string }
+        pipEnabled:        { type: string }
+        pipCameraId:       { type: integer, nullable: true }
+        allowedRoles:      { type: string }
+        posWebcamEnabled:  { type: string }
+        posWebcamDeviceId: { type: string, nullable: true }
 
     CameraSettingsInput:
       type: object
       properties:
-        pipEnabled:   { type: string }
-        pipCameraId:  { type: integer, nullable: true }
-        allowedRoles: { type: string }
+        pipEnabled:        { type: string }
+        pipCameraId:       { type: integer, nullable: true }
+        allowedRoles:      { type: string }
+        posWebcamEnabled:  { type: string }
+        posWebcamDeviceId: { type: string, nullable: true }
+
+    PosSecurityCapture:
+      type: object
+      required: [id, type, takenAt, storedLocally]
+      properties:
+        id:           { type: integer }
+        type:         { type: string }
+        imageData:    { type: string, nullable: true }
+        filename:     { type: string, nullable: true }
+        deviceLabel:  { type: string, nullable: true }
+        takenAt:      { type: string }
+        takenBy:      { type: string, nullable: true }
+        storedLocally: { type: boolean }
+
+    PosSecurityCaptureInput:
+      type: object
+      required: [type]
+      properties:
+        type:        { type: string }
+        imageData:   { type: string }
+        filename:    { type: string }
+        deviceLabel: { type: string }
+        takenBy:     { type: string }
+        storedLocally: { type: boolean }
 
     CameraSnapshot:
       type: object

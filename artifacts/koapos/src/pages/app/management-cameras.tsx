@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import {
   Camera, Plus, Pencil, Trash2, Eye, EyeOff, Loader2,
   Image, Shield, Tv2, X, AlertTriangle, CheckCircle2,
-  GripVertical, Maximize2,
+  GripVertical, Maximize2, Video, ShieldAlert, RefreshCw,
+  HardDrive, Cloud, Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -28,13 +29,15 @@ import {
   useUpdateCameraSettings,
   useListCameraSnapshots,
   useDeleteCameraSnapshot,
+  useListPosSecurityCaptures,
+  useDeletePosSecurityCapture,
   type Camera as CameraType,
   type CameraInput,
 } from "@workspace/api-client-react";
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
 
-type Tab = "setup" | "snapshots" | "access";
+type Tab = "setup" | "snapshots" | "access" | "poscamera";
 
 const ROLES = [
   { key: "admin",   label: "Admin / Owner" },
@@ -525,12 +528,302 @@ function AccessPipTab() {
   );
 }
 
+/* ─── POS Camera tab ──────────────────────────────────────────────────────── */
+
+type VideoDevice = { deviceId: string; label: string };
+
+function PosCameraTab() {
+  const { data: settings, isLoading } = useGetCameraSettings();
+  const updateSettings = useUpdateCameraSettings();
+  const { data: captures = [], isLoading: capturesLoading, refetch } = useListPosSecurityCaptures();
+  const deleteCapture = useDeletePosSecurityCapture();
+
+  const [saving, setSaving]         = useState(false);
+  const [devices, setDevices]       = useState<VideoDevice[]>([]);
+  const [viewSnap, setViewSnap]     = useState<string | null>(null);
+
+  const posWebcamEnabled = settings?.posWebcamEnabled === "true";
+  const posWebcamDeviceId = settings?.posWebcamDeviceId ?? null;
+
+  /* Enumerate video input devices */
+  useEffect(() => {
+    const enumerate = async () => {
+      try {
+        const all = await navigator.mediaDevices.enumerateDevices();
+        const vids = all
+          .filter((d) => d.kind === "videoinput")
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 6)}` }));
+        setDevices(vids);
+      } catch {
+        // permissions not granted yet — will enumerate after first getUserMedia call
+      }
+    };
+    enumerate();
+    navigator.mediaDevices.addEventListener("devicechange", enumerate);
+    return () => navigator.mediaDevices.removeEventListener("devicechange", enumerate);
+  }, []);
+
+  const save = async (patch: { posWebcamEnabled?: string; posWebcamDeviceId?: string | null }) => {
+    setSaving(true);
+    try {
+      await updateSettings.mutateAsync({ data: patch });
+      toast.success("Settings saved");
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteCapture.mutateAsync({ id });
+      toast.success("Capture deleted");
+    } catch {
+      toast.error("Failed to delete capture");
+    }
+  };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  const photos = captures.filter((c) => c.type === "photo");
+  const videos = captures.filter((c) => c.type === "video");
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Enable / device */}
+        <div className="rounded-xl border bg-card p-5 space-y-5">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4" /> POS Security Webcam
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Add silent photo &amp; video capture buttons to the POS Sell Screen.
+              Captures are saved locally and accessible below.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Enable POS Camera</p>
+              <p className="text-xs text-muted-foreground">Show capture buttons on POS screen</p>
+            </div>
+            <Switch
+              checked={posWebcamEnabled}
+              disabled={saving}
+              onCheckedChange={(v) => save({ posWebcamEnabled: v ? "true" : "false" })}
+            />
+          </div>
+
+          {posWebcamEnabled && (
+            <div className="space-y-1.5">
+              <Label>Webcam Device</Label>
+              {devices.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No cameras detected. Grant browser camera permission first or connect a USB webcam.
+                </p>
+              ) : (
+                <Select
+                  value={posWebcamDeviceId ?? "default"}
+                  onValueChange={(v) => save({ posWebcamDeviceId: v === "default" ? null : v })}
+                  disabled={saving}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Use default camera" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default system camera</SelectItem>
+                    {devices.map((d) => (
+                      <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Select the USB webcam to use for POS security captures.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Storage info */}
+        <div className="rounded-xl border bg-card p-5 space-y-4">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <HardDrive className="w-4 h-4" /> Storage & Cloud Sync
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              How captures are saved and where they go.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3 rounded-lg border">
+              <Camera className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Photos</p>
+                <p className="text-xs text-muted-foreground">
+                  Captured frames are saved to the KoaPOS server and visible in the history below.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg border">
+              <Video className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Videos</p>
+                <p className="text-xs text-muted-foreground">
+                  Recordings are automatically downloaded to your device's Downloads folder as <code className="text-xs bg-muted px-1 rounded">.webm</code> files. Metadata is logged here.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <Cloud className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Cloud Sync</p>
+                <p className="text-xs text-muted-foreground">
+                  Google Drive, OneDrive and Dropbox sync can be configured in{" "}
+                  <a href="/management/integrations" className="underline hover:text-foreground">Management › Integrations</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Capture history */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Smartphone className="w-4 h-4" /> Capture History
+            <span className="text-xs font-normal text-muted-foreground">({captures.length} total)</span>
+          </h3>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={capturesLoading}>
+            <RefreshCw className={cn("w-3.5 h-3.5 mr-1", capturesLoading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+
+        {capturesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : captures.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground space-y-1">
+            <Camera className="w-8 h-8 mx-auto opacity-30" />
+            <p className="text-sm">No captures yet</p>
+            <p className="text-xs">Enable the POS Camera and capture photos from the Sell Screen.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {photos.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                  Photos ({photos.length})
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  {photos.map((cap) => (
+                    <div key={cap.id} className="group relative aspect-video rounded-lg overflow-hidden border bg-muted">
+                      {cap.imageData && (
+                        <img
+                          src={cap.imageData}
+                          alt={`Capture ${cap.id}`}
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setViewSnap(cap.imageData!)}
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setViewSnap(cap.imageData!)}
+                          className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cap.id)}
+                          className="p-1.5 rounded-full bg-white/20 hover:bg-red-500/80 text-white"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1">
+                        <p className="text-[10px] text-white/80 truncate">
+                          {format(new Date(cap.takenAt), "dd/MM HH:mm:ss")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {videos.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                  Video Recordings ({videos.length})
+                </p>
+                <div className="space-y-2">
+                  {videos.map((cap) => (
+                    <div key={cap.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Video className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{cap.filename ?? "Recording"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(cap.takenAt), "dd/MM/yyyy HH:mm:ss")}
+                            {cap.deviceLabel ? ` · ${cap.deviceLabel}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => handleDelete(cap.id)}
+                        className="text-destructive hover:text-destructive shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Full-size photo viewer */}
+      <Dialog open={!!viewSnap} onOpenChange={(o) => { if (!o) setViewSnap(null); }}>
+        <DialogContent className="max-w-3xl p-0 bg-black border-zinc-800 [&>button]:hidden">
+          {viewSnap && (
+            <>
+              <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+                <p className="text-white text-sm font-semibold flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-zinc-400" /> Security Capture
+                </p>
+                <button onClick={() => setViewSnap(null)} className="text-zinc-400 hover:text-white p-1 rounded">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <img src={viewSnap} alt="Security capture" className="w-full object-contain max-h-[75vh]" />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "setup",     label: "Camera Setup",    icon: Camera  },
-  { id: "snapshots", label: "Snapshot History", icon: Image  },
-  { id: "access",    label: "Access & PiP",    icon: Shield  },
+  { id: "setup",     label: "Camera Setup",    icon: Camera     },
+  { id: "snapshots", label: "Snapshot History", icon: Image     },
+  { id: "access",    label: "Access & PiP",    icon: Shield     },
+  { id: "poscamera", label: "POS Camera",      icon: ShieldAlert },
 ];
 
 export default function ManagementCamerasPage() {
@@ -572,6 +865,7 @@ export default function ManagementCamerasPage() {
         {tab === "setup"     && <CameraSetupTab />}
         {tab === "snapshots" && <SnapshotHistoryTab />}
         {tab === "access"    && <AccessPipTab />}
+        {tab === "poscamera" && <PosCameraTab />}
       </div>
     </AppLayout>
   );
