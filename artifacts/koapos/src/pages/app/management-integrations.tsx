@@ -315,7 +315,7 @@ function Section({
 
 /* ─── Section config ─────────────────────────────────────────────────────── */
 
-const FEATURED_SECTIONS = [
+const ALL_SECTIONS = [
   {
     id: "cloud_storage",
     title: "Cloud Storage & Backups",
@@ -343,10 +343,7 @@ const FEATURED_SECTIONS = [
     iconBg: "bg-pink-100 dark:bg-pink-900/40",
     iconColor: "text-pink-600 dark:text-pink-400",
   },
-];
-
-const SECONDARY_SECTIONS = [
-  { id: "payments",  title: "Payments & EFTPOS",    description: "In-store card, QR, and online payment terminals",
+  { id: "payments",  title: "Payments & EFTPOS",     description: "In-store card, QR, and online payment terminals",
     icon: Receipt, accent: "bg-emerald-50/60 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900",
     iconBg: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400" },
   { id: "bnpl",      title: "Buy Now, Pay Later",    description: "Instalment and pay-later options at checkout",
@@ -355,16 +352,16 @@ const SECONDARY_SECTIONS = [
   { id: "wallets",   title: "Digital Wallets",       description: "Issue loyalty passes and coupons to wallets",
     icon: Wallet, accent: "bg-orange-50/60 border-orange-200 dark:bg-orange-950/20 dark:border-orange-900",
     iconBg: "bg-orange-100 dark:bg-orange-900/40", iconColor: "text-orange-600 dark:text-orange-400" },
-  { id: "payroll",   title: "Payroll & Staff",        description: "Roster, timesheet, and payroll sync",
+  { id: "payroll",   title: "Payroll & Staff",       description: "Roster, timesheet, and payroll sync",
     icon: Users, accent: "bg-teal-50/60 border-teal-200 dark:bg-teal-950/20 dark:border-teal-900",
     iconBg: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-600 dark:text-teal-400" },
-  { id: "shipping",  title: "Shipping & Fulfilment",  description: "Real-time rates, labels, and pickup booking",
+  { id: "shipping",  title: "Shipping & Fulfilment", description: "Real-time rates, labels, and pickup booking",
     icon: Truck, accent: "bg-amber-50/60 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900",
     iconBg: "bg-amber-100 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-400" },
-  { id: "contacts",  title: "Contacts & Calendar",   description: "Sync customers and appointments",
+  { id: "contacts",  title: "Contacts & Calendar",  description: "Sync customers and appointments",
     icon: Mail, accent: "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900",
     iconBg: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400" },
-  { id: "ai",        title: "AI & Automation",        description: "AI insights and no-code workflow automation",
+  { id: "ai",        title: "AI & Automation",      description: "AI insights and no-code workflow automation",
     icon: Sparkles, accent: "bg-slate-50/60 border-slate-200 dark:bg-slate-950/20 dark:border-slate-800",
     iconBg: "bg-slate-100 dark:bg-slate-900/40", iconColor: "text-slate-600 dark:text-slate-400" },
 ];
@@ -452,41 +449,21 @@ export default function ManagementIntegrationsPage() {
           </div>
         ) : (
           <div className="space-y-12">
-            {/* ── Featured sections ── */}
-            {FEATURED_SECTIONS.map((sec) => (
-              <Section
-                key={sec.id}
-                {...sec}
-                items={bySection(sec.id)}
-                connecting={connecting}
-                onConnect={setModalTarget}
-                onDisconnect={handleDisconnect}
-                onOAuth={handleOAuth}
-                defaultOpen
-              />
-            ))}
-
-            {/* ── More integrations ── */}
-            <section className="space-y-4">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                More Integrations
-              </h2>
-              {SECONDARY_SECTIONS.map((sec) => {
-                const items = bySection(sec.id);
-                if (items.length === 0) return null;
-                return (
-                  <Section
-                    key={sec.id}
-                    {...sec}
-                    items={items}
-                    connecting={connecting}
-                    onConnect={setModalTarget}
-                    onDisconnect={handleDisconnect}
-                    onOAuth={handleOAuth}
-                  />
-                );
-              })}
-            </section>
+            {ALL_SECTIONS.map((sec) => {
+              const items = bySection(sec.id);
+              if (items.length === 0) return null;
+              return (
+                <Section
+                  key={sec.id}
+                  {...sec}
+                  items={items}
+                  connecting={connecting}
+                  onConnect={setModalTarget}
+                  onDisconnect={handleDisconnect}
+                  onOAuth={handleOAuth}
+                />
+              );
+            })}
           </div>
         )}
       </div>
