@@ -1418,7 +1418,6 @@ export default function POSPage() {
                 <Package className="w-4 h-4" />
                 <span className="hidden sm:inline">Custom</span>
               </Button>
-              <PosWebcamCapture />
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="flex w-max space-x-1.5 pb-1">
@@ -1571,6 +1570,7 @@ export default function POSPage() {
               >
                 {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
               </button>
+              <PosWebcamCapture />
               <button
                 onClick={() => window.open("/customer-display", "_blank")}
                 title="Open customer-facing display"
