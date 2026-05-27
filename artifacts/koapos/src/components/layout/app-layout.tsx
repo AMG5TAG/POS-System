@@ -168,6 +168,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Marketing",
     icon: Share2,
     children: [
+      { name: "Automation",  href: "/management/marketing/automation",  icon: Zap },
       { name: "Socials",     href: "/management/marketing/socials",     icon: Share2  },
       { name: "Online Ads",  href: "/management/marketing/online-ads",  icon: Megaphone },
       { name: "Referrals",   href: "/management/marketing/referrals",   icon: UserPlus },
@@ -261,6 +262,7 @@ const SEARCH_INDEX = [
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
   { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
+  { label: "Marketing · Automation",         href: "/management/marketing/automation",      icon: Zap,       group: "Management" },
   { label: "Marketing · Socials Settings",  href: "/management/marketing/socials",         icon: Share2,    group: "Management" },
   { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
@@ -367,6 +369,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/socials/track":              ["Marketing", "Socials", "Track"],
   "/management/koapos":                    ["Management", "KoaPOS"],
   "/marketing/referrals":                  ["Marketing", "Referrals"],
+  "/management/marketing/automation":      ["Management", "Marketing", "Automation"],
   "/management/marketing/socials":         ["Management", "Marketing", "Socials"],
   "/management/marketing/online-ads":      ["Management", "Marketing", "Online Ads"],
   "/management/online-store":              ["Management", "Online Store"],

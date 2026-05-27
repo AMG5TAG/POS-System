@@ -98,6 +98,7 @@ import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
 import ManagementMarketingSocialsPage from "@/pages/app/management-marketing-socials";
 import ManagementMarketingOnlineAdsPage from "@/pages/app/management-marketing-online-ads";
 import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
+import ManagementMarketingAutomationPage from "@/pages/app/management-marketing-automation";
 import ManagementOnlineStorePage from "@/pages/app/management-online-store";
 import OnlineDeliveryOrdersPage from "@/pages/app/online-delivery-orders";
 import OnlineShippingPage from "@/pages/app/online-shipping";
@@ -436,6 +437,9 @@ function Router() {
       </Route>
       <Route path="/management/marketing/referrals">
         <ProtectedRoute component={ManagementMarketingReferralsPage} />
+      </Route>
+      <Route path="/management/marketing/automation">
+        <ProtectedRoute component={ManagementMarketingAutomationPage} />
       </Route>
       <Route path="/management/online-store">
         <ProtectedRoute component={ManagementOnlineStorePage} />

@@ -32,6 +32,7 @@ import formsRouter from "./forms";
 import formSubmissionsRouter from "./form-submissions";
 import laybysRouter from "./laybys";
 import xeroRouter from "./xero";
+import marketingAutomationRouter from "./marketing-automation";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(formsRouter);
 router.use(formSubmissionsRouter);
 router.use(laybysRouter);
 router.use(xeroRouter);
+router.use(marketingAutomationRouter);
 
 export default router;
