@@ -70,7 +70,6 @@ const ONLINE_SUBNAV: NavItem[] = [
 
 const MARKETING_SUBNAV: NavItem[] = [
   { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
-  { name: "Online Ads",    href: "/marketing/online-ads",           icon: Megaphone  },
   { name: "Landing Pages", href: "/marketing/landing-pages",        icon: LayoutTemplate },
   {
     name: "Email",
@@ -98,14 +97,6 @@ const MARKETING_SUBNAV: NavItem[] = [
   },
   { name: "Automation",    href: "/marketing/automation",       icon: Zap },
   { name: "Referrals",     href: "/marketing/referrals",        icon: UserPlus },
-  {
-    name: "Socials",
-    icon: Share2,
-    children: [
-      { name: "Posts", href: "/marketing/socials/posts", icon: Send  },
-      { name: "Track", href: "/marketing/socials/track", icon: Target },
-    ],
-  },
 ];
 
 const INVENTORY_SUBNAV = [
@@ -169,8 +160,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Marketing",
     icon: Share2,
     children: [
-      { name: "Socials",     href: "/management/marketing/socials",     icon: Share2  },
-      { name: "Online Ads",  href: "/management/marketing/online-ads",  icon: Megaphone },
       { name: "Referrals",   href: "/management/marketing/referrals",   icon: UserPlus },
     ],
   },
@@ -256,15 +245,10 @@ const SEARCH_INDEX = [
   { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
-  { label: "Marketing · Online Ads",        href: "/marketing/online-ads",          icon: Megaphone, group: "Marketing" },
-  { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
-  { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
   { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
-  { label: "Marketing · Socials Settings",  href: "/management/marketing/socials",         icon: Share2,    group: "Management" },
-  { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
   { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
   { label: "Online · Deliveries",     href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
@@ -364,14 +348,9 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
   "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
   "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
-  "/marketing/online-ads":                 ["Marketing", "Online Ads"],
-  "/marketing/socials/posts":              ["Marketing", "Socials", "Posts"],
-  "/marketing/socials/track":              ["Marketing", "Socials", "Track"],
   "/management/koapos":                    ["Management", "KoaPOS"],
   "/marketing/referrals":                  ["Marketing", "Referrals"],
   "/marketing/automation":                 ["Marketing", "Automation"],
-  "/management/marketing/socials":         ["Management", "Marketing", "Socials"],
-  "/management/marketing/online-ads":      ["Management", "Marketing", "Online Ads"],
   "/management/online-store":              ["Management", "Online Store"],
   "/online/delivery-orders":               ["Online", "Deliveries"],
   "/online/shipping":                      ["Online", "Shipping"],

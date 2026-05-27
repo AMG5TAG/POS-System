@@ -93,10 +93,6 @@ import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
 import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
 import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
 import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
-import MarketingSocialsPostsPage from "@/pages/app/marketing-socials-posts";
-import MarketingSocialsTrackPage from "@/pages/app/marketing-socials-track";
-import ManagementMarketingSocialsPage from "@/pages/app/management-marketing-socials";
-import ManagementMarketingOnlineAdsPage from "@/pages/app/management-marketing-online-ads";
 import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
 import ManagementMarketingAutomationPage from "@/pages/app/management-marketing-automation";
 import ManagementOnlineStorePage from "@/pages/app/management-online-store";
@@ -105,7 +101,6 @@ import OnlineShippingPage from "@/pages/app/online-shipping";
 import OnlineMarketplacePage from "@/pages/app/online-marketplace";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import ManagementMiscPage from "@/pages/app/management-misc";
-import MarketingOnlineAdsPage from "@/pages/app/marketing-online-ads";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
@@ -414,26 +409,11 @@ function Router() {
       <Route path="/marketing/loyalty/leaderboard">
         <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
-      <Route path="/marketing/socials/posts">
-        <ProtectedRoute component={MarketingSocialsPostsPage} />
-      </Route>
-      <Route path="/marketing/socials/track">
-        <ProtectedRoute component={MarketingSocialsTrackPage} />
-      </Route>
-      <Route path="/marketing/online-ads">
-        <ProtectedRoute component={MarketingOnlineAdsPage} />
-      </Route>
       <Route path="/marketing/referrals">
         <ProtectedRoute component={MarketingReferralsPage} />
       </Route>
       <Route path="/management/koapos">
         <ProtectedRoute component={ManagementKoaPOSPage} />
-      </Route>
-      <Route path="/management/marketing/socials">
-        <ProtectedRoute component={ManagementMarketingSocialsPage} />
-      </Route>
-      <Route path="/management/marketing/online-ads">
-        <ProtectedRoute component={ManagementMarketingOnlineAdsPage} />
       </Route>
       <Route path="/management/marketing/referrals">
         <ProtectedRoute component={ManagementMarketingReferralsPage} />
