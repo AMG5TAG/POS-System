@@ -1161,9 +1161,14 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
   const { navLayout } = useNavLayout();
   const logoutMutation = useLogout();
 
-  // Scroll only the main content area to the top on navigation — sidebar keeps its position
+  // Scroll only the main content area to the top when the pathname changes — ignore hash/query
+  const scrollPathRef = useRef("");
   useEffect(() => {
-    document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "instant" });
+    const pathname = location.split("?")[0].split("#")[0];
+    if (pathname !== scrollPathRef.current) {
+      scrollPathRef.current = pathname;
+      document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [location]);
 
   // Global keyboard shortcuts
