@@ -438,7 +438,7 @@ function Router() {
       <Route path="/management/marketing/referrals">
         <ProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
-      <Route path="/management/marketing/automation">
+      <Route path="/marketing/automation">
         <ProtectedRoute component={ManagementMarketingAutomationPage} />
       </Route>
       <Route path="/management/online-store">
