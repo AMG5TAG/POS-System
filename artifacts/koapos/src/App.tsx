@@ -1,5 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import { AuthProvider } from "@/lib/auth";
+import { AIProvider } from "@/lib/ai-context";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
 import { NavLayoutProvider } from "@/lib/nav-layout";
@@ -88,6 +89,7 @@ import StaffLinksPage from "@/pages/app/staff-links";
 import StaffSocialFeedPage from "@/pages/app/staff-social-feed";
 import ManagementMarketingSocialFeedPage from "@/pages/app/management-marketing-social-feed";
 import ManagementFloorPlanPage from "@/pages/app/management-floor-plan";
+import ManagementAIPage from "@/pages/app/management-ai";
 
 import MarketingPage from "@/pages/app/marketing";
 import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
@@ -449,6 +451,9 @@ function Router() {
       <Route path="/management/cameras">
         <ProtectedRoute component={ManagementCamerasPage} />
       </Route>
+      <Route path="/management/ai">
+        <ProtectedRoute component={ManagementAIPage} />
+      </Route>
       <Route path="/online/delivery-orders">
         <ProtectedRoute component={OnlineDeliveryOrdersPage} />
       </Route>
@@ -472,9 +477,11 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <TooltipProvider>
               <AuthProvider>
-                <a href="#main-content" className="skip-link">Skip to main content</a>
-                <Router />
-                <Toaster />
+                <AIProvider>
+                  <a href="#main-content" className="skip-link">Skip to main content</a>
+                  <Router />
+                  <Toaster />
+                </AIProvider>
               </AuthProvider>
             </TooltipProvider>
           </QueryClientProvider>

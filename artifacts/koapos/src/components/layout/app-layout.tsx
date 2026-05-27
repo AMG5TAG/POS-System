@@ -17,7 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
-  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera,
+  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import {
@@ -189,6 +189,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
+  { name: "AI Assistant",   href: "/management/ai",             icon: Brain          },
   { name: "Feedback",       href: "/management/feedback",       icon: MessageSquare  },
   { name: "Cameras",        href: "/management/cameras",        icon: Camera         },
 ];

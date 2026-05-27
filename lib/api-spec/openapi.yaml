@@ -40,6 +40,10 @@ tags:
     description: Object storage upload and serving endpoints.
   - name: cameras
     description: IP camera management and snapshots
+  - name: openai
+    description: AI assistant powered by OpenAI
+  - name: ai
+    description: AI feature settings and kill-switch
 
 paths:
   /healthz:
@@ -2490,6 +2494,138 @@ paths:
         "204":
           description: Deleted
 
+  /ai/settings:
+    get:
+      operationId: getAiSettings
+      tags: [ai]
+      summary: Get AI feature settings (kill-switch)
+      responses:
+        "200":
+          description: AI settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettings"
+    put:
+      operationId: saveAiSettings
+      tags: [ai]
+      summary: Update AI feature settings (kill-switch)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                required: [ok]
+
+  /openai/conversations:
+    get:
+      operationId: listOpenaiConversations
+      tags: [openai]
+      summary: List all conversations for the merchant
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiConversation"
+    post:
+      operationId: createOpenaiConversation
+      tags: [openai]
+      summary: Create or fetch conversation by mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiConversationInput"
+      responses:
+        "201":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+
+  /openai/conversations/{id}:
+    get:
+      operationId: getOpenaiConversation
+      tags: [openai]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteOpenaiConversation
+      tags: [openai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  /openai/conversations/{id}/messages:
+    post:
+      operationId: sendOpenaiMessage
+      tags: [openai]
+      summary: Send a message and receive a streaming AI response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant text chunks
+          content:
+            text/event-stream: {}
+
   /floor-plan:
     get:
       operationId: getFloorPlan
@@ -4740,3 +4876,67 @@ components:
       properties:
         id:    { type: string }
         label: { type: string }
+
+    AiSettings:
+      type: object
+      required: [aiEnabled]
+      properties:
+        aiEnabled: { type: boolean }
+
+    AiSettingsInput:
+      type: object
+      required: [aiEnabled]
+      properties:
+        aiEnabled: { type: boolean }
+
+    OpenaiConversation:
+      type: object
+      required: [id, merchantId, mode, title, createdAt]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        mode:       { type: string }
+        title:      { type: string }
+        createdAt:  { type: string, format: date-time }
+
+    OpenaiConversationInput:
+      type: object
+      properties:
+        mode:  { type: string }
+        title: { type: string }
+
+    OpenaiMessage:
+      type: object
+      required: [id, conversationId, role, content, createdAt]
+      properties:
+        id:             { type: integer }
+        conversationId: { type: integer }
+        role:           { type: string }
+        content:        { type: string }
+        createdAt:      { type: string, format: date-time }
+
+    OpenaiMessageInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+
+    OpenaiConversationWithMessages:
+      type: object
+      required: [id, merchantId, mode, title, createdAt, messages]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        mode:       { type: string }
+        title:      { type: string }
+        createdAt:  { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+
+    OpenaiError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }

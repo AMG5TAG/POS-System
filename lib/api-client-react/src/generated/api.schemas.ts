@@ -1600,6 +1600,52 @@ export interface FloorZone {
   label: string;
 }
 
+export interface AiSettings {
+  aiEnabled: boolean;
+}
+
+export interface AiSettingsInput {
+  aiEnabled: boolean;
+}
+
+export interface OpenaiConversation {
+  id: number;
+  merchantId: number;
+  mode: string;
+  title: string;
+  createdAt: string;
+}
+
+export interface OpenaiConversationInput {
+  mode?: string;
+  title?: string;
+}
+
+export interface OpenaiMessage {
+  id: number;
+  conversationId: number;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface OpenaiMessageInput {
+  content: string;
+}
+
+export interface OpenaiConversationWithMessages {
+  id: number;
+  merchantId: number;
+  mode: string;
+  title: string;
+  createdAt: string;
+  messages: OpenaiMessage[];
+}
+
+export interface OpenaiError {
+  error: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1782,6 +1828,10 @@ export type CancelLaybyBody = {
 
 export type ListCameraSnapshotsParams = {
 cameraId?: number;
+};
+
+export type SaveAiSettings200 = {
+  ok: boolean;
 };
 
 export type SaveFloorPlan200 = {

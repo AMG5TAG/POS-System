@@ -37,6 +37,8 @@ import feedbackRouter from "./feedback";
 import camerasRouter from "./cameras";
 import socialFeedRouter from "./social-feed";
 import floorPlanRouter from "./floor-plan";
+import openaiRouter from "./openai";
+import aiSettingsRouter from "./ai-settings";
 
 const router: IRouter = Router();
 
@@ -78,5 +80,7 @@ router.use(feedbackRouter);
 router.use(camerasRouter);
 router.use(socialFeedRouter);
 router.use(floorPlanRouter);
+router.use(openaiRouter);
+router.use(aiSettingsRouter);
 
 export default router;

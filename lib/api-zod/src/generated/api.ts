@@ -3370,6 +3370,91 @@ export const DeletePosSecurityCaptureParams = zod.object({
 
 
 /**
+ * @summary Get AI feature settings (kill-switch)
+ */
+export const GetAiSettingsResponse = zod.object({
+  "aiEnabled": zod.boolean()
+})
+
+
+/**
+ * @summary Update AI feature settings (kill-switch)
+ */
+export const SaveAiSettingsBody = zod.object({
+  "aiEnabled": zod.boolean()
+})
+
+export const SaveAiSettingsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List all conversations for the merchant
+ */
+export const ListOpenaiConversationsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "mode": zod.string(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversationsResponseItem)
+
+
+/**
+ * @summary Create or fetch conversation by mode
+ */
+export const CreateOpenaiConversationBody = zod.object({
+  "mode": zod.string().optional(),
+  "title": zod.string().optional()
+})
+
+
+/**
+ * @summary Get conversation with messages
+ */
+export const GetOpenaiConversationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetOpenaiConversationResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "mode": zod.string(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "conversationId": zod.number(),
+  "role": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a conversation
+ */
+export const DeleteOpenaiConversationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Send a message and receive a streaming AI response
+ */
+export const SendOpenaiMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendOpenaiMessageBody = zod.object({
+  "content": zod.string()
+})
+
+
+/**
  * @summary Get the merchant floor plan
  */
 export const GetFloorPlanResponse = zod.object({
