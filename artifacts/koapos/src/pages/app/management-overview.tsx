@@ -172,8 +172,7 @@ export default function ManagementOverviewPage() {
   const totalPoints   = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
   const pointsPerDollar = loyaltyData?.pointsPerDollar ? Number(loyaltyData.pointsPerDollar) : 10;
   const loyaltyDollarValue = pointsPerDollar > 0 ? totalPoints / pointsPerDollar : 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loyaltyEnabled = !!(loyaltyData?.isEnabled as any);
+  const loyaltyEnabled = Boolean(loyaltyData?.isEnabled);
 
   /* Yesterday values (for VS bar) */
   const ySales     = yesterday?.totalSales       ?? 0;
@@ -326,13 +325,13 @@ export default function ManagementOverviewPage() {
               href="/management/sales-overview"
             />
             <KpiCard
-              title="GST Rate"
-              icon={Percent}
-              iconBg="bg-lime-100 dark:bg-lime-900/30 text-lime-600"
-              value={gstRateStr}
-              sub={taxData?.gstEnabled === "true" ? `${gstInclusive ? "Inclusive" : "Exclusive"} · ${taxData.taxName ?? "GST"}` : "GST disabled"}
-              valueClass="text-lime-600"
-              href="/management/tax"
+              title="Net Profit"
+              icon={TrendingUp}
+              iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
+              value={isLoading ? "—" : formatCurrency(Math.max(0, revenueExGst - discountTotal - refundTotal))}
+              sub="Revenue ex-GST, less discounts & refunds"
+              valueClass="text-emerald-600"
+              href="/management/sales-overview#profit-loss"
             />
             <KpiCard
               title="Laybys"

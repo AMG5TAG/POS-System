@@ -699,11 +699,19 @@ export default function ServiceJobsPage() {
   useEffect(() => {
     if (!printState) return;
     const t = setTimeout(() => {
-      document.body.setAttribute("data-print", printState.mode === "sheet" ? "sj-sheet" : "sj-sticker");
+      const attr = printState.mode === "sheet" ? "sj-sheet" : "sj-sticker";
+      document.body.setAttribute("data-print", attr);
+      const cleanup = () => {
+        document.body.removeAttribute("data-print");
+        setPrintState(null);
+      };
+      // Use afterprint so the print area stays mounted until the browser is done rendering the print
+      window.addEventListener("afterprint", cleanup, { once: true });
       window.print();
-      document.body.removeAttribute("data-print");
-      setPrintState(null);
-    }, 120);
+      // Fallback: if afterprint never fires (some environments), clean up after 30 s
+      const fallback = window.setTimeout(cleanup, 30_000);
+      window.addEventListener("afterprint", () => window.clearTimeout(fallback), { once: true });
+    }, 150);
     return () => clearTimeout(t);
   }, [printState]);
 

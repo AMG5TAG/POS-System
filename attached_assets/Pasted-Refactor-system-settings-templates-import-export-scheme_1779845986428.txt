@@ -1,0 +1,12 @@
+Refactor system settings, templates, import/export schemes, and file management:
+1. Templates & Comms: Fix the 'New Service' print layout; currently, clicking print triggers a blank A4 sheet. Ensure the template maps data correctly. Verify and link the email and SMS notification systems to their respective templates.
+2. Navigation & Settings Relocation:
+   - Move 'Receipt & Print Settings' from Management > Tax Settings to Management > Sales Templates.
+   - Move 'Document Code Prefixes' from Management > Tax Settings to Management > Misc.
+   - Move 'Maps' from the Main Navigation Menu into the Management > Misc page.
+   - Change End-of-Day cash printout orientation from horizontal to vertical.
+3. Management Overview: Replace the 'GST Rate' metric square with a 'Total Profit' calculation block. Fix 'Loyalty Liability' which is currently misconfigured and rendering '$0, o’clock pts across 0 customers'.
+4. Security: Add functionality allowing Platform Subscribers to update their own account email addresses, protected by a secure password reset validation flow.
+5. Import/Export Schema: Update Management > Import/Export > 'Customers' to include 'Group', 'Shipping Address', 'Referral Code', and 'Referred By' in both export CSV generation and import parsing. Remove the legacy 'Address (single-line)' field. Build a completely new Import/Export tool for 'Product Types'. Remove the 'Similar' system entirely.
+6. Shipping Defaults: In Online > Shipping, dynamically set the default 'Origin' to the suburb/city found in Management > Business Info > Details > Address > Suburb/City. Add official shipping provider logos to this view.
+7. File Manager Extension: Expand Management > Forms into 'Management > Forms and Files'. Update all UI contexts from 'Attach Forms' to 'Attach Forms and Files'. Retain existing forms features, but build a file upload and storage system supporting .pdf, .epub, .docx, .gdoc, .txt, .rtf, .xlsx, .csv, .sheets, .pptx, .key, .slides, .zip, .7z, and .rar. Build a folder structure allowing creation of nested folders. Restrict overall storage limits tied to a platform subscription variable with structural logic to allow manual capacity increases. Allow files to be attached downstream to Services, Appointments, Sales, Invoices, Purchase Orders, Customers, Staff, and Products.

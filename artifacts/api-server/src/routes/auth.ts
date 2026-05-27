@@ -136,6 +136,34 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
 });
 
 
+router.post("/auth/change-email", requireAuth, async (req, res): Promise<void> => {
+  const { currentPassword, newEmail } = req.body as Record<string, unknown>;
+  if (typeof currentPassword !== "string" || typeof newEmail !== "string") {
+    res.status(400).json({ error: "currentPassword and newEmail are required" });
+    return;
+  }
+  const trimmedEmail = newEmail.trim().toLowerCase();
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(trimmedEmail)) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  if (!merchant || !(await verifyPassword(currentPassword, merchant.passwordHash))) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+  // Check email not already in use
+  const [existing] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, trimmedEmail));
+  if (existing && existing.id !== merchantId) {
+    res.status(409).json({ error: "That email address is already in use" });
+    return;
+  }
+  await db.update(merchantsTable).set({ email: trimmedEmail }).where(eq(merchantsTable.id, merchantId));
+  res.json({ ok: true });
+});
+
 router.post("/auth/logout", async (req, res): Promise<void> => {
   req.session.destroy(() => {});
   res.json({ ok: true });

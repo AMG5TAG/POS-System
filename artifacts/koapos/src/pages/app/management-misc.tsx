@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
-import { Map, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Map, ExternalLink, Hash } from "lucide-react";
 import { toast } from "sonner";
 
 export const MAP_PROVIDER_KEY = "koapos_map_provider";
@@ -50,17 +52,59 @@ export function buildMapUrl(address: string, provider?: MapProvider): string {
   }
 }
 
+/* ─── Document Code Prefixes ─────────────────────────────────────────────── */
+
+export const CODE_PREFIX_KEY = "koapos_code_prefixes";
+
+export interface CodePrefixSettings {
+  receiptPrefix:     string; receiptDigits:     number;
+  invoicePrefix:     string; invoiceDigits:     number;
+  servicePrefix:     string; serviceDigits:     number;
+  appointmentPrefix: string; appointmentDigits: number;
+}
+
+export const CODE_PREFIX_DEFAULTS: CodePrefixSettings = {
+  receiptPrefix: "KR",     receiptDigits: 5,
+  invoicePrefix: "KI",     invoiceDigits: 5,
+  servicePrefix: "KS",     serviceDigits: 5,
+  appointmentPrefix: "KA", appointmentDigits: 5,
+};
+
+export function loadCodePrefixes(): CodePrefixSettings {
+  try {
+    const raw = localStorage.getItem(CODE_PREFIX_KEY);
+    return raw ? { ...CODE_PREFIX_DEFAULTS, ...JSON.parse(raw) } : CODE_PREFIX_DEFAULTS;
+  } catch { return CODE_PREFIX_DEFAULTS; }
+}
+
+export function saveCodePrefixes(s: CodePrefixSettings) {
+  localStorage.setItem(CODE_PREFIX_KEY, JSON.stringify(s));
+}
+
+export function previewCode(prefix: string, digits: number) {
+  return `${prefix}${"0".repeat(Math.max(1, digits - 1))}1`;
+}
+
 export default function ManagementMiscPage() {
   const [provider, setProvider] = useState<MapProvider>("google");
+  const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(() => loadCodePrefixes());
 
   useEffect(() => {
     const stored = localStorage.getItem(MAP_PROVIDER_KEY) as MapProvider | null;
     if (stored) setProvider(stored);
   }, []);
 
-  function save() {
+  const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
+    setCodePrefixes((prev) => ({ ...prev, [key]: value }));
+
+  function saveMap() {
     localStorage.setItem(MAP_PROVIDER_KEY, provider);
     toast.success("Map provider saved");
+  }
+
+  function saveCodePrefixesHandler() {
+    saveCodePrefixes(codePrefixes);
+    toast.success("Document code prefixes saved");
   }
 
   return (
@@ -70,6 +114,8 @@ export default function ManagementMiscPage() {
           <h1 className="text-2xl font-bold tracking-tight">Misc Settings</h1>
           <p className="text-muted-foreground mt-1">Miscellaneous preferences for your KoaPOS system.</p>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         <Card>
           <CardHeader>
@@ -109,11 +155,69 @@ export default function ManagementMiscPage() {
               ))}
             </RadioGroup>
 
-            <Button onClick={save} className="mt-2">
-              Save
+            <Button onClick={saveMap} className="mt-2">
+              Save Map Provider
             </Button>
           </CardContent>
         </Card>
+
+        {/* Document Code Prefixes */}
+        <Card id="code-prefixes">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hash className="w-5 h-5" /> Document Code Prefixes
+            </CardTitle>
+            <CardDescription>
+              Set the prefix and number length for receipts, invoices, service jobs and appointments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(
+                [
+                  { label: "Receipt",     prefixKey: "receiptPrefix",     digitsKey: "receiptDigits"     },
+                  { label: "Invoice",     prefixKey: "invoicePrefix",     digitsKey: "invoiceDigits"     },
+                  { label: "Service Job", prefixKey: "servicePrefix",     digitsKey: "serviceDigits"     },
+                  { label: "Appointment", prefixKey: "appointmentPrefix", digitsKey: "appointmentDigits" },
+                ] as { label: string; prefixKey: keyof CodePrefixSettings; digitsKey: keyof CodePrefixSettings }[]
+              ).map(({ label, prefixKey, digitsKey }) => (
+                <div key={prefixKey} className="rounded-xl border p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{label}</p>
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {previewCode(String(codePrefixes[prefixKey]), Number(codePrefixes[digitsKey]))}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Prefix</Label>
+                      <Input
+                        value={String(codePrefixes[prefixKey])}
+                        onChange={(e) => updatePrefix(prefixKey, e.target.value.toUpperCase())}
+                        className="font-mono"
+                        maxLength={6}
+                        placeholder="KR"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Digits</Label>
+                      <Input
+                        type="number" min={1} max={10}
+                        value={Number(codePrefixes[digitsKey])}
+                        onChange={(e) => updatePrefix(digitsKey, Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) as CodePrefixSettings[typeof digitsKey])}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={saveCodePrefixesHandler}>Save Code Prefixes</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        </div>
       </div>
     </AppLayout>
   );

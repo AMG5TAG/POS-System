@@ -10,10 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Receipt, Percent, Info, Hash, Calendar, DollarSign, Copy } from "lucide-react";
+import { Percent, Info, Calendar, DollarSign, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -99,71 +97,6 @@ function saveExt(s: ExtSettings) {
   localStorage.setItem(LS_KEY, JSON.stringify({ ...existing, ...s }));
 }
 
-function SegmentToggle<T extends string>({
-  options, value, onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex rounded-lg border overflow-hidden">
-      {options.map(opt => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-            value === opt.value
-              ? "bg-primary/10 text-primary border-primary"
-              : "text-muted-foreground hover:bg-muted/50"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Code prefix settings (localStorage) ───────────────────────────────── */
-
-const CODE_PREFIX_KEY = "koapos_code_prefixes";
-
-interface CodePrefixSettings {
-  receiptPrefix:     string; receiptDigits:     number;
-  invoicePrefix:     string; invoiceDigits:     number;
-  servicePrefix:     string; serviceDigits:     number;
-  appointmentPrefix: string; appointmentDigits: number;
-}
-
-const CODE_PREFIX_DEFAULTS: CodePrefixSettings = {
-  receiptPrefix: "KR",     receiptDigits: 5,
-  invoicePrefix: "KI",     invoiceDigits: 5,
-  servicePrefix: "KS",     serviceDigits: 5,
-  appointmentPrefix: "KA", appointmentDigits: 5,
-};
-
-function loadCodePrefixes(): CodePrefixSettings {
-  try {
-    const raw = localStorage.getItem(CODE_PREFIX_KEY);
-    return raw ? { ...CODE_PREFIX_DEFAULTS, ...JSON.parse(raw) } : CODE_PREFIX_DEFAULTS;
-  } catch { return CODE_PREFIX_DEFAULTS; }
-}
-
-function saveCodePrefixes(s: CodePrefixSettings) {
-  localStorage.setItem(CODE_PREFIX_KEY, JSON.stringify(s));
-}
-
-function previewCode(prefix: string, digits: number) {
-  return `${prefix}${"0".repeat(Math.max(1, digits - 1))}1`;
-}
-
-const TAX_TABS = [
-  { href: "#gst-settings", label: "GST Settings",    icon: Percent },
-  { href: "#receipt",      label: "Receipt",          icon: Receipt },
-  { href: "#code-prefixes",label: "Document Codes",   icon: Hash    },
-];
 
 export default function SettingsTaxPage() {
   const { data: settings, isLoading } = useGetTaxSettings();
@@ -177,16 +110,6 @@ export default function SettingsTaxPage() {
   const handleSaveExt = () => {
     saveExt(ext);
     toast.success("Settings saved");
-  };
-
-  const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(() => loadCodePrefixes());
-
-  const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
-    setCodePrefixes((prev) => ({ ...prev, [key]: value }));
-
-  const handleSaveCodePrefixes = () => {
-    saveCodePrefixes(codePrefixes);
-    toast.success("Document code prefixes saved");
   };
 
   const [form, setForm] = useState({
@@ -253,7 +176,7 @@ export default function SettingsTaxPage() {
           <Percent className="w-6 h-6 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">Tax Settings</h1>
-            <p className="text-sm text-muted-foreground">Configure tax rates, receipt settings, and notification preferences</p>
+            <p className="text-sm text-muted-foreground">Configure GST rates, fiscal year, and tax compliance terminology</p>
           </div>
         </div>
 
@@ -468,118 +391,6 @@ export default function SettingsTaxPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" onClick={handleSaveExt}>Save Tax &amp; Compliance</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Receipt & Print Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-primary" />
-              Receipt &amp; Print Settings
-            </CardTitle>
-            <CardDescription>
-              Choose the default paper size for receipts and printed documents.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-1.5">
-              <Label>Receipt / Thermal Printer Paper Width</Label>
-              <SegmentToggle
-                options={[
-                  { value: "58mm", label: "58 mm  (small thermal)" },
-                  { value: "80mm", label: "80 mm  (standard thermal)" },
-                  { value: "a4",   label: "A4 / Full page" },
-                ]}
-                value={ext.receiptPaperSize}
-                onChange={v => patchExt({ receiptPaperSize: v })}
-              />
-            </div>
-            <Separator />
-            <div className="grid grid-cols-3 gap-3 text-center">
-              {[
-                { w: "58mm",  label: "58 mm",  desc: "Small handheld printers" },
-                { w: "80mm",  label: "80 mm",  desc: "Most counter-top thermal printers" },
-                { w: "210mm", label: "A4",     desc: "Full invoices & detailed receipts" },
-              ].map(p => (
-                <div
-                  key={p.label}
-                  onClick={() => patchExt({ receiptPaperSize: (p.w === "210mm" ? "a4" : p.w) as ExtSettings["receiptPaperSize"] })}
-                  className={`rounded-lg border-2 p-3 cursor-pointer transition-colors ${
-                    (p.w === "210mm" ? "a4" : p.w) === ext.receiptPaperSize
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <div
-                    className="mx-auto mb-2 rounded border-2 border-current bg-white"
-                    style={{
-                      width:  p.w === "58mm" ? 24 : p.w === "80mm" ? 30 : 40,
-                      height: p.w === "210mm" ? 56 : 36,
-                    }}
-                  />
-                  <p className="text-xs font-semibold">{p.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{p.desc}</p>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveExt}>Save Print Settings</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Document Code Prefixes */}
-        <Card id="code-prefixes">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Hash className="w-4 h-4" /> Document Code Prefixes
-            </CardTitle>
-            <CardDescription>Set the prefix and number length for receipts, invoices, service jobs and appointments.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(
-                [
-                  { label: "Receipt",     prefixKey: "receiptPrefix",     digitsKey: "receiptDigits"     },
-                  { label: "Invoice",     prefixKey: "invoicePrefix",     digitsKey: "invoiceDigits"     },
-                  { label: "Service Job", prefixKey: "servicePrefix",     digitsKey: "serviceDigits"     },
-                  { label: "Appointment", prefixKey: "appointmentPrefix", digitsKey: "appointmentDigits" },
-                ] as { label: string; prefixKey: keyof CodePrefixSettings; digitsKey: keyof CodePrefixSettings }[]
-              ).map(({ label, prefixKey, digitsKey }) => (
-                <div key={prefixKey} className="rounded-xl border p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{label}</p>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {previewCode(String(codePrefixes[prefixKey]), Number(codePrefixes[digitsKey]))}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Prefix</Label>
-                      <Input
-                        value={String(codePrefixes[prefixKey])}
-                        onChange={(e) => updatePrefix(prefixKey, e.target.value.toUpperCase())}
-                        className="font-mono"
-                        maxLength={6}
-                        placeholder="KR"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Digits</Label>
-                      <Input
-                        type="number" min={1} max={10}
-                        value={Number(codePrefixes[digitsKey])}
-                        onChange={(e) => updatePrefix(digitsKey, Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) as CodePrefixSettings[typeof digitsKey])}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveCodePrefixes}>Save Code Prefixes</Button>
             </div>
           </CardContent>
         </Card>

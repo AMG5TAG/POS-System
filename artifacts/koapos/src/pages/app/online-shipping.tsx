@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/use-auth";
 import { BrandIcon } from "@/components/brand-icon";
+import { useGetMerchant } from "@workspace/api-client-react";
 import {
   Truck, MapPin, Calculator, CheckCircle2,
   Clock, DollarSign, Settings2, Zap, Search, ShieldCheck,
@@ -47,8 +48,6 @@ interface Quote {
   tracking:  boolean;
 }
 
-const ORIGIN = { postcode: "2010", state: "NSW", city: "Surry Hills" };
-
 /** Mock quote calculator – approximates carrier pricing based on weight, distance, and dimensions. */
 function calculateQuotes(
   destination: string,
@@ -57,9 +56,10 @@ function calculateQuotes(
   width: number,
   height: number,
   carriers: Carrier[],
+  originPostcode: string,
 ): Quote[] {
   const volume = (length * width * height) / 1000;
-  const distance = Math.abs(parseInt(destination.slice(0, 2)) - parseInt(ORIGIN.postcode.slice(0, 2))) * 50 + 100;
+  const distance = Math.abs(parseInt(destination.slice(0, 2)) - parseInt((originPostcode || "2000").slice(0, 2))) * 50 + 100;
   const baseDistanceFactor = distance / 1000;
 
   const services: { carrierId: string; service: string; multiplier: number; speed: string; insured: boolean }[] = [
@@ -136,6 +136,11 @@ function saveCarriers(carriers: Carrier[]) {
 
 export default function OnlineShippingPage() {
   const { user } = useAuth();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const merchantExt = merchant as unknown as { postcode?: string; state?: string };
+  const originCity     = merchant?.city          || "—";
+  const originPostcode = merchantExt?.postcode   || "—";
+  const originState    = merchantExt?.state      || "—";
   const [carriers, setCarriers] = useState<Carrier[]>(() => loadCarriers());
   const [form, setForm] = useState({
     postcode: "",
@@ -165,7 +170,7 @@ export default function OnlineShippingPage() {
     setQuotes([]);
     setSelectedQuote(null);
     setTimeout(() => {
-      const result = calculateQuotes(form.postcode, form.weight, form.length, form.width, form.height, carriers);
+      const result = calculateQuotes(form.postcode, form.weight, form.length, form.width, form.height, carriers, originPostcode);
       setQuotes(result);
       setLoading(false);
       toast.success(`Found ${result.length} shipping options`);
@@ -226,7 +231,11 @@ export default function OnlineShippingPage() {
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-xs">Origin</Label>
-                    <Input value={`${ORIGIN.postcode} – ${ORIGIN.city}, ${ORIGIN.state}`} readOnly className="bg-muted/40" />
+                    <Input
+                      value={originPostcode !== "—" ? `${originPostcode} – ${originCity}, ${originState}` : "Not set — update in Business Info"}
+                      readOnly
+                      className="bg-muted/40"
+                    />
                   </div>
                 </div>
 

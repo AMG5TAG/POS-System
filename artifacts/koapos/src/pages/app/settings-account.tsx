@@ -40,9 +40,45 @@ export default function SettingsAccountPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwSaving,   setPwSaving]   = useState(false);
 
+  // Email change state
+  const [newEmail,      setNewEmail]      = useState("");
+  const [confirmEmail,  setConfirmEmail]  = useState("");
+  const [emailPw,       setEmailPw]       = useState("");
+  const [showEmailPw,   setShowEmailPw]   = useState(false);
+  const [emailSaving,   setEmailSaving]   = useState(false);
+
   const pwMismatch  = confirmPw.length > 0 && newPw !== confirmPw;
   const pwTooShort  = newPw.length > 0 && newPw.length < 8;
   const canChangePw = currentPw.length > 0 && newPw.length >= 8 && newPw === confirmPw;
+
+  const emailMismatch  = confirmEmail.length > 0 && newEmail !== confirmEmail;
+  const emailInvalid   = newEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail);
+  const canChangeEmail = newEmail.length > 0 && !emailInvalid && newEmail === confirmEmail && emailPw.length > 0;
+
+  const handleChangeEmail = async () => {
+    if (!canChangeEmail) return;
+    setEmailSaving(true);
+    try {
+      const res = await fetch("/api/auth/change-email", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: emailPw, newEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Email change failed");
+        return;
+      }
+      toast.success("Email updated successfully");
+      qc.invalidateQueries({ queryKey: ["merchant"] });
+      setNewEmail(""); setConfirmEmail(""); setEmailPw("");
+    } catch {
+      toast.error("Network error — please try again");
+    } finally {
+      setEmailSaving(false);
+    }
+  };
 
   const handleChangePassword = async () => {
     if (!canChangePw) return;
@@ -143,7 +179,7 @@ export default function SettingsAccountPage() {
               <Label>Email Address</Label>
               <Input value={merchant?.email ?? ""} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground mt-1">
-                Contact support to change your email address.
+                To change your email, use the <strong>Update Email</strong> card below.
               </p>
             </div>
             <div>
@@ -243,6 +279,76 @@ export default function SettingsAccountPage() {
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
               ) : (
                 "Update Password"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Update Email */}
+        <Card id="update-email">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AtSign className="w-4 h-4" /> Update Email Address
+            </CardTitle>
+            <CardDescription>
+              Change the email address you use to log in to KoaPOS. Your current password is required for security.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-email">New Email Address</Label>
+              <Input
+                id="new-email"
+                type="email"
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value.trim())}
+                placeholder="new@example.com"
+                className={emailInvalid ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {emailInvalid && (
+                <p className="text-xs text-destructive">Please enter a valid email address</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-email">Confirm New Email</Label>
+              <Input
+                id="confirm-email"
+                type="email"
+                value={confirmEmail}
+                onChange={e => setConfirmEmail(e.target.value.trim())}
+                placeholder="Re-enter new email"
+                className={emailMismatch ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {emailMismatch && (
+                <p className="text-xs text-destructive">Email addresses do not match</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email-pw">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="email-pw"
+                  type={showEmailPw ? "text" : "password"}
+                  value={emailPw}
+                  onChange={e => setEmailPw(e.target.value)}
+                  placeholder="Confirm with your current password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEmailPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showEmailPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <Button onClick={handleChangeEmail} disabled={!canChangeEmail || emailSaving}>
+              {emailSaving ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
+              ) : (
+                "Update Email"
               )}
             </Button>
           </CardContent>

@@ -156,7 +156,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Customers",      href: "/management/customers",      icon: Users          },
   { name: "Discounts",      href: "/management/discounts",      icon: Percent        },
   { name: "Email",          href: "/management/email",          icon: Mail           },
-  { name: "Forms",          href: "/management/forms",          icon: FileText       },
+  { name: "Forms & Files",   href: "/management/forms",          icon: FileText       },
   { name: "Import / Export",href: "/management/import-export",  icon: ArrowLeftRight },
   { name: "Integrations",   href: "/management/integrations",   icon: Receipt        },
   { name: "Inventory",      href: "/management/inventory",      icon: Boxes          },
@@ -173,13 +173,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Referrals",   href: "/management/marketing/referrals",   icon: UserPlus },
     ],
   },
-  {
-    name: "Misc",
-    icon: MoreHorizontal,
-    children: [
-      { name: "Maps", href: "/management/misc", icon: Map },
-    ],
-  },
+  { name: "Misc",            href: "/management/misc",           icon: MoreHorizontal },
   { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
   { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
@@ -251,7 +245,7 @@ const SEARCH_INDEX = [
   { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
   { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
   { label: "Sale Templates",      href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
-  { label: "Forms",             href: "/management/forms",            icon: FileText,        group: "Management" },
+  { label: "Forms & Files",     href: "/management/forms",            icon: FileText,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
   { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
   { label: "Marketing · Overview",             href: "/marketing",                          icon: BarChart2,  group: "Marketing" },
@@ -265,7 +259,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Socials Posts",    href: "/marketing/socials/posts",       icon: Send,   group: "Marketing" },
   { label: "Marketing · Socials Track",    href: "/marketing/socials/track",       icon: Target, group: "Marketing" },
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
-  { label: "Misc · Maps",                  href: "/management/misc",                       icon: Map,       group: "Management" },
+  { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Socials Settings",  href: "/management/marketing/socials",         icon: Share2,    group: "Management" },
   { label: "Marketing · Ads Settings",      href: "/management/marketing/online-ads",      icon: Megaphone, group: "Management" },
@@ -380,7 +374,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/online/shipping":                      ["Online", "Shipping"],
   "/online/marketplace":                   ["Online", "Marketplace"],
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
-  "/management/misc":                      ["Management", "Misc", "Maps"],
+  "/management/misc":                      ["Management", "Misc"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */

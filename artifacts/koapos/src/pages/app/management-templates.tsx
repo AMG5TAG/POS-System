@@ -1232,6 +1232,85 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
   );
 }
 
+/* ─── Receipt & Print Settings ───────────────────────────────────────────── */
+
+const EXT_KEY = "koapos_regional_ext";
+type PaperSize = "58mm" | "80mm" | "a4";
+
+function loadPaperSize(): PaperSize {
+  try {
+    const raw = localStorage.getItem(EXT_KEY);
+    if (!raw) return "80mm";
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.receiptPaperSize === "58mm" || parsed.receiptPaperSize === "80mm" || parsed.receiptPaperSize === "a4") {
+      return parsed.receiptPaperSize as PaperSize;
+    }
+  } catch {}
+  return "80mm";
+}
+
+function savePaperSize(size: PaperSize) {
+  try {
+    const raw = localStorage.getItem(EXT_KEY);
+    const existing = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+    localStorage.setItem(EXT_KEY, JSON.stringify({ ...existing, receiptPaperSize: size }));
+  } catch {}
+}
+
+function ReceiptPrintSettings() {
+  const [selected, setSelected] = useState<PaperSize>(() => loadPaperSize());
+
+  const sizes: { value: PaperSize; label: string; desc: string; w: number; h: number }[] = [
+    { value: "58mm", label: "58 mm",  desc: "Small handheld printers",             w: 24, h: 36 },
+    { value: "80mm", label: "80 mm",  desc: "Most counter-top thermal printers",   w: 30, h: 36 },
+    { value: "a4",   label: "A4",     desc: "Full invoices & detailed receipts",   w: 40, h: 56 },
+  ];
+
+  const handleSave = () => {
+    savePaperSize(selected);
+    toast.success("Print settings saved");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Printer className="h-5 w-5 text-primary" />
+          Receipt &amp; Print Settings
+        </CardTitle>
+        <CardDescription>
+          Choose the default paper size for receipts and printed documents.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-3 gap-3 text-center">
+          {sizes.map(p => (
+            <div
+              key={p.value}
+              onClick={() => setSelected(p.value)}
+              className={`rounded-lg border-2 p-3 cursor-pointer transition-colors ${
+                p.value === selected
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/40"
+              }`}
+            >
+              <div
+                className="mx-auto mb-2 rounded border-2 border-current bg-white"
+                style={{ width: p.w, height: p.h }}
+              />
+              <p className="text-xs font-semibold">{p.label}</p>
+              <p className="text-[11px] text-muted-foreground">{p.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <Button size="sm" onClick={handleSave}>Save Print Settings</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ManagementTemplatesPage() {
@@ -1448,6 +1527,9 @@ export default function ManagementTemplatesPage() {
           focusedField={focusedFieldLabel}
           onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
         />
+
+        {/* Receipt & Print Settings */}
+        <ReceiptPrintSettings />
       </div>
     </AppLayout>
   );
