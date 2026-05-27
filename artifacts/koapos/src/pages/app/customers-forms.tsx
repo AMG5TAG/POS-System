@@ -38,8 +38,8 @@ export default function CustomersFormsPage() {
   const [viewingSub, setViewingSub]                 = useState<FormSubmission | null>(null);
 
   const { data: forms = [],     isLoading: formsLoading }  = useListForms();
-  const { data: allCustomers = [] }                         = useListCustomers();
-  const customers = allCustomers as Customer[];
+  const { data: customersData }                             = useListCustomers();
+  const customers = (customersData?.items ?? []) as Customer[];
   const { data: merchant }                                  = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile }                                         = useBusinessProfile();
   const { data: submissions = [] }                          = useListFormSubmissions(

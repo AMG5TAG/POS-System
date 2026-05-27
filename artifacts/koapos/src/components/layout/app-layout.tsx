@@ -20,7 +20,15 @@ import {
   ShoppingBag, Map, MoreHorizontal,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
-import { useLogout } from "@workspace/api-client-react";
+import {
+  useLogout,
+  useListCustomers,
+  useListServiceJobs,
+  useListAppointments,
+  type Customer,
+  type Appointment,
+  type ServiceJob,
+} from "@workspace/api-client-react";
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
   SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarFooter,
@@ -386,12 +394,55 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
 
   const setOpenWithCallback = (val: boolean) => { setOpen(val); onOpenChange?.(val); };
 
-  const results = query.trim().length === 0
+  const liveEnabled = query.trim().length >= 2;
+  const { data: custData }  = useListCustomers(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["customers-search", liveEnabled] } });
+  const { data: svcData }   = useListServiceJobs({ query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["service-jobs-search", liveEnabled] } });
+  const { data: apptData }  = useListAppointments(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["appointments-search", liveEnabled] } });
+
+  const q = query.trim().toLowerCase();
+
+  const staticResults = q.length === 0
     ? SEARCH_INDEX.slice(0, 8)
     : SEARCH_INDEX.filter((item) =>
-        item.label.toLowerCase().includes(query.toLowerCase()) ||
-        item.group.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 10);
+        item.label.toLowerCase().includes(q) ||
+        item.group.toLowerCase().includes(q)
+      ).slice(0, 6);
+
+  const liveItems: typeof SEARCH_INDEX = [];
+  if (q.length >= 2) {
+    ((custData as { items?: Customer[] } | undefined)?.items ?? [])
+      .filter((c) => `${c.firstName ?? ""} ${c.lastName ?? ""} ${c.email ?? ""}`.toLowerCase().includes(q))
+      .slice(0, 3)
+      .forEach((c) => liveItems.push({
+        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || (c.email ?? "Customer"),
+        href: "/customers",
+        icon: Users,
+        group: "Customer",
+      }));
+
+    const jobs = (svcData as ServiceJob[] | { items?: ServiceJob[] } | undefined);
+    (Array.isArray(jobs) ? jobs : (jobs as { items?: ServiceJob[] } | undefined)?.items ?? [])
+      .filter((j) => `${j.jobNumber ?? ""} ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? ""} ${j.customerName ?? ""}`.toLowerCase().includes(q))
+      .slice(0, 3)
+      .forEach((j) => liveItems.push({
+        label: `#${j.jobNumber} — ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? (j as ServiceJob & { deviceType?: string | null }).deviceType ?? "Service Job"}`,
+        href: `/service-jobs/${j.id}`,
+        icon: Wrench,
+        group: "Service Job",
+      }));
+
+    (Array.isArray(apptData) ? apptData as Appointment[] : [])
+      .filter((a) => `${a.title} ${a.customerName ?? ""}`.toLowerCase().includes(q))
+      .slice(0, 3)
+      .forEach((a) => liveItems.push({
+        label: a.title,
+        href: "/appointments",
+        icon: CalendarClock,
+        group: "Appointment",
+      }));
+  }
+
+  const results = [...staticResults, ...liveItems].slice(0, 12);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

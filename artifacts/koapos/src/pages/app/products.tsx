@@ -663,6 +663,7 @@ function ProductDetailDialog({
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [search, setSearch]             = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
@@ -829,6 +830,12 @@ export default function ProductsPage() {
       .then((r) => r.ok ? r.json() : { items: [] })
       .then((data) => setSuppliersList((data as { items: { id: number; name: string }[] }).items || []));
   }, []);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const t = setTimeout(() => scrollContainerRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [dialogOpen]);
 
   const products   = productsData?.items || [];
   const categories = (categoriesData as unknown as { id: number; name: string; parentId?: number | null }[]) || [];
@@ -1352,7 +1359,7 @@ export default function ProductsPage() {
             className="flex-1 overflow-y-auto px-6"
             tabIndex={-1}
             style={{ outline: "none" }}
-            ref={(el) => { if (el && dialogOpen) el.focus(); }}
+            ref={scrollContainerRef}
           >
 
             {/* ── Details ── */}
@@ -1622,7 +1629,7 @@ export default function ProductsPage() {
                           <SelectTrigger className="mt-1.5"><SelectValue placeholder="No supplier" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">No supplier</SelectItem>
-                            {suppliersList.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                            {[...suppliersList].sort((a, b) => a.name.localeCompare(b.name)).map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : (

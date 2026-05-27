@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -51,6 +51,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { ACTIVE_STORAGE_KEY, DEFAULT_OPTS, type TplOpts } from "@/pages/app/management-templates";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -233,6 +234,33 @@ export default function ServiceJobNewPage() {
   };
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
+
+  const svcOpts = useMemo((): TplOpts => {
+    try {
+      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
+      const tplId = active.service || "ss-standard";
+      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
+      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
+    } catch { return { ...DEFAULT_OPTS }; }
+  }, [successJob]); // refresh opts whenever the success dialog opens
+
+  const emailOpts = useMemo((): TplOpts => {
+    try {
+      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
+      const tplId = active.emails || "email-plain";
+      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
+      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
+    } catch { return { ...DEFAULT_OPTS }; }
+  }, [successJob]);
+
+  const smsOpts = useMemo((): TplOpts => {
+    try {
+      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
+      const tplId = active.sms || "sms-standard";
+      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
+      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
+    } catch { return { ...DEFAULT_OPTS }; }
+  }, [successJob]);
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -766,18 +794,49 @@ export default function ServiceJobNewPage() {
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col mt-2">
           {selectedCustomer?.email && (
-            <Button
-              className="w-full gap-2"
-              variant="outline"
-              asChild
-            >
+            <Button className="w-full gap-2" variant="outline" asChild>
               <a
-                href={`mailto:${selectedCustomer.email}?subject=Service%20Job%20Confirmation%20%23${successJob?.jobNumber ?? successJob?.id}&body=Hi%20${encodeURIComponent((selectedCustomer.firstName ?? "") + " " + (selectedCustomer.lastName ?? "")).trim()}%2C%0A%0AYour%20device%20has%20been%20booked%20in%20for%20service.%20Your%20job%20number%20is%20%23${successJob?.jobNumber ?? successJob?.id}.%0A%0AWe%20will%20be%20in%20touch%20with%20an%20update%20shortly.%0A%0AThank%20you%21`}
+                href={(() => {
+                  const jobRef = successJob?.jobNumber ?? `SVC-${successJob?.id}`;
+                  const custName = `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim();
+                  const defaultBody = `Hi ${custName},\n\nYour device has been booked in for service. Your job number is #${jobRef}.\n\nWe will be in touch with an update shortly.\n\nThank you!`;
+                  const subject = encodeURIComponent(
+                    emailOpts.subjectLine || `Service Job Confirmation #${jobRef}`,
+                  );
+                  const body = encodeURIComponent(
+                    (emailOpts.messageText || defaultBody)
+                      .replace(/\{jobNumber\}/g, jobRef)
+                      .replace(/\{customerName\}/g, custName)
+                      .replace(/\{businessName\}/g, businessName),
+                  );
+                  return `mailto:${selectedCustomer.email}?subject=${subject}&body=${body}`;
+                })()}
                 target="_blank"
                 rel="noreferrer"
               >
                 <Mail className="w-4 h-4" />
                 Email Customer
+              </a>
+            </Button>
+          )}
+          {selectedCustomer?.phone && (
+            <Button className="w-full gap-2" variant="outline" asChild>
+              <a
+                href={(() => {
+                  const jobRef = successJob?.jobNumber ?? `SVC-${successJob?.id}`;
+                  const custName = `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim();
+                  const defaultMsg = `Hi ${custName}, your device has been booked in. Job #${jobRef}. We'll be in touch soon. — ${businessName}`;
+                  const msg = encodeURIComponent(
+                    (smsOpts.messageText || defaultMsg)
+                      .replace(/\{jobNumber\}/g, jobRef)
+                      .replace(/\{customerName\}/g, custName)
+                      .replace(/\{businessName\}/g, businessName),
+                  );
+                  return `sms:${selectedCustomer.phone}?body=${msg}`;
+                })()}
+              >
+                <Tag className="w-4 h-4" />
+                SMS Customer
               </a>
             </Button>
           )}
@@ -906,21 +965,25 @@ export default function ServiceJobNewPage() {
     {/* ── Job Sheet print area ─────────────────────────────────────── */}
     <div id="svc-job-sheet-print-area" aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: 0, width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #222", paddingBottom: "14px", marginBottom: "22px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `2px solid ${brandColor}`, paddingBottom: "14px", marginBottom: "22px" }}>
         <div>
-          <div style={{ width: "30px", height: "30px", borderRadius: "5px", background: brandColor, marginBottom: "6px" }} />
+          {svcOpts.showLogo
+            ? <div style={{ width: "30px", height: "30px", borderRadius: "5px", background: brandColor, marginBottom: "6px" }} />
+            : null}
           <div style={{ fontSize: "18px", fontWeight: "bold" }}>{merchant?.businessName ?? "Service Centre"}</div>
-          {bizProfile?.abn && <div style={{ color: "#666", fontSize: "11px" }}>ABN {bizProfile.abn}</div>}
+          {svcOpts.showAbn && bizProfile?.abn && <div style={{ color: "#666", fontSize: "11px" }}>ABN {bizProfile.abn}</div>}
           {(bizProfile?.state || bizProfile?.postcode) && (
             <div style={{ color: "#666", fontSize: "11px" }}>{[bizProfile.state, bizProfile.postcode].filter(Boolean).join(" ")}</div>
           )}
           {(bizProfile?.contactEmail ?? merchant?.email) && (
             <div style={{ color: "#666", fontSize: "11px" }}>{bizProfile?.contactEmail ?? merchant?.email}</div>
           )}
-          {bizProfile?.website && <div style={{ color: "#666", fontSize: "11px" }}>{bizProfile.website}</div>}
+          {svcOpts.showWebsite && bizProfile?.website && <div style={{ color: "#666", fontSize: "11px" }}>{bizProfile.website}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "20px", fontWeight: "bold", textTransform: "uppercase", color: "#444", letterSpacing: "1px" }}>Service Job Sheet</div>
+          <div style={{ fontSize: "20px", fontWeight: "bold", textTransform: "uppercase", color: brandColor, letterSpacing: "1px" }}>
+            {svcOpts.headerText || "Service Job Sheet"}
+          </div>
           <div style={{ marginTop: "6px" }}>Job No: <strong>{successJob?.jobNumber ?? `SVC-${successJob?.id}`}</strong></div>
           <div>Date: <strong>{new Date(bookInDate || Date.now()).toLocaleDateString("en-AU")}</strong></div>
           <div>Status: <strong style={{ textTransform: "capitalize" }}>{status}</strong></div>
@@ -933,27 +996,35 @@ export default function ServiceJobNewPage() {
       </div>
 
       {/* Customer + Device 2-col */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-        <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Customer Details</div>
-          <div><strong>Name:</strong> {selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in")}</div>
-          {selectedCustomer?.phone && <div><strong>Phone:</strong> {selectedCustomer.phone}</div>}
-          {selectedCustomer?.email && <div><strong>Email:</strong> {selectedCustomer.email}</div>}
+      {(svcOpts.showCustomerDetails || svcOpts.showDeviceDetails) && (
+        <div style={{ display: "grid", gridTemplateColumns: svcOpts.showCustomerDetails && svcOpts.showDeviceDetails ? "1fr 1fr" : "1fr", gap: "16px", marginBottom: "16px" }}>
+          {svcOpts.showCustomerDetails && (
+            <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
+              <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Customer Details</div>
+              <div><strong>Name:</strong> {selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in")}</div>
+              {selectedCustomer?.phone && <div><strong>Phone:</strong> {selectedCustomer.phone}</div>}
+              {selectedCustomer?.email && <div><strong>Email:</strong> {selectedCustomer.email}</div>}
+            </div>
+          )}
+          {svcOpts.showDeviceDetails && (
+            <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
+              <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Device Details</div>
+              {deviceType && <div><strong>Type:</strong> {deviceType}</div>}
+              {deviceDescription && <div><strong>Model:</strong> {deviceDescription}</div>}
+              {serialNumber && <div><strong>Serial:</strong> {serialNumber}</div>}
+              {condition && <div><strong>Condition:</strong> {condition}</div>}
+            </div>
+          )}
         </div>
-        <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Device Details</div>
-          {deviceType && <div><strong>Type:</strong> {deviceType}</div>}
-          {deviceDescription && <div><strong>Model:</strong> {deviceDescription}</div>}
-          {serialNumber && <div><strong>Serial:</strong> {serialNumber}</div>}
-          {condition && <div><strong>Condition:</strong> {condition}</div>}
-        </div>
-      </div>
+      )}
 
       {/* Work description */}
-      <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Fault / Work Required</div>
-        <div style={{ minHeight: "48px", whiteSpace: "pre-wrap" }}>{workDescription || "—"}</div>
-      </div>
+      {svcOpts.showWorkDescription && (
+        <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px", marginBottom: "16px" }}>
+          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Fault / Work Required</div>
+          <div style={{ minHeight: "48px", whiteSpace: "pre-wrap" }}>{workDescription || "—"}</div>
+        </div>
+      )}
 
       {/* Additional equipment */}
       {additionalEquipment && (
@@ -971,8 +1042,15 @@ export default function ServiceJobNewPage() {
         </div>
       )}
 
+      {/* Warranty notice */}
+      {svcOpts.warrantyText && (
+        <div style={{ border: "1px solid #d1fae5", borderRadius: "6px", padding: "12px", marginBottom: "16px", background: "#f0fdf4", color: "#065f46", fontSize: "11px" }}>
+          {svcOpts.warrantyText}
+        </div>
+      )}
+
       {/* Photos */}
-      {photos.some(Boolean) && (
+      {svcOpts.showPhotos && photos.some(Boolean) && (
         <div style={{ marginBottom: "16px" }}>
           <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Device Photos</div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -984,7 +1062,7 @@ export default function ServiceJobNewPage() {
       )}
 
       {/* Signature (captured) */}
-      {signature && (
+      {svcOpts.showSignature && signature && (
         <div style={{ marginBottom: "16px" }}>
           <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Customer Signature (captured on device)</div>
           <div style={{ border: "1px solid #ddd", borderRadius: "4px", padding: "4px", display: "inline-block" }}>
@@ -994,6 +1072,7 @@ export default function ServiceJobNewPage() {
       )}
 
       {/* Call History table */}
+      {svcOpts.showCallHistory && (
       <div style={{ marginBottom: "20px" }}>
         <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Call History</div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -1005,7 +1084,7 @@ export default function ServiceJobNewPage() {
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: 7 }).map((_, i) => (
+            {Array.from({ length: Math.max(2, Math.min(10, parseInt(svcOpts.callHistoryRows || "6", 10))) }).map((_, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                 <td style={{ padding: "16px 10px" }}> </td>
                 <td style={{ padding: "16px 10px" }}> </td>
@@ -1015,6 +1094,7 @@ export default function ServiceJobNewPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Signature row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "32px" }}>
