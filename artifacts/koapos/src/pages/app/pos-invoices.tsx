@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
+
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListProducts, useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -32,6 +33,40 @@ import {
   Banknote, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
+
+/* ── PDF image compression helper ───────────────────────────────────────── */
+
+/**
+ * Downscale + JPEG-compress any image data URL before embedding in a PDF.
+ * Logo at 22mm print size needs at most ~260 px at 300 DPI — raw user uploads
+ * are often 1000–4000 px PNGs which balloon the file to 100 MB+.
+ * This reduces a typical logo from ~3 MB of base64 PNG to ~20 KB JPEG.
+ */
+async function compressForPdf(
+  src: string,
+  maxPx = 260,
+  quality = 0.78,
+): Promise<{ dataUrl: string; format: "JPEG" }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width || 1, img.height || 1));
+      const w = Math.max(1, Math.round(img.width  * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width  = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("no 2d ctx")); return; }
+      ctx.fillStyle = "#ffffff";  // white background so transparency becomes white, not black
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve({ dataUrl: canvas.toDataURL("image/jpeg", quality), format: "JPEG" });
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
@@ -709,8 +744,10 @@ export default function POSInvoicesPage() {
     if (opts.showLogo) {
       if (logo) {
         try {
-          const imgFormat = logo.startsWith("data:image/png") ? "PNG" : "JPEG";
-          doc.addImage(logo, imgFormat, ML, y, 22, 22);
+          /* Compress to JPEG at ≤260 px before embedding — raw user PNG logos
+             (often 1000–4000 px) are the #1 cause of 100 MB+ PDF output. */
+          const { dataUrl: compressedLogo, format: logoFmt } = await compressForPdf(logo, 260, 0.78);
+          doc.addImage(compressedLogo, logoFmt, ML, y, 22, 22);
           logoH = 26;
         } catch {
           doc.setFillColor(cr, cg, cb);
