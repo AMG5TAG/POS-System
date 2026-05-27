@@ -64,6 +64,8 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   linkedin_business:    { type: "img",  bg: "bg-[#0A66C2]",    src: SI("linkedin",      "ffffff") },
   tiktok_business:      { type: "img",  bg: "bg-black",         src: SI("tiktok",        "ffffff") },
   google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
+  youtube_channel:      { type: "img",  bg: "bg-[#FF0000]",    src: SI("youtube",       "ffffff") },
+  google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
   mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",    src: SI("mailchimp",     "000000") },
   /* Payments & EFTPOS */
   commbank_eftpos:      { type: "text", bg: "bg-[#FFD200]",    color: "text-black",   label: "CBA",  cls: "text-[11px] font-black tracking-tight" },
