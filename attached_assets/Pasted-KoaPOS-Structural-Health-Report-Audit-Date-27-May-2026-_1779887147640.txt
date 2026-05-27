@@ -1,0 +1,106 @@
+KoaPOS — Structural Health Report
+Audit Date: 27 May 2026 | Scope: Full codebase (frontend + backend)
+
+Critical Blockers
+Data lost on every page refresh — in-memory state only, no DB or localStorage
+
+These pages use useState([]) with a module-level let nextId = 1 counter. Every record created is wiped on navigation or refresh. No backend API calls are ever made.
+
+File	Feature	Severity
+artifacts/koapos/src/pages/app/products-recalls.tsx	Product Recalls	🔴 Critical
+artifacts/koapos/src/pages/app/products-pre-orders.tsx	Pre-Orders	🔴 Critical
+artifacts/koapos/src/pages/app/products-return-auth.tsx	Return Authorisations	🔴 Critical
+artifacts/koapos/src/pages/app/products-brands.tsx	Brands	🔴 Critical
+artifacts/koapos/src/pages/app/products-tags.tsx	Tags	🔴 Critical
+artifacts/koapos/src/pages/app/products-suppliers.tsx	Suppliers	🔴 Critical
+Root cause: Backend routes (/brands, /tags, /suppliers) were built in artifacts/api-server/src/routes/ and registered in routes/index.ts, but were never added to lib/api-spec/openapi.yaml. Because the OpenAPI spec is the source of truth for codegen, no React Query hooks were ever generated for them, and the frontend pages were built with pure in-memory state as a stopgap. The gap was never closed.
+
+Specific evidence:
+
+products-recalls.tsx line 25: let nextId = 1; — module-level mutable ID counter
+products-recalls.tsx line 31: const [recalls, setRecalls] = useState<Recall[]>([]);
+products-brands.tsx — imports zero items from @workspace/api-client-react
+High Severity — Data Persists Only Per-Browser (localStorage)
+These pages store all user data in localStorage. Data is silently lost when the user clears their browser, logs in from a different device, or opens a private window. None commit to the database.
+
+Register & POS Infrastructure
+File	What's localStorage-only	localStorage calls
+artifacts/koapos/src/pages/app/management-registers.tsx:189	Register list, payment methods, POS grid settings, hardware config, shortcuts, active register	21
+This is high severity because register configuration is core operational data. A staff member on a different tablet would see zero registers.
+
+Settings & Configuration
+File	What's localStorage-only	localStorage calls
+artifacts/koapos/src/pages/app/management-layby.tsx:22	Layby duration, deposit %, payment frequency, T&C text	2
+artifacts/koapos/src/pages/app/management-kpis.tsx	KPI targets and bonus thresholds for staff	2
+artifacts/koapos/src/pages/app/management-marketing-generators.tsx:34	Global QR code defaults, shortlink base domain	2
+Marketing Module (entire module is browser-local)
+File	Feature stored locally	localStorage calls
+artifacts/koapos/src/pages/app/marketing-qr-codes.tsx	Full QR code library	7
+artifacts/koapos/src/pages/app/marketing-email-templates.tsx	Email template library	5
+artifacts/koapos/src/pages/app/marketing-email-campaigns.tsx	Campaign history	2
+artifacts/koapos/src/pages/app/marketing-landing-pages.tsx	Published landing pages	2
+artifacts/koapos/src/pages/app/marketing-shortlinks.tsx	Shortlink library	3
+artifacts/koapos/src/pages/app/management-marketing-automation.tsx	Automation rules	1
+Online / eCommerce Module (entire module is browser-local)
+File	Feature stored locally	localStorage calls
+artifacts/koapos/src/pages/app/management-online-store.tsx	Store config, hours, fulfilment settings	11
+artifacts/koapos/src/pages/app/online-shipping.tsx	Shipping providers & rates	6
+artifacts/koapos/src/pages/app/online-marketplace.tsx	Marketplace platform connections	5
+artifacts/koapos/src/pages/app/online-delivery-orders.tsx	Delivery order queue	5
+UI/UX Disconnects
+Fully stub pages — routed, linked in nav, but render only a "Coming soon" placeholder
+
+File	Route	Renders
+artifacts/koapos/src/pages/app/staff-timesheet.tsx	/staff/timesheet	"Coming soon" dashed box
+artifacts/koapos/src/pages/app/staff-leave-requests.tsx	/staff/leave-requests	"Coming soon" dashed box
+artifacts/koapos/src/pages/app/staff-cost-summary.tsx	/staff/cost-summary	"Coming soon" dashed box
+These three stubs are wired in both App.tsx (lines 257–268) and the navigation sidebar, making the Staff section look larger than it is. Clicking any of them shows a dashed empty container with greyed-out text.
+
+Broken integrations — UI exists, credentials missing
+
+Integration	Backend route	Missing env vars
+Xero OAuth	artifacts/api-server/src/routes/xero.ts:115	XERO_CLIENT_ID, XERO_CLIENT_SECRET
+xero.ts line 168: const configured = !!(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET) — the UI will tell users Xero is "not configured" and the Connect button will fail silently. The full Xero sync implementation (contacts, transactions, purchase orders) is complete and functional once the env vars are provisioned.
+
+The broader Integrations page (management-integrations.tsx) catalogues OAuth providers (Google Drive, Meta, Twitter, LinkedIn, TikTok, QuickBooks, Stripe, etc.) — credentials storage in the vault table is wired, but the actual OAuth token exchange for each provider requires its own CLIENT_ID / CLIENT_SECRET pair in env, none of which are set.
+
+Optimisation Notes — Orphaned & Structural Issues
+Orphaned page file (exists on disk, never imported or routed)
+
+artifacts/koapos/src/pages/app/management-marketing-generators.tsx (308 lines) — this file exists and contains a working QR code / shortlink settings UI, but it is never imported in App.tsx and has no registered route. It is not reachable by any user. It partially overlaps in purpose with marketing-qr-codes.tsx and marketing-shortlinks.tsx.
+
+Duplicate referral pages
+
+Two separate files cover customer referrals with different scopes but the same concept:
+
+artifacts/koapos/src/pages/app/marketing-referrals.tsx (347 lines) — customer-facing referral view
+artifacts/koapos/src/pages/app/management-marketing-referrals.tsx (210 lines) — management view
+Both are routed and linked. This is not a bug, but a structural note — if the referral feature grows, keeping the two in sync will require discipline.
+
+Backend routes with no OpenAPI spec entries (no generated hooks)
+
+Three backend routes exist in routes/index.ts and their handler files are fully implemented, but are absent from lib/api-spec/openapi.yaml:
+
+Route file	Endpoints
+artifacts/api-server/src/routes/brands.ts	GET/POST /brands, PUT/DELETE /brands/{id}
+artifacts/api-server/src/routes/tags.ts	GET/POST /tags, PUT/DELETE /tags/{id}
+artifacts/api-server/src/routes/suppliers.ts	Full CRUD /suppliers
+Because they are absent from the spec, pnpm --filter @workspace/api-spec run codegen produces no React Query hooks for them — which is the root cause of the Critical Blocker section above.
+
+Xero redirect URI not configurable via env
+
+artifacts/api-server/src/routes/xero.ts line 115 builds the OAuth redirect URI using a hardcoded fallback. This will cause an OAuth mismatch error in production deployments where the domain differs from the development preview URL.
+
+Summary Counts
+Category	Count
+🔴 Critical Blockers (data lost on refresh)	6 pages
+🟠 High Severity (localStorage-only persistence)	15 pages
+🟡 UI/UX Disconnects (stubs / broken integrations)	3 stub pages + Xero/OAuth
+⚪ Optimisation (orphaned files, spec gaps)	4 items
+Recommended Fix Priority
+Add /brands, /tags, /suppliers to the OpenAPI spec, run codegen, then wire the generated hooks into the three frontend pages — this fixes 6 critical data-loss bugs in one sweep.
+Migrate management-registers.tsx to a DB-backed registers table (highest-impact single localStorage migration — 21 writes, core operational data).
+Migrate the Marketing module to DB (landing pages, campaigns, templates, QR library are the most business-critical).
+Set XERO_CLIENT_ID / XERO_CLIENT_SECRET in the environment to activate Xero sync.
+Delete or route management-marketing-generators.tsx — either remove it or add it to App.tsx at /management/marketing/generators.
+Remove the three "Coming soon" staff stubs from the nav, or implement them.
