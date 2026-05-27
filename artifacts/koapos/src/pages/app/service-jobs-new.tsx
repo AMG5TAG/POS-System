@@ -844,9 +844,13 @@ export default function ServiceJobNewPage() {
             className="w-full gap-2"
             variant="outline"
             onClick={() => {
-              document.body.setAttribute("data-print", "sheet");
-              window.print();
-              document.body.removeAttribute("data-print");
+              setTimeout(() => {
+                document.body.setAttribute("data-print", "sheet");
+                const cleanup = () => document.body.removeAttribute("data-print");
+                window.addEventListener("afterprint", cleanup, { once: true });
+                setTimeout(cleanup, 30_000);
+                window.print();
+              }, 80);
             }}
           >
             <Printer className="w-4 h-4" />
@@ -939,9 +943,11 @@ export default function ServiceJobNewPage() {
               setShowStickerDialog(false);
               setTimeout(() => {
                 document.body.setAttribute("data-print", "sticker");
+                const cleanup = () => document.body.removeAttribute("data-print");
+                window.addEventListener("afterprint", cleanup, { once: true });
+                setTimeout(cleanup, 30_000);
                 window.print();
-                document.body.removeAttribute("data-print");
-              }, 50);
+              }, 150);
             }}
           >
             <Printer className="w-4 h-4" />
@@ -951,19 +957,34 @@ export default function ServiceJobNewPage() {
       </DialogContent>
     </Dialog>
 
-    {/* Hidden print area — visible only during window.print() */}
+    {/* Print-only areas — hidden on screen, shown during window.print() */}
     <style dangerouslySetInnerHTML={{ __html:
-      `@media print {
-        body { visibility: hidden; }
-        body[data-print="sticker"] #svc-sticker-print-area { visibility: visible !important; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        body[data-print="sticker"] #svc-sticker-print-area * { visibility: visible !important; }
-        body[data-print="sheet"] #svc-job-sheet-print-area { visibility: visible !important; position: fixed; left: 0; top: 0; width: 100%; }
+      `@media screen {
+        #svc-job-sheet-print-area, #svc-sticker-print-area { display: none !important; }
+      }
+      @media print {
+        body * { visibility: hidden !important; }
+        body[data-print="sheet"] #svc-job-sheet-print-area,
         body[data-print="sheet"] #svc-job-sheet-print-area * { visibility: visible !important; }
+        body[data-print="sheet"] #svc-job-sheet-print-area {
+          display: block !important;
+          position: fixed !important; left: 0 !important; top: 0 !important;
+          width: 100% !important; box-sizing: border-box !important;
+        }
+        body[data-print="sticker"] #svc-sticker-print-area,
+        body[data-print="sticker"] #svc-sticker-print-area * { visibility: visible !important; }
+        body[data-print="sticker"] #svc-sticker-print-area {
+          display: flex !important;
+          position: fixed !important; left: 0 !important; top: 0 !important;
+          width: 100vw !important; height: 100vh !important;
+          align-items: center !important; justify-content: center !important;
+        }
+        @page { size: A4 portrait; margin: 10mm; }
       }`
     }} />
 
     {/* ── Job Sheet print area ─────────────────────────────────────── */}
-    <div id="svc-job-sheet-print-area" aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: 0, width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
+    <div id="svc-job-sheet-print-area" style={{ width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `2px solid ${brandColor}`, paddingBottom: "14px", marginBottom: "22px" }}>
         <div>
@@ -1110,7 +1131,7 @@ export default function ServiceJobNewPage() {
     </div>
 
     {/* ── Sticker print area ───────────────────────────────────────── */}
-    <div id="svc-sticker-print-area" aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: 0 }}>
+    <div id="svc-sticker-print-area">
       <LabelPreview
         type={repairStickerType}
         fields={stickerFields}

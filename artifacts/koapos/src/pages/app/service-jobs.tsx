@@ -1054,7 +1054,6 @@ export default function ServiceJobsPage() {
             {/* A4 service sheet */}
             <div
               id="sj-sheet-print-area"
-              aria-hidden="true"
               style={{ width: "100%", maxWidth: 794, background: "white", padding: "48px 48px 48px 48px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: 12, color: "#111", lineHeight: 1.6 }}
             >
               {/* Header */}
@@ -1216,7 +1215,6 @@ export default function ServiceJobsPage() {
             {/* Sticker */}
             <div
               id="sj-sticker-print-area"
-              aria-hidden="true"
               style={{ position: "fixed", left: "-9999px", top: 0 }}
             >
               <LabelPreview
