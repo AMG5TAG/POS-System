@@ -198,9 +198,11 @@ export default function ProductsPurchaseOrdersPage() {
     : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null }[] } | undefined)?.items ?? [];
 
   /* ── Totals ─────────────────────────────────────────────────────────── */
-  const itemsSubtotal = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
-  const delivery      = calcDelivery(form.deliveryCharge, form.deliveryTaxMode);
-  const grandTotal    = itemsSubtotal + delivery.incGst;
+  const itemsSubtotal    = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
+  const itemsGst         = itemsSubtotal * GST_RATE;
+  const itemsIncGst      = itemsSubtotal * (1 + GST_RATE);
+  const delivery         = calcDelivery(form.deliveryCharge, form.deliveryTaxMode);
+  const grandTotal       = itemsIncGst + delivery.incGst;
 
   return (
     <AppLayout>
@@ -418,9 +420,12 @@ export default function ProductsPurchaseOrdersPage() {
                   <Input className="col-span-2 text-center" type="number" min={1} placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateItem(i, "quantity", parseInt(e.target.value) || 1)} />
-                  <Input className="col-span-3" type="number" step="0.01" placeholder="Unit cost"
-                    value={item.unitCost || ""}
-                    onChange={(e) => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)} />
+                  <div className="col-span-3 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                    <Input className="pl-6" type="number" step="0.01" placeholder="0.00"
+                      value={item.unitCost || ""}
+                      onChange={(e) => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)} />
+                  </div>
                   <Button variant="ghost" size="icon" className="col-span-2 h-8 text-destructive hover:text-destructive"
                     onClick={() => removeItem(i)}>
                     <Trash2 className="w-3.5 h-3.5" />
@@ -520,13 +525,25 @@ export default function ProductsPurchaseOrdersPage() {
             {/* ── Summary footer ───────────────────────────────────────── */}
             <div className="rounded-lg border bg-muted/10 px-4 py-3 space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
-                <span>Items subtotal</span>
+                <span>Items subtotal (ex GST)</span>
                 <span>{formatCurrency(itemsSubtotal)}</span>
               </div>
+              {itemsSubtotal > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>GST on items (10%)</span>
+                  <span>+ {formatCurrency(itemsGst)}</span>
+                </div>
+              )}
+              {itemsSubtotal > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Items (inc GST)</span>
+                  <span>{formatCurrency(itemsIncGst)}</span>
+                </div>
+              )}
               {form.deliveryCharge > 0 && (
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Delivery ({form.deliveryTaxMode === "exclusive" ? "inc GST" : "inc GST"})</span>
-                  <span>{formatCurrency(delivery.incGst)}</span>
+                  <span>Delivery (inc GST)</span>
+                  <span>+ {formatCurrency(delivery.incGst)}</span>
                 </div>
               )}
               <div className="flex justify-between font-semibold border-t pt-1.5 mt-0.5">
