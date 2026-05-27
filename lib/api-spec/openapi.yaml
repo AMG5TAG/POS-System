@@ -634,7 +634,44 @@ paths:
         "204":
           description: Deleted
 
+  /customers/generate-referral-codes:
+    post:
+      operationId: generateMissingReferralCodes
+      tags: [customers]
+      summary: Generate referral codes for all customers missing one
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: integer
+                    description: Number of customers updated
+
   # ── Customer sub-resources ────────────────────────────────────────────────
+
+  /customers/{id}/generate-referral-code:
+    post:
+      operationId: generateCustomerReferralCode
+      tags: [customers]
+      summary: Generate a referral code for a specific customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
 
   /customers/{id}/history:
     get:

@@ -78,6 +78,7 @@ import type {
   ErrorEnvelope,
   FloorPlan,
   FloorZone,
+  GenerateMissingReferralCodes200,
   GetDashboardActivityParams,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
@@ -2606,6 +2607,146 @@ export const useDeleteCustomer = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCustomerMutationOptions(options));
+    }
+
+export const getGenerateMissingReferralCodesUrl = () => {
+
+
+
+
+  return `/api/customers/generate-referral-codes`
+}
+
+/**
+ * @summary Generate referral codes for all customers missing one
+ */
+export const generateMissingReferralCodes = async ( options?: RequestInit): Promise<GenerateMissingReferralCodes200> => {
+
+  return customFetch<GenerateMissingReferralCodes200>(getGenerateMissingReferralCodesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateMissingReferralCodesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingReferralCodes>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateMissingReferralCodes>>, TError,void, TContext> => {
+
+const mutationKey = ['generateMissingReferralCodes'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateMissingReferralCodes>>, void> = () => {
+
+
+          return  generateMissingReferralCodes(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateMissingReferralCodesMutationResult = NonNullable<Awaited<ReturnType<typeof generateMissingReferralCodes>>>
+
+    export type GenerateMissingReferralCodesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate referral codes for all customers missing one
+ */
+export const useGenerateMissingReferralCodes = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingReferralCodes>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateMissingReferralCodes>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getGenerateMissingReferralCodesMutationOptions(options));
+    }
+
+export const getGenerateCustomerReferralCodeUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/generate-referral-code`
+}
+
+/**
+ * @summary Generate a referral code for a specific customer
+ */
+export const generateCustomerReferralCode = async (id: number, options?: RequestInit): Promise<Customer> => {
+
+  return customFetch<Customer>(getGenerateCustomerReferralCodeUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateCustomerReferralCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCustomerReferralCode>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCustomerReferralCode>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['generateCustomerReferralCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCustomerReferralCode>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  generateCustomerReferralCode(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCustomerReferralCodeMutationResult = NonNullable<Awaited<ReturnType<typeof generateCustomerReferralCode>>>
+
+    export type GenerateCustomerReferralCodeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate a referral code for a specific customer
+ */
+export const useGenerateCustomerReferralCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCustomerReferralCode>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCustomerReferralCode>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getGenerateCustomerReferralCodeMutationOptions(options));
     }
 
 export const getGetCustomerHistoryUrl = (id: number,) => {

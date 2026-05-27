@@ -2355,6 +2355,11 @@ limit?: number;
 offset?: number;
 };
 
+export type GenerateMissingReferralCodes200 = {
+  /** Number of customers updated */
+  updated: number;
+};
+
 export type ListTransactionsParams = {
 limit?: number;
 offset?: number;

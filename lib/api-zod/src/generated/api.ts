@@ -822,6 +822,57 @@ export const DeleteCustomerParams = zod.object({
 
 
 /**
+ * @summary Generate referral codes for all customers missing one
+ */
+export const GenerateMissingReferralCodesResponse = zod.object({
+  "updated": zod.number().describe('Number of customers updated')
+})
+
+
+/**
+ * @summary Generate a referral code for a specific customer
+ */
+export const GenerateCustomerReferralCodeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GenerateCustomerReferralCodeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
+})
+
+
+/**
  * @summary Get all history for a customer (sales, appointments, services)
  */
 export const GetCustomerHistoryParams = zod.object({

@@ -8,13 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, Settings2 } from "lucide-react";
+import { CheckCircle2, Clock, Settings2, Wand2, Loader2 } from "lucide-react";
+import { useListCustomers, useGenerateMissingReferralCodes } from "@workspace/api-client-react";
 
-/* ─── Storage ──────────────────────────────────────────────────────────────────── */
-
-const SETTINGS_KEY = "koapos_customer_referral_settings";
+/* ─── Settings ─────────────────────────────────────────────────────────────── */
 
 interface ReferralSettings {
   enabled: boolean;
@@ -40,18 +42,7 @@ const DEFAULT_SETTINGS: ReferralSettings = {
   referrerRewardAmount:500,
 };
 
-function loadSettings(): ReferralSettings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) as Partial<ReferralSettings> } : DEFAULT_SETTINGS;
-  } catch { return DEFAULT_SETTINGS; }
-}
-
-function saveSettings(s: ReferralSettings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-}
-
-/* ─── Settings panel ──────────────────────────────────────────────────────────────── */
+/* ─── Settings panel ────────────────────────────────────────────────────────── */
 
 function SettingsPanel({ settings, onSave }: { settings: ReferralSettings; onSave: (s: ReferralSettings) => void }) {
   const [local, setLocal] = useState<ReferralSettings>(settings);
@@ -163,19 +154,41 @@ function SettingsPanel({ settings, onSave }: { settings: ReferralSettings; onSav
   );
 }
 
-/* ─── Page ───────────────────────────────────────────────────────────────────────── */
+/* ─── Page ─────────────────────────────────────────────────────────────────── */
 
 export default function ManagementMarketingReferralsPage() {
-  const [settings, setSettings] = useState<ReferralSettings>(() => loadSettings());
+  const [settings, setSettings] = useState<ReferralSettings>(DEFAULT_SETTINGS);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleSave = (s: ReferralSettings) => {
-    setSettings(s);
-    saveSettings(s);
+  const { data, refetch } = useListCustomers({ limit: 500, offset: 0 });
+  const customers = data?.items ?? [];
+  const missingCount = customers.filter((c) => !c.referralCode).length;
+
+  const generateMissing = useGenerateMissingReferralCodes();
+
+  const handleGenerate = () => {
+    generateMissing.mutate(undefined, {
+      onSuccess: (result) => {
+        setConfirmOpen(false);
+        const count = (result as { updated: number }).updated;
+        toast.success(
+          count === 0
+            ? "All customers already have referral codes"
+            : `Generated ${count} referral code${count === 1 ? "" : "s"} successfully`,
+        );
+        void refetch();
+      },
+      onError: () => {
+        setConfirmOpen(false);
+        toast.error("Failed to generate referral codes");
+      },
+    });
   };
 
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold">Customer Referral Settings</h1>
@@ -183,14 +196,48 @@ export default function ManagementMarketingReferralsPage() {
               Configure how the customer referral program works — qualification rules, rewards, and enrolment.
             </p>
           </div>
-          <Badge
-            variant="secondary"
-            className={cn("gap-1.5", settings.enabled ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0" : "")}
-          >
-            {settings.enabled ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-            {settings.enabled ? "Program active" : "Program disabled"}
-          </Badge>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              variant="outline"
+              className="gap-2 border-primary/40 text-primary hover:bg-primary/5"
+              onClick={() => setConfirmOpen(true)}
+              disabled={generateMissing.isPending}
+            >
+              {generateMissing.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Wand2 className="w-4 h-4" />
+              }
+              Generate Missing Codes
+              {missingCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold w-5 h-5">
+                  {missingCount}
+                </span>
+              )}
+            </Button>
+            <Badge
+              variant="secondary"
+              className={cn("gap-1.5", settings.enabled ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0" : "")}
+            >
+              {settings.enabled ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+              {settings.enabled ? "Program active" : "Program disabled"}
+            </Badge>
+          </div>
         </div>
+
+        {/* Missing codes callout */}
+        {missingCount > 0 && (
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Wand2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                <span className="font-semibold">{missingCount} customer{missingCount === 1 ? "" : "s"}</span> {missingCount === 1 ? "is" : "are"} missing a referral code and won't appear in the referral dashboard.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30" onClick={() => setConfirmOpen(true)}>
+              Fix now
+            </Button>
+          </div>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -201,10 +248,43 @@ export default function ManagementMarketingReferralsPage() {
             <CardDescription>Control how customer referrals work, what triggers a reward, and what rewards are earned.</CardDescription>
           </CardHeader>
           <CardContent>
-            <SettingsPanel settings={settings} onSave={handleSave} />
+            <SettingsPanel settings={settings} onSave={setSettings} />
           </CardContent>
         </Card>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-primary" />
+              Generate Missing Referral Codes
+            </DialogTitle>
+            <DialogDescription className="pt-1">
+              This will generate a unique referral code for every customer who doesn't already have one.
+              {missingCount > 0
+                ? ` ${missingCount} customer${missingCount === 1 ? "" : "s"} will be updated.`
+                : " All customers already have codes."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
+            Codes are generated in the format <code className="font-mono text-foreground bg-muted px-1 rounded text-xs">KOA7X92B</code> — 8-character alphanumeric, guaranteed unique per merchant.
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={generateMissing.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerate} disabled={generateMissing.isPending || missingCount === 0} className="gap-2">
+              {generateMissing.isPending
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                : <><Wand2 className="w-4 h-4" /> Generate {missingCount > 0 ? `${missingCount} Code${missingCount === 1 ? "" : "s"}` : "Codes"}</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

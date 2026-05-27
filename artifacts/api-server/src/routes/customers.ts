@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, customersTable, customerNotesTable, customerFilesTable, transactionsTable, appointmentsTable, serviceJobsTable, merchantsTable } from "@workspace/db";
-import { eq, and, ilike, or, sql, desc } from "drizzle-orm";
+import { eq, and, ilike, or, sql, desc, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -23,6 +23,24 @@ function generateReferralCode(firstName?: string | null, lastName?: string | nul
   let suffix = "";
   for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
   return `${f}${l}-${suffix}`;
+}
+
+function generateStandardCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "KOA";
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+async function uniqueStandardCode(merchantId: number): Promise<string> {
+  for (let attempts = 0; attempts < 20; attempts++) {
+    const code = generateStandardCode();
+    const existing = await db.select({ id: customersTable.id }).from(customersTable).where(
+      and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, code))
+    ).limit(1);
+    if (existing.length === 0) return code;
+  }
+  return `KOA${crypto.randomBytes(3).toString("hex").toUpperCase().slice(0, 5)}`;
 }
 
 async function uniqueReferralCode(merchantId: number, firstName?: string | null, lastName?: string | null): Promise<string> {
@@ -109,6 +127,24 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(formatCustomer(customer));
 });
 
+router.post("/customers/generate-referral-codes", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const missing = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      or(isNull(customersTable.referralCode), eq(customersTable.referralCode, "")),
+    ));
+  let updated = 0;
+  for (const c of missing) {
+    const code = await uniqueStandardCode(merchantId);
+    await db.update(customersTable).set({ referralCode: code }).where(eq(customersTable.id, c.id));
+    updated++;
+  }
+  res.json({ updated });
+});
+
 router.get("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetCustomerParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
@@ -141,6 +177,19 @@ router.delete("/customers/:id", requireAuth, async (req, res): Promise<void> => 
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   await db.delete(customersTable).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
+});
+
+router.post("/customers/:id/generate-referral-code", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const merchantId = req.session.merchantId!;
+  const code = await uniqueStandardCode(merchantId);
+  const [customer] = await db.update(customersTable)
+    .set({ referralCode: code })
+    .where(and(eq(customersTable.id, id), eq(customersTable.merchantId, merchantId)))
+    .returning();
+  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+  res.json(formatCustomer(customer));
 });
 
 /* ── History ───────────────────────────────────────────────────────────────── */
