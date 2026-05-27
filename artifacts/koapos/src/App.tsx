@@ -101,6 +101,7 @@ import OnlineShippingPage from "@/pages/app/online-shipping";
 import OnlineMarketplacePage from "@/pages/app/online-marketplace";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import ManagementMiscPage from "@/pages/app/management-misc";
+import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
@@ -423,6 +424,10 @@ function Router() {
       </Route>
       <Route path="/management/online-store">
         <ProtectedRoute component={ManagementOnlineStorePage} />
+      </Route>
+
+      <Route path="/management/feedback">
+        <ProtectedRoute component={ManagementFeedbackPage} />
       </Route>
       <Route path="/online/delivery-orders">
         <ProtectedRoute component={OnlineDeliveryOrdersPage} />

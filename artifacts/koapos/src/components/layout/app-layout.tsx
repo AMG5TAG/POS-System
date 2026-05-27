@@ -17,7 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
-  ShoppingBag, Map, MoreHorizontal,
+  ShoppingBag, Map, MoreHorizontal, MessageSquare,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import {
@@ -186,6 +186,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
+  { name: "Feedback",       href: "/management/feedback",       icon: MessageSquare  },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -247,6 +248,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
   { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
+  { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
