@@ -221,18 +221,19 @@ export function ServiceJobsTiles({
       {showMetricTiles && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <MetricTile
-            icon={<TrendingUp className="w-5 h-5" />}
-            value={formatCurrency(fySales)}
-            label={`${fyLabel} Sales`}
-            iconColor="text-emerald-500"
-            valueColor="text-emerald-700"
-          />
-          <MetricTile
             icon={<FileText className="w-5 h-5" />}
             value={jobs.length}
             label="Total Jobs"
             iconColor="text-blue-500"
             valueColor="text-foreground"
+          />
+          <MetricTile
+            icon={<Receipt className="w-5 h-5" />}
+            value={summary?.pendingInvoiceCount ?? 0}
+            label="Invoices"
+            iconColor="text-amber-500"
+            valueColor="text-amber-700"
+            href="/invoices"
           />
           <MetricTile
             icon={<Truck className="w-5 h-5" />}
@@ -250,12 +251,11 @@ export function ServiceJobsTiles({
             valueColor="text-foreground"
           />
           <MetricTile
-            icon={<Receipt className="w-5 h-5" />}
-            value={summary?.pendingInvoiceCount ?? 0}
-            label="Invoices"
-            iconColor="text-amber-500"
-            valueColor="text-amber-700"
-            href="/invoices"
+            icon={<TrendingUp className="w-5 h-5" />}
+            value={formatCurrency(fySales)}
+            label={`${fyLabel} Sales`}
+            iconColor="text-emerald-500"
+            valueColor="text-emerald-700"
           />
         </div>
       )}

@@ -496,9 +496,9 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             label="Attach Forms"
           />
 
-          {/* Notes */}
+          {/* Work Details */}
           <div className="space-y-1.5">
-            <Label>Notes</Label>
+            <Label>Work Details</Label>
             <Textarea placeholder="Any additional details..." value={form.notes}
               onChange={(e) => setField("notes", e.target.value)} rows={3} className="text-sm resize-none" />
           </div>

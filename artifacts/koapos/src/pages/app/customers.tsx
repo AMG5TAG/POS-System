@@ -19,6 +19,9 @@ import {
   Customer,
   CustomerNote,
   CustomerFile,
+  Transaction,
+  Appointment,
+  ServiceJob,
 } from "@workspace/api-client-react";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
 import { Button } from "@/components/ui/button";
@@ -220,6 +223,9 @@ function CustomerDetailInner({
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
   const [uploadingFile, setUploadingFile]       = useState(false);
   const [viewingSub, setViewingSub]             = useState<FormSubmission | null>(null);
+  const [selectedTx, setSelectedTx]             = useState<Transaction | null>(null);
+  const [selectedAppt, setSelectedAppt]         = useState<Appointment | null>(null);
+  const [selectedJob, setSelectedJob]           = useState<ServiceJob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const qrSvgRef = useRef<SVGSVGElement>(null);
 
@@ -658,7 +664,7 @@ function CustomerDetailInner({
                 ) : (
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.transactions.map((tx) => (
-                      <div key={tx.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                      <button key={tx.id} type="button" onClick={() => setSelectedTx(tx as Transaction)} className="flex items-center justify-between px-4 py-2.5 text-sm w-full text-left hover:bg-muted/40 transition-colors">
                         <div>
                           <p className="font-medium">{tx.receiptNumber || `#${tx.id}`}</p>
                           <p className="text-xs text-muted-foreground">{tx.paymentMethod} · {new Date(tx.createdAt).toLocaleDateString("en-AU")}</p>
@@ -667,7 +673,7 @@ function CustomerDetailInner({
                           <p className="font-bold">{formatCurrency(tx.total)}</p>
                           <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -683,13 +689,13 @@ function CustomerDetailInner({
                 ) : (
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.appointments.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                      <button key={a.id} type="button" onClick={() => setSelectedAppt(a)} className="flex items-center justify-between px-4 py-2.5 text-sm w-full text-left hover:bg-muted/40 transition-colors">
                         <div>
                           <p className="font-medium">{a.title}</p>
                           <p className="text-xs text-muted-foreground">{new Date(a.scheduledAt).toLocaleString("en-AU")} · {a.durationMinutes}min</p>
                         </div>
                         <Badge variant="outline" className="text-xs capitalize">{a.status}</Badge>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -707,7 +713,7 @@ function CustomerDetailInner({
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
                       return (
-                        <div key={j.id} className="px-4 py-2.5 text-sm space-y-2">
+                        <div key={j.id} role="button" onClick={() => setSelectedJob(j as ServiceJob)} className="px-4 py-2.5 text-sm space-y-2 cursor-pointer hover:bg-muted/40 transition-colors">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
@@ -1053,6 +1059,165 @@ function CustomerDetailInner({
           </Dialog>
         );
       })()}
+
+      {/* ── Transaction detail modal ── */}
+      <Dialog open={!!selectedTx} onOpenChange={() => setSelectedTx(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Transaction {selectedTx?.receiptNumber || `#${selectedTx?.id}`}</DialogTitle>
+          </DialogHeader>
+          {selectedTx && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Date</p>
+                  <p className="font-medium">{new Date(selectedTx.createdAt).toLocaleString("en-AU")}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Payment Method</p>
+                  <p className="font-medium capitalize">{selectedTx.paymentMethod}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                  <Badge variant="outline" className="capitalize">{selectedTx.status}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Total</p>
+                  <p className="font-bold text-base">{formatCurrency(selectedTx.total)}</p>
+                </div>
+              </div>
+              {selectedTx.items?.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Items</p>
+                  {selectedTx.items.map((item, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span>{item.quantity}× {item.productName}</span>
+                      <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-1 border-t pt-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatCurrency(selectedTx.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span>{formatCurrency(selectedTx.taxTotal)}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t pt-1">
+                  <span>Total</span>
+                  <span>{formatCurrency(selectedTx.total)}</span>
+                </div>
+              </div>
+              {selectedTx.notes && (
+                <div className="rounded-lg bg-muted/20 border px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                  <p>{selectedTx.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Appointment detail modal ── */}
+      <Dialog open={!!selectedAppt} onOpenChange={() => setSelectedAppt(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{selectedAppt?.title}</DialogTitle>
+          </DialogHeader>
+          {selectedAppt && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Scheduled</p>
+                  <p className="font-medium">{new Date(selectedAppt.scheduledAt).toLocaleString("en-AU")}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Duration</p>
+                  <p className="font-medium">{selectedAppt.durationMinutes} min</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                  <Badge variant="outline" className="capitalize">{selectedAppt.status}</Badge>
+                </div>
+                {selectedAppt.staffName && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Staff</p>
+                    <p className="font-medium">{selectedAppt.staffName}</p>
+                  </div>
+                )}
+              </div>
+              {selectedAppt.description && (
+                <div className="rounded-lg bg-muted/20 border px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">Description</p>
+                  <p>{selectedAppt.description}</p>
+                </div>
+              )}
+              {selectedAppt.notes && (
+                <div className="rounded-lg bg-muted/20 border px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                  <p>{selectedAppt.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Service Job detail modal ── */}
+      <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Job {selectedJob?.jobNumber}</DialogTitle>
+          </DialogHeader>
+          {selectedJob && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Device</p>
+                  <p className="font-medium">{selectedJob.deviceType || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                  <Badge variant="outline" className="capitalize">{selectedJob.status}</Badge>
+                </div>
+                {selectedJob.estimatedCost != null && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Estimated Cost</p>
+                    <p className="font-bold">{formatCurrency(selectedJob.estimatedCost)}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Book-In Date</p>
+                  <p className="font-medium">{new Date(selectedJob.bookInDate).toLocaleDateString("en-AU")}</p>
+                </div>
+              </div>
+              {selectedJob.deviceDescription && (
+                <div className="rounded-lg bg-muted/20 border px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">Device Description</p>
+                  <p>{selectedJob.deviceDescription}</p>
+                </div>
+              )}
+              {selectedJob.workDescription && (
+                <div className="rounded-lg bg-muted/20 border px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">Work Description</p>
+                  <p>{selectedJob.workDescription}</p>
+                </div>
+              )}
+              {(Array.isArray(selectedJob.photos) ? (selectedJob.photos as string[]).filter(Boolean) : []).length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Photos</p>
+                  <ServiceJobPhotoStrip photos={(selectedJob.photos as string[]).filter(Boolean)} />
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </>
   );
 }
