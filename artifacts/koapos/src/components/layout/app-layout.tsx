@@ -925,7 +925,6 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
           <TopNavBtn icon={Wrench} label="Services" isActive={location === "/service-jobs" || location.startsWith("/service-jobs/")} onClick={() => navigate("/service-jobs")} />
           <TopNavBtn icon={CalendarClock} label="Appts" isActive={location === "/appointments"} onClick={() => navigate("/appointments")} />
-          <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
           <TopNavBtn icon={Users} label="Customers" isActive={location === "/customers"} onClick={() => navigate("/customers")} />
@@ -935,6 +934,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing" />
           <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
             isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/delivery-orders" />
+          <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
           <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
             isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
         </nav>
@@ -980,7 +980,6 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
   const sections: { label: string; items: NavLeaf[] }[] = [
     { label: "POS",        items: POS_SUBNAV },
-    { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
     { label: "Inventory",  items: INVENTORY_SUBNAV },
     {
       label: "Staff",
@@ -1000,6 +999,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
         "children" in item ? item.children : [item as NavLeaf]
       ),
     },
+    { label: "Cameras", items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
     {
       label: "Management",
       items: MANAGEMENT_SUBNAV.flatMap((item) =>
@@ -1310,7 +1310,6 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           />
           <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
           <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
-          <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           <CollapsibleSection
             label="Inventory" icon={Boxes} isActive={isInventorySection} isOpen={invOpen}
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
@@ -1336,6 +1335,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
             onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
             items={ONLINE_SUBNAV} defaultHref="/online/delivery-orders"
           />
+          <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           {canManage && (
             <CollapsibleSection
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
