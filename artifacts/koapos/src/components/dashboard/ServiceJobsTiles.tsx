@@ -1,7 +1,7 @@
 import { useListServiceJobs, useListCustomers, useListAppointments, ServiceJob } from "@workspace/api-client-react";
 import { useGetDashboardSummary } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, TrendingUp, FileText, Truck, Users2 } from "lucide-react";
+import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, TrendingUp, FileText, Truck, Users2, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -219,7 +219,7 @@ export function ServiceJobsTiles({
 
       {/* Row 2: Business metric tiles */}
       {showMetricTiles && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <MetricTile
             icon={<TrendingUp className="w-5 h-5" />}
             value={formatCurrency(fySales)}
@@ -248,6 +248,14 @@ export function ServiceJobsTiles({
             label="Total Customers"
             iconColor="text-emerald-500"
             valueColor="text-foreground"
+          />
+          <MetricTile
+            icon={<Receipt className="w-5 h-5" />}
+            value={summary?.pendingInvoiceCount ?? 0}
+            label="Invoices"
+            iconColor="text-amber-500"
+            valueColor="text-amber-700"
+            href="/invoices"
           />
         </div>
       )}

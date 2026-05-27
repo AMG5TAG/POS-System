@@ -190,12 +190,23 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   }
   const topPaymentMethod = Object.entries(paymentCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
 
+  // Invoices awaiting payment (status sent or overdue — not draft, not paid)
+  const [pendingInvoiceResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(invoicesTable)
+    .where(and(
+      eq(invoicesTable.merchantId, merchantId),
+      inArray(invoicesTable.status, ["sent", "overdue"]),
+    ));
+  const pendingInvoiceCount = Number(pendingInvoiceResult?.count ?? 0);
+
   res.json({
     totalSales: Math.round(totalSales * 100) / 100,
     posSales: Math.round(posSales * 100) / 100,
     invoiceSales: Math.round(invoiceSales * 100) / 100,
     posCount: completedTxns.length,
     invoiceCount: paidInvoices.length,
+    pendingInvoiceCount,
     transactionCount,
     averageOrderValue: Math.round(averageOrderValue * 100) / 100,
     newCustomers: Number(newCustomersResult.count),
@@ -535,19 +546,18 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     if (dayMap[key]) dayMap[key].serviceJobs += 1;
   }
 
-  // Invoices (by due date)
+  // Invoices — group by creation date so all invoices created in the month appear on that day
   const invs = await db
     .select()
     .from(invoicesTable)
     .where(and(
       eq(invoicesTable.merchantId, merchantId),
-      gte(invoicesTable.dueDate, monthStart),
-      lt(invoicesTable.dueDate, monthEnd),
+      gte(invoicesTable.createdAt, monthStart),
+      lt(invoicesTable.createdAt, monthEnd),
     ));
 
   for (const inv of invs) {
-    if (!inv.dueDate) continue;
-    const localDate = new Date(inv.dueDate.getTime() + 10 * 60 * 60 * 1000);
+    const localDate = new Date(inv.createdAt.getTime() + 10 * 60 * 60 * 1000);
     const key = localDate.toISOString().split("T")[0];
     if (dayMap[key]) dayMap[key].invoices += 1;
   }

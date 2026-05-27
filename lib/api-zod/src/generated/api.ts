@@ -1698,6 +1698,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "invoiceSales": zod.number().optional(),
   "posCount": zod.number().optional(),
   "invoiceCount": zod.number().optional(),
+  "pendingInvoiceCount": zod.number().optional(),
   "transactionCount": zod.number(),
   "averageOrderValue": zod.number(),
   "newCustomers": zod.number(),

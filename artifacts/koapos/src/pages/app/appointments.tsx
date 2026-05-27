@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
-  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye,
+  ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
   ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -118,6 +118,16 @@ function sortAppointments(appts: Appointment[], key: SortKey, dir: SortDir): App
     const r  = av < bv ? -1 : av > bv ? 1 : 0;
     return dir === "asc" ? r : -r;
   };
+
+  // When sorting by scheduledAt asc, put future appointments first (nearest first),
+  // then past scheduled appointments — so the next upcoming is always at the top.
+  if (key === "scheduledAt" && dir === "asc") {
+    const now = new Date().toISOString();
+    const future = active.filter((a) => (a.scheduledAt ?? "") >= now).sort(cmp);
+    const past   = active.filter((a) => (a.scheduledAt ?? "") <  now).sort(cmp);
+    return [...future, ...past, ...done.sort(cmp)];
+  }
+
   return [...active.sort(cmp), ...done.sort(cmp)];
 }
 
@@ -518,8 +528,8 @@ function AppointmentsCalendar({
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
 
-  // Only show upcoming (scheduled) appointments in the calendar
-  const upcomingAppts = appointments.filter((a) => a.status === "scheduled");
+  // Show scheduled and completed appointments in the calendar
+  const upcomingAppts = appointments.filter((a) => a.status === "scheduled" || a.status === "completed");
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en-AU", {
     month: "long",
@@ -648,18 +658,22 @@ function AppointmentsCalendar({
                                 timeZone: "Australia/Sydney",
                               })
                             : "";
+                          const isCompleted = a.status === "completed";
                           return (
                             <button
                               key={a.id}
                               onClick={() => onView(a)}
                               className={cn(
                                 "text-[11px] px-1.5 py-0.5 rounded border text-left truncate transition-colors",
-                                "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
+                                isCompleted
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700"
+                                  : "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
                               )}
-                              title={`${a.title || "Appointment"} — ${time}`}
+                              title={`${time} — ${a.customerName || a.title || "Appointment"}`}
                             >
-                              <span className="font-medium">{time}</span>{" "}
-                              <span className="truncate">{a.title || "Appointment"}</span>
+                              <span className="font-medium">{time}</span>
+                              {" — "}
+                              <span className="truncate">{a.customerName || a.title || "Appointment"}</span>
                             </button>
                           );
                         })}
@@ -692,6 +706,7 @@ export default function AppointmentsPage() {
   const { data: appointmentsData, isLoading } = useListAppointments({}, { query: { queryKey: ["listAppointments"] } });
   const { data: staffData } = useListStaff();
   const deleteMutation          = useDeleteAppointment();
+  const completeMutation        = useUpdateAppointment();
 
   const appts = Array.isArray(appointmentsData) ? appointmentsData : [];
   const staff = Array.isArray(staffData) ? staffData : [];
@@ -729,6 +744,33 @@ export default function AppointmentsPage() {
       },
       onError: () => toast.error("Failed to delete appointment"),
     });
+  };
+
+  const handleComplete = (appt: Appointment) => {
+    const endAt = appt.scheduledAt
+      ? new Date(new Date(appt.scheduledAt).getTime() + (appt.durationMinutes ?? 60) * 60000).toISOString()
+      : new Date().toISOString();
+    completeMutation.mutate(
+      {
+        id: appt.id,
+        data: {
+          scheduledAt: appt.scheduledAt,
+          endAt,
+          status: "completed" as AppointmentInputStatus,
+          customerId: appt.customerId ?? null,
+          staffId: appt.staffId ?? null,
+          title: appt.title ?? undefined,
+          notes: appt.notes ?? null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Appointment marked as completed");
+          queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
+        },
+        onError: () => toast.error("Failed to update appointment"),
+      }
+    );
   };
 
   const openNew  = () => { setEditing(null); setBookingOpen(true); };
@@ -893,6 +935,14 @@ export default function AppointmentsPage() {
                                 >
                                   <Pencil className="w-3 h-3" /> Edit
                                 </button>
+                                {appt.status === "scheduled" && (
+                                  <button
+                                    onClick={() => handleComplete(appt)}
+                                    className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
+                                  >
+                                    <CheckCircle className="w-3 h-3" /> Complete
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

@@ -3361,6 +3361,8 @@ components:
           type: integer
         invoiceCount:
           type: integer
+        pendingInvoiceCount:
+          type: integer
         transactionCount:
           type: integer
         averageOrderValue:

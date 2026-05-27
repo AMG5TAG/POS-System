@@ -832,6 +832,7 @@ export interface DashboardSummary {
   invoiceSales?: number;
   posCount?: number;
   invoiceCount?: number;
+  pendingInvoiceCount?: number;
   transactionCount: number;
   averageOrderValue: number;
   newCustomers: number;

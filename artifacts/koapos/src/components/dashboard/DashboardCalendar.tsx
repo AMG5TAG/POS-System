@@ -26,6 +26,62 @@ interface SelectedDay {
   birthday?: CalendarBirthday;
 }
 
+function DayAppointmentsDialog({
+  appts,
+  onSelect,
+  onClose,
+}: {
+  appts: CalendarAppointment[];
+  onSelect: (a: CalendarAppointment) => void;
+  onClose: () => void;
+}) {
+  const sorted = [...appts].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Appointments ({appts.length})</DialogTitle>
+          <DialogDescription>All appointments for this day — click one to view details</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 pt-2 max-h-80 overflow-y-auto">
+          {sorted.map((appt) => {
+            const time = new Date(appt.scheduledAt).toLocaleTimeString("en-AU", {
+              hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney",
+            });
+            const statusColor =
+              appt.status === "completed" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+              appt.status === "cancelled" ? "bg-red-100 text-red-700 border-red-200" :
+              "bg-violet-100 text-violet-700 border-violet-200";
+            return (
+              <button
+                key={appt.id}
+                onClick={() => { onClose(); onSelect(appt); }}
+                className="w-full text-left rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-semibold">{time}</span>
+                    {appt.customerName && (
+                      <span className="text-sm text-muted-foreground truncate">— {appt.customerName}</span>
+                    )}
+                  </div>
+                  <span className={cn("text-[10px] px-2 py-0.5 rounded border font-medium shrink-0", statusColor)}>
+                    {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                  </span>
+                </div>
+                {appt.title && (
+                  <p className="text-xs text-muted-foreground mt-1 pl-5">{appt.title}</p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AppointmentDialog({ appt, onClose }: { appt: CalendarAppointment; onClose: () => void }) {
   const time = new Date(appt.scheduledAt).toLocaleTimeString("en-AU", {
     hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney"
@@ -122,7 +178,7 @@ function DayCell({
   isCurrentMonth: boolean;
   isToday: boolean;
   isPast: boolean;
-  onAppointmentClick: (appt: CalendarAppointment) => void;
+  onAppointmentClick: (first: CalendarAppointment, all: CalendarAppointment[]) => void;
   onBirthdayClick: (b: CalendarBirthday) => void;
 }) {
   if (!day) {
@@ -165,7 +221,7 @@ function DayCell({
     </div>
   );
   if (apptCount > 0) rightItems.push(
-    <button key="appt" onClick={() => onAppointmentClick(day.appointments[0])}
+    <button key="appt" onClick={() => onAppointmentClick(day.appointments[0], day.appointments)}
       className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate text-left w-full hover:opacity-80 transition-opacity", EVENT_COLORS.appointments)}
     >
       <CalendarDays className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{apptCount}</span>
@@ -213,7 +269,16 @@ export function DashboardCalendar() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [selectedAppt, setSelectedAppt] = useState<CalendarAppointment | null>(null);
+  const [selectedDayAppts, setSelectedDayAppts] = useState<CalendarAppointment[] | null>(null);
   const [selectedBirthday, setSelectedBirthday] = useState<CalendarBirthday | null>(null);
+
+  const handleAppointmentClick = (first: CalendarAppointment, all: CalendarAppointment[]) => {
+    if (all.length > 1) {
+      setSelectedDayAppts(all);
+    } else {
+      setSelectedAppt(first);
+    }
+  };
 
   const { data, isLoading } = useGetDashboardCalendar(
     { year, month },
@@ -310,7 +375,7 @@ export function DashboardCalendar() {
                       isCurrentMonth={day !== null}
                       isToday={day?.date === todayStr}
                       isPast={day !== null && day.date < todayStr}
-                      onAppointmentClick={setSelectedAppt}
+                      onAppointmentClick={handleAppointmentClick}
                       onBirthdayClick={setSelectedBirthday}
                     />
                   ))}
@@ -323,6 +388,13 @@ export function DashboardCalendar() {
 
       {selectedAppt && (
         <AppointmentDialog appt={selectedAppt} onClose={() => setSelectedAppt(null)} />
+      )}
+      {selectedDayAppts && (
+        <DayAppointmentsDialog
+          appts={selectedDayAppts}
+          onSelect={setSelectedAppt}
+          onClose={() => setSelectedDayAppts(null)}
+        />
       )}
       {selectedBirthday && (
         <BirthdayDialog birthday={selectedBirthday} onClose={() => setSelectedBirthday(null)} />
