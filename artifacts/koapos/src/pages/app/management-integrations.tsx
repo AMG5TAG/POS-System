@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, Clock, HardDrive, Briefcase, Share2, ChevronDown, ChevronRight, Zap,
+  Receipt, CreditCard, Wallet, Truck, Users, Mail, Sparkles,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -248,13 +249,13 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
   );
 }
 
-/* ─── Featured section ───────────────────────────────────────────────────── */
+/* ─── Featured section (always visible) ──────────────────────────────────── */
 
 function FeaturedSection({
-  id, title, description, icon: Icon, accent, iconBg, iconColor,
+  title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
 }: {
-  id: string; title: string; description: string;
+  title: string; description: string;
   icon: React.ComponentType<{ className?: string }>;
   accent: string; iconBg: string; iconColor: string;
   items: Integration[];
@@ -266,7 +267,6 @@ function FeaturedSection({
   const connected = items.filter((i) => i.status === "connected").length;
   return (
     <section className="space-y-4">
-      {/* Section header */}
       <div className={cn("rounded-2xl border px-5 py-4 flex items-center gap-4", accent)}>
         <div className={cn("rounded-xl p-2.5 shrink-0", iconBg)}>
           <Icon className={cn("w-5 h-5", iconColor)} />
@@ -283,7 +283,6 @@ function FeaturedSection({
           <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
         </div>
       </div>
-      {/* Cards grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {items.map((intg) => (
           <IntegrationCard
@@ -300,10 +299,16 @@ function FeaturedSection({
   );
 }
 
-/* ─── Collapsible secondary section ─────────────────────────────────────── */
+/* ─── Secondary section (collapsible, same card grid) ────────────────────── */
 
-function CollapsibleSection({ title, description, items, connecting, onConnect, onDisconnect, onOAuth }: {
-  title: string; description: string; items: Integration[];
+function SecondarySection({
+  title, description, icon: Icon, accent, iconBg, iconColor,
+  items, connecting, onConnect, onDisconnect, onOAuth,
+}: {
+  title: string; description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string; iconBg: string; iconColor: string;
+  items: Integration[];
   connecting: Record<string, boolean>;
   onConnect: (i: Integration) => void;
   onDisconnect: (i: Integration) => void;
@@ -312,41 +317,47 @@ function CollapsibleSection({ title, description, items, connecting, onConnect, 
   const [open, setOpen] = useState(false);
   const connected = items.filter((i) => i.status === "connected").length;
   return (
-    <div className="border rounded-xl overflow-hidden bg-card">
+    <section className="space-y-4">
       <button
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-muted/40 transition-colors text-left"
+        className={cn("w-full rounded-2xl border px-5 py-4 flex items-center gap-4 text-left transition-all", accent, "hover:shadow-sm")}
         onClick={() => setOpen((o) => !o)}
       >
-        <div className="flex items-center gap-3">
-          <span className="font-medium text-sm">{title}</span>
-          <span className="text-xs text-muted-foreground hidden sm:block">{description}</span>
-          {connected > 0 && (
-            <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 text-[10px] py-0">
-              <CheckCircle2 className="w-2.5 h-2.5" />{connected}
-            </Badge>
-          )}
+        <div className={cn("rounded-xl p-2.5 shrink-0", iconBg)}>
+          <Icon className={cn("w-5 h-5", iconColor)} />
         </div>
-        {open
-          ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
-      </button>
-      {open && (
-        <div className="px-5 pb-5 pt-1 border-t">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
-            {items.map((intg) => (
-              <IntegrationCard
-                key={intg.key}
-                intg={intg}
-                busy={!!connecting[intg.key]}
-                onConnect={() => onConnect(intg)}
-                onDisconnect={() => onDisconnect(intg)}
-                onOAuth={() => onOAuth(intg)}
-              />
-            ))}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-semibold text-base">{title}</h2>
+            {connected > 0 && (
+              <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 text-[11px]">
+                <CheckCircle2 className="w-3 h-3" /> {connected} connected
+              </Badge>
+            )}
           </div>
+          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+        </div>
+        <div className="shrink-0 ml-2">
+          {open
+            ? <ChevronDown className="w-5 h-5 text-muted-foreground" />
+            : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {items.map((intg) => (
+            <IntegrationCard
+              key={intg.key}
+              intg={intg}
+              busy={!!connecting[intg.key]}
+              onConnect={() => onConnect(intg)}
+              onDisconnect={() => onDisconnect(intg)}
+              onOAuth={() => onOAuth(intg)}
+            />
+          ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -383,13 +394,27 @@ const FEATURED_SECTIONS = [
 ];
 
 const SECONDARY_SECTIONS = [
-  { id: "payments",  title: "Payments & EFTPOS",    description: "In-store card, QR, and online payment terminals" },
-  { id: "bnpl",      title: "Buy Now, Pay Later",    description: "Instalment and pay-later options at checkout" },
-  { id: "wallets",   title: "Digital Wallets",       description: "Issue loyalty passes and coupons to wallets" },
-  { id: "payroll",   title: "Payroll & Staff",        description: "Roster, timesheet, and payroll sync" },
-  { id: "shipping",  title: "Shipping & Fulfilment",  description: "Real-time rates, labels, and pickup booking" },
-  { id: "contacts",  title: "Contacts & Calendar",   description: "Sync customers and appointments" },
-  { id: "ai",        title: "AI & Automation",        description: "AI insights and no-code workflow automation" },
+  { id: "payments",  title: "Payments & EFTPOS",    description: "In-store card, QR, and online payment terminals",
+    icon: Receipt, accent: "bg-emerald-50/60 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900",
+    iconBg: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400" },
+  { id: "bnpl",      title: "Buy Now, Pay Later",    description: "Instalment and pay-later options at checkout",
+    icon: CreditCard, accent: "bg-purple-50/60 border-purple-200 dark:bg-purple-950/20 dark:border-purple-900",
+    iconBg: "bg-purple-100 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400" },
+  { id: "wallets",   title: "Digital Wallets",       description: "Issue loyalty passes and coupons to wallets",
+    icon: Wallet, accent: "bg-orange-50/60 border-orange-200 dark:bg-orange-950/20 dark:border-orange-900",
+    iconBg: "bg-orange-100 dark:bg-orange-900/40", iconColor: "text-orange-600 dark:text-orange-400" },
+  { id: "payroll",   title: "Payroll & Staff",        description: "Roster, timesheet, and payroll sync",
+    icon: Users, accent: "bg-teal-50/60 border-teal-200 dark:bg-teal-950/20 dark:border-teal-900",
+    iconBg: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-600 dark:text-teal-400" },
+  { id: "shipping",  title: "Shipping & Fulfilment",  description: "Real-time rates, labels, and pickup booking",
+    icon: Truck, accent: "bg-amber-50/60 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900",
+    iconBg: "bg-amber-100 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-400" },
+  { id: "contacts",  title: "Contacts & Calendar",   description: "Sync customers and appointments",
+    icon: Mail, accent: "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900",
+    iconBg: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400" },
+  { id: "ai",        title: "AI & Automation",        description: "AI insights and no-code workflow automation",
+    icon: Sparkles, accent: "bg-slate-50/60 border-slate-200 dark:bg-slate-950/20 dark:border-slate-800",
+    iconBg: "bg-slate-100 dark:bg-slate-900/40", iconColor: "text-slate-600 dark:text-slate-400" },
 ];
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
@@ -489,7 +514,7 @@ export default function ManagementIntegrationsPage() {
             ))}
 
             {/* ── More integrations ── */}
-            <section className="space-y-3">
+            <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 More Integrations
               </h2>
@@ -497,10 +522,9 @@ export default function ManagementIntegrationsPage() {
                 const items = bySection(sec.id);
                 if (items.length === 0) return null;
                 return (
-                  <CollapsibleSection
+                  <SecondarySection
                     key={sec.id}
-                    title={sec.title}
-                    description={sec.description}
+                    {...sec}
                     items={items}
                     connecting={connecting}
                     onConnect={setModalTarget}
