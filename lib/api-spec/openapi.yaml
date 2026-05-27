@@ -3818,6 +3818,8 @@ components:
         receivedDate: { type: string, nullable: true }
         notes: { type: string, nullable: true }
         totalCost: { type: number }
+        deliveryCharge: { type: number }
+        deliveryTaxMode: { type: string }
         items:
           type: array
           items:
@@ -3836,6 +3838,8 @@ components:
         receivedDate: { type: string }
         notes: { type: string }
         totalCost: { type: number }
+        deliveryCharge: { type: number }
+        deliveryTaxMode: { type: string }
         items:
           type: array
           items:

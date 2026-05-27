@@ -2231,6 +2231,8 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -2258,6 +2260,8 @@ export const CreatePurchaseOrderBody = zod.object({
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
   "totalCost": zod.number().optional(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -2289,6 +2293,8 @@ export const GetPurchaseOrderResponse = zod.object({
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -2319,6 +2325,8 @@ export const UpdatePurchaseOrderBody = zod.object({
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
   "totalCost": zod.number().optional(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -2342,6 +2350,8 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),

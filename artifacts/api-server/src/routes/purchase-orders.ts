@@ -41,6 +41,8 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null)
     receivedDate: po.receivedDate ?? null,
     notes: po.notes ?? null,
     totalCost: parseFloat(po.totalCost),
+    deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
+    deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
     items: items.map(fmtItem),
     createdAt: po.createdAt.toISOString(),
   };
@@ -85,7 +87,11 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePurchaseOrderBody.parse(req.body);
   const poNumber = body.poNumber ?? `PO-${Date.now()}`;
-  const totalCost = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+  const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+  const deliveryCharge = body.deliveryCharge ?? 0;
+  const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
+  const totalCost = itemsSubtotal + deliveryGross;
   const [po] = await db.insert(purchaseOrdersTable).values({
     merchantId,
     supplierId: body.supplierId ?? null,
@@ -97,6 +103,8 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
     receivedDate: body.receivedDate ?? null,
     notes: body.notes ?? null,
     totalCost: String(totalCost),
+    deliveryCharge: String(deliveryCharge),
+    deliveryTaxMode,
   }).returning();
   if (body.items?.length) {
     await db.insert(purchaseOrderItemsTable).values(
@@ -129,7 +137,11 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdatePurchaseOrderParams.parse({ id: Number(req.params.id) });
   const body = UpdatePurchaseOrderBody.parse(req.body);
-  const totalCost = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+  const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+  const deliveryCharge = body.deliveryCharge ?? 0;
+  const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
+  const totalCost = itemsSubtotal + deliveryGross;
   await db.update(purchaseOrdersTable).set({
     supplierId: body.supplierId ?? null,
     ...(body.poNumber ? { poNumber: body.poNumber } : {}),
@@ -140,6 +152,8 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     receivedDate: body.receivedDate ?? null,
     notes: body.notes ?? null,
     totalCost: String(totalCost),
+    deliveryCharge: String(deliveryCharge),
+    deliveryTaxMode,
   }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (body.items !== undefined) {
     await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));

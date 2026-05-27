@@ -19,27 +19,45 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package } from "lucide-react";
 import { toast } from "sonner";
 
 type POStatus = "Draft" | "Sent" | "Partial" | "Received" | "Cancelled";
-type POItem = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
+type TaxMode  = "exclusive" | "inclusive";
+type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
 
 interface SupplierOption { id: number; name: string }
+
+const GST_RATE = 0.1; // Australia — 10%
 
 const statusColors: Record<POStatus, string> = {
   Draft: "secondary", Sent: "outline", Partial: "outline", Received: "default", Cancelled: "destructive",
 } as const;
 
 const EMPTY_FORM = {
-  supplierId: null as number | null,
-  supplierName: "",
-  orderNumber: "",
-  expectedDate: "",
-  notes: "",
-  status: "Draft" as POStatus,
+  supplierId:      null as number | null,
+  supplierName:    "",
+  orderNumber:     "",
+  expectedDate:    "",
+  notes:           "",
+  status:          "Draft" as POStatus,
+  deliveryCharge:  0,
+  deliveryTaxMode: "exclusive" as TaxMode,
 };
 const EMPTY_ITEM: POItem = { productName: "", quantity: 1, unitCost: 0, received: 0 };
+
+/* ── Delivery cost helpers ─────────────────────────────────────────────── */
+
+function calcDelivery(charge: number, mode: TaxMode) {
+  if (charge <= 0) return { exGst: 0, gst: 0, incGst: 0 };
+  if (mode === "exclusive") {
+    const gst   = charge * GST_RATE;
+    return { exGst: charge, gst, incGst: charge + gst };
+  } else {
+    const gst   = charge - charge / (1 + GST_RATE);
+    return { exGst: charge - gst, gst, incGst: charge };
+  }
+}
 
 export default function ProductsPurchaseOrdersPage() {
   const [search, setSearch] = useState("");
@@ -118,19 +136,21 @@ export default function ProductsPurchaseOrdersPage() {
   const openEdit = (po: (typeof orders)[0]) => {
     setEditingId(po.id);
     setForm({
-      supplierId: po.supplierId ?? null,
-      supplierName: po.supplierName ?? "",
-      orderNumber: (po as { orderNumber?: string | null }).orderNumber ?? "",
-      expectedDate: po.expectedDate ?? "",
-      notes: po.notes ?? "",
-      status: po.status as POStatus,
+      supplierId:      po.supplierId ?? null,
+      supplierName:    po.supplierName ?? "",
+      orderNumber:     (po as { orderNumber?: string | null }).orderNumber ?? "",
+      expectedDate:    po.expectedDate ?? "",
+      notes:           po.notes ?? "",
+      status:          po.status as POStatus,
+      deliveryCharge:  (po as { deliveryCharge?: number }).deliveryCharge ?? 0,
+      deliveryTaxMode: ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
     });
     setItems((po.items ?? []).map((i) => ({
       productName: i.productName ?? "",
-      quantity: i.quantity ?? 1,
-      unitCost: i.unitCost ?? 0,
-      received: i.received ?? 0,
-      productId: i.productId ?? undefined,
+      quantity:    i.quantity ?? 1,
+      unitCost:    i.unitCost ?? 0,
+      received:    i.received ?? 0,
+      productId:   i.productId ?? undefined,
     })));
     setProductSearchQuery("");
     setDialogOpen(true);
@@ -140,13 +160,15 @@ export default function ProductsPurchaseOrdersPage() {
     const validItems = items.filter((i) => i.productName);
     if (!validItems.length) { toast.error("Add at least one item"); return; }
     const payload = {
-      supplierId: form.supplierId ?? undefined,
-      orderNumber: form.orderNumber || undefined,
-      status: form.status,
-      orderDate: new Date().toISOString().slice(0, 10),
-      expectedDate: form.expectedDate || undefined,
-      notes: form.notes || undefined,
-      items: validItems,
+      supplierId:      form.supplierId ?? undefined,
+      orderNumber:     form.orderNumber || undefined,
+      status:          form.status,
+      orderDate:       new Date().toISOString().slice(0, 10),
+      expectedDate:    form.expectedDate || undefined,
+      notes:           form.notes || undefined,
+      deliveryCharge:  form.deliveryCharge,
+      deliveryTaxMode: form.deliveryTaxMode,
+      items:           validItems,
     };
     if (editingId !== null) {
       updatePO.mutate(
@@ -174,6 +196,11 @@ export default function ProductsPurchaseOrdersPage() {
   const productList = Array.isArray(productResults)
     ? productResults
     : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null }[] } | undefined)?.items ?? [];
+
+  /* ── Totals ─────────────────────────────────────────────────────────── */
+  const itemsSubtotal = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
+  const delivery      = calcDelivery(form.deliveryCharge, form.deliveryTaxMode);
+  const grandTotal    = itemsSubtotal + delivery.incGst;
 
   return (
     <AppLayout>
@@ -402,22 +429,117 @@ export default function ProductsPurchaseOrdersPage() {
               ))}
             </div>
 
+            {/* ── Delivery Charge ─────────────────────────────────────────── */}
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Delivery Charge</Label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Amount</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className="pl-6"
+                      value={form.deliveryCharge || ""}
+                      onChange={(e) => setForm({ ...form, deliveryCharge: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tax</Label>
+                  <div className="flex rounded-md border overflow-hidden h-9">
+                    {(["exclusive", "inclusive"] as TaxMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setForm({ ...form, deliveryTaxMode: mode })}
+                        className={cn(
+                          "flex-1 text-xs font-medium transition-colors",
+                          form.deliveryTaxMode === mode
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background hover:bg-muted/60 text-muted-foreground"
+                        )}
+                      >
+                        {mode === "exclusive" ? "Ex GST" : "Inc GST"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tax breakdown — only shown when there's a non-zero charge */}
+              {form.deliveryCharge > 0 && (
+                <div className="rounded-md bg-background border px-3 py-2 space-y-1 text-xs">
+                  {form.deliveryTaxMode === "exclusive" ? (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Delivery (ex GST)</span>
+                        <span>{formatCurrency(delivery.exGst)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>GST (10%)</span>
+                        <span>+ {formatCurrency(delivery.gst)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t pt-1 mt-1">
+                        <span>Delivery (inc GST)</span>
+                        <span>{formatCurrency(delivery.incGst)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Delivery (inc GST)</span>
+                        <span>{formatCurrency(delivery.incGst)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>GST component (10%)</span>
+                        <span>{formatCurrency(delivery.gst)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t pt-1 mt-1">
+                        <span>Delivery (ex GST)</span>
+                        <span>{formatCurrency(delivery.exGst)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder="Internal notes..." rows={2} />
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t">
-              <p className="font-medium">
-                Total: {formatCurrency(items.reduce((s, i) => s + i.quantity * i.unitCost, 0))}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={createPO.isPending || updatePO.isPending}>
-                  {editingId ? "Save Changes" : "Create PO"}
-                </Button>
+            {/* ── Summary footer ───────────────────────────────────────── */}
+            <div className="rounded-lg border bg-muted/10 px-4 py-3 space-y-1.5 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Items subtotal</span>
+                <span>{formatCurrency(itemsSubtotal)}</span>
               </div>
+              {form.deliveryCharge > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Delivery ({form.deliveryTaxMode === "exclusive" ? "inc GST" : "inc GST"})</span>
+                  <span>{formatCurrency(delivery.incGst)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold border-t pt-1.5 mt-0.5">
+                <span>Total (inc GST)</span>
+                <span>{formatCurrency(grandTotal)}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={createPO.isPending || updatePO.isPending}>
+                {editingId ? "Save Changes" : "Create PO"}
+              </Button>
             </div>
           </div>
         </DialogContent>

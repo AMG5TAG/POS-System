@@ -1170,6 +1170,8 @@ export interface PurchaseOrder {
   receivedDate?: string | null;
   notes?: string | null;
   totalCost: number;
+  deliveryCharge?: number;
+  deliveryTaxMode?: string;
   items?: PurchaseOrderItem[];
   createdAt: string;
 }
@@ -1184,6 +1186,8 @@ export interface PurchaseOrderInput {
   receivedDate?: string;
   notes?: string;
   totalCost?: number;
+  deliveryCharge?: number;
+  deliveryTaxMode?: string;
   items?: PurchaseOrderItem[];
 }
 

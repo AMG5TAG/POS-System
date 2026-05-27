@@ -16,7 +16,9 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   expectedDate: text("expected_date"),
   receivedDate: text("received_date"),
   notes:        text("notes"),
-  totalCost:    numeric("total_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  totalCost:       numeric("total_cost",       { precision: 10, scale: 2 }).notNull().default("0"),
+  deliveryCharge:  numeric("delivery_charge",  { precision: 10, scale: 2 }).notNull().default("0"),
+  deliveryTaxMode: text("delivery_tax_mode").notNull().default("exclusive"), // "exclusive" | "inclusive"
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
