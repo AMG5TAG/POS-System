@@ -1633,6 +1633,36 @@ paths:
                 properties:
                   success: { type: boolean }
 
+  /purchase-orders/{id}/email:
+    post:
+      operationId: sendPurchaseOrderEmail
+      summary: Email purchase order to supplier
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to: { type: string }
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string, nullable: true }
+
   # ── Product Bundles ───────────────────────────────────────────────────────────
   /product-bundles:
     get:
@@ -3854,6 +3884,8 @@ components:
       properties:
         supplierId: { type: integer }
         poNumber: { type: string }
+        poNumberPrefix: { type: string }
+        poNumberDigits: { type: integer }
         orderNumber: { type: string }
         status: { type: string }
         orderDate: { type: string }

@@ -1179,6 +1179,8 @@ export interface PurchaseOrder {
 export interface PurchaseOrderInput {
   supplierId?: number;
   poNumber?: string;
+  poNumberPrefix?: string;
+  poNumberDigits?: number;
   orderNumber?: string;
   status?: string;
   orderDate: string;
@@ -1549,6 +1551,16 @@ status?: string;
 
 export type DeletePurchaseOrder200 = {
   success?: boolean;
+};
+
+export type SendPurchaseOrderEmailBody = {
+  to?: string;
+};
+
+export type SendPurchaseOrderEmail200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string | null;
 };
 
 export type DeleteProductBundle200 = {

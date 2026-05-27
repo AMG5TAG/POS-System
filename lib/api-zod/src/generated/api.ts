@@ -2267,6 +2267,8 @@ export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseIt
 export const CreatePurchaseOrderBody = zod.object({
   "supplierId": zod.number().optional(),
   "poNumber": zod.string().optional(),
+  "poNumberPrefix": zod.string().optional(),
+  "poNumberDigits": zod.number().optional(),
   "orderNumber": zod.string().optional(),
   "status": zod.string().optional(),
   "orderDate": zod.string(),
@@ -2332,6 +2334,8 @@ export const UpdatePurchaseOrderParams = zod.object({
 export const UpdatePurchaseOrderBody = zod.object({
   "supplierId": zod.number().optional(),
   "poNumber": zod.string().optional(),
+  "poNumberPrefix": zod.string().optional(),
+  "poNumberDigits": zod.number().optional(),
   "orderNumber": zod.string().optional(),
   "status": zod.string().optional(),
   "orderDate": zod.string(),
@@ -2388,6 +2392,24 @@ export const DeletePurchaseOrderParams = zod.object({
 
 export const DeletePurchaseOrderResponse = zod.object({
   "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Email purchase order to supplier
+ */
+export const SendPurchaseOrderEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendPurchaseOrderEmailBody = zod.object({
+  "to": zod.string().optional()
+})
+
+export const SendPurchaseOrderEmailResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional(),
+  "error": zod.string().nullish()
 })
 
 

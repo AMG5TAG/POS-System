@@ -100,6 +100,8 @@ import type {
   RefundInput,
   RegisterInput,
   SalesDataPoint,
+  SendPurchaseOrderEmail200,
+  SendPurchaseOrderEmailBody,
   SendReceiptRequest,
   SendServiceJobEmail200,
   SendTransactionReceipt200,
@@ -6346,6 +6348,78 @@ export const useDeletePurchaseOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeletePurchaseOrderMutationOptions(options));
+    }
+
+export const getSendPurchaseOrderEmailUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}/email`
+}
+
+/**
+ * @summary Email purchase order to supplier
+ */
+export const sendPurchaseOrderEmail = async (id: number,
+    sendPurchaseOrderEmailBody?: SendPurchaseOrderEmailBody, options?: RequestInit): Promise<SendPurchaseOrderEmail200> => {
+
+  return customFetch<SendPurchaseOrderEmail200>(getSendPurchaseOrderEmailUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sendPurchaseOrderEmailBody,)
+  }
+);}
+
+
+
+
+export const getSendPurchaseOrderEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendPurchaseOrderEmail>>, TError,{id: number;data?: BodyType<SendPurchaseOrderEmailBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendPurchaseOrderEmail>>, TError,{id: number;data?: BodyType<SendPurchaseOrderEmailBody>}, TContext> => {
+
+const mutationKey = ['sendPurchaseOrderEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendPurchaseOrderEmail>>, {id: number;data?: BodyType<SendPurchaseOrderEmailBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendPurchaseOrderEmail(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendPurchaseOrderEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendPurchaseOrderEmail>>>
+    export type SendPurchaseOrderEmailMutationBody = BodyType<SendPurchaseOrderEmailBody> | undefined
+    export type SendPurchaseOrderEmailMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Email purchase order to supplier
+ */
+export const useSendPurchaseOrderEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendPurchaseOrderEmail>>, TError,{id: number;data?: BodyType<SendPurchaseOrderEmailBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendPurchaseOrderEmail>>,
+        TError,
+        {id: number;data?: BodyType<SendPurchaseOrderEmailBody>},
+        TContext
+      > => {
+      return useMutation(getSendPurchaseOrderEmailMutationOptions(options));
     }
 
 export const getListProductBundlesUrl = () => {

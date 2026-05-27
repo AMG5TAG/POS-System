@@ -61,6 +61,7 @@ export interface CodePrefixSettings {
   invoicePrefix:     string; invoiceDigits:     number;
   servicePrefix:     string; serviceDigits:     number;
   appointmentPrefix: string; appointmentDigits: number;
+  poPrefix:          string; poDigits:          number;
 }
 
 export const CODE_PREFIX_DEFAULTS: CodePrefixSettings = {
@@ -68,6 +69,7 @@ export const CODE_PREFIX_DEFAULTS: CodePrefixSettings = {
   invoicePrefix: "KI",     invoiceDigits: 5,
   servicePrefix: "KS",     serviceDigits: 5,
   appointmentPrefix: "KA", appointmentDigits: 5,
+  poPrefix: "KP",          poDigits: 5,
 };
 
 export function loadCodePrefixes(): CodePrefixSettings {
@@ -168,17 +170,18 @@ export default function ManagementMiscPage() {
               <Hash className="w-5 h-5" /> Document Code Prefixes
             </CardTitle>
             <CardDescription>
-              Set the prefix and number length for receipts, invoices, service jobs and appointments.
+              Set the prefix and number length for receipts, invoices, service jobs, appointments and purchase orders.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(
                 [
-                  { label: "Receipt",     prefixKey: "receiptPrefix",     digitsKey: "receiptDigits"     },
-                  { label: "Invoice",     prefixKey: "invoicePrefix",     digitsKey: "invoiceDigits"     },
-                  { label: "Service Job", prefixKey: "servicePrefix",     digitsKey: "serviceDigits"     },
-                  { label: "Appointment", prefixKey: "appointmentPrefix", digitsKey: "appointmentDigits" },
+                  { label: "Receipt",         prefixKey: "receiptPrefix",     digitsKey: "receiptDigits"     },
+                  { label: "Invoice",         prefixKey: "invoicePrefix",     digitsKey: "invoiceDigits"     },
+                  { label: "Service Job",     prefixKey: "servicePrefix",     digitsKey: "serviceDigits"     },
+                  { label: "Appointment",     prefixKey: "appointmentPrefix", digitsKey: "appointmentDigits" },
+                  { label: "Purchase Order",  prefixKey: "poPrefix",          digitsKey: "poDigits"          },
                 ] as { label: string; prefixKey: keyof CodePrefixSettings; digitsKey: keyof CodePrefixSettings }[]
               ).map(({ label, prefixKey, digitsKey }) => (
                 <div key={prefixKey} className="rounded-xl border p-4 space-y-3">

@@ -9,20 +9,22 @@ import {
   useListProducts,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
+  type PurchaseOrder,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { loadCodePrefixes } from "@/pages/app/management-misc";
 
 type POStatus = "Draft" | "Sent" | "Partial" | "Received" | "Cancelled";
 type TaxMode  = "exclusive" | "inclusive";
@@ -71,6 +73,10 @@ export default function ProductsPurchaseOrdersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [items, setItems] = useState<POItem[]>([{ ...EMPTY_ITEM }]);
   const [printPO, setPrintPO] = useState<PrintPO | null>(null);
+  const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [manualEmail, setManualEmail] = useState("");
 
   /* Supplier dropdown */
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -191,12 +197,12 @@ export default function ProductsPurchaseOrdersPage() {
         }
       );
     } else {
-      createPO.mutate({ data: payload }, {
+      const prefixes = loadCodePrefixes();
+      createPO.mutate({ data: { ...payload, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
         onSuccess: (data) => {
           invalidateList();
           toast.success(`${data.poNumber} created`);
           setDialogOpen(false);
-          // Trigger automatic print after a short delay to allow dialog to close
           setTimeout(() => setPrintPO(data), 100);
         },
         onError: () => toast.error("Failed to create purchase order"),
@@ -270,31 +276,34 @@ export default function ProductsPurchaseOrdersPage() {
               </thead>
               <tbody className="divide-y">
                 {filtered.map((po) => (
-                  <tr key={po.id} className="bg-background hover:bg-muted/20">
-                    <td className="p-3 font-mono font-medium">{po.poNumber}</td>
-                    <td className="p-3 hidden sm:table-cell">
+                  <tr key={po.id} className="bg-background hover:bg-muted/20 cursor-pointer">
+                    <td className="p-3 font-mono font-medium" onClick={() => setViewingPO(po)}>{po.poNumber}</td>
+                    <td className="p-3 hidden sm:table-cell" onClick={() => setViewingPO(po)}>
                       <span className="flex items-center gap-1.5">
                         <Truck className="w-3.5 h-3.5 text-muted-foreground" />
                         {po.supplierName ?? "—"}
                       </span>
                     </td>
-                    <td className="p-3 hidden md:table-cell text-muted-foreground font-mono text-xs">
+                    <td className="p-3 hidden md:table-cell text-muted-foreground font-mono text-xs" onClick={() => setViewingPO(po)}>
                       {(po as { orderNumber?: string | null }).orderNumber || "—"}
                     </td>
-                    <td className="p-3 hidden md:table-cell text-muted-foreground">{formatDate(po.createdAt)}</td>
-                    <td className="p-3 hidden lg:table-cell text-muted-foreground">{po.expectedDate || "—"}</td>
-                    <td className="p-3">
+                    <td className="p-3 hidden md:table-cell text-muted-foreground" onClick={() => setViewingPO(po)}>{formatDate(po.createdAt)}</td>
+                    <td className="p-3 hidden lg:table-cell text-muted-foreground" onClick={() => setViewingPO(po)}>{po.expectedDate || "—"}</td>
+                    <td className="p-3" onClick={() => setViewingPO(po)}>
                       <Badge variant={statusColors[po.status as POStatus] as "default" | "secondary" | "outline" | "destructive"}>
                         {po.status}
                       </Badge>
                     </td>
-                    <td className="p-3 text-right font-medium">{formatCurrency(po.totalCost ?? 0)}</td>
+                    <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>{formatCurrency(po.totalCost ?? 0)}</td>
                     <td className="p-3 flex gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(po)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(po.id)}>
+                        title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po.id); }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>
@@ -305,6 +314,236 @@ export default function ProductsPurchaseOrdersPage() {
           </div>
         )}
       </div>
+
+      {/* ── Purchase Order Detail Dialog ────────────────────────────────── */}
+      {viewingPO && (() => {
+        const po = viewingPO;
+        const deliveryCharge = (po as { deliveryCharge?: number }).deliveryCharge ?? 0;
+        const deliveryTaxMode = ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode;
+        const delivery = calcDelivery(deliveryCharge, deliveryTaxMode);
+        const itemsSubtotal = (po.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+        const itemsGst = itemsSubtotal * GST_RATE;
+        const grandTotal = itemsSubtotal * (1 + GST_RATE) + delivery.incGst;
+        const fmtDate = (d: string | null | undefined) => {
+          if (!d) return "—";
+          const [y, m, day] = d.split("-");
+          return `${day}/${m}/${y}`;
+        };
+
+        const handleSendEmail = async (overrideTo?: string) => {
+          setEmailLoading(true);
+          try {
+            const res = await fetch(`/api/purchase-orders/${po.id}/email`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(overrideTo ? { to: overrideTo } : {}),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+              if (json.error === "no_email") {
+                setManualEmail("");
+                setEmailModalOpen(true);
+              } else {
+                toast.error(json.message ?? "Failed to send email");
+              }
+            } else if (json.error) {
+              toast.error(`Email sent but provider reported: ${json.error}`);
+            } else {
+              toast.success("Email sent to supplier");
+            }
+          } catch {
+            toast.error("Network error sending email");
+          } finally {
+            setEmailLoading(false);
+          }
+        };
+
+        return (
+          <Dialog open={!!viewingPO} onOpenChange={(o) => { if (!o) setViewingPO(null); }}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <DialogTitle className="font-mono text-xl">#{po.poNumber}</DialogTitle>
+                  <Badge variant={statusColors[po.status as POStatus] as "default" | "secondary" | "outline" | "destructive"}>
+                    {po.status}
+                  </Badge>
+                </div>
+              </DialogHeader>
+
+              {/* Info grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Supplier</p>
+                  <p className="font-medium mt-0.5">{po.supplierName ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Order Date</p>
+                  <p className="font-medium mt-0.5">{fmtDate(po.orderDate)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Expected</p>
+                  <p className="font-medium mt-0.5">{po.expectedDate ? fmtDate(po.expectedDate) : "—"}</p>
+                </div>
+                {(po as { orderNumber?: string | null }).orderNumber && (
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Order #</p>
+                    <p className="font-medium mt-0.5 font-mono text-xs">{(po as { orderNumber?: string | null }).orderNumber}</p>
+                  </div>
+                )}
+                {po.receivedDate && (
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Received</p>
+                    <p className="font-medium mt-0.5">{fmtDate(po.receivedDate)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Items table */}
+              <div className="rounded-lg border overflow-hidden mt-2">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-2.5 font-medium text-muted-foreground">Product</th>
+                      <th className="text-center p-2.5 font-medium text-muted-foreground w-16">Qty</th>
+                      <th className="text-right p-2.5 font-medium text-muted-foreground w-28">Unit Cost</th>
+                      <th className="text-right p-2.5 font-medium text-muted-foreground w-28">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {(po.items ?? []).map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2.5">{item.productName}</td>
+                        <td className="p-2.5 text-center">{item.quantity}</td>
+                        <td className="p-2.5 text-right">{formatCurrency(item.unitCost ?? 0)}</td>
+                        <td className="p-2.5 text-right">{formatCurrency((item.quantity ?? 1) * (item.unitCost ?? 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals summary */}
+              <div className="flex justify-end">
+                <div className="text-sm space-y-1 min-w-[220px]">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Items subtotal (ex GST)</span>
+                    <span>{formatCurrency(itemsSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>GST (10%)</span>
+                    <span>+ {formatCurrency(itemsGst)}</span>
+                  </div>
+                  {deliveryCharge > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Delivery (inc GST)</span>
+                      <span>+ {formatCurrency(delivery.incGst)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold text-base border-t pt-1.5 mt-1.5">
+                    <span>Total (inc GST)</span>
+                    <span>{formatCurrency(grandTotal)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {po.notes && (
+                <div className="rounded-lg border p-3 bg-muted/30 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Notes</p>
+                  <p className="whitespace-pre-wrap">{po.notes}</p>
+                </div>
+              )}
+
+              <DialogFooter className="flex gap-2 pt-2 sm:justify-between">
+                <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
+                  <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" disabled={emailLoading} onClick={() => handleSendEmail()}>
+                    {emailLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
+                    Email to Supplier
+                  </Button>
+                  <Button variant="outline" onClick={() => setPrintPO(po as unknown as PrintPO)}>
+                    <Printer className="w-4 h-4 mr-1.5" /> Print
+                  </Button>
+                </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── Manual Email Fallback Modal ──────────────────────────────────── */}
+      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter Supplier Email</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This supplier has no email address on file. Enter one below to send the purchase order.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Email address</Label>
+            <Input
+              type="email"
+              placeholder="supplier@example.com"
+              value={manualEmail}
+              onChange={(e) => setManualEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manualEmail) {
+                  setEmailModalOpen(false);
+                  // Re-trigger with manual email using the current viewingPO
+                  if (viewingPO) {
+                    setEmailLoading(true);
+                    fetch(`/api/purchase-orders/${viewingPO.id}/email`, {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ to: manualEmail }),
+                    })
+                      .then((r) => r.json())
+                      .then((j) => {
+                        if (j.error) toast.error(`Email failed: ${j.error}`);
+                        else toast.success("Email sent to supplier");
+                      })
+                      .catch(() => toast.error("Network error"))
+                      .finally(() => setEmailLoading(false));
+                  }
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!manualEmail || emailLoading}
+              onClick={() => {
+                setEmailModalOpen(false);
+                if (viewingPO) {
+                  setEmailLoading(true);
+                  fetch(`/api/purchase-orders/${viewingPO.id}/email`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ to: manualEmail }),
+                  })
+                    .then((r) => r.json())
+                    .then((j) => {
+                      if (j.error) toast.error(`Email failed: ${j.error}`);
+                      else toast.success("Email sent to supplier");
+                    })
+                    .catch(() => toast.error("Network error"))
+                    .finally(() => setEmailLoading(false));
+                }
+              }}
+            >
+              {emailLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
+              Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
