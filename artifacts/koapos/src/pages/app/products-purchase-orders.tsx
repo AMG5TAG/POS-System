@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListPurchaseOrders,
@@ -7,6 +8,7 @@ import {
   useDeletePurchaseOrder,
   useListProducts,
   getListProductsQueryKey,
+  getListPurchaseOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 type POStatus = "Draft" | "Sent" | "Partial" | "Received" | "Cancelled";
@@ -59,12 +61,16 @@ function calcDelivery(charge: number, mode: TaxMode) {
   }
 }
 
+type PrintPO = Awaited<ReturnType<typeof import("@workspace/api-client-react").createPurchaseOrder>>;
+
 export default function ProductsPurchaseOrdersPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [items, setItems] = useState<POItem[]>([{ ...EMPTY_ITEM }]);
+  const [printPO, setPrintPO] = useState<PrintPO | null>(null);
 
   /* Supplier dropdown */
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -156,6 +162,8 @@ export default function ProductsPurchaseOrdersPage() {
     setDialogOpen(true);
   };
 
+  const invalidateList = () => queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+
   const handleSave = () => {
     const validItems = items.filter((i) => i.productName);
     if (!validItems.length) { toast.error("Add at least one item"); return; }
@@ -174,21 +182,31 @@ export default function ProductsPurchaseOrdersPage() {
       updatePO.mutate(
         { id: editingId, data: payload },
         {
-          onSuccess: () => { toast.success("Purchase order updated"); setDialogOpen(false); },
+          onSuccess: () => {
+            invalidateList();
+            toast.success("Purchase order updated");
+            setDialogOpen(false);
+          },
           onError: () => toast.error("Failed to update"),
         }
       );
     } else {
       createPO.mutate({ data: payload }, {
-        onSuccess: (data) => { toast.success(`${data.poNumber} created`); setDialogOpen(false); },
-        onError: () => toast.error("Failed to create"),
+        onSuccess: (data) => {
+          invalidateList();
+          toast.success(`${data.poNumber} created`);
+          setDialogOpen(false);
+          // Trigger automatic print after a short delay to allow dialog to close
+          setTimeout(() => setPrintPO(data), 100);
+        },
+        onError: () => toast.error("Failed to create purchase order"),
       });
     }
   };
 
   const handleDelete = (id: number) => {
     deletePO.mutate({ id }, {
-      onSuccess: () => toast.success("Purchase order deleted"),
+      onSuccess: () => { invalidateList(); toast.success("Purchase order deleted"); },
       onError: () => toast.error("Failed to delete"),
     });
   };
@@ -561,6 +579,150 @@ export default function ProductsPurchaseOrdersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Auto-print after PO creation ─────────────────────────────── */}
+      {printPO && <POPrintArea po={printPO} onDone={() => setPrintPO(null)} />}
     </AppLayout>
+  );
+}
+
+/* ── Print area component ─────────────────────────────────────────────── */
+
+type POData = NonNullable<PrintPO>;
+
+function POPrintArea({ po, onDone }: { po: POData; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(() => {
+      document.body.setAttribute("data-print", "po");
+      const cleanup = () => {
+        document.body.removeAttribute("data-print");
+        onDone();
+      };
+      window.addEventListener("afterprint", cleanup, { once: true });
+      window.print();
+      const fallback = window.setTimeout(cleanup, 30_000);
+      window.addEventListener("afterprint", () => window.clearTimeout(fallback), { once: true });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const deliveryCharge = (po as { deliveryCharge?: number }).deliveryCharge ?? 0;
+  const deliveryTaxMode = ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode;
+  const delivery = calcDelivery(deliveryCharge, deliveryTaxMode);
+  const itemsSubtotal = (po.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
+  const itemsIncGst = itemsSubtotal * (1 + GST_RATE);
+  const grandTotal = itemsIncGst + delivery.incGst;
+
+  const today = new Date();
+  const fmtDate = (d: string | null | undefined) => {
+    if (!d) return "—";
+    const [y, m, day] = d.split("-");
+    return `${day}/${m}/${y}`;
+  };
+
+  return (
+    <>
+      <style>{`
+        @media screen {
+          #po-print-area { display: none !important; }
+        }
+        @media print {
+          body * { visibility: hidden !important; }
+          body[data-print="po"] #po-print-area,
+          body[data-print="po"] #po-print-area * { visibility: visible !important; }
+          body[data-print="po"] #po-print-area {
+            position: fixed !important;
+            inset: 0 !important;
+            display: block !important;
+            padding: 32px !important;
+            background: white !important;
+          }
+          @page { size: A4; margin: 12mm; }
+        }
+      `}</style>
+      <div id="po-print-area" style={{ fontFamily: "Arial, sans-serif", fontSize: 13, color: "#222", lineHeight: 1.5 }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #f0c040", paddingBottom: 12, marginBottom: 20 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>PURCHASE ORDER</h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#666" }}>#{po.poNumber}</p>
+          </div>
+          <div style={{ textAlign: "right", fontSize: 12, color: "#555" }}>
+            <p style={{ margin: 0 }}>Date: {fmtDate(today.toISOString().slice(0, 10))}</p>
+            <p style={{ margin: "2px 0 0" }}>Status: <strong>{po.status}</strong></p>
+            {po.orderNumber && <p style={{ margin: "2px 0 0" }}>Order #: {po.orderNumber}</p>}
+            {po.expectedDate && <p style={{ margin: "2px 0 0" }}>Expected: {fmtDate(po.expectedDate)}</p>}
+          </div>
+        </div>
+
+        {/* Supplier */}
+        {po.supplierName && (
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ margin: 0, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, color: "#888" }}>Supplier</p>
+            <p style={{ margin: "2px 0 0", fontWeight: 600, fontSize: 14 }}>{po.supplierName}</p>
+          </div>
+        )}
+
+        {/* Items table */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
+          <thead>
+            <tr style={{ backgroundColor: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
+              <th style={{ textAlign: "left", padding: "8px 10px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Product</th>
+              <th style={{ textAlign: "center", padding: "8px 10px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, width: 60 }}>Qty</th>
+              <th style={{ textAlign: "right", padding: "8px 10px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, width: 100 }}>Unit Cost</th>
+              <th style={{ textAlign: "right", padding: "8px 10px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, width: 100 }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(po.items ?? []).map((item, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "7px 10px" }}>{item.productName}</td>
+                <td style={{ padding: "7px 10px", textAlign: "center" }}>{item.quantity}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right" }}>{formatCurrency(item.unitCost ?? 0)}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right" }}>{formatCurrency((item.quantity ?? 1) * (item.unitCost ?? 0))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Totals */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <table style={{ borderCollapse: "collapse", minWidth: 260 }}>
+            <tbody>
+              <tr>
+                <td style={{ padding: "3px 10px", color: "#666", fontSize: 12 }}>Items subtotal (ex GST)</td>
+                <td style={{ padding: "3px 10px", textAlign: "right", fontSize: 12 }}>{formatCurrency(itemsSubtotal)}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: "3px 10px", color: "#666", fontSize: 12 }}>GST on items (10%)</td>
+                <td style={{ padding: "3px 10px", textAlign: "right", fontSize: 12 }}>+ {formatCurrency(itemsSubtotal * GST_RATE)}</td>
+              </tr>
+              {deliveryCharge > 0 && (
+                <tr>
+                  <td style={{ padding: "3px 10px", color: "#666", fontSize: 12 }}>Delivery (inc GST)</td>
+                  <td style={{ padding: "3px 10px", textAlign: "right", fontSize: 12 }}>+ {formatCurrency(delivery.incGst)}</td>
+                </tr>
+              )}
+              <tr style={{ borderTop: "2px solid #222" }}>
+                <td style={{ padding: "6px 10px", fontWeight: 700, fontSize: 14 }}>Total (inc GST)</td>
+                <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, fontSize: 14 }}>{formatCurrency(grandTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Notes */}
+        {po.notes && (
+          <div style={{ marginTop: 24, borderTop: "1px solid #eee", paddingTop: 12 }}>
+            <p style={{ margin: 0, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, color: "#888" }}>Notes</p>
+            <p style={{ margin: "4px 0 0", fontSize: 13, whiteSpace: "pre-wrap" }}>{po.notes}</p>
+          </div>
+        )}
+
+        <p style={{ marginTop: 32, fontSize: 11, color: "#aaa", borderTop: "1px solid #eee", paddingTop: 8 }}>
+          Generated by KoaPOS — {today.toLocaleDateString("en-AU")}
+        </p>
+      </div>
+    </>
   );
 }
