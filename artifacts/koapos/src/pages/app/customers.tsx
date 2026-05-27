@@ -1084,6 +1084,7 @@ export default function CustomersPage() {
   const [pageSize, setPageSize]             = useState<number | "all">(25);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
+  const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
   const merchantCountryCode = (merchantData as any)?.country ?? "AU";
@@ -1402,10 +1403,17 @@ export default function CustomersPage() {
                             : "—"}
                         </td>
                         <td className="p-3 hidden md:table-cell">
-                          <span className="flex items-center gap-1">
-                            <Star className="w-3 h-3 text-amber-500 shrink-0" />
-                            {customer.loyaltyPoints ?? 0}
-                          </span>
+                          {(() => {
+                            const pts = customer.loyaltyPoints ?? 0;
+                            const pType = loyaltySettings?.programType ?? "cashback";
+                            if (pType === "cashback" || pType === "tiered" || pType === "custom") {
+                              return <span className="font-medium text-emerald-600">${(pts as number).toFixed(2)}</span>;
+                            }
+                            if (pType === "stamp") {
+                              return <span className="flex items-center gap-1 text-muted-foreground"><span>🎟</span>{pts}</span>;
+                            }
+                            return <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 shrink-0" />{pts}</span>;
+                          })()}
                         </td>
                         <td className="p-3 hidden lg:table-cell text-muted-foreground">
                           {customer.visitCount ?? 0} visits

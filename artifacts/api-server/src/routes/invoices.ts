@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, loyaltySettingsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
@@ -322,12 +322,79 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     updates.recurringOccurrences = recurring?.enabled ? (recurring.occurrences ?? null) : null;
     updates.recurringStartDate = recurring?.enabled && recurring.startDate ? new Date(recurring.startDate) : null;
   }
+  // ── Pre-fetch current invoice to detect paid transition (for loyalty) ──
+  let preInv: { status: string | null; customerId: number | null; total: string | null } | undefined;
+  if (status === "paid") {
+    const [cur] = await db
+      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
+    preInv = cur ?? undefined;
+  }
+
   const [inv] = await db
     .update(invoicesTable)
     .set(updates)
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
     .returning();
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  // ── Credit loyalty when an invoice transitions to paid for the first time ──
+  if (
+    status === "paid" &&
+    preInv &&
+    preInv.status !== "paid" &&
+    preInv.customerId
+  ) {
+    const invoiceTotal = parseFloat(preInv.total ?? "0");
+    if (invoiceTotal > 0) {
+      const [loyaltyRow] = await db
+        .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
+        .from(loyaltySettingsTable)
+        .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+      const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
+      if (programOn) {
+        const programType = loyaltyRow?.programType ?? "cashback";
+        const config = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
+        let earned = 0;
+        switch (programType) {
+          case "cashback": {
+            const rate = Math.max(0, (config.cashbackRate as number) ?? 0.01);
+            earned = round2(invoiceTotal * rate);
+            break;
+          }
+          case "tiered": {
+            const tiers = (config.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number }>;
+            const sorted = [...tiers].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
+            const tier = sorted.find(t => invoiceTotal >= (t.minSpend ?? 0));
+            const rate = Math.max(0, tier?.rate ?? 0.01);
+            const mult = tier?.bonusMultiplier ?? 1;
+            earned = round2(invoiceTotal * rate * mult);
+            break;
+          }
+          case "points": {
+            const ppd = Math.max(0, (config.pointsPerDollar as number) ?? 1);
+            earned = Math.floor(invoiceTotal * ppd);
+            break;
+          }
+          case "stamp":
+            earned = 1;
+            break;
+          case "custom": {
+            const rate = Math.max(0, (config.customValue as number) ?? 0.01);
+            earned = round2(invoiceTotal * rate);
+            break;
+          }
+        }
+        if (earned > 0) {
+          await db
+            .update(customersTable)
+            .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
+            .where(and(eq(customersTable.id, preInv.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+        }
+      }
+    }
+  }
 
   const [row] = await db
     .select({

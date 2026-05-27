@@ -138,13 +138,17 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // only; the persisted record is built from product.price + product.taxRate.
   // Client `discount` per line is honoured but clamped to [0, lineGross]
   // so a forged discount cannot drive totals negative or below zero.
-  const productIds = [...new Set(clientItems.map((i) => i.productId))];
-  const dbProducts = await db
-    .select()
-    .from(productsTable)
-    .where(and(inArray(productsTable.id, productIds), eq(productsTable.merchantId, req.session.merchantId!)));
+  // productId === 0 signals a custom / one-off item — it bypasses the DB lookup
+  // and inventory deduction, using client-supplied name and price instead.
+  const regularProductIds = [...new Set(clientItems.filter(i => i.productId !== 0).map((i) => i.productId))];
+  const dbProducts = regularProductIds.length > 0
+    ? await db
+        .select()
+        .from(productsTable)
+        .where(and(inArray(productsTable.id, regularProductIds), eq(productsTable.merchantId, req.session.merchantId!)))
+    : [];
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
-  const missing = productIds.filter((id) => !productMap.has(id));
+  const missing = regularProductIds.filter((id) => !productMap.has(id));
   if (missing.length > 0) {
     res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` });
     return;
@@ -161,9 +165,20 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
       return;
     }
-    const product = productMap.get(i.productId)!;
-    const unitPrice = parseFloat(product.price);
-    const taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
+    let unitPrice: number;
+    let taxRatePct: number;
+    let itemName: string;
+    if (i.productId === 0) {
+      // Custom item: trust client-supplied values, no DB product required
+      unitPrice  = Math.max(0, i.unitPrice ?? 0);
+      taxRatePct = 10; // standard Australian GST
+      itemName   = (i.productName || "Custom Item").slice(0, 200);
+    } else {
+      const product = productMap.get(i.productId)!;
+      unitPrice  = parseFloat(product.price);
+      taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
+      itemName   = product.name;
+    }
     const lineGross = round2(unitPrice * i.quantity);
     const rawDiscount = Math.max(0, i.discount ?? 0);
     const discount = round2(Math.min(rawDiscount, lineGross));
@@ -171,7 +186,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
     computedItems.push({
       productId: i.productId,
-      productName: product.name,
+      productName: itemName,
       quantity: i.quantity,
       unitPrice,
       totalPrice,
@@ -361,9 +376,9 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       const finalEarned = baseEarned * bestMultiplier + bestBonus;
 
       // Cap monetary earnings at the sale total so cashback never exceeds
-      // the amount paid. Points and stamps have no such cap (they're a count).
+      // the amount paid. Points and stamps are integer counts so we floor those.
       if (programType === "cashback" || programType === "tiered" || programType === "custom") {
-        sanitizedEarned = Math.max(0, Math.min(Math.floor(finalEarned), Math.floor(total)));
+        sanitizedEarned = round2(Math.max(0, Math.min(finalEarned, total)));
       } else {
         sanitizedEarned = Math.max(0, Math.floor(finalEarned));
       }

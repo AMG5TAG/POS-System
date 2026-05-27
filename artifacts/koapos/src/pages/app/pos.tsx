@@ -40,7 +40,7 @@ import {
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
-  MessageSquareWarning,
+  MessageSquareWarning, Package,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -119,6 +119,8 @@ export default function POSPage() {
   /* cart */
   const [cart, setCart] = useState<CartItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState("");
+  const [tempItemOpen, setTempItemOpen] = useState(false);
+  const [tempItemForm, setTempItemForm] = useState({ name: "", price: "", cost: "" });
   const [saleNotes, setSaleNotes] = useState("");
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
 
@@ -736,6 +738,37 @@ export default function POSPage() {
   }, [customers, customerSearch]);
 
   /* ── Cart operations ── */
+  const addTempToCart = () => {
+    const name = tempItemForm.name.trim();
+    const price = parseFloat(tempItemForm.price);
+    if (!name) { toast.error("Enter an item name"); return; }
+    if (!price || price <= 0) { toast.error("Enter a valid price"); return; }
+    const tempProduct = {
+      id: 0,
+      name,
+      price,
+      sku: null,
+      merchantId: 0,
+      stockQuantity: null,
+      lowStockThreshold: null,
+      taxRate: "10",
+      trackInventory: "false",
+      isActive: "true",
+      categoryId: null,
+      imageUrl: null,
+      description: null,
+      costPrice: tempItemForm.cost ? String(parseFloat(tempItemForm.cost)) : null,
+      productType: "product",
+      barcode: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      excludeFromLoyalty: "false",
+    } as unknown as Product;
+    setCart(prev => [...prev, { product: tempProduct, quantity: 1, itemDiscount: 0 }]);
+    setTempItemOpen(false);
+    setTempItemForm({ name: "", price: "", cost: "" });
+  };
+
   const addToCart = (product: Product) => {
     if ((product.price ?? 0) === 0) {
       setZeroPricePending(product);
@@ -1229,15 +1262,38 @@ export default function POSPage() {
     amountTendered: number,
     extraNote?: string,
   ) => {
-    const txItems = cart.map(i => ({
-      productId: i.product.id,
-      productName: i.product.name,
-      quantity: i.quantity,
-      unitPrice: i.customPrice ?? i.product.price,
-      totalPrice: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
-      taxAmount: ((i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount) * ((i.product.taxRate ?? 10) / (100 + (i.product.taxRate ?? 10))),
-      discount: i.itemDiscount || undefined,
-    }));
+    // Distribute cart-level (overall) and tier discounts proportionally across
+    // all items so the server's recomputed total matches the client total.
+    // Without this, the server ignores the overall discount and rejects with 409.
+    const _totalOverallDiscount = overallDiscountAmt + tierDiscountAmt;
+    const _afterItemDiscounts = cartSubtotal - itemDiscountTotal;
+    let _allocated = 0;
+    const txItems = cart.map((i, idx) => {
+      const lineGross = (i.customPrice ?? i.product.price) * i.quantity;
+      const lineAfterItemDisc = Math.max(0, lineGross - i.itemDiscount);
+      let proportional: number;
+      if (idx === cart.length - 1) {
+        // Last item absorbs any rounding remainder so the sum is exact
+        proportional = Math.max(0, Math.round((_totalOverallDiscount - _allocated) * 100) / 100);
+      } else {
+        proportional = _totalOverallDiscount > 0 && _afterItemDiscounts > 0
+          ? Math.round(_totalOverallDiscount * (lineAfterItemDisc / _afterItemDiscounts) * 100) / 100
+          : 0;
+        _allocated += proportional;
+      }
+      const totalDiscount = Math.round((i.itemDiscount + proportional) * 100) / 100;
+      const lineTotal = Math.round((lineGross - totalDiscount) * 100) / 100;
+      const taxRate = i.product.taxRate ?? 10;
+      return {
+        productId: i.product.id,
+        productName: i.product.name,
+        quantity: i.quantity,
+        unitPrice: i.customPrice ?? i.product.price,
+        totalPrice: lineTotal,
+        taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
+        discount: totalDiscount > 0 ? totalDiscount : undefined,
+      };
+    });
     const notesParts = [
       linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
       linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
@@ -1350,6 +1406,16 @@ export default function POSPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 gap-1.5"
+                onClick={() => { setTempItemOpen(true); setTempItemForm({ name: "", price: "", cost: "" }); }}
+                title="Add a one-off custom item to the cart"
+              >
+                <Package className="w-4 h-4" />
+                <span className="hidden sm:inline">Custom</span>
+              </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="flex w-max space-x-1.5 pb-1">
@@ -2843,6 +2909,67 @@ export default function POSPage() {
             <Button variant="outline" onClick={() => setEodPrintOpen(false)}>No Thanks</Button>
             <Button onClick={() => { printEodReport(); setEodPrintOpen(false); }}>
               <Printer className="w-4 h-4 mr-1.5" /> Print Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Custom / Temp Item Dialog ── */}
+      <Dialog open={tempItemOpen} onOpenChange={setTempItemOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Custom Item
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Add a one-off item that doesn't exist in your product catalogue.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="temp-name">Item name <span className="text-destructive">*</span></Label>
+              <Input
+                id="temp-name"
+                placeholder="e.g. Delivery fee"
+                value={tempItemForm.name}
+                onChange={(e) => setTempItemForm(f => ({ ...f, name: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="temp-price">Price (inc. GST) <span className="text-destructive">*</span></Label>
+              <Input
+                id="temp-price"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                value={tempItemForm.price}
+                onChange={(e) => setTempItemForm(f => ({ ...f, price: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="temp-cost">Cost price (optional)</Label>
+              <Input
+                id="temp-cost"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={tempItemForm.cost}
+                onChange={(e) => setTempItemForm(f => ({ ...f, cost: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTempItemOpen(false)}>Cancel</Button>
+            <Button onClick={addTempToCart}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add to Cart
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, date, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -13,7 +13,7 @@ export const customersTable = pgTable("customers", {
   address: text("address"),
   notes: text("notes"),
   dateOfBirth: date("date_of_birth"),
-  loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  loyaltyPoints: doublePrecision("loyalty_points").notNull().default(0),
   totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).notNull().default("0"),
   visitCount: integer("visit_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
