@@ -1158,6 +1158,23 @@ export interface ParkedSaleInput {
   total: number;
 }
 
+export interface POReceiptLog {
+  id: number;
+  processedBy: string;
+  processedAt: string;
+  notes: string;
+}
+
+export type ReceiveItemsInputItemsItem = {
+  poItemId: number;
+  quantityReceiving: number;
+};
+
+export interface ReceiveItemsInput {
+  processedBy?: string;
+  items: ReceiveItemsInputItemsItem[];
+}
+
 export interface PurchaseOrderItem {
   id?: number;
   productId?: number | null;
@@ -1183,6 +1200,7 @@ export interface PurchaseOrder {
   deliveryCharge?: number;
   deliveryTaxMode?: string;
   items?: PurchaseOrderItem[];
+  receipts?: POReceiptLog[];
   createdAt: string;
 }
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable } from "@workspace/db";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListPurchaseOrdersQueryParams,
@@ -16,6 +16,7 @@ const router: IRouter = Router();
 
 type PORow = typeof purchaseOrdersTable.$inferSelect;
 type POItemRow = typeof purchaseOrderItemsTable.$inferSelect;
+type ReceiptRow = typeof purchaseOrderReceiptsTable.$inferSelect;
 
 function fmtItem(i: POItemRow) {
   return {
@@ -29,7 +30,16 @@ function fmtItem(i: POItemRow) {
   };
 }
 
-function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null) {
+function fmtReceipt(r: ReceiptRow) {
+  return {
+    id: r.id,
+    processedBy: r.processedBy,
+    processedAt: r.processedAt.toISOString(),
+    notes: r.notes,
+  };
+}
+
+function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = []) {
   return {
     id: po.id,
     supplierId: po.supplierId ?? null,
@@ -45,6 +55,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null)
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
     items: items.map(fmtItem),
+    receipts: receipts.map(fmtReceipt),
     createdAt: po.createdAt.toISOString(),
   };
 }
@@ -86,13 +97,18 @@ async function getPOWithItems(id: number, merchantId: number) {
   const [po] = await db.select().from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!po) return null;
-  const items = await db.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+  const [items, receipts] = await Promise.all([
+    db.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id)),
+    db.select().from(purchaseOrderReceiptsTable)
+      .where(eq(purchaseOrderReceiptsTable.poId, id))
+      .orderBy(desc(purchaseOrderReceiptsTable.processedAt)),
+  ]);
   let supplierName: string | null = null;
   if (po.supplierId) {
     const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, po.supplierId));
     supplierName = s?.name ?? null;
   }
-  return fmtPO(po, items, supplierName);
+  return fmtPO(po, items, supplierName, receipts);
 }
 
 // GET /purchase-orders
@@ -250,6 +266,115 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   await db.delete(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   res.json({ success: true });
+});
+
+// POST /purchase-orders/:id/receive
+router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const userEmail  = (req.session as { email?: string }).email ?? "Unknown";
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const po = await getPOWithItems(id, merchantId);
+  if (!po) { res.status(404).json({ error: "Purchase order not found" }); return; }
+
+  const receivableStatuses = ["Ordered", "Partially Received", "Sent", "Partial"];
+  if (!receivableStatuses.includes(po.status)) {
+    res.status(400).json({ error: `Cannot receive items on a PO with status '${po.status}'` });
+    return;
+  }
+
+  const {
+    processedBy,
+    items: receiveItems,
+  }: {
+    processedBy?: string;
+    items: Array<{ poItemId: number; quantityReceiving: number }>;
+  } = req.body;
+
+  if (!receiveItems?.length) {
+    res.status(400).json({ error: "At least one item is required" });
+    return;
+  }
+
+  const actor = processedBy?.trim() || userEmail;
+
+  // Build a map of current PO items for validation
+  const poItemMap = new Map(po.items.map((i) => [i.id, i]));
+  const receiptLines: string[] = [];
+
+  for (const { poItemId, quantityReceiving } of receiveItems) {
+    if (quantityReceiving <= 0) continue;
+    const poItem = poItemMap.get(poItemId);
+    if (!poItem) continue;
+
+    const maxReceivable = poItem.quantity - poItem.received;
+    const qty = Math.min(quantityReceiving, maxReceivable);
+    if (qty <= 0) continue;
+
+    // Update PO item received count
+    await db.update(purchaseOrderItemsTable)
+      .set({ received: sql`${purchaseOrderItemsTable.received} + ${qty}` })
+      .where(eq(purchaseOrderItemsTable.id, poItemId));
+
+    // Update inventory stock if product is tracked
+    if (poItem.productId) {
+      const [product] = await db.select({ trackInventory: productsTable.trackInventory })
+        .from(productsTable)
+        .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+      if (product?.trackInventory === "true") {
+        await db.update(productsTable)
+          .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
+          .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+        // Lock in the PO unit cost
+        await db.update(productsTable)
+          .set({ costPrice: String(poItem.unitCost) })
+          .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+        // Log price history
+        await db.insert(productPriceHistoryTable).values({
+          merchantId,
+          productId: poItem.productId,
+          costPrice: String(poItem.unitCost),
+          supplierName: po.supplierName ?? null,
+          poNumber: po.poNumber,
+          poId: id,
+        });
+      }
+    }
+
+    receiptLines.push(`${qty}x ${poItem.productName}`);
+  }
+
+  if (receiptLines.length === 0) {
+    res.status(400).json({ error: "No receivable quantities — all items may already be fully received" });
+    return;
+  }
+
+  // Re-fetch updated items to compute new status
+  const updatedItems = await db.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+  const totalOrdered  = updatedItems.reduce((s, i) => s + i.quantity, 0);
+  const totalReceived = updatedItems.reduce((s, i) => s + i.received, 0);
+  const newStatus = totalReceived >= totalOrdered ? "Fully Received" : "Partially Received";
+  const nowDate   = new Date().toISOString().slice(0, 10);
+
+  await db.update(purchaseOrdersTable)
+    .set({
+      status: newStatus,
+      ...(newStatus === "Fully Received" ? { receivedDate: nowDate } : {}),
+    })
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+
+  // Write receipt log
+  const receiptNote = `Received ${receiptLines.join(", ")} — processed by ${actor}`;
+  await db.insert(purchaseOrderReceiptsTable).values({
+    poId: id,
+    merchantId,
+    processedBy: actor,
+    notes: receiptNote,
+  });
+
+  const result = await getPOWithItems(id, merchantId);
+  res.json(result);
 });
 
 // POST /purchase-orders/:id/email

@@ -2275,6 +2275,12 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish()
 })).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
   "createdAt": zod.string()
 })
 export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
@@ -2339,6 +2345,12 @@ export const GetPurchaseOrderResponse = zod.object({
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish()
 })).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
   "createdAt": zod.string()
 })
 
@@ -2398,6 +2410,12 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish()
 })).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
   "createdAt": zod.string()
 })
 
@@ -2411,6 +2429,54 @@ export const DeletePurchaseOrderParams = zod.object({
 
 export const DeletePurchaseOrderResponse = zod.object({
   "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Process a goods receipt against a purchase order
+ */
+export const ReceivePurchaseOrderItemsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReceivePurchaseOrderItemsBody = zod.object({
+  "processedBy": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "poItemId": zod.number(),
+  "quantityReceiving": zod.number()
+}))
+})
+
+export const ReceivePurchaseOrderItemsResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "orderNumber": zod.string().nullish(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish()
+})).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
+  "createdAt": zod.string()
 })
 
 

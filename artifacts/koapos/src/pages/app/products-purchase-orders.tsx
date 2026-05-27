@@ -6,6 +6,7 @@ import {
   useCreatePurchaseOrder,
   useUpdatePurchaseOrder,
   useDeletePurchaseOrder,
+  useReceivePurchaseOrderItems,
   useListProducts,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
@@ -22,11 +23,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
-type POStatus = "Draft" | "Sent" | "Partial" | "Received" | "Cancelled";
+type POStatus = "Draft" | "Ordered" | "Partially Received" | "Fully Received" | "Cancelled"
+              | "Sent" | "Partial" | "Received"; // legacy values
 type TaxMode  = "exclusive" | "inclusive";
 type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
 
@@ -34,9 +36,21 @@ interface SupplierOption { id: number; name: string }
 
 const GST_RATE = 0.1; // Australia — 10%
 
-const statusColors: Record<POStatus, string> = {
-  Draft: "secondary", Sent: "outline", Partial: "outline", Received: "default", Cancelled: "destructive",
-} as const;
+function getStatusBadge(status: string): { variant: "default" | "secondary" | "outline" | "destructive"; className?: string } {
+  switch (status) {
+    case "Draft":                return { variant: "secondary" };
+    case "Ordered":              return { variant: "outline", className: "border-amber-400 text-amber-700 dark:text-amber-400" };
+    case "Partially Received":
+    case "Partial":              return { variant: "outline", className: "border-blue-400 text-blue-700 dark:text-blue-400" };
+    case "Fully Received":
+    case "Received":             return { variant: "default", className: "bg-emerald-600 hover:bg-emerald-700 text-white border-0" };
+    case "Cancelled":            return { variant: "destructive" };
+    case "Sent":                 return { variant: "outline", className: "border-amber-400 text-amber-700 dark:text-amber-400" };
+    default:                     return { variant: "secondary" };
+  }
+}
+
+const PO_STATUSES: POStatus[] = ["Draft", "Ordered", "Partially Received", "Fully Received", "Cancelled"];
 
 const EMPTY_FORM = {
   supplierId:      null as number | null,
@@ -77,6 +91,7 @@ export default function ProductsPurchaseOrdersPage() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [manualEmail, setManualEmail] = useState("");
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
   /* Supplier dropdown */
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -113,9 +128,10 @@ export default function ProductsPurchaseOrdersPage() {
   }, []);
 
   const { data: orders = [], isLoading } = useListPurchaseOrders({});
-  const createPO = useCreatePurchaseOrder();
-  const updatePO = useUpdatePurchaseOrder();
-  const deletePO = useDeletePurchaseOrder();
+  const createPO    = useCreatePurchaseOrder();
+  const updatePO    = useUpdatePurchaseOrder();
+  const deletePO    = useDeletePurchaseOrder();
+  const receivePO   = useReceivePurchaseOrderItems();
 
   const filtered = orders.filter((o) =>
     o.poNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -290,9 +306,7 @@ export default function ProductsPurchaseOrdersPage() {
                     <td className="p-3 hidden md:table-cell text-muted-foreground" onClick={() => setViewingPO(po)}>{formatDate(po.createdAt)}</td>
                     <td className="p-3 hidden lg:table-cell text-muted-foreground" onClick={() => setViewingPO(po)}>{po.expectedDate || "—"}</td>
                     <td className="p-3" onClick={() => setViewingPO(po)}>
-                      <Badge variant={statusColors[po.status as POStatus] as "default" | "secondary" | "outline" | "destructive"}>
-                        {po.status}
-                      </Badge>
+                      {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                     </td>
                     <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>{formatCurrency(po.totalCost ?? 0)}</td>
                     <td className="p-3 flex gap-1 justify-end">
@@ -365,9 +379,7 @@ export default function ProductsPurchaseOrdersPage() {
               <DialogHeader>
                 <div className="flex items-center gap-3">
                   <DialogTitle className="font-mono text-xl">#{po.poNumber}</DialogTitle>
-                  <Badge variant={statusColors[po.status as POStatus] as "default" | "secondary" | "outline" | "destructive"}>
-                    {po.status}
-                  </Badge>
+                  {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                 </div>
               </DialogHeader>
 
@@ -455,10 +467,37 @@ export default function ProductsPurchaseOrdersPage() {
                 </div>
               )}
 
+              {/* Receipt history */}
+              {(po as PurchaseOrder & { receipts?: Array<{ id: number; processedBy: string; processedAt: string; notes: string }> }).receipts?.length ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <History className="w-3.5 h-3.5" /> Receipt History
+                  </div>
+                  <div className="space-y-1.5">
+                    {(po as PurchaseOrder & { receipts?: Array<{ id: number; processedBy: string; processedAt: string; notes: string }> }).receipts!.map((r) => (
+                      <div key={r.id} className="rounded-lg border bg-muted/20 px-3 py-2.5 text-sm">
+                        <p className="font-medium">{r.notes}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          {new Date(r.processedAt).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <DialogFooter className="flex gap-2 pt-2 sm:justify-between">
-                <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
-                  <Pencil className="w-4 h-4 mr-1.5" /> Edit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
+                    <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                  </Button>
+                  {(po.status === "Ordered" || po.status === "Partially Received" || po.status === "Sent" || po.status === "Partial") && (
+                    <Button onClick={() => setReceiveDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+                      <PackageCheck className="w-4 h-4" /> Receive Inventory
+                    </Button>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Button variant="outline" disabled={emailLoading} onClick={() => handleSendEmail()}>
                     {emailLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
@@ -598,7 +637,7 @@ export default function ProductsPurchaseOrdersPage() {
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as POStatus })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["Draft","Sent","Partial","Received","Cancelled"].map((s) => (
+                    {PO_STATUSES.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
@@ -819,9 +858,183 @@ export default function ProductsPurchaseOrdersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Receive Goods Worksheet ──────────────────────────────────── */}
+      {viewingPO && receiveDialogOpen && (
+        <ReceiveGoodsDialog
+          po={viewingPO}
+          open={receiveDialogOpen}
+          onOpenChange={setReceiveDialogOpen}
+          onSuccess={(updated) => {
+            setViewingPO(updated);
+            invalidateList();
+          }}
+        />
+      )}
+
       {/* ── Auto-print after PO creation ─────────────────────────────── */}
       {printPO && <POPrintArea po={printPO} onDone={() => setPrintPO(null)} />}
     </AppLayout>
+  );
+}
+
+/* ── Receive Goods Dialog ─────────────────────────────────────────────── */
+
+type ReceiptItem = { poItemId: number; quantityReceiving: number };
+type POWithReceipts = PurchaseOrder & { receipts?: Array<{ id: number; processedBy: string; processedAt: string; notes: string }> };
+
+function ReceiveGoodsDialog({
+  po, open, onOpenChange, onSuccess,
+}: {
+  po: PurchaseOrder;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSuccess: (updated: PurchaseOrder) => void;
+}) {
+  const items = po.items ?? [];
+
+  // Default each field to the remaining unreceived balance
+  const [qtys, setQtys] = useState<Record<number, number>>(() => {
+    const init: Record<number, number> = {};
+    for (const item of items) {
+      if (item.id != null) {
+        init[item.id] = Math.max(0, (item.quantity ?? 0) - (item.received ?? 0));
+      }
+    }
+    return init;
+  });
+
+  const receivePO = useReceivePurchaseOrderItems();
+
+  const totalReceiving = Object.values(qtys).reduce((s, v) => s + (v || 0), 0);
+
+  const handleConfirm = () => {
+    const receiveItems: ReceiptItem[] = items
+      .filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0)
+      .map((i) => ({ poItemId: i.id!, quantityReceiving: qtys[i.id!] }));
+
+    if (!receiveItems.length) {
+      toast.error("Enter at least one quantity to receive.");
+      return;
+    }
+
+    receivePO.mutate(
+      { id: po.id, data: { items: receiveItems } },
+      {
+        onSuccess: (updated) => {
+          toast.success("Goods received — inventory updated.");
+          onSuccess(updated as PurchaseOrder);
+          onOpenChange(false);
+        },
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Failed to confirm receipt";
+          toast.error(msg);
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PackageCheck className="w-5 h-5 text-emerald-600" />
+            Receive Goods — #{po.poNumber}
+          </DialogTitle>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">
+          Enter the quantities being received now. Any outstanding amounts can be processed when the remainder arrives.
+        </p>
+
+        {/* Worksheet table */}
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left p-3 font-medium">Product</th>
+                <th className="text-center p-3 font-medium w-28">Ordered Qty</th>
+                <th className="text-center p-3 font-medium w-32">Previously<br/>Received</th>
+                <th className="text-center p-3 font-medium w-36">Qty Receiving<br/>Now</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {items.map((item) => {
+                const remaining = Math.max(0, (item.quantity ?? 0) - (item.received ?? 0));
+                const isFullyReceived = remaining === 0;
+                return (
+                  <tr key={item.id} className={cn(isFullyReceived && "opacity-50 bg-muted/20")}>
+                    <td className="p-3">
+                      <p className="font-medium">{item.productName}</p>
+                      {item.unitCost != null && (
+                        <p className="text-xs text-muted-foreground">Cost: {formatCurrency(item.unitCost)}</p>
+                      )}
+                    </td>
+                    <td className="p-3 text-center font-mono">{item.quantity}</td>
+                    <td className="p-3 text-center font-mono">
+                      {(item.received ?? 0) > 0
+                        ? <span className="text-emerald-600 font-medium">{item.received}</span>
+                        : <span className="text-muted-foreground">0</span>}
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={remaining}
+                        disabled={isFullyReceived}
+                        className="text-center h-8 w-full"
+                        value={item.id != null ? (qtys[item.id] ?? 0) : 0}
+                        onChange={(e) => {
+                          if (item.id == null) return;
+                          const v = Math.max(0, Math.min(remaining, parseInt(e.target.value) || 0));
+                          setQtys((prev) => ({ ...prev, [item.id!]: v }));
+                        }}
+                      />
+                      {isFullyReceived && (
+                        <p className="text-[10px] text-center text-emerald-600 mt-0.5">Complete</p>
+                      )}
+                      {!isFullyReceived && remaining > 0 && (
+                        <p className="text-[10px] text-center text-muted-foreground mt-0.5">
+                          max {remaining}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Summary */}
+        <div className="rounded-lg bg-muted/30 border px-4 py-3 text-sm flex items-center justify-between">
+          <span className="text-muted-foreground">Total units receiving now</span>
+          <span className="font-bold text-lg">{totalReceiving}</span>
+        </div>
+
+        <div className="text-xs text-muted-foreground flex items-start gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 px-3 py-2.5">
+          <PackageCheck className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-500" />
+          <span>
+            Stock quantities will be incremented immediately. The PO will be marked{" "}
+            <strong>Fully Received</strong> once all items have been received, or{" "}
+            <strong>Partially Received</strong> if any remain outstanding.
+          </span>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={receivePO.isPending || totalReceiving === 0}
+            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {receivePO.isPending
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming…</>
+              : <><PackageCheck className="w-4 h-4" /> Confirm Receipt</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

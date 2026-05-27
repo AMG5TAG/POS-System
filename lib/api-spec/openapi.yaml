@@ -1654,6 +1654,30 @@ paths:
                 properties:
                   success: { type: boolean }
 
+  /purchase-orders/{id}/receive:
+    post:
+      operationId: receivePurchaseOrderItems
+      summary: Process a goods receipt against a purchase order
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiveItemsInput"
+      responses:
+        "200":
+          description: Updated purchase order with receipt log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
   /purchase-orders/{id}/email:
     post:
       operationId: sendPurchaseOrderEmail
@@ -3878,6 +3902,27 @@ components:
         total: { type: number }
 
     # ── Purchase Orders ───────────────────────────────────────────────────────
+    POReceiptLog:
+      type: object
+      required: [id, processedBy, processedAt, notes]
+      properties:
+        id: { type: integer }
+        processedBy: { type: string }
+        processedAt: { type: string }
+        notes: { type: string }
+    ReceiveItemsInput:
+      type: object
+      required: [items]
+      properties:
+        processedBy: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [poItemId, quantityReceiving]
+            properties:
+              poItemId: { type: integer }
+              quantityReceiving: { type: integer }
     PurchaseOrderItem:
       type: object
       properties:
@@ -3909,6 +3954,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PurchaseOrderItem"
+        receipts:
+          type: array
+          items:
+            $ref: "#/components/schemas/POReceiptLog"
         createdAt: { type: string }
     PurchaseOrderInput:
       type: object
