@@ -249,11 +249,12 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
   );
 }
 
-/* ─── Featured section (always visible) ──────────────────────────────────── */
+/* ─── Section (collapsible, shared by all groups) ─────────────────────────────────── */
 
-function FeaturedSection({
+function Section({
   title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
+  defaultOpen = false,
 }: {
   title: string; description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -263,58 +264,9 @@ function FeaturedSection({
   onConnect: (i: Integration) => void;
   onDisconnect: (i: Integration) => void;
   onOAuth: (i: Integration) => void;
+  defaultOpen?: boolean;
 }) {
-  const connected = items.filter((i) => i.status === "connected").length;
-  return (
-    <section className="space-y-4">
-      <div className={cn("rounded-2xl border px-5 py-4 flex items-center gap-4", accent)}>
-        <div className={cn("rounded-xl p-2.5 shrink-0", iconBg)}>
-          <Icon className={cn("w-5 h-5", iconColor)} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h2 className="font-semibold text-base">{title}</h2>
-            {connected > 0 && (
-              <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 text-[11px]">
-                <CheckCircle2 className="w-3 h-3" /> {connected} connected
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {items.map((intg) => (
-          <IntegrationCard
-            key={intg.key}
-            intg={intg}
-            busy={!!connecting[intg.key]}
-            onConnect={() => onConnect(intg)}
-            onDisconnect={() => onDisconnect(intg)}
-            onOAuth={() => onOAuth(intg)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ─── Secondary section (collapsible, same card grid) ────────────────────── */
-
-function SecondarySection({
-  title, description, icon: Icon, accent, iconBg, iconColor,
-  items, connecting, onConnect, onDisconnect, onOAuth,
-}: {
-  title: string; description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string; iconBg: string; iconColor: string;
-  items: Integration[];
-  connecting: Record<string, boolean>;
-  onConnect: (i: Integration) => void;
-  onDisconnect: (i: Integration) => void;
-  onOAuth: (i: Integration) => void;
-}) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const connected = items.filter((i) => i.status === "connected").length;
   return (
     <section className="space-y-4">
@@ -502,7 +454,7 @@ export default function ManagementIntegrationsPage() {
           <div className="space-y-12">
             {/* ── Featured sections ── */}
             {FEATURED_SECTIONS.map((sec) => (
-              <FeaturedSection
+              <Section
                 key={sec.id}
                 {...sec}
                 items={bySection(sec.id)}
@@ -510,6 +462,7 @@ export default function ManagementIntegrationsPage() {
                 onConnect={setModalTarget}
                 onDisconnect={handleDisconnect}
                 onOAuth={handleOAuth}
+                defaultOpen
               />
             ))}
 
@@ -522,7 +475,7 @@ export default function ManagementIntegrationsPage() {
                 const items = bySection(sec.id);
                 if (items.length === 0) return null;
                 return (
-                  <SecondarySection
+                  <Section
                     key={sec.id}
                     {...sec}
                     items={items}
