@@ -38,6 +38,8 @@ tags:
     description: Service job management
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: cameras
+    description: IP camera management and snapshots
 
 paths:
   /healthz:
@@ -2293,6 +2295,155 @@ paths:
               schema:
                 $ref: "#/components/schemas/Layby"
 
+  # ── Cameras ───────────────────────────────────────────────────────────────
+  /cameras:
+    get:
+      operationId: listCameras
+      tags: [cameras]
+      summary: List all cameras for merchant
+      responses:
+        "200":
+          description: Camera list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Camera"
+    post:
+      operationId: createCamera
+      tags: [cameras]
+      summary: Create a new camera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CameraInput"
+      responses:
+        "201":
+          description: Created camera
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+
+  /cameras/settings:
+    get:
+      operationId: getCameraSettings
+      tags: [cameras]
+      summary: Get camera settings for merchant
+      responses:
+        "200":
+          description: Camera settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraSettings"
+    put:
+      operationId: updateCameraSettings
+      tags: [cameras]
+      summary: Update camera settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CameraSettingsInput"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraSettings"
+
+  /cameras/{id}:
+    put:
+      operationId: updateCamera
+      tags: [cameras]
+      summary: Update a camera
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CameraInput"
+      responses:
+        "200":
+          description: Updated camera
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camera"
+    delete:
+      operationId: deleteCamera
+      tags: [cameras]
+      summary: Delete a camera
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /camera-snapshots:
+    get:
+      operationId: listCameraSnapshots
+      tags: [cameras]
+      summary: List snapshots
+      parameters:
+        - in: query
+          name: cameraId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Snapshot list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CameraSnapshot"
+    post:
+      operationId: createCameraSnapshot
+      tags: [cameras]
+      summary: Save a snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CameraSnapshotInput"
+      responses:
+        "201":
+          description: Saved snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraSnapshot"
+
+  /camera-snapshots/{id}:
+    delete:
+      operationId: deleteCameraSnapshot
+      tags: [cameras]
+      summary: Delete a snapshot
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -4266,3 +4417,66 @@ components:
         amount:        { type: number }
         paymentMethod: { type: string }
         note:          { type: string }
+
+    Camera:
+      type: object
+      required: [id, name, streamUrl, status, sortOrder, createdAt]
+      properties:
+        id:        { type: integer }
+        name:      { type: string }
+        streamUrl: { type: string }
+        port:      { type: string, nullable: true }
+        username:  { type: string, nullable: true }
+        password:  { type: string, nullable: true }
+        status:    { type: string }
+        sortOrder: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    CameraInput:
+      type: object
+      required: [name, streamUrl]
+      properties:
+        name:      { type: string }
+        streamUrl: { type: string }
+        port:      { type: string, nullable: true }
+        username:  { type: string, nullable: true }
+        password:  { type: string, nullable: true }
+        status:    { type: string }
+        sortOrder: { type: integer }
+
+    CameraSettings:
+      type: object
+      required: [pipEnabled, allowedRoles]
+      properties:
+        pipEnabled:   { type: string }
+        pipCameraId:  { type: integer, nullable: true }
+        allowedRoles: { type: string }
+
+    CameraSettingsInput:
+      type: object
+      properties:
+        pipEnabled:   { type: string }
+        pipCameraId:  { type: integer, nullable: true }
+        allowedRoles: { type: string }
+
+    CameraSnapshot:
+      type: object
+      required: [id, cameraId, cameraName, imageData, takenAt, source]
+      properties:
+        id:         { type: integer }
+        cameraId:   { type: integer }
+        cameraName: { type: string }
+        imageData:  { type: string }
+        takenAt:    { type: string }
+        takenBy:    { type: string, nullable: true }
+        source:     { type: string }
+
+    CameraSnapshotInput:
+      type: object
+      required: [cameraId, imageData]
+      properties:
+        cameraId:  { type: integer }
+        imageData: { type: string }
+        takenBy:   { type: string }
+        source:    { type: string }

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
+import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
@@ -2976,6 +2977,8 @@ export default function POSPage() {
       </Dialog>
 
       </POSPageExpander>
+
+      <CameraPosPiP />
     </AppLayout>
   );
 }

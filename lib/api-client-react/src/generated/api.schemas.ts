@@ -1457,6 +1457,58 @@ export interface AddLaybyPaymentBody {
   note?: string;
 }
 
+export interface Camera {
+  id: number;
+  name: string;
+  streamUrl: string;
+  port?: string | null;
+  username?: string | null;
+  password?: string | null;
+  status: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CameraInput {
+  name: string;
+  streamUrl: string;
+  port?: string | null;
+  username?: string | null;
+  password?: string | null;
+  status?: string;
+  sortOrder?: number;
+}
+
+export interface CameraSettings {
+  pipEnabled: string;
+  pipCameraId?: number | null;
+  allowedRoles: string;
+}
+
+export interface CameraSettingsInput {
+  pipEnabled?: string;
+  pipCameraId?: number | null;
+  allowedRoles?: string;
+}
+
+export interface CameraSnapshot {
+  id: number;
+  cameraId: number;
+  cameraName: string;
+  imageData: string;
+  takenAt: string;
+  takenBy?: string | null;
+  source: string;
+}
+
+export interface CameraSnapshotInput {
+  cameraId: number;
+  imageData: string;
+  takenBy?: string;
+  source?: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1635,5 +1687,9 @@ export type ListLaybys200 = {
 
 export type CancelLaybyBody = {
   reason?: string;
+};
+
+export type ListCameraSnapshotsParams = {
+cameraId?: number;
 };
 

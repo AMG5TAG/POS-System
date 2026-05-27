@@ -34,6 +34,7 @@ import laybysRouter from "./laybys";
 import xeroRouter from "./xero";
 import marketingAutomationRouter from "./marketing-automation";
 import feedbackRouter from "./feedback";
+import camerasRouter from "./cameras";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(laybysRouter);
 router.use(xeroRouter);
 router.use(marketingAutomationRouter);
 router.use(feedbackRouter);
+router.use(camerasRouter);
 
 export default router;

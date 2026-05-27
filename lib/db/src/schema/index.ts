@@ -27,3 +27,4 @@ export * from "./laybys";
 export * from "./product-price-history";
 export * from "./marketing-automation";
 export * from "./oauth-token-vault";
+export * from "./cameras";

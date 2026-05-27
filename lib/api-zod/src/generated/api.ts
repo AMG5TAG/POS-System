@@ -3187,3 +3187,138 @@ export const CompleteLaybyResponse = zod.object({
 })
 
 
+/**
+ * @summary List all cameras for merchant
+ */
+export const ListCamerasResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "streamUrl": zod.string(),
+  "port": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "status": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListCamerasResponse = zod.array(ListCamerasResponseItem)
+
+
+/**
+ * @summary Create a new camera
+ */
+export const CreateCameraBody = zod.object({
+  "name": zod.string(),
+  "streamUrl": zod.string(),
+  "port": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Get camera settings for merchant
+ */
+export const GetCameraSettingsResponse = zod.object({
+  "pipEnabled": zod.string(),
+  "pipCameraId": zod.number().nullish(),
+  "allowedRoles": zod.string()
+})
+
+
+/**
+ * @summary Update camera settings
+ */
+export const UpdateCameraSettingsBody = zod.object({
+  "pipEnabled": zod.string().optional(),
+  "pipCameraId": zod.number().nullish(),
+  "allowedRoles": zod.string().optional()
+})
+
+export const UpdateCameraSettingsResponse = zod.object({
+  "pipEnabled": zod.string(),
+  "pipCameraId": zod.number().nullish(),
+  "allowedRoles": zod.string()
+})
+
+
+/**
+ * @summary Update a camera
+ */
+export const UpdateCameraParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateCameraBody = zod.object({
+  "name": zod.string(),
+  "streamUrl": zod.string(),
+  "port": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateCameraResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "streamUrl": zod.string(),
+  "port": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "status": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a camera
+ */
+export const DeleteCameraParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List snapshots
+ */
+export const ListCameraSnapshotsQueryParams = zod.object({
+  "cameraId": zod.coerce.number().optional()
+})
+
+export const ListCameraSnapshotsResponseItem = zod.object({
+  "id": zod.number(),
+  "cameraId": zod.number(),
+  "cameraName": zod.string(),
+  "imageData": zod.string(),
+  "takenAt": zod.string(),
+  "takenBy": zod.string().nullish(),
+  "source": zod.string()
+})
+export const ListCameraSnapshotsResponse = zod.array(ListCameraSnapshotsResponseItem)
+
+
+/**
+ * @summary Save a snapshot
+ */
+export const CreateCameraSnapshotBody = zod.object({
+  "cameraId": zod.number(),
+  "imageData": zod.string(),
+  "takenBy": zod.string().optional(),
+  "source": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a snapshot
+ */
+export const DeleteCameraSnapshotParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+

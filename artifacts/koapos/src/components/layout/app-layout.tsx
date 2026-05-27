@@ -17,7 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
-  ShoppingBag, Map, MoreHorizontal, MessageSquare,
+  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import {
@@ -187,6 +187,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   },
   { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
   { name: "Feedback",       href: "/management/feedback",       icon: MessageSquare  },
+  { name: "Cameras",        href: "/management/cameras",        icon: Camera         },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -249,6 +250,8 @@ const SEARCH_INDEX = [
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
   { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
+  { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
+  { label: "Camera Management",             href: "/management/cameras",                    icon: Camera,         group: "Management"  },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
@@ -359,6 +362,8 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/online/marketplace":                   ["Online", "Marketplace"],
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
   "/management/misc":                      ["Management", "Misc"],
+  "/cameras":                              ["Cameras"],
+  "/management/cameras":                   ["Management", "Cameras"],
 };
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
@@ -885,6 +890,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
   const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
+  const isCamerasSection    = location === "/cameras";
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -919,6 +925,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
           <TopNavBtn icon={Wrench} label="Services" isActive={location === "/service-jobs" || location.startsWith("/service-jobs/")} onClick={() => navigate("/service-jobs")} />
           <TopNavBtn icon={CalendarClock} label="Appts" isActive={location === "/appointments"} onClick={() => navigate("/appointments")} />
+          <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
           <TopNavBtn icon={Users} label="Customers" isActive={location === "/customers"} onClick={() => navigate("/customers")} />
@@ -973,6 +980,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
   const sections: { label: string; items: NavLeaf[] }[] = [
     { label: "POS",        items: POS_SUBNAV },
+    { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
     { label: "Inventory",  items: INVENTORY_SUBNAV },
     {
       label: "Staff",
@@ -1302,6 +1310,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           />
           <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
           <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
+          <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           <CollapsibleSection
             label="Inventory" icon={Boxes} isActive={isInventorySection} isOpen={invOpen}
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}

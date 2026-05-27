@@ -24,6 +24,12 @@ import type {
   Appointment,
   AppointmentInput,
   CalendarMonth,
+  Camera,
+  CameraInput,
+  CameraSettings,
+  CameraSettingsInput,
+  CameraSnapshot,
+  CameraSnapshotInput,
   CancelLaybyBody,
   CashDrawerEntry,
   CashDrawerEntryInput,
@@ -68,6 +74,7 @@ import type {
   Layby,
   LaybyPayment,
   ListAppointmentsParams,
+  ListCameraSnapshotsParams,
   ListCashDrawerEntriesParams,
   ListCustomersParams,
   ListInventoryParams,
@@ -8771,5 +8778,668 @@ export const useCompleteLayby = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCompleteLaybyMutationOptions(options));
+    }
+
+export const getListCamerasUrl = () => {
+
+
+
+
+  return `/api/cameras`
+}
+
+/**
+ * @summary List all cameras for merchant
+ */
+export const listCameras = async ( options?: RequestInit): Promise<Camera[]> => {
+
+  return customFetch<Camera[]>(getListCamerasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCamerasQueryKey = () => {
+    return [
+    `/api/cameras`
+    ] as const;
+    }
+
+
+export const getListCamerasQueryOptions = <TData = Awaited<ReturnType<typeof listCameras>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCameras>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCamerasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCameras>>> = ({ signal }) => listCameras({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCameras>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCamerasQueryResult = NonNullable<Awaited<ReturnType<typeof listCameras>>>
+export type ListCamerasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all cameras for merchant
+ */
+
+export function useListCameras<TData = Awaited<ReturnType<typeof listCameras>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCameras>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCamerasQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateCameraUrl = () => {
+
+
+
+
+  return `/api/cameras`
+}
+
+/**
+ * @summary Create a new camera
+ */
+export const createCamera = async (cameraInput: CameraInput, options?: RequestInit): Promise<Camera> => {
+
+  return customFetch<Camera>(getCreateCameraUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cameraInput,)
+  }
+);}
+
+
+
+
+export const getCreateCameraMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCamera>>, TError,{data: BodyType<CameraInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCamera>>, TError,{data: BodyType<CameraInput>}, TContext> => {
+
+const mutationKey = ['createCamera'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCamera>>, {data: BodyType<CameraInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCamera(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCameraMutationResult = NonNullable<Awaited<ReturnType<typeof createCamera>>>
+    export type CreateCameraMutationBody = BodyType<CameraInput>
+    export type CreateCameraMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a new camera
+ */
+export const useCreateCamera = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCamera>>, TError,{data: BodyType<CameraInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCamera>>,
+        TError,
+        {data: BodyType<CameraInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCameraMutationOptions(options));
+    }
+
+export const getGetCameraSettingsUrl = () => {
+
+
+
+
+  return `/api/cameras/settings`
+}
+
+/**
+ * @summary Get camera settings for merchant
+ */
+export const getCameraSettings = async ( options?: RequestInit): Promise<CameraSettings> => {
+
+  return customFetch<CameraSettings>(getGetCameraSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCameraSettingsQueryKey = () => {
+    return [
+    `/api/cameras/settings`
+    ] as const;
+    }
+
+
+export const getGetCameraSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getCameraSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCameraSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCameraSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCameraSettings>>> = ({ signal }) => getCameraSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCameraSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCameraSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getCameraSettings>>>
+export type GetCameraSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get camera settings for merchant
+ */
+
+export function useGetCameraSettings<TData = Awaited<ReturnType<typeof getCameraSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCameraSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCameraSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCameraSettingsUrl = () => {
+
+
+
+
+  return `/api/cameras/settings`
+}
+
+/**
+ * @summary Update camera settings
+ */
+export const updateCameraSettings = async (cameraSettingsInput: CameraSettingsInput, options?: RequestInit): Promise<CameraSettings> => {
+
+  return customFetch<CameraSettings>(getUpdateCameraSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cameraSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCameraSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCameraSettings>>, TError,{data: BodyType<CameraSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCameraSettings>>, TError,{data: BodyType<CameraSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateCameraSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCameraSettings>>, {data: BodyType<CameraSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCameraSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCameraSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateCameraSettings>>>
+    export type UpdateCameraSettingsMutationBody = BodyType<CameraSettingsInput>
+    export type UpdateCameraSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update camera settings
+ */
+export const useUpdateCameraSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCameraSettings>>, TError,{data: BodyType<CameraSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCameraSettings>>,
+        TError,
+        {data: BodyType<CameraSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCameraSettingsMutationOptions(options));
+    }
+
+export const getUpdateCameraUrl = (id: number,) => {
+
+
+
+
+  return `/api/cameras/${id}`
+}
+
+/**
+ * @summary Update a camera
+ */
+export const updateCamera = async (id: number,
+    cameraInput: CameraInput, options?: RequestInit): Promise<Camera> => {
+
+  return customFetch<Camera>(getUpdateCameraUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cameraInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCameraMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCamera>>, TError,{id: number;data: BodyType<CameraInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCamera>>, TError,{id: number;data: BodyType<CameraInput>}, TContext> => {
+
+const mutationKey = ['updateCamera'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCamera>>, {id: number;data: BodyType<CameraInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCamera(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCameraMutationResult = NonNullable<Awaited<ReturnType<typeof updateCamera>>>
+    export type UpdateCameraMutationBody = BodyType<CameraInput>
+    export type UpdateCameraMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a camera
+ */
+export const useUpdateCamera = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCamera>>, TError,{id: number;data: BodyType<CameraInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCamera>>,
+        TError,
+        {id: number;data: BodyType<CameraInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCameraMutationOptions(options));
+    }
+
+export const getDeleteCameraUrl = (id: number,) => {
+
+
+
+
+  return `/api/cameras/${id}`
+}
+
+/**
+ * @summary Delete a camera
+ */
+export const deleteCamera = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCameraUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCameraMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCamera>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCamera>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCamera'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCamera>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCamera(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCameraMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCamera>>>
+
+    export type DeleteCameraMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a camera
+ */
+export const useDeleteCamera = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCamera>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCamera>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCameraMutationOptions(options));
+    }
+
+export const getListCameraSnapshotsUrl = (params?: ListCameraSnapshotsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/camera-snapshots?${stringifiedParams}` : `/api/camera-snapshots`
+}
+
+/**
+ * @summary List snapshots
+ */
+export const listCameraSnapshots = async (params?: ListCameraSnapshotsParams, options?: RequestInit): Promise<CameraSnapshot[]> => {
+
+  return customFetch<CameraSnapshot[]>(getListCameraSnapshotsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCameraSnapshotsQueryKey = (params?: ListCameraSnapshotsParams,) => {
+    return [
+    `/api/camera-snapshots`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCameraSnapshotsQueryOptions = <TData = Awaited<ReturnType<typeof listCameraSnapshots>>, TError = ErrorType<unknown>>(params?: ListCameraSnapshotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCameraSnapshots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCameraSnapshotsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCameraSnapshots>>> = ({ signal }) => listCameraSnapshots(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCameraSnapshots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCameraSnapshotsQueryResult = NonNullable<Awaited<ReturnType<typeof listCameraSnapshots>>>
+export type ListCameraSnapshotsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List snapshots
+ */
+
+export function useListCameraSnapshots<TData = Awaited<ReturnType<typeof listCameraSnapshots>>, TError = ErrorType<unknown>>(
+ params?: ListCameraSnapshotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCameraSnapshots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCameraSnapshotsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateCameraSnapshotUrl = () => {
+
+
+
+
+  return `/api/camera-snapshots`
+}
+
+/**
+ * @summary Save a snapshot
+ */
+export const createCameraSnapshot = async (cameraSnapshotInput: CameraSnapshotInput, options?: RequestInit): Promise<CameraSnapshot> => {
+
+  return customFetch<CameraSnapshot>(getCreateCameraSnapshotUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cameraSnapshotInput,)
+  }
+);}
+
+
+
+
+export const getCreateCameraSnapshotMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCameraSnapshot>>, TError,{data: BodyType<CameraSnapshotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCameraSnapshot>>, TError,{data: BodyType<CameraSnapshotInput>}, TContext> => {
+
+const mutationKey = ['createCameraSnapshot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCameraSnapshot>>, {data: BodyType<CameraSnapshotInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCameraSnapshot(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCameraSnapshotMutationResult = NonNullable<Awaited<ReturnType<typeof createCameraSnapshot>>>
+    export type CreateCameraSnapshotMutationBody = BodyType<CameraSnapshotInput>
+    export type CreateCameraSnapshotMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save a snapshot
+ */
+export const useCreateCameraSnapshot = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCameraSnapshot>>, TError,{data: BodyType<CameraSnapshotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCameraSnapshot>>,
+        TError,
+        {data: BodyType<CameraSnapshotInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCameraSnapshotMutationOptions(options));
+    }
+
+export const getDeleteCameraSnapshotUrl = (id: number,) => {
+
+
+
+
+  return `/api/camera-snapshots/${id}`
+}
+
+/**
+ * @summary Delete a snapshot
+ */
+export const deleteCameraSnapshot = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCameraSnapshotUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCameraSnapshotMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCameraSnapshot>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCameraSnapshot>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCameraSnapshot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCameraSnapshot>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCameraSnapshot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCameraSnapshotMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCameraSnapshot>>>
+
+    export type DeleteCameraSnapshotMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a snapshot
+ */
+export const useDeleteCameraSnapshot = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCameraSnapshot>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCameraSnapshot>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCameraSnapshotMutationOptions(options));
     }
 
