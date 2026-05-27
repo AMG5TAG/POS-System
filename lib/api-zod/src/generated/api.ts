@@ -3365,3 +3365,67 @@ export const DeletePosSecurityCaptureParams = zod.object({
 })
 
 
+/**
+ * @summary Get social feed display settings
+ */
+export const GetSocialFeedSettingsResponse = zod.object({
+  "id": zod.number().nullish(),
+  "showFacebook": zod.boolean(),
+  "showInstagram": zod.boolean(),
+  "showTwitter": zod.boolean(),
+  "showLinkedin": zod.boolean(),
+  "refreshIntervalMinutes": zod.number()
+})
+
+
+/**
+ * @summary Update social feed display settings
+ */
+export const UpdateSocialFeedSettingsBody = zod.object({
+  "showFacebook": zod.boolean().optional(),
+  "showInstagram": zod.boolean().optional(),
+  "showTwitter": zod.boolean().optional(),
+  "showLinkedin": zod.boolean().optional(),
+  "refreshIntervalMinutes": zod.number().optional()
+})
+
+export const UpdateSocialFeedSettingsResponse = zod.object({
+  "id": zod.number().nullish(),
+  "showFacebook": zod.boolean(),
+  "showInstagram": zod.boolean(),
+  "showTwitter": zod.boolean(),
+  "showLinkedin": zod.boolean(),
+  "refreshIntervalMinutes": zod.number()
+})
+
+
+/**
+ * @summary Fetch posts from connected social platforms
+ */
+export const ListSocialFeedPostsQueryParams = zod.object({
+  "platform": zod.coerce.string().optional()
+})
+
+export const ListSocialFeedPostsResponse = zod.object({
+  "results": zod.array(zod.object({
+  "platform": zod.string(),
+  "status": zod.string(),
+  "posts": zod.array(zod.object({
+  "id": zod.string(),
+  "platform": zod.string(),
+  "accountName": zod.string(),
+  "accountHandle": zod.string(),
+  "text": zod.string(),
+  "imageUrl": zod.string().nullish(),
+  "videoUrl": zod.string().nullish(),
+  "permalink": zod.string().nullish(),
+  "likes": zod.number(),
+  "comments": zod.number(),
+  "shares": zod.number(),
+  "postedAt": zod.string()
+})),
+  "error": zod.string().nullish()
+}))
+})
+
+

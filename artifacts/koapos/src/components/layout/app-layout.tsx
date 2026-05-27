@@ -56,10 +56,11 @@ const CUSTOMERS_SUBNAV = [
 ];
 
 const STAFF_SUBNAV: NavItem[] = [
-  { name: "Rostering",  href: "/staff/rostering",      icon: CalendarClock },
-  { name: "Notes",      href: "/staff/notes",          icon: StickyNote    },
-  { name: "KPIs",       href: "/staff/kpis",           icon: Target        },
-  { name: "Links",      href: "/staff/links",          icon: Link2         },
+  { name: "Rostering",   href: "/staff/rostering",    icon: CalendarClock },
+  { name: "Notes",       href: "/staff/notes",        icon: StickyNote    },
+  { name: "KPIs",        href: "/staff/kpis",         icon: Target        },
+  { name: "Links",       href: "/staff/links",        icon: Link2         },
+  { name: "Social Feed", href: "/staff/social-feed",  icon: Share2        },
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
@@ -160,7 +161,8 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Marketing",
     icon: Share2,
     children: [
-      { name: "Referrals",   href: "/management/marketing/referrals",   icon: UserPlus },
+      { name: "Referrals",   href: "/management/marketing/referrals",        icon: UserPlus },
+      { name: "Social Feed", href: "/management/marketing/social-feed",      icon: Share2   },
     ],
   },
   { name: "Misc",            href: "/management/misc",           icon: MoreHorizontal },
@@ -215,7 +217,9 @@ const SEARCH_INDEX = [
   { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Staff" },
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
-  { label: "Staff · Links",      href: "/staff/links",                 icon: Link2,           group: "Staff" },
+  { label: "Staff · Links",        href: "/staff/links",                        icon: Link2,    group: "Staff" },
+  { label: "Staff · Social Feed", href: "/staff/social-feed",                  icon: Share2,   group: "Staff" },
+  { label: "Marketing · Social Feed Settings", href: "/management/marketing/social-feed", icon: Share2, group: "Management" },
   { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
@@ -316,8 +320,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/staff/cost-summary":          ["Staff", "Costs"],
   "/staff/notes":                 ["Staff", "Notes"],
   "/staff/kpis":                  ["Staff", "KPIs"],
-  "/staff/links":                 ["Staff", "Links"],
-  "/modules":                     ["Management", "Account", "Modules"],
+  "/staff/links":                          ["Staff", "Links"],
+  "/staff/social-feed":                    ["Staff", "Social Feed"],
+  "/management/marketing/social-feed":     ["Management", "Marketing", "Social Feed"],
+  "/modules":                              ["Management", "Account", "Modules"],
   "/management/staff":              ["Management", "Staff", "Employees"],
   "/management/staff/timesheet":    ["Management", "Staff", "Timesheet"],
   "/management/staff/cost-summary": ["Management", "Staff", "Costs"],

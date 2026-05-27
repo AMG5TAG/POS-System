@@ -1516,6 +1516,49 @@ export interface PosSecurityCaptureInput {
   storedLocally?: boolean;
 }
 
+export interface SocialFeedSettings {
+  id?: number | null;
+  showFacebook: boolean;
+  showInstagram: boolean;
+  showTwitter: boolean;
+  showLinkedin: boolean;
+  refreshIntervalMinutes: number;
+}
+
+export interface SocialFeedSettingsInput {
+  showFacebook?: boolean;
+  showInstagram?: boolean;
+  showTwitter?: boolean;
+  showLinkedin?: boolean;
+  refreshIntervalMinutes?: number;
+}
+
+export interface SocialPost {
+  id: string;
+  platform: string;
+  accountName: string;
+  accountHandle: string;
+  text: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  permalink?: string | null;
+  likes: number;
+  comments: number;
+  shares: number;
+  postedAt: string;
+}
+
+export interface SocialPlatformResult {
+  platform: string;
+  status: string;
+  posts: SocialPost[];
+  error?: string | null;
+}
+
+export interface SocialFeedResponse {
+  results: SocialPlatformResult[];
+}
+
 export interface CameraSnapshot {
   id: number;
   cameraId: number;
@@ -1715,5 +1758,9 @@ export type CancelLaybyBody = {
 
 export type ListCameraSnapshotsParams = {
 cameraId?: number;
+};
+
+export type ListSocialFeedPostsParams = {
+platform?: string;
 };
 

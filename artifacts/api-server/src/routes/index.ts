@@ -35,6 +35,7 @@ import xeroRouter from "./xero";
 import marketingAutomationRouter from "./marketing-automation";
 import feedbackRouter from "./feedback";
 import camerasRouter from "./cameras";
+import socialFeedRouter from "./social-feed";
 
 const router: IRouter = Router();
 
@@ -74,5 +75,6 @@ router.use(xeroRouter);
 router.use(marketingAutomationRouter);
 router.use(feedbackRouter);
 router.use(camerasRouter);
+router.use(socialFeedRouter);
 
 export default router;

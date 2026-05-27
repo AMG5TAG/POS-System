@@ -82,6 +82,7 @@ import type {
   ListLaybysParams,
   ListProductsParams,
   ListPurchaseOrdersParams,
+  ListSocialFeedPostsParams,
   ListTransactionsParams,
   ListWastageParams,
   LoginInput,
@@ -118,6 +119,9 @@ import type {
   SendTransactionReceipt200,
   ServiceJob,
   ServiceJobInput,
+  SocialFeedResponse,
+  SocialFeedSettings,
+  SocialFeedSettingsInput,
   Staff,
   StaffInput,
   StaffUpdate,
@@ -9662,4 +9666,236 @@ export const useDeletePosSecurityCapture = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeletePosSecurityCaptureMutationOptions(options));
     }
+
+export const getGetSocialFeedSettingsUrl = () => {
+
+
+
+
+  return `/api/social-feed/settings`
+}
+
+/**
+ * @summary Get social feed display settings
+ */
+export const getSocialFeedSettings = async ( options?: RequestInit): Promise<SocialFeedSettings> => {
+
+  return customFetch<SocialFeedSettings>(getGetSocialFeedSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSocialFeedSettingsQueryKey = () => {
+    return [
+    `/api/social-feed/settings`
+    ] as const;
+    }
+
+
+export const getGetSocialFeedSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSocialFeedSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSocialFeedSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSocialFeedSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSocialFeedSettings>>> = ({ signal }) => getSocialFeedSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSocialFeedSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSocialFeedSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSocialFeedSettings>>>
+export type GetSocialFeedSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get social feed display settings
+ */
+
+export function useGetSocialFeedSettings<TData = Awaited<ReturnType<typeof getSocialFeedSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSocialFeedSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSocialFeedSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateSocialFeedSettingsUrl = () => {
+
+
+
+
+  return `/api/social-feed/settings`
+}
+
+/**
+ * @summary Update social feed display settings
+ */
+export const updateSocialFeedSettings = async (socialFeedSettingsInput: SocialFeedSettingsInput, options?: RequestInit): Promise<SocialFeedSettings> => {
+
+  return customFetch<SocialFeedSettings>(getUpdateSocialFeedSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      socialFeedSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateSocialFeedSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSocialFeedSettings>>, TError,{data: BodyType<SocialFeedSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSocialFeedSettings>>, TError,{data: BodyType<SocialFeedSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateSocialFeedSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSocialFeedSettings>>, {data: BodyType<SocialFeedSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSocialFeedSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSocialFeedSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSocialFeedSettings>>>
+    export type UpdateSocialFeedSettingsMutationBody = BodyType<SocialFeedSettingsInput>
+    export type UpdateSocialFeedSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update social feed display settings
+ */
+export const useUpdateSocialFeedSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSocialFeedSettings>>, TError,{data: BodyType<SocialFeedSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSocialFeedSettings>>,
+        TError,
+        {data: BodyType<SocialFeedSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSocialFeedSettingsMutationOptions(options));
+    }
+
+export const getListSocialFeedPostsUrl = (params?: ListSocialFeedPostsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/social-feed/posts?${stringifiedParams}` : `/api/social-feed/posts`
+}
+
+/**
+ * @summary Fetch posts from connected social platforms
+ */
+export const listSocialFeedPosts = async (params?: ListSocialFeedPostsParams, options?: RequestInit): Promise<SocialFeedResponse> => {
+
+  return customFetch<SocialFeedResponse>(getListSocialFeedPostsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSocialFeedPostsQueryKey = (params?: ListSocialFeedPostsParams,) => {
+    return [
+    `/api/social-feed/posts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSocialFeedPostsQueryOptions = <TData = Awaited<ReturnType<typeof listSocialFeedPosts>>, TError = ErrorType<unknown>>(params?: ListSocialFeedPostsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSocialFeedPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSocialFeedPostsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSocialFeedPosts>>> = ({ signal }) => listSocialFeedPosts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSocialFeedPosts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSocialFeedPostsQueryResult = NonNullable<Awaited<ReturnType<typeof listSocialFeedPosts>>>
+export type ListSocialFeedPostsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Fetch posts from connected social platforms
+ */
+
+export function useListSocialFeedPosts<TData = Awaited<ReturnType<typeof listSocialFeedPosts>>, TError = ErrorType<unknown>>(
+ params?: ListSocialFeedPostsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSocialFeedPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSocialFeedPostsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
