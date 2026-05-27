@@ -54,7 +54,10 @@ export default function ProductsPurchaseOrdersPage() {
     if (!dialogOpen) return;
     fetch("/api/suppliers", { credentials: "include" })
       .then((r) => r.json())
-      .then((d) => setSuppliers(d.items ?? []))
+      .then((d) => {
+        const list: SupplierOption[] = d.items ?? [];
+        setSuppliers([...list].sort((a, b) => a.name.localeCompare(b.name)));
+      })
       .catch(() => {});
   }, [dialogOpen]);
 
@@ -95,10 +98,10 @@ export default function ProductsPurchaseOrdersPage() {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
 
-  const addProductFromSearch = (product: { id: number; name: string; price: number }) => {
+  const addProductFromSearch = (product: { id: number; name: string; price: number; costPrice?: number | null }) => {
     setItems((prev) => [
       ...prev.filter((it) => it.productName),
-      { productName: product.name, quantity: 1, unitCost: product.price, received: 0, productId: product.id },
+      { productName: product.name, quantity: 1, unitCost: product.costPrice ?? 0, received: 0, productId: product.id },
     ]);
     setProductSearchQuery("");
     setShowProductResults(false);
@@ -170,7 +173,7 @@ export default function ProductsPurchaseOrdersPage() {
 
   const productList = Array.isArray(productResults)
     ? productResults
-    : (productResults as { items?: { id: number; name: string; price: number }[] } | undefined)?.items ?? [];
+    : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null }[] } | undefined)?.items ?? [];
 
   return (
     <AppLayout>

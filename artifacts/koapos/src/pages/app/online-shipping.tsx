@@ -134,13 +134,24 @@ function saveCarriers(carriers: Carrier[]) {
   localStorage.setItem(getStorageKey(), JSON.stringify(carriers.map((c) => ({ id: c.id, connected: c.connected }))));
 }
 
+function getBusinessPostcode(): { postcode: string; state: string } {
+  try {
+    const raw = localStorage.getItem("koapos_business_profile");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { postcode?: string; state?: string };
+      return { postcode: parsed.postcode ?? "", state: parsed.state ?? "" };
+    }
+  } catch { /* ignore */ }
+  return { postcode: "", state: "" };
+}
+
 export default function OnlineShippingPage() {
   const { user } = useAuth();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const merchantExt = merchant as unknown as { postcode?: string; state?: string };
-  const originCity     = merchant?.city          || "—";
-  const originPostcode = merchantExt?.postcode   || "—";
-  const originState    = merchantExt?.state      || "—";
+  const [bizProfile] = useState(() => getBusinessPostcode());
+  const originCity     = merchant?.city   || "—";
+  const originPostcode = bizProfile.postcode || "—";
+  const originState    = bizProfile.state    || "—";
   const [carriers, setCarriers] = useState<Carrier[]>(() => loadCarriers());
   const [form, setForm] = useState({
     postcode: "",

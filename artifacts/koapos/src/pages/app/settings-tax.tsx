@@ -183,12 +183,12 @@ export default function SettingsTaxPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
-        {/* GST Settings */}
-        <Card id="gst-settings">
-          <CardHeader>
-            <CardTitle className="text-base">GST Settings</CardTitle>
-            <CardDescription>Configure how GST/tax is calculated and displayed</CardDescription>
-          </CardHeader>
+          {/* GST Settings */}
+          <Card id="gst-settings">
+            <CardHeader>
+              <CardTitle className="text-base">GST Settings</CardTitle>
+              <CardDescription>Configure how GST/tax is calculated and displayed</CardDescription>
+            </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -285,55 +285,55 @@ export default function SettingsTaxPage() {
               </>
             )}
           </CardContent>
-        </Card>
+          </Card>
 
-        </div>{/* end 2-col grid */}
-
-        {/* Fiscal Year */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              Fiscal Year
-            </CardTitle>
-            <CardDescription>
-              Sets the financial reporting period for your business. Affects sales reports and analytics.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Fiscal Year Start</Label>
-                <Select
-                  value={String(ext.fiscalYearStart)}
-                  onValueChange={v => patchExt({ fiscalYearStart: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((m, i) => (
-                      <SelectItem key={i + 1} value={String(i + 1)}>
-                        {m}  ({i === 0 ? "Jan" : i === 6 ? "Jul (AU/NZ standard)" : i === 3 ? "Apr (UK standard)" : m.slice(0, 3)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fiscal Year End</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
-                  {fiscalEnd}  (auto-calculated)
+          {/* Fiscal Year */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Fiscal Year
+              </CardTitle>
+              <CardDescription>
+                Sets the financial reporting period for your business. Affects sales reports and analytics.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <Label>Fiscal Year Start</Label>
+                  <Select
+                    value={String(ext.fiscalYearStart)}
+                    onValueChange={v => patchExt({ fiscalYearStart: Number(v) })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>
+                          {m}  ({i === 0 ? "Jan" : i === 6 ? "Jul (AU/NZ standard)" : i === 3 ? "Apr (UK standard)" : m.slice(0, 3)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fiscal Year End</Label>
+                  <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
+                    {fiscalEnd}  (auto-calculated)
+                  </div>
                 </div>
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Your fiscal year runs from <strong>{MONTHS[ext.fiscalYearStart - 1]}</strong> to <strong>{fiscalEnd}</strong>.
-              Australia &amp; NZ standard is 1 July — 30 June. US standard is January — December.
-            </p>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveExt}>Save Fiscal Year</Button>
-            </div>
-          </CardContent>
-        </Card>
+              <p className="text-xs text-muted-foreground">
+                Your fiscal year runs from <strong>{MONTHS[ext.fiscalYearStart - 1]}</strong> to <strong>{fiscalEnd}</strong>.
+                Australia &amp; NZ standard is 1 July — 30 June. US standard is January — December.
+              </p>
+              <div className="flex justify-end">
+                <Button size="sm" onClick={handleSaveExt}>Save Fiscal Year</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>{/* end 2-col grid */}
 
         {/* Tax & Compliance */}
         <Card>
