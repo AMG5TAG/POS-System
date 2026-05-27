@@ -24,3 +24,4 @@ export * from "./email-settings";
 export * from "./forms";
 export * from "./form-submissions";
 export * from "./laybys";
+export * from "./product-price-history";

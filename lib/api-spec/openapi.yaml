@@ -436,6 +436,27 @@ paths:
         "204":
           description: Deleted
 
+  /products/{id}/pricing-history:
+    get:
+      operationId: getProductPricingHistory
+      summary: Get pricing history for a product
+      tags: [products]
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Pricing history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductPriceHistoryEntry"
+
   # ── Digital Codes ─────────────────────────────────────────────────────────
   /products/{productId}/digital-codes:
     get:
@@ -2424,6 +2445,17 @@ components:
           type: boolean
 
     # ── Products ─────────────────────────────────────────────────────────────
+    ProductPriceHistoryEntry:
+      type: object
+      required: [id, productId, costPrice, changedAt]
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        costPrice: { type: number }
+        supplierName: { type: string, nullable: true }
+        poNumber: { type: string, nullable: true }
+        poId: { type: integer, nullable: true }
+        changedAt: { type: string }
     Product:
       type: object
       required: [id, merchantId, name, price, sku, trackInventory, productType, createdAt]

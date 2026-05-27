@@ -116,6 +116,16 @@ export interface Subscription {
   cancelAtPeriodEnd?: boolean;
 }
 
+export interface ProductPriceHistoryEntry {
+  id: number;
+  productId: number;
+  costPrice: number;
+  supplierName?: string | null;
+  poNumber?: string | null;
+  poId?: number | null;
+  changedAt: string;
+}
+
 export type ProductGroupPrices = {[key: string]: number};
 
 export interface Category {

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable } from "@workspace/db";
-import { eq, and, ilike, sql, or } from "drizzle-orm";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable } from "@workspace/db";
+import { eq, and, ilike, sql, or, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListProductsQueryParams,
@@ -451,6 +451,27 @@ router.delete("/digital-codes/:id", requireAuth, async (req, res): Promise<void>
     .delete(digitalCodesTable)
     .where(and(eq(digitalCodesTable.id, params.data.id), eq(digitalCodesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
+});
+
+// GET /products/:id/pricing-history
+router.get("/products/:id/pricing-history", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const merchantId = req.session.merchantId!;
+  const rows = await db
+    .select()
+    .from(productPriceHistoryTable)
+    .where(and(eq(productPriceHistoryTable.productId, id), eq(productPriceHistoryTable.merchantId, merchantId)))
+    .orderBy(desc(productPriceHistoryTable.changedAt));
+  res.json(rows.map((r) => ({
+    id: r.id,
+    productId: r.productId,
+    costPrice: parseFloat(r.costPrice),
+    supplierName: r.supplierName ?? null,
+    poNumber: r.poNumber ?? null,
+    poId: r.poId ?? null,
+    changedAt: r.changedAt.toISOString(),
+  })));
 });
 
 export default router;

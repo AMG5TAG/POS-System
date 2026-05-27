@@ -557,6 +557,25 @@ export const DeleteCategoryParams = zod.object({
 
 
 /**
+ * @summary Get pricing history for a product
+ */
+export const GetProductPricingHistoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductPricingHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "costPrice": zod.number(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string().nullish(),
+  "poId": zod.number().nullish(),
+  "changedAt": zod.string()
+})
+export const GetProductPricingHistoryResponse = zod.array(GetProductPricingHistoryResponseItem)
+
+
+/**
  * @summary List digital codes for a product
  */
 export const ListDigitalCodesParams = zod.object({

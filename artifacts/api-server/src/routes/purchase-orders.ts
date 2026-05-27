@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, suppliersTable, merchantsTable } from "@workspace/db";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -47,6 +47,30 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null)
     items: items.map(fmtItem),
     createdAt: po.createdAt.toISOString(),
   };
+}
+
+async function syncCostPricesFromPO(
+  merchantId: number,
+  poId: number,
+  poNumber: string,
+  items: Array<{ productId?: number | null; unitCost?: number | null }>,
+  supplierName: string | null,
+) {
+  for (const item of items) {
+    if (!item.productId || item.unitCost == null) continue;
+    const cost = item.unitCost;
+    await db.update(productsTable)
+      .set({ costPrice: String(cost) })
+      .where(and(eq(productsTable.id, item.productId), eq(productsTable.merchantId, merchantId)));
+    await db.insert(productPriceHistoryTable).values({
+      merchantId,
+      productId: item.productId,
+      costPrice: String(cost),
+      supplierName: supplierName ?? null,
+      poNumber,
+      poId,
+    });
+  }
 }
 
 function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digits = 5): string {
@@ -140,6 +164,16 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
       }))
     );
   }
+  // Sync product cost prices and log pricing history
+  if (body.items?.length) {
+    let supplierName: string | null = null;
+    if (body.supplierId) {
+      const [sup] = await db.select({ name: suppliersTable.name }).from(suppliersTable)
+        .where(and(eq(suppliersTable.id, body.supplierId), eq(suppliersTable.merchantId, merchantId)));
+      supplierName = sup?.name ?? null;
+    }
+    await syncCostPricesFromPO(merchantId, po.id, poNumber, body.items, supplierName);
+  }
   const result = await getPOWithItems(po.id, merchantId);
   res.status(201).json(result);
 });
@@ -190,6 +224,18 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
           notes: i.notes ?? null,
         }))
       );
+    }
+    // Sync product cost prices and log pricing history
+    const [updatedPO] = await db.select().from(purchaseOrdersTable)
+      .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+    let supplierName: string | null = null;
+    if (updatedPO?.supplierId) {
+      const [sup] = await db.select({ name: suppliersTable.name }).from(suppliersTable)
+        .where(and(eq(suppliersTable.id, updatedPO.supplierId), eq(suppliersTable.merchantId, merchantId)));
+      supplierName = sup?.name ?? null;
+    }
+    if (body.items.length) {
+      await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName);
     }
   }
   const result = await getPOWithItems(id, merchantId);

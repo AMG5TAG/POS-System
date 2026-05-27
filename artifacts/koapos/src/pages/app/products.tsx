@@ -9,6 +9,7 @@ import {
   useDeleteProduct,
   useCreateCategory,
   useGetMerchant,
+  useGetProductPricingHistory,
   Product,
 } from "@workspace/api-client-react";
 import {
@@ -656,6 +657,57 @@ function ProductDetailDialog({
       </AlertDialogContent>
     </AlertDialog>
   </>
+  );
+}
+
+/* ─── Pricing History Table ──────────────────────────────────────────────── */
+
+function PricingHistoryTable({ productId }: { productId: number }) {
+  const { data, isLoading } = useGetProductPricingHistory(productId);
+
+  if (isLoading) {
+    return (
+      <div className="mt-3 space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-9 rounded-lg bg-muted/40 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <p className="mt-3 text-sm text-muted-foreground">
+        No pricing history yet. Cost price changes from Purchase Orders will appear here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50">
+          <tr>
+            <th className="text-left p-2.5 font-medium text-muted-foreground">Date</th>
+            <th className="text-right p-2.5 font-medium text-muted-foreground">Cost Price</th>
+            <th className="text-left p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Supplier</th>
+            <th className="text-left p-2.5 font-medium text-muted-foreground hidden md:table-cell">PO Number</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {data.map((entry) => (
+            <tr key={entry.id} className="hover:bg-muted/20">
+              <td className="p-2.5 text-muted-foreground">
+                {new Date(entry.changedAt).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
+              </td>
+              <td className="p-2.5 text-right font-medium">{formatCurrency(entry.costPrice)}</td>
+              <td className="p-2.5 text-muted-foreground hidden sm:table-cell">{entry.supplierName ?? "—"}</td>
+              <td className="p-2.5 font-mono text-xs text-muted-foreground hidden md:table-cell">{entry.poNumber ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1745,20 +1797,13 @@ export default function ProductsPage() {
                   </div>
                 )}
 
-                {/* Options */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="Options" />
-                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">No Loyalty Points</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
-                    </div>
-                    <Switch
-                      checked={form.excludeFromLoyalty}
-                      onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
-                    />
+                {/* Pricing History */}
+                {editingProduct && (
+                  <div className="border-t pt-5">
+                    <SectionHeader label="Pricing History" />
+                    <PricingHistoryTable productId={editingProduct.id} />
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -1853,6 +1898,21 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* No Loyalty Points */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Loyalty" />
+                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">No Loyalty Points</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
+                    </div>
+                    <Switch
+                      checked={form.excludeFromLoyalty}
+                      onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
+                    />
+                  </div>
+                </div>
 
                 {/* Internal Notes */}
                 <div className="border-t pt-5">

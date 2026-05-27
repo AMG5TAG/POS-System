@@ -94,6 +94,7 @@ import type {
   ProductBundleInput,
   ProductInput,
   ProductList,
+  ProductPriceHistoryEntry,
   ProductUpdate,
   PurchaseOrder,
   PurchaseOrderInput,
@@ -1841,6 +1842,83 @@ export const useDeleteCategory = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteCategoryMutationOptions(options));
     }
+
+export const getGetProductPricingHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/products/${id}/pricing-history`
+}
+
+/**
+ * @summary Get pricing history for a product
+ */
+export const getProductPricingHistory = async (id: number, options?: RequestInit): Promise<ProductPriceHistoryEntry[]> => {
+
+  return customFetch<ProductPriceHistoryEntry[]>(getGetProductPricingHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductPricingHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/products/${id}/pricing-history`
+    ] as const;
+    }
+
+
+export const getGetProductPricingHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getProductPricingHistory>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductPricingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductPricingHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductPricingHistory>>> = ({ signal }) => getProductPricingHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductPricingHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductPricingHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getProductPricingHistory>>>
+export type GetProductPricingHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get pricing history for a product
+ */
+
+export function useGetProductPricingHistory<TData = Awaited<ReturnType<typeof getProductPricingHistory>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductPricingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductPricingHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListDigitalCodesUrl = (productId: number,) => {
 
