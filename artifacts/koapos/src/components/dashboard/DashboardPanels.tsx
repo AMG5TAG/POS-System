@@ -25,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 const ALL_STATUSES: { value: string; label: string }[] = [
   { value: "pending",           label: "Pending" },
   { value: "in-progress",       label: "In Progress" },
+  { value: "awaiting-stock",    label: "Awaiting Stock" },
   { value: "awaiting-customer", label: "Awaiting Customer" },
   { value: "completed",         label: "Completed" },
   { value: "cancelled",         label: "Cancelled" },
@@ -38,6 +39,7 @@ function statusLabel(status: string): string {
 function statusColor(status: string): string {
   switch (status) {
     case "in-progress":       return "bg-blue-100 text-blue-700 border-blue-200";
+    case "awaiting-stock":    return "bg-purple-100 text-purple-700 border-purple-200";
     case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";
     case "pending":           return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "completed":         return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -49,6 +51,7 @@ function statusColor(status: string): string {
 function statusIconColor(status: string): string {
   switch (status) {
     case "in-progress":       return "text-blue-500";
+    case "awaiting-stock":    return "text-purple-500";
     case "awaiting-customer": return "text-orange-500";
     case "pending":           return "text-yellow-500";
     case "completed":         return "text-emerald-500";
@@ -100,7 +103,11 @@ function ServiceJobDialog({ job, onClose }: JobDialogProps) {
     newNote.trim().length > 0;
 
   const handleSave = async () => {
-    const mergedNotes = [job.notes, newNote.trim()].filter(Boolean).join("\n\n---\n\n");
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const ts = `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
+    const timestampedNote = newNote.trim() ? `${ts} ${newNote.trim()}` : "";
+    const mergedNotes = [job.notes, timestampedNote].filter(Boolean).join("\n\n---\n\n");
     await updateMutation.mutateAsync({
       id: job.id,
       data: {

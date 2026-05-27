@@ -55,10 +55,33 @@ import { STICKER_TYPES, DYMO_SIZES, LabelPreview, useStickerTemplates } from "@/
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending:             { label: "Pending",           className: "bg-amber-50 text-amber-700 border-amber-300" },
   "in-progress":       { label: "In Progress",       className: "bg-blue-50 text-blue-700 border-blue-300" },
+  "awaiting-stock":    { label: "Awaiting Stock",    className: "bg-purple-50 text-purple-700 border-purple-300" },
   completed:           { label: "Completed",          className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
   cancelled:           { label: "Cancelled",          className: "bg-red-50 text-red-700 border-red-300" },
   "awaiting-customer": { label: "Awaiting Customer", className: "bg-orange-50 text-orange-600 border-orange-300" },
 };
+
+/* ─── Note helpers ──────────────────────────────────────────────────────── */
+
+const NOTE_SEP = "\n\n---\n\n";
+
+function parseNotes(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split("---").map((s) => s.trim()).filter(Boolean);
+}
+
+function buildNoteTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
+}
+
+function appendNote(existing: string | null | undefined, text: string): string {
+  const ts = buildNoteTimestamp();
+  const entry = `${ts} ${text.trim()}`;
+  const parts = parseNotes(existing);
+  return [...parts, entry].join(NOTE_SEP);
+}
 
 function getStatus(s: string) {
   return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
@@ -181,20 +204,20 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
   const fileInputRef   = useRef<HTMLInputElement>(null);
 
   const [localStatus, setLocalStatus] = useState<string>(job?.status ?? "pending");
-  const [localNotes,  setLocalNotes]  = useState(job?.notes  ?? "");
-  const [notesDirty,  setNotesDirty]  = useState(false);
+  const [newNoteText, setNewNoteText] = useState("");
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [uploading,   setUploading]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAll,     setShowAll]     = useState(false);
 
   useEffect(() => {
     if (!job) return;
     setLocalStatus(job.status ?? "pending");
-    setLocalNotes(job.notes ?? "");
-    setNotesDirty(false);
+    setNewNoteText("");
     setLocalPhotos(Array.isArray(job.photos) ? (job.photos as string[]).filter(Boolean) : []);
     setLightboxSrc(null);
+    setShowAll(false);
   }, [job?.id]);
 
   if (!job) return null;
@@ -210,10 +233,15 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
     );
   };
 
-  const handleSaveNotes = () => {
+  const handleAppendNote = () => {
+    if (!newNoteText.trim()) return;
+    const updated = appendNote(job.notes, newNoteText.trim());
     updateMutation.mutate(
-      { id: job.id, data: { notes: localNotes } as never },
-      { onSuccess: () => { invalidate(); setNotesDirty(false); toast.success("Notes saved"); }, onError: () => toast.error("Failed to save notes") }
+      { id: job.id, data: { notes: updated } as never },
+      {
+        onSuccess: () => { invalidate(); setNewNoteText(""); toast.success("Note appended"); },
+        onError: () => toast.error("Failed to save note"),
+      }
     );
   };
 
@@ -285,6 +313,18 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
                   ))}
                 </SelectContent>
               </Select>
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className={cn(
+                  "ml-auto text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors",
+                  showAll
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                )}
+              >
+                {showAll ? "Compact View" : "Display All"}
+              </button>
             </DialogTitle>
           </DialogHeader>
 
@@ -309,48 +349,78 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
               </div>
             )}
 
+            {/* ── Customer ── */}
             <div className="rounded-xl border bg-muted/20 divide-y">
-              <DetailRow icon={User}     label="Customer"      value={job.customerName} />
-              {job.customerPhone && <DetailRow icon={User} label="Phone"  value={job.customerPhone} />}
-              {job.customerEmail && <DetailRow icon={User} label="Email"  value={job.customerEmail} />}
-              <DetailRow icon={Calendar} label="Book-In Date" value={formatDate(job.bookInDate)} />
-              {job.partnerRepairCode && (
-                <DetailRow icon={Hash} label="Partner Repair Code" value={job.partnerRepairCode} />
-              )}
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <User className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer</span>
+              </div>
+              <div className="grid grid-cols-2 divide-x">
+                <div className="divide-y">
+                  <DetailRow icon={User}     label="Name"        value={job.customerName} />
+                  <DetailRow icon={Calendar} label="Book-In Date" value={formatDate(job.bookInDate)} />
+                  {job.partnerRepairCode && (
+                    <DetailRow icon={Hash} label="Partner Repair Code" value={job.partnerRepairCode} />
+                  )}
+                  {(showAll && !job.partnerRepairCode) && (
+                    <div className="flex items-start gap-3 px-4 py-3">
+                      <Hash className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                      <div className="text-sm min-w-0">
+                        <p className="text-xs text-muted-foreground mb-0.5">Partner Repair Code</p>
+                        <p className="font-medium text-muted-foreground/40">—</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="divide-y">
+                  {(job.customerPhone || showAll) && (
+                    <DetailRow icon={User} label="Phone" value={job.customerPhone ?? (showAll ? "—" : null)} />
+                  )}
+                  {(job.customerEmail || showAll) && (
+                    <DetailRow icon={User} label="Email" value={job.customerEmail ?? (showAll ? "—" : null)} />
+                  )}
+                  {job.estimatedCost != null && (
+                    <DetailRow icon={ClipboardList} label="Estimated Cost" value={`$${job.estimatedCost.toFixed(2)}`} />
+                  )}
+                  {(showAll && job.estimatedCost == null) && (
+                    <div className="flex items-start gap-3 px-4 py-3">
+                      <ClipboardList className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                      <div className="text-sm min-w-0">
+                        <p className="text-xs text-muted-foreground mb-0.5">Estimated Cost</p>
+                        <p className="font-medium text-muted-foreground/40">—</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {(job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
+            {/* ── Device ── */}
+            {(showAll || job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                   <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
                 </div>
-                <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType} />
-                <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription} />
-                <DetailRow icon={Hash}              label="Serial Number" value={job.serialNumber} />
-                <DetailRow icon={AlertCircle}       label="Known Damage"  value={job.condition} />
-              </div>
-            )}
-
-            {(job.workDescription || job.additionalEquipment || job.passwordOrPin || job.accounts) && (
-              <div className="rounded-xl border bg-muted/20 divide-y">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
-                  <ClipboardList className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work Details</span>
-                </div>
-                <DetailRow icon={ClipboardList} label="Work Description"     value={job.workDescription} />
-                <DetailRow icon={Package}       label="Additional Equipment" value={job.additionalEquipment} />
-                {(job.passwordOrPin || job.accounts) && (() => {
+                {(job.deviceType || showAll) && <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType ?? (showAll ? "—" : null)} />}
+                {(job.deviceDescription || showAll) && <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription ?? (showAll ? "—" : null)} />}
+                {(job.serialNumber || showAll) && <DetailRow icon={Hash}              label="Serial Number" value={job.serialNumber ?? (showAll ? "—" : null)} />}
+                {(job.condition || showAll) && <DetailRow icon={AlertCircle}       label="Known Damage / Condition"  value={job.condition ?? (showAll ? "—" : null)} />}
+                {/* Logins / Accounts — shown under Condition */}
+                {(job.passwordOrPin || job.accounts || showAll) && (() => {
                   const pins  = (job.passwordOrPin ?? "").split("\n").map(s => s.trim());
                   const accts = (job.accounts ?? "").split("\n").map(s => s.trim());
                   const max   = Math.max(pins.length, accts.length);
                   const hasBoth = pins.some(Boolean) && accts.some(Boolean);
+                  const hasAny  = pins.some(Boolean) || accts.some(Boolean);
                   return (
                     <div className="flex items-start gap-3 px-4 py-3">
                       <KeyRound className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                       <div className="text-sm min-w-0 flex-1">
                         <p className="text-xs text-muted-foreground mb-1.5">Logins / Accounts</p>
-                        {hasBoth ? (
+                        {!hasAny ? (
+                          <p className="font-medium text-muted-foreground/40">—</p>
+                        ) : hasBoth ? (
                           <div className="grid grid-cols-2 gap-x-6 gap-y-1">
                             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-semibold">Account</p>
                             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-semibold">Password / PIN</p>
@@ -371,6 +441,26 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
               </div>
             )}
 
+            {/* ── Work Details ── */}
+            {(showAll || job.workDescription || job.additionalEquipment) && (
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                  <ClipboardList className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work Details</span>
+                </div>
+                {(job.workDescription || showAll) && (
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <ClipboardList className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="text-sm min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground mb-0.5">Work Description</p>
+                      <p className="font-medium break-words whitespace-pre-line">{job.workDescription ?? "—"}</p>
+                    </div>
+                  </div>
+                )}
+                {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
+              </div>
+            )}
+
             {/* ── Notes ── */}
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -378,17 +468,44 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</span>
               </div>
               <div className="p-4 space-y-3">
-                <Textarea
-                  value={localNotes}
-                  onChange={(e) => { setLocalNotes(e.target.value); setNotesDirty(true); }}
-                  placeholder="Add internal notes for this service job…"
-                  rows={3}
-                  className="resize-none"
-                />
-                {notesDirty && (
-                  <Button size="sm" className="h-7 text-xs" onClick={handleSaveNotes} disabled={updateMutation.isPending}>
-                    Save Notes
+                {/* Append note input */}
+                <div className="flex gap-2 items-start">
+                  <Textarea
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    placeholder="Type a note to append…"
+                    rows={2}
+                    className="resize-none flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    className="shrink-0 h-auto py-2 px-3 text-xs"
+                    onClick={handleAppendNote}
+                    disabled={!newNoteText.trim() || updateMutation.isPending}
+                  >
+                    Append Note
                   </Button>
+                </div>
+                {/* Existing notes — newest first */}
+                {parseNotes(job.notes).length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {[...parseNotes(job.notes)].reverse().map((note, i) => {
+                      const tsMatch = note.match(/^\[(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2})\]\s*/);
+                      const ts   = tsMatch ? tsMatch[1] : null;
+                      const text = ts ? note.slice(tsMatch![0].length) : note;
+                      return (
+                        <div key={i} className="rounded-lg border bg-background p-3 text-sm space-y-1">
+                          {ts && (
+                            <p className="text-[10px] font-semibold text-muted-foreground/70 flex items-center gap-1">
+                              <StickyNote className="w-3 h-3" />
+                              {ts}
+                            </p>
+                          )}
+                          <p className="whitespace-pre-wrap break-words leading-relaxed">{text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -479,7 +596,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sheet")}>
                 <Printer className="w-3.5 h-3.5" />
-                A4 Sheet
+                Print
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sticker")}>
                 <Printer className="w-3.5 h-3.5" />
@@ -721,9 +838,10 @@ export default function ServiceJobsPage() {
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="awaiting-stock">Awaiting Stock</SelectItem>
+                    <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

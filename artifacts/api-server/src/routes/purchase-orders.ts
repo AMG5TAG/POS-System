@@ -34,6 +34,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null)
     supplierId: po.supplierId ?? null,
     supplierName: supplierName ?? null,
     poNumber: po.poNumber,
+    orderNumber: po.orderNumber ?? null,
     status: po.status,
     orderDate: po.orderDate,
     expectedDate: po.expectedDate ?? null,
@@ -89,6 +90,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
     merchantId,
     supplierId: body.supplierId ?? null,
     poNumber,
+    orderNumber: body.orderNumber ?? null,
     status: body.status ?? "Draft",
     orderDate: body.orderDate,
     expectedDate: body.expectedDate ?? null,
@@ -131,6 +133,7 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   await db.update(purchaseOrdersTable).set({
     supplierId: body.supplierId ?? null,
     ...(body.poNumber ? { poNumber: body.poNumber } : {}),
+    orderNumber: body.orderNumber ?? null,
     ...(body.status ? { status: body.status } : {}),
     ...(body.orderDate ? { orderDate: body.orderDate } : {}),
     expectedDate: body.expectedDate ?? null,

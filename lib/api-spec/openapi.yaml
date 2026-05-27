@@ -3190,7 +3190,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, in-progress, completed, cancelled]
+          enum: [pending, in-progress, awaiting-stock, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -3243,7 +3243,7 @@ components:
           type: ["integer", "null"]
         status:
           type: string
-          enum: [pending, in-progress, completed, cancelled]
+          enum: [pending, in-progress, awaiting-stock, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -3811,6 +3811,7 @@ components:
         supplierId: { type: integer, nullable: true }
         supplierName: { type: string, nullable: true }
         poNumber: { type: string }
+        orderNumber: { type: string, nullable: true }
         status: { type: string }
         orderDate: { type: string }
         expectedDate: { type: string, nullable: true }
@@ -3828,6 +3829,7 @@ components:
       properties:
         supplierId: { type: integer }
         poNumber: { type: string }
+        orderNumber: { type: string }
         status: { type: string }
         orderDate: { type: string }
         expectedDate: { type: string }

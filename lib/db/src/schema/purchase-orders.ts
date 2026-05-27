@@ -10,6 +10,7 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   merchantId:   integer("merchant_id").notNull().references(() => merchantsTable.id),
   supplierId:   integer("supplier_id").references(() => suppliersTable.id),
   poNumber:     text("po_number").notNull(),
+  orderNumber:  text("order_number"),
   status:       text("status").notNull().default("Draft"), // Draft|Sent|Partial|Received|Cancelled
   orderDate:    text("order_date").notNull(), // ISO date string
   expectedDate: text("expected_date"),

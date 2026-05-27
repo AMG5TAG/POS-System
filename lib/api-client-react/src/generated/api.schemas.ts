@@ -665,6 +665,8 @@ export type ServiceJobStatus = typeof ServiceJobStatus[keyof typeof ServiceJobSt
 export const ServiceJobStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
+  'awaiting-stock': 'awaiting-stock',
+  'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;
@@ -723,6 +725,8 @@ export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof Se
 export const ServiceJobInputStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
+  'awaiting-stock': 'awaiting-stock',
+  'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;
@@ -1159,6 +1163,7 @@ export interface PurchaseOrder {
   supplierId?: number | null;
   supplierName?: string | null;
   poNumber: string;
+  orderNumber?: string | null;
   status: string;
   orderDate: string;
   expectedDate?: string | null;
@@ -1172,6 +1177,7 @@ export interface PurchaseOrder {
 export interface PurchaseOrderInput {
   supplierId?: number;
   poNumber?: string;
+  orderNumber?: string;
   status?: string;
   orderDate: string;
   expectedDate?: string;
