@@ -44,6 +44,18 @@ tags:
     description: AI assistant powered by OpenAI
   - name: ai
     description: AI feature settings and kill-switch
+  - name: brands
+    description: Brand management
+  - name: tags
+    description: Tag management
+  - name: suppliers
+    description: Supplier management
+  - name: product-recalls
+    description: Product recall management
+  - name: product-pre-orders
+    description: Pre-order management
+  - name: product-return-auths
+    description: Return authorisation management
 
 paths:
   /healthz:
@@ -2720,6 +2732,431 @@ paths:
               schema:
                 $ref: "#/components/schemas/SocialFeedResponse"
 
+  /brands:
+    get:
+      operationId: listBrands
+      tags: [brands]
+      summary: List brands
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Brand list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandListResponse"
+    post:
+      operationId: createBrand
+      tags: [brands]
+      summary: Create brand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+  /brands/{id}:
+    patch:
+      operationId: updateBrand
+      tags: [brands]
+      summary: Update brand
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+    delete:
+      operationId: deleteBrand
+      tags: [brands]
+      summary: Delete brand
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List tags
+      responses:
+        "200":
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+    post:
+      operationId: createTag
+      tags: [tags]
+      summary: Create tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+
+  /tags/{id}:
+    patch:
+      operationId: updateTag
+      tags: [tags]
+      summary: Update tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+    delete:
+      operationId: deleteTag
+      tags: [tags]
+      summary: Delete tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Supplier list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierListResponse"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Create supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    patch:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /recalls:
+    get:
+      operationId: listProductRecalls
+      tags: [product-recalls]
+      summary: List product recalls
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: Recall list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductRecallListResponse"
+    post:
+      operationId: createProductRecall
+      tags: [product-recalls]
+      summary: Create product recall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRecallInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductRecall"
+
+  /recalls/{id}:
+    patch:
+      operationId: updateProductRecall
+      tags: [product-recalls]
+      summary: Update product recall
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRecallInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductRecall"
+    delete:
+      operationId: deleteProductRecall
+      tags: [product-recalls]
+      summary: Delete product recall
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /pre-orders:
+    get:
+      operationId: listProductPreOrders
+      tags: [product-pre-orders]
+      summary: List pre-orders
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pre-order list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPreOrderListResponse"
+    post:
+      operationId: createProductPreOrder
+      tags: [product-pre-orders]
+      summary: Create pre-order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductPreOrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPreOrder"
+
+  /pre-orders/{id}:
+    patch:
+      operationId: updateProductPreOrder
+      tags: [product-pre-orders]
+      summary: Update pre-order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductPreOrderInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPreOrder"
+    delete:
+      operationId: deleteProductPreOrder
+      tags: [product-pre-orders]
+      summary: Delete pre-order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /return-auths:
+    get:
+      operationId: listProductReturnAuths
+      tags: [product-return-auths]
+      summary: List return authorisations
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: Return auth list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductReturnAuthListResponse"
+    post:
+      operationId: createProductReturnAuth
+      tags: [product-return-auths]
+      summary: Create return authorisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductReturnAuthInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductReturnAuth"
+
+  /return-auths/{id}:
+    patch:
+      operationId: updateProductReturnAuth
+      tags: [product-return-auths]
+      summary: Update return authorisation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductReturnAuthInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductReturnAuth"
+    delete:
+      operationId: deleteProductReturnAuth
+      tags: [product-return-auths]
+      summary: Delete return authorisation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -4940,3 +5377,248 @@ components:
       required: [error]
       properties:
         error: { type: string }
+
+    Brand:
+      type: object
+      required: [id, merchantId, name, createdAt, productCount, retailValue]
+      properties:
+        id:           { type: integer }
+        merchantId:   { type: integer }
+        name:         { type: string }
+        logoUrl:      { type: string, nullable: true }
+        website:      { type: string, nullable: true }
+        description:  { type: string, nullable: true }
+        createdAt:    { type: string, format: date-time }
+        productCount: { type: integer }
+        retailValue:  { type: number }
+
+    BrandInput:
+      type: object
+      required: [name]
+      properties:
+        name:        { type: string }
+        logoUrl:     { type: string }
+        website:     { type: string }
+        description: { type: string }
+
+    BrandListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Brand"
+        total: { type: integer }
+
+    Tag:
+      type: object
+      required: [id, merchantId, name, color, createdAt]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        name:       { type: string }
+        color:      { type: string }
+        createdAt:  { type: string, format: date-time }
+
+    TagInput:
+      type: object
+      required: [name]
+      properties:
+        name:  { type: string }
+        color: { type: string }
+
+    TagListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        total: { type: integer }
+
+    Supplier:
+      type: object
+      required: [id, merchantId, name, createdAt]
+      properties:
+        id:                  { type: integer }
+        merchantId:          { type: integer }
+        name:                { type: string }
+        accountNumber:       { type: string, nullable: true }
+        website:             { type: string, nullable: true }
+        paymentTerms:        { type: string, nullable: true }
+        notes:               { type: string, nullable: true }
+        logoUrl:             { type: string, nullable: true }
+        street:              { type: string, nullable: true }
+        city:                { type: string, nullable: true }
+        state:               { type: string, nullable: true }
+        postcode:            { type: string, nullable: true }
+        country:             { type: string, nullable: true }
+        address:             { type: string, nullable: true }
+        contacts:            { type: string, nullable: true }
+        raPortalLink:        { type: string, nullable: true }
+        raProcedure:         { type: string, nullable: true }
+        creditAccountNumber: { type: string, nullable: true }
+        creditLimit:         { type: string, nullable: true }
+        creditTerms:         { type: string, nullable: true }
+        creditContactName:   { type: string, nullable: true }
+        contactName:         { type: string, nullable: true }
+        email:               { type: string, nullable: true }
+        phone:               { type: string, nullable: true }
+        createdAt:           { type: string, format: date-time }
+
+    SupplierInput:
+      type: object
+      required: [name]
+      properties:
+        name:                { type: string }
+        accountNumber:       { type: string }
+        website:             { type: string }
+        paymentTerms:        { type: string }
+        notes:               { type: string }
+        logoUrl:             { type: string }
+        street:              { type: string }
+        city:                { type: string }
+        state:               { type: string }
+        postcode:            { type: string }
+        country:             { type: string }
+        address:             { type: string }
+        contacts:            {}
+        raPortalLink:        { type: string }
+        raProcedure:         { type: string }
+        creditAccountNumber: { type: string }
+        creditLimit:         { type: string }
+        creditTerms:         { type: string }
+        creditContactName:   { type: string }
+        contactName:         { type: string }
+        email:               { type: string }
+        phone:               { type: string }
+
+    SupplierListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Supplier"
+        total: { type: integer }
+
+    ProductRecall:
+      type: object
+      required: [id, merchantId, recallId, productName, reason, severity, status, createdAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        recallId:      { type: string }
+        productId:     { type: integer, nullable: true }
+        productName:   { type: string }
+        reason:        { type: string }
+        severity:      { type: string }
+        status:        { type: string }
+        affectedBatch: { type: string, nullable: true }
+        notes:         { type: string, nullable: true }
+        createdAt:     { type: string, format: date-time }
+
+    ProductRecallInput:
+      type: object
+      required: [productName, reason]
+      properties:
+        productId:     { type: integer }
+        productName:   { type: string }
+        reason:        { type: string }
+        severity:      { type: string }
+        status:        { type: string }
+        affectedBatch: { type: string }
+        notes:         { type: string }
+
+    ProductRecallListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductRecall"
+        total: { type: integer }
+
+    ProductPreOrder:
+      type: object
+      required: [id, merchantId, poNumber, customerName, productName, quantity, depositAmount, status, createdAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        poNumber:      { type: string }
+        customerId:    { type: integer, nullable: true }
+        customerName:  { type: string }
+        productId:     { type: integer, nullable: true }
+        productName:   { type: string }
+        quantity:      { type: integer }
+        depositAmount: { type: number }
+        status:        { type: string }
+        expectedDate:  { type: string, nullable: true }
+        notes:         { type: string, nullable: true }
+        createdAt:     { type: string, format: date-time }
+
+    ProductPreOrderInput:
+      type: object
+      required: [customerName, productName, quantity]
+      properties:
+        customerId:    { type: integer }
+        customerName:  { type: string }
+        productId:     { type: integer }
+        productName:   { type: string }
+        quantity:      { type: integer }
+        depositAmount: { type: number }
+        status:        { type: string }
+        expectedDate:  { type: string }
+        notes:         { type: string }
+
+    ProductPreOrderListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPreOrder"
+        total: { type: integer }
+
+    ProductReturnAuth:
+      type: object
+      required: [id, merchantId, raNumber, customerName, items, refundAmount, status, createdAt]
+      properties:
+        id:           { type: integer }
+        merchantId:   { type: integer }
+        raNumber:     { type: string }
+        customerId:   { type: integer, nullable: true }
+        customerName: { type: string }
+        reason:       { type: string, nullable: true }
+        items:        { type: string }
+        refundAmount: { type: number }
+        status:       { type: string }
+        notes:        { type: string, nullable: true }
+        createdAt:    { type: string, format: date-time }
+
+    ProductReturnAuthInput:
+      type: object
+      required: [customerName, items]
+      properties:
+        customerId:   { type: integer }
+        customerName: { type: string }
+        reason:       { type: string }
+        items:        { type: string }
+        refundAmount: { type: number }
+        status:       { type: string }
+        notes:        { type: string }
+
+    ProductReturnAuthListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductReturnAuth"
+        total: { type: integer }

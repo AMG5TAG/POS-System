@@ -3568,3 +3568,510 @@ export const ListSocialFeedPostsResponse = zod.object({
 })
 
 
+/**
+ * @summary List brands
+ */
+export const ListBrandsQueryParams = zod.object({
+  "search": zod.coerce.string().optional()
+})
+
+export const ListBrandsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "productCount": zod.number(),
+  "retailValue": zod.number()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create brand
+ */
+export const CreateBrandBody = zod.object({
+  "name": zod.string(),
+  "logoUrl": zod.string().optional(),
+  "website": zod.string().optional(),
+  "description": zod.string().optional()
+})
+
+
+/**
+ * @summary Update brand
+ */
+export const UpdateBrandParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateBrandBody = zod.object({
+  "name": zod.string(),
+  "logoUrl": zod.string().optional(),
+  "website": zod.string().optional(),
+  "description": zod.string().optional()
+})
+
+export const UpdateBrandResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "productCount": zod.number(),
+  "retailValue": zod.number()
+})
+
+
+/**
+ * @summary Delete brand
+ */
+export const DeleteBrandParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List tags
+ */
+export const ListTagsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "color": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create tag
+ */
+export const CreateTagBody = zod.object({
+  "name": zod.string(),
+  "color": zod.string().optional()
+})
+
+
+/**
+ * @summary Update tag
+ */
+export const UpdateTagParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateTagBody = zod.object({
+  "name": zod.string(),
+  "color": zod.string().optional()
+})
+
+export const UpdateTagResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "color": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete tag
+ */
+export const DeleteTagParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List suppliers
+ */
+export const ListSuppliersQueryParams = zod.object({
+  "search": zod.coerce.string().optional()
+})
+
+export const ListSuppliersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "accountNumber": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "paymentTerms": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "street": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "postcode": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "contacts": zod.string().nullish(),
+  "raPortalLink": zod.string().nullish(),
+  "raProcedure": zod.string().nullish(),
+  "creditAccountNumber": zod.string().nullish(),
+  "creditLimit": zod.string().nullish(),
+  "creditTerms": zod.string().nullish(),
+  "creditContactName": zod.string().nullish(),
+  "contactName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create supplier
+ */
+export const CreateSupplierBody = zod.object({
+  "name": zod.string(),
+  "accountNumber": zod.string().optional(),
+  "website": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "logoUrl": zod.string().optional(),
+  "street": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "country": zod.string().optional(),
+  "address": zod.string().optional(),
+  "contacts": zod.unknown().optional(),
+  "raPortalLink": zod.string().optional(),
+  "raProcedure": zod.string().optional(),
+  "creditAccountNumber": zod.string().optional(),
+  "creditLimit": zod.string().optional(),
+  "creditTerms": zod.string().optional(),
+  "creditContactName": zod.string().optional(),
+  "contactName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional()
+})
+
+
+/**
+ * @summary Update supplier
+ */
+export const UpdateSupplierParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateSupplierBody = zod.object({
+  "name": zod.string(),
+  "accountNumber": zod.string().optional(),
+  "website": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "logoUrl": zod.string().optional(),
+  "street": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "country": zod.string().optional(),
+  "address": zod.string().optional(),
+  "contacts": zod.unknown().optional(),
+  "raPortalLink": zod.string().optional(),
+  "raProcedure": zod.string().optional(),
+  "creditAccountNumber": zod.string().optional(),
+  "creditLimit": zod.string().optional(),
+  "creditTerms": zod.string().optional(),
+  "creditContactName": zod.string().optional(),
+  "contactName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional()
+})
+
+export const UpdateSupplierResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "accountNumber": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "paymentTerms": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "street": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "postcode": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "contacts": zod.string().nullish(),
+  "raPortalLink": zod.string().nullish(),
+  "raProcedure": zod.string().nullish(),
+  "creditAccountNumber": zod.string().nullish(),
+  "creditLimit": zod.string().nullish(),
+  "creditTerms": zod.string().nullish(),
+  "creditContactName": zod.string().nullish(),
+  "contactName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete supplier
+ */
+export const DeleteSupplierParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List product recalls
+ */
+export const ListProductRecallsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListProductRecallsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "recallId": zod.string(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "reason": zod.string(),
+  "severity": zod.string(),
+  "status": zod.string(),
+  "affectedBatch": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create product recall
+ */
+export const CreateProductRecallBody = zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "reason": zod.string(),
+  "severity": zod.string().optional(),
+  "status": zod.string().optional(),
+  "affectedBatch": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Update product recall
+ */
+export const UpdateProductRecallParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProductRecallBody = zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "reason": zod.string(),
+  "severity": zod.string().optional(),
+  "status": zod.string().optional(),
+  "affectedBatch": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateProductRecallResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "recallId": zod.string(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "reason": zod.string(),
+  "severity": zod.string(),
+  "status": zod.string(),
+  "affectedBatch": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete product recall
+ */
+export const DeleteProductRecallParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List pre-orders
+ */
+export const ListProductPreOrdersQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListProductPreOrdersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "poNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "depositAmount": zod.number(),
+  "status": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create pre-order
+ */
+export const CreateProductPreOrderBody = zod.object({
+  "customerId": zod.number().optional(),
+  "customerName": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "depositAmount": zod.number().optional(),
+  "status": zod.string().optional(),
+  "expectedDate": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Update pre-order
+ */
+export const UpdateProductPreOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProductPreOrderBody = zod.object({
+  "customerId": zod.number().optional(),
+  "customerName": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "depositAmount": zod.number().optional(),
+  "status": zod.string().optional(),
+  "expectedDate": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateProductPreOrderResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "poNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "depositAmount": zod.number(),
+  "status": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete pre-order
+ */
+export const DeleteProductPreOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List return authorisations
+ */
+export const ListProductReturnAuthsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListProductReturnAuthsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "raNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "reason": zod.string().nullish(),
+  "items": zod.string(),
+  "refundAmount": zod.number(),
+  "status": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create return authorisation
+ */
+export const CreateProductReturnAuthBody = zod.object({
+  "customerId": zod.number().optional(),
+  "customerName": zod.string(),
+  "reason": zod.string().optional(),
+  "items": zod.string(),
+  "refundAmount": zod.number().optional(),
+  "status": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Update return authorisation
+ */
+export const UpdateProductReturnAuthParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProductReturnAuthBody = zod.object({
+  "customerId": zod.number().optional(),
+  "customerName": zod.string(),
+  "reason": zod.string().optional(),
+  "items": zod.string(),
+  "refundAmount": zod.number().optional(),
+  "status": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateProductReturnAuthResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "raNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "reason": zod.string().nullish(),
+  "items": zod.string(),
+  "refundAmount": zod.number(),
+  "status": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete return authorisation
+ */
+export const DeleteProductReturnAuthParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+

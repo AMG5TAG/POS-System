@@ -1646,6 +1646,197 @@ export interface OpenaiError {
   error: string;
 }
 
+export interface Brand {
+  id: number;
+  merchantId: number;
+  name: string;
+  logoUrl?: string | null;
+  website?: string | null;
+  description?: string | null;
+  createdAt: string;
+  productCount: number;
+  retailValue: number;
+}
+
+export interface BrandInput {
+  name: string;
+  logoUrl?: string;
+  website?: string;
+  description?: string;
+}
+
+export interface BrandListResponse {
+  items: Brand[];
+  total: number;
+}
+
+export interface Tag {
+  id: number;
+  merchantId: number;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface TagInput {
+  name: string;
+  color?: string;
+}
+
+export interface TagListResponse {
+  items: Tag[];
+  total: number;
+}
+
+export interface Supplier {
+  id: number;
+  merchantId: number;
+  name: string;
+  accountNumber?: string | null;
+  website?: string | null;
+  paymentTerms?: string | null;
+  notes?: string | null;
+  logoUrl?: string | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  address?: string | null;
+  contacts?: string | null;
+  raPortalLink?: string | null;
+  raProcedure?: string | null;
+  creditAccountNumber?: string | null;
+  creditLimit?: string | null;
+  creditTerms?: string | null;
+  creditContactName?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  createdAt: string;
+}
+
+export interface SupplierInput {
+  name: string;
+  accountNumber?: string;
+  website?: string;
+  paymentTerms?: string;
+  notes?: string;
+  logoUrl?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  address?: string;
+  contacts?: unknown;
+  raPortalLink?: string;
+  raProcedure?: string;
+  creditAccountNumber?: string;
+  creditLimit?: string;
+  creditTerms?: string;
+  creditContactName?: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface SupplierListResponse {
+  items: Supplier[];
+  total: number;
+}
+
+export interface ProductRecall {
+  id: number;
+  merchantId: number;
+  recallId: string;
+  productId?: number | null;
+  productName: string;
+  reason: string;
+  severity: string;
+  status: string;
+  affectedBatch?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface ProductRecallInput {
+  productId?: number;
+  productName: string;
+  reason: string;
+  severity?: string;
+  status?: string;
+  affectedBatch?: string;
+  notes?: string;
+}
+
+export interface ProductRecallListResponse {
+  items: ProductRecall[];
+  total: number;
+}
+
+export interface ProductPreOrder {
+  id: number;
+  merchantId: number;
+  poNumber: string;
+  customerId?: number | null;
+  customerName: string;
+  productId?: number | null;
+  productName: string;
+  quantity: number;
+  depositAmount: number;
+  status: string;
+  expectedDate?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface ProductPreOrderInput {
+  customerId?: number;
+  customerName: string;
+  productId?: number;
+  productName: string;
+  quantity: number;
+  depositAmount?: number;
+  status?: string;
+  expectedDate?: string;
+  notes?: string;
+}
+
+export interface ProductPreOrderListResponse {
+  items: ProductPreOrder[];
+  total: number;
+}
+
+export interface ProductReturnAuth {
+  id: number;
+  merchantId: number;
+  raNumber: string;
+  customerId?: number | null;
+  customerName: string;
+  reason?: string | null;
+  items: string;
+  refundAmount: number;
+  status: string;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface ProductReturnAuthInput {
+  customerId?: number;
+  customerName: string;
+  reason?: string;
+  items: string;
+  refundAmount?: number;
+  status?: string;
+  notes?: string;
+}
+
+export interface ProductReturnAuthListResponse {
+  items: ProductReturnAuth[];
+  total: number;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1840,5 +2031,28 @@ export type SaveFloorPlan200 = {
 
 export type ListSocialFeedPostsParams = {
 platform?: string;
+};
+
+export type ListBrandsParams = {
+search?: string;
+};
+
+export type ListSuppliersParams = {
+search?: string;
+};
+
+export type ListProductRecallsParams = {
+search?: string;
+status?: string;
+};
+
+export type ListProductPreOrdersParams = {
+search?: string;
+status?: string;
+};
+
+export type ListProductReturnAuthsParams = {
+search?: string;
+status?: string;
 };
 

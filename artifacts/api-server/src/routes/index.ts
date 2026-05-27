@@ -39,6 +39,9 @@ import socialFeedRouter from "./social-feed";
 import floorPlanRouter from "./floor-plan";
 import openaiRouter from "./openai";
 import aiSettingsRouter from "./ai-settings";
+import productRecallsRouter from "./product-recalls";
+import productPreOrdersRouter from "./product-pre-orders";
+import productReturnAuthsRouter from "./product-return-auths";
 
 const router: IRouter = Router();
 
@@ -82,5 +85,8 @@ router.use(socialFeedRouter);
 router.use(floorPlanRouter);
 router.use(openaiRouter);
 router.use(aiSettingsRouter);
+router.use(productRecallsRouter);
+router.use(productPreOrdersRouter);
+router.use(productReturnAuthsRouter);
 
 export default router;
