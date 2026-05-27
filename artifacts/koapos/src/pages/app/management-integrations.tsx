@@ -269,7 +269,7 @@ function Section({
   const [open, setOpen] = useState(defaultOpen);
   const connected = items.filter((i) => i.status === "connected").length;
   return (
-    <section className="space-y-4">
+    <section className="space-y-2">
       <button
         className={cn("w-full rounded-2xl border px-5 py-4 flex items-center gap-4 text-left transition-all", accent, "hover:shadow-sm")}
         onClick={() => setOpen((o) => !o)}
@@ -423,7 +423,7 @@ export default function ManagementIntegrationsPage() {
 
   return (
     <AppLayout>
-      <div className="w-full px-4 lg:px-6 py-6 space-y-10">
+      <div className="w-full px-4 lg:px-6 py-6 space-y-6">
 
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4">
@@ -448,7 +448,7 @@ export default function ManagementIntegrationsPage() {
             <Loader2 className="w-7 h-7 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="space-y-12">
+          <div className="space-y-6">
             {ALL_SECTIONS.map((sec) => {
               const items = bySection(sec.id);
               if (items.length === 0) return null;
