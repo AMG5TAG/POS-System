@@ -29,3 +29,4 @@ export * from "./marketing-automation";
 export * from "./oauth-token-vault";
 export * from "./cameras";
 export * from "./social-feed";
+export * from "./floor-plan";

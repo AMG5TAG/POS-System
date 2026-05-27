@@ -87,6 +87,7 @@ import StaffKpisPage from "@/pages/app/staff-kpis";
 import StaffLinksPage from "@/pages/app/staff-links";
 import StaffSocialFeedPage from "@/pages/app/staff-social-feed";
 import ManagementMarketingSocialFeedPage from "@/pages/app/management-marketing-social-feed";
+import ManagementFloorPlanPage from "@/pages/app/management-floor-plan";
 
 import MarketingPage from "@/pages/app/marketing";
 import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
@@ -326,6 +327,9 @@ function Router() {
       </Route>
       <Route path="/management/inventory">
         <ProtectedRoute component={ManagementInventoryPage} />
+      </Route>
+      <Route path="/management/floor-plan">
+        <ProtectedRoute component={ManagementFloorPlanPage} />
       </Route>
       <Route path="/management/discounts">
         <ProtectedRoute component={ManagementDiscountsPage} />

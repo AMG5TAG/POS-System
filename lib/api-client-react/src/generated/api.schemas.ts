@@ -180,6 +180,8 @@ export interface Product {
   isEpay?: boolean;
   /** @maxItems 5 */
   tags?: string[];
+  /** @nullable */
+  stockLocation?: string | null;
   createdAt: string;
 }
 
@@ -241,6 +243,7 @@ export interface ProductUpdate {
   isEpay?: boolean;
   /** @maxItems 5 */
   tags?: string[];
+  stockLocation?: string;
 }
 
 export interface ProductList {
@@ -1576,6 +1579,27 @@ export interface CameraSnapshotInput {
   source?: string;
 }
 
+export interface FloorElement {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+}
+
+export interface FloorPlan {
+  elements: FloorElement[];
+  gridCols: number;
+  gridRows: number;
+}
+
+export interface FloorZone {
+  id: string;
+  label: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -1758,6 +1782,10 @@ export type CancelLaybyBody = {
 
 export type ListCameraSnapshotsParams = {
 cameraId?: number;
+};
+
+export type SaveFloorPlan200 = {
+  ok?: boolean;
 };
 
 export type ListSocialFeedPostsParams = {

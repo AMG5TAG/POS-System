@@ -62,6 +62,8 @@ import type {
   EmailSettings,
   EmailSettingsInput,
   ErrorEnvelope,
+  FloorPlan,
+  FloorZone,
   GetDashboardActivityParams,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
@@ -112,6 +114,7 @@ import type {
   RefundInput,
   RegisterInput,
   SalesDataPoint,
+  SaveFloorPlan200,
   SendPurchaseOrderEmail200,
   SendPurchaseOrderEmailBody,
   SendReceiptRequest,
@@ -9666,6 +9669,231 @@ export const useDeletePosSecurityCapture = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeletePosSecurityCaptureMutationOptions(options));
     }
+
+export const getGetFloorPlanUrl = () => {
+
+
+
+
+  return `/api/floor-plan`
+}
+
+/**
+ * @summary Get the merchant floor plan
+ */
+export const getFloorPlan = async ( options?: RequestInit): Promise<FloorPlan> => {
+
+  return customFetch<FloorPlan>(getGetFloorPlanUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFloorPlanQueryKey = () => {
+    return [
+    `/api/floor-plan`
+    ] as const;
+    }
+
+
+export const getGetFloorPlanQueryOptions = <TData = Awaited<ReturnType<typeof getFloorPlan>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFloorPlan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFloorPlanQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFloorPlan>>> = ({ signal }) => getFloorPlan({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFloorPlan>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFloorPlanQueryResult = NonNullable<Awaited<ReturnType<typeof getFloorPlan>>>
+export type GetFloorPlanQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the merchant floor plan
+ */
+
+export function useGetFloorPlan<TData = Awaited<ReturnType<typeof getFloorPlan>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFloorPlan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFloorPlanQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSaveFloorPlanUrl = () => {
+
+
+
+
+  return `/api/floor-plan`
+}
+
+/**
+ * @summary Save the merchant floor plan
+ */
+export const saveFloorPlan = async (floorPlan: FloorPlan, options?: RequestInit): Promise<SaveFloorPlan200> => {
+
+  return customFetch<SaveFloorPlan200>(getSaveFloorPlanUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      floorPlan,)
+  }
+);}
+
+
+
+
+export const getSaveFloorPlanMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveFloorPlan>>, TError,{data: BodyType<FloorPlan>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveFloorPlan>>, TError,{data: BodyType<FloorPlan>}, TContext> => {
+
+const mutationKey = ['saveFloorPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveFloorPlan>>, {data: BodyType<FloorPlan>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveFloorPlan(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveFloorPlanMutationResult = NonNullable<Awaited<ReturnType<typeof saveFloorPlan>>>
+    export type SaveFloorPlanMutationBody = BodyType<FloorPlan>
+    export type SaveFloorPlanMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save the merchant floor plan
+ */
+export const useSaveFloorPlan = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveFloorPlan>>, TError,{data: BodyType<FloorPlan>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveFloorPlan>>,
+        TError,
+        {data: BodyType<FloorPlan>},
+        TContext
+      > => {
+      return useMutation(getSaveFloorPlanMutationOptions(options));
+    }
+
+export const getListFloorPlanZonesUrl = () => {
+
+
+
+
+  return `/api/floor-plan/zones`
+}
+
+/**
+ * @summary List named zones from the floor plan (for product location dropdown)
+ */
+export const listFloorPlanZones = async ( options?: RequestInit): Promise<FloorZone[]> => {
+
+  return customFetch<FloorZone[]>(getListFloorPlanZonesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFloorPlanZonesQueryKey = () => {
+    return [
+    `/api/floor-plan/zones`
+    ] as const;
+    }
+
+
+export const getListFloorPlanZonesQueryOptions = <TData = Awaited<ReturnType<typeof listFloorPlanZones>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFloorPlanZones>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFloorPlanZonesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFloorPlanZones>>> = ({ signal }) => listFloorPlanZones({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFloorPlanZones>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFloorPlanZonesQueryResult = NonNullable<Awaited<ReturnType<typeof listFloorPlanZones>>>
+export type ListFloorPlanZonesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List named zones from the floor plan (for product location dropdown)
+ */
+
+export function useListFloorPlanZones<TData = Awaited<ReturnType<typeof listFloorPlanZones>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFloorPlanZones>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFloorPlanZonesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetSocialFeedSettingsUrl = () => {
 

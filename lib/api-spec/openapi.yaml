@@ -2490,6 +2490,53 @@ paths:
         "204":
           description: Deleted
 
+  /floor-plan:
+    get:
+      operationId: getFloorPlan
+      tags: [floor-plan]
+      summary: Get the merchant floor plan
+      responses:
+        "200":
+          description: Floor plan data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorPlan"
+    put:
+      operationId: saveFloorPlan
+      tags: [floor-plan]
+      summary: Save the merchant floor plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorPlan"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /floor-plan/zones:
+    get:
+      operationId: listFloorPlanZones
+      tags: [floor-plan]
+      summary: List named zones from the floor plan (for product location dropdown)
+      responses:
+        "200":
+          description: Zone list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FloorZone"
+
   /social-feed/settings:
     get:
       operationId: getSocialFeedSettings
@@ -2781,6 +2828,8 @@ components:
           items:
             type: string
           maxItems: 5
+        stockLocation:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -2889,6 +2938,8 @@ components:
           items:
             type: string
           maxItems: 5
+        stockLocation:
+          type: string
 
     ProductList:
       type: object
@@ -4659,3 +4710,33 @@ components:
         imageData: { type: string }
         takenBy:   { type: string }
         source:    { type: string }
+
+    FloorElement:
+      type: object
+      required: [id, type, x, y, width, height, label]
+      properties:
+        id:     { type: string }
+        type:   { type: string }
+        x:      { type: integer }
+        y:      { type: integer }
+        width:  { type: integer }
+        height: { type: integer }
+        label:  { type: string }
+
+    FloorPlan:
+      type: object
+      required: [elements, gridCols, gridRows]
+      properties:
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/FloorElement"
+        gridCols: { type: integer }
+        gridRows:  { type: integer }
+
+    FloorZone:
+      type: object
+      required: [id, label]
+      properties:
+        id:    { type: string }
+        label: { type: string }

@@ -36,6 +36,7 @@ import marketingAutomationRouter from "./marketing-automation";
 import feedbackRouter from "./feedback";
 import camerasRouter from "./cameras";
 import socialFeedRouter from "./social-feed";
+import floorPlanRouter from "./floor-plan";
 
 const router: IRouter = Router();
 
@@ -76,5 +77,6 @@ router.use(marketingAutomationRouter);
 router.use(feedbackRouter);
 router.use(camerasRouter);
 router.use(socialFeedRouter);
+router.use(floorPlanRouter);
 
 export default router;

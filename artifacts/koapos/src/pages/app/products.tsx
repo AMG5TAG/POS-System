@@ -10,6 +10,8 @@ import {
   useCreateCategory,
   useGetMerchant,
   useGetProductPricingHistory,
+  useListFloorPlanZones,
+  useGetFloorPlan,
   Product,
 } from "@workspace/api-client-react";
 import {
@@ -30,12 +32,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import {
   Search, Plus, Pencil, Trash2, Package,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
-  Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon,
+  Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
   Archive, X as XIcon,
@@ -76,6 +79,8 @@ type ProductForm = {
   groupPrices: Record<string, string>;
   /* digital code */
   isEpay: boolean;
+  /* floor plan */
+  stockLocation: string;
 };
 
 const defaultForm: ProductForm = {
@@ -92,6 +97,7 @@ const defaultForm: ProductForm = {
   internalNotes: "",
   groupPrices: {},
   isEpay: false,
+  stockLocation: "",
 };
 
 const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean }[] = [
@@ -477,7 +483,9 @@ function ProductDetailDialog({
   const [tab, setTab]                         = useState<DetailTab>("details");
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
+  const { data: floorPlanData }                 = useGetFloorPlan();
   if (!product) return null;
+  const productStockLocation = (product as Product & { stockLocation?: string | null }).stockLocation ?? null;
 
   const margin = product.costPrice && product.price > 0
     ? Math.round(((product.price - product.costPrice) / product.price) * 100)
@@ -591,6 +599,25 @@ function ProductDetailDialog({
                 </div>
               )}
             </div>
+            {productStockLocation && (
+              <div className="rounded-xl border bg-muted/20 divide-y mt-0">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground">Stock Location</p>
+                    <p className="font-medium">{productStockLocation}</p>
+                  </div>
+                </div>
+                {floorPlanData && floorPlanData.elements && floorPlanData.elements.length > 0 && (
+                  <div className="px-4 py-3">
+                    <FloorPlanMiniView
+                      floorPlan={floorPlanData as { elements: { id: string; type: string; x: number; y: number; width: number; height: number; label: string }[]; gridCols: number; gridRows: number }}
+                      highlightLabel={productStockLocation}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             {isLowStock && (
               <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
                 ⚠ Stock is below the low stock threshold
@@ -872,6 +899,7 @@ export default function ProductsPage() {
     { query: { queryKey: ["products", search, categoryFilter] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
+  const { data: floorPlanZones } = useListFloorPlanZones();
   const createMutation   = useCreateProduct();
   const updateMutation   = useUpdateProduct();
   const deleteMutation   = useDeleteProduct();
@@ -950,6 +978,7 @@ export default function ProductsPage() {
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
       isEpay: ep.isEpay ?? false,
+      stockLocation: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
     });
     if ((ep.productType ?? "standard") === "digital_code") {
       loadDigitalCodes(p.id);
@@ -984,6 +1013,7 @@ export default function ProductsPage() {
       supplierCode: form.supplierCode || undefined,
       isEpay: form.isEpay,
       tags: form.tags,
+      stockLocation: form.stockLocation || undefined,
       groupPrices: Object.fromEntries(
         Object.entries(form.groupPrices)
           .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
@@ -1504,6 +1534,25 @@ export default function ProductsPage() {
                       placeholder="Scan or type barcode"
                       className="mt-1.5"
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> Stock Location
+                    </Label>
+                    <Select value={form.stockLocation || "__none__"} onValueChange={(v) => setField("stockLocation", v === "__none__" ? "" : v)}>
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue placeholder="No location assigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— No location —</SelectItem>
+                        {(floorPlanZones ?? []).map((z) => (
+                          <SelectItem key={z.id} value={z.label}>{z.label}</SelectItem>
+                        ))}
+                        {(!floorPlanZones || floorPlanZones.length === 0) && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">No zones defined — add zones in the Floor Plan editor</div>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Category</Label>

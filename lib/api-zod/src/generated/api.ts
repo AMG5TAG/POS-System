@@ -315,6 +315,7 @@ export const ListProductsResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
+  "stockLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -401,6 +402,7 @@ export const GetProductResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
+  "stockLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -437,7 +439,8 @@ export const UpdateProductBody = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
-  "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional()
+  "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
+  "stockLocation": zod.string().optional()
 })
 
 export const updateProductResponseTagsMax = 5;
@@ -478,6 +481,7 @@ export const UpdateProductResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
+  "stockLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -3363,6 +3367,56 @@ export const CreatePosSecurityCaptureBody = zod.object({
 export const DeletePosSecurityCaptureParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+/**
+ * @summary Get the merchant floor plan
+ */
+export const GetFloorPlanResponse = zod.object({
+  "elements": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "x": zod.number(),
+  "y": zod.number(),
+  "width": zod.number(),
+  "height": zod.number(),
+  "label": zod.string()
+})),
+  "gridCols": zod.number(),
+  "gridRows": zod.number()
+})
+
+
+/**
+ * @summary Save the merchant floor plan
+ */
+export const SaveFloorPlanBody = zod.object({
+  "elements": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "x": zod.number(),
+  "y": zod.number(),
+  "width": zod.number(),
+  "height": zod.number(),
+  "label": zod.string()
+})),
+  "gridCols": zod.number(),
+  "gridRows": zod.number()
+})
+
+export const SaveFloorPlanResponse = zod.object({
+  "ok": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List named zones from the floor plan (for product location dropdown)
+ */
+export const ListFloorPlanZonesResponseItem = zod.object({
+  "id": zod.string(),
+  "label": zod.string()
+})
+export const ListFloorPlanZonesResponse = zod.array(ListFloorPlanZonesResponseItem)
 
 
 /**
