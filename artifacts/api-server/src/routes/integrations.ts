@@ -18,7 +18,7 @@ export const INTEGRATIONS = [
   { key: "proton_drive",    label: "Proton Drive",          section: "cloud_storage",    category: "Cloud Storage",           description: "Store encrypted backups in Proton Drive for maximum privacy and security.",                                      authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── BUSINESS & FINANCE ─────────────────────────────────────────────────── */
-  { key: "xero",            label: "Xero",                  section: "business_finance", category: "Business & Finance",      description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.",                    authType: "oauth" as const, oauthProvider: "xero"      as const, useVault: true  },
+  { key: "xero",            label: "Xero",                  section: "business_finance", category: "Business & Finance",      description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.",                    authType: "oauth" as const, oauthProvider: "xero"      as const, useVault: false },
   { key: "quickbooks",      label: "QuickBooks Online",     section: "business_finance", category: "Business & Finance",      description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online (Intuit).",                     authType: "oauth" as const, oauthProvider: "quickbooks" as const, useVault: true },
   { key: "myob",            label: "MYOB",                  section: "business_finance", category: "Business & Finance",      description: "Sync sales data and end-of-day takings directly to MYOB AccountRight or Essentials.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "stripe_own",      label: "Stripe",                section: "business_finance", category: "Business & Finance",      description: "Connect your own Stripe account to accept card payments from customers.",                                         authType: "oauth" as const, oauthProvider: "stripe"    as const, useVault: true  },
@@ -157,27 +157,57 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
 
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
-async function exchangeToken(key: string, code: string, cb: string): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
+async function exchangeToken(key: string, code: string, cb: string, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
   if (key === "google_drive" || key === "google_business" || key === "google_contacts") {
     const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null };
+    const accessToken = d.access_token ?? "";
+    let accountId: string | undefined, accountHandle: string | undefined;
+    if (accessToken) {
+      const profile = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { sub?: string; email?: string };
+      accountId = profile.sub; accountHandle = profile.email;
+    }
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
   }
   if (key === "onedrive" || key === "microsoft_contacts") {
     const d = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.MICROSOFT_CLIENT_ID ?? "", client_secret: process.env.MICROSOFT_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null };
+    const accessToken = d.access_token ?? "";
+    let accountId: string | undefined, accountHandle: string | undefined;
+    if (accessToken) {
+      const profile = await fetch("https://graph.microsoft.com/v1.0/me", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { id?: string; mail?: string; userPrincipalName?: string };
+      accountId = profile.id; accountHandle = profile.mail ?? profile.userPrincipalName;
+    }
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
   }
   if (key === "dropbox") {
     const d = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.DROPBOX_APP_KEY ?? "", client_secret: process.env.DROPBOX_APP_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; account_id?: string };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id };
+    const accessToken = d.access_token ?? "";
+    let accountHandle: string | undefined;
+    if (accessToken) {
+      const profile = await fetch("https://api.dropboxapi.com/2/users/get_current_account", { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: "null" }).then((r) => r.json()).catch(() => ({})) as { email?: string };
+      accountHandle = profile.email;
+    }
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
   }
   if (key === "stripe_own") {
     const d = await fetch("https://connect.stripe.com/oauth/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, client_secret: process.env.STRIPE_SECRET_KEY ?? "" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; stripe_user_id?: string };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.stripe_user_id };
+    const accessToken = d.access_token ?? "";
+    let accountHandle: string | undefined;
+    if (d.stripe_user_id) {
+      const account = await fetch(`https://api.stripe.com/v1/accounts/${d.stripe_user_id}`, { headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY ?? ""}` } }).then((r) => r.json()).catch(() => ({})) as { email?: string; business_profile?: { name?: string } };
+      accountHandle = account.business_profile?.name ?? account.email;
+    }
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.stripe_user_id, accountHandle };
   }
   if (key === "quickbooks") {
-    const creds = Buffer.from(`${process.env.QUICKBOOKS_CLIENT_ID}:${process.env.QUICKBOOKS_CLIENT_SECRET}`).toString("base64");
-    const d = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${creds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null };
+    const basicCreds = Buffer.from(`${process.env.QUICKBOOKS_CLIENT_ID}:${process.env.QUICKBOOKS_CLIENT_SECRET}`).toString("base64");
+    const d = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basicCreds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
+    const accessToken = d.access_token ?? "";
+    let accountHandle: string | undefined;
+    if (accessToken) {
+      const profile = await fetch("https://accounts.platform.intuit.com/v1/openid_connect/userinfo", { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }).then((r) => r.json()).catch(() => ({})) as { email?: string; givenName?: string; familyName?: string };
+      accountHandle = profile.email ?? (profile.givenName ? `${profile.givenName} ${profile.familyName ?? ""}`.trim() : undefined);
+    }
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: extra?.realmId, accountHandle };
   }
   if (key === "meta_business" || key === "instagram_business") {
     const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
@@ -216,8 +246,16 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
 
     let status = "disconnected", connectedAt: string | null = null, accountHandle: string | null = null, accountId: string | null = null;
     if (!comingSoon) {
-      if (intg.useVault && vaultRow?.connectedAt) { status = "connected"; connectedAt = vaultRow.connectedAt.toISOString(); accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null; }
-      else if (row?.status === "connected") { status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null; }
+      if (intg.useVault && vaultRow?.connectedAt) {
+        status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
+        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+      } else if (row?.status === "connected") {
+        status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
+        // For Xero: surface the tenant name stored in credentials as accountHandle
+        if (intg.key === "xero" && row.credentials) {
+          try { const c = JSON.parse(row.credentials) as { tenantName?: string; tenantId?: string }; accountHandle = c.tenantName ?? null; accountId = c.tenantId ?? null; } catch { /* ignore */ }
+        }
+      }
     }
 
     return {
@@ -273,15 +311,17 @@ router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
 
 router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> => {
   const { key } = req.params;
-  const { code, state, error } = req.query as Record<string, string>;
+  const { code, state, error, realmId } = req.query as Record<string, string>;
   if (error || !code || !state) { res.redirect(`/management/integrations?error=${key}_oauth_denied`); return; }
   const merchantId = parseInt(state, 10);
   if (isNaN(merchantId)) { res.redirect(`/management/integrations?error=${key}_invalid_state`); return; }
-  if (key === "xero") { res.redirect(`/management/integrations?error=xero_use_dedicated_route`); return; }
+  // Xero has a dedicated route with full tenant-selection flow — hand off there
+  if (key === "xero") { res.redirect(`/api/xero/auth/start`); return; }
 
   try {
     const cb = cbUrl(key, req);
-    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb);
+    const extra = realmId ? { realmId } : undefined;
+    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, extra);
     const intg = INTEGRATIONS.find((i) => i.key === key);
 
     if (intg?.useVault) {

@@ -319,7 +319,8 @@ export default function ManagementIntegrationsPage() {
   };
 
   const handleOAuth = (intg: Integration) => {
-    if (intg.key === "xero") { setLocation("/management/xero"); return; }
+    // Xero has a dedicated OAuth + tenant-selection flow at /api/xero/auth/start
+    if (intg.key === "xero") { window.location.href = "/api/xero/auth/start"; return; }
     window.location.href = `/api/integrations/oauth/${intg.key}/start`;
   };
 
