@@ -44,6 +44,8 @@ import {
   Camera,
   Upload,
   X,
+  Mail,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -207,6 +209,7 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
   const [newNoteText, setNewNoteText] = useState("");
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [uploading,   setUploading]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
@@ -594,6 +597,36 @@ function DetailDialog({ job, onClose, onDelete, deleteIsPending, onPrint }: Deta
               Delete
             </Button>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={emailLoading || !job?.customerEmail}
+                title={job?.customerEmail ? "Email job details to customer" : "No customer email on file"}
+                onClick={async () => {
+                  if (!job?.customerEmail || emailLoading) return;
+                  setEmailLoading(true);
+                  try {
+                    const res = await fetch(`/api/service-jobs/${job.id}/email`, {
+                      method: "POST",
+                      credentials: "include",
+                    });
+                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+                    if (res.ok && data.success) {
+                      toast.success(`Email sent to ${job.customerEmail}`);
+                    } else {
+                      toast.error(data.error ?? "Failed to send email");
+                    }
+                  } catch {
+                    toast.error("Network error — email not sent");
+                  } finally {
+                    setEmailLoading(false);
+                  }
+                }}
+              >
+                {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                Email
+              </Button>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sheet")}>
                 <Printer className="w-3.5 h-3.5" />
                 Print

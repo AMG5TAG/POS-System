@@ -101,6 +101,7 @@ import type {
   RegisterInput,
   SalesDataPoint,
   SendReceiptRequest,
+  SendServiceJobEmail200,
   SendTransactionReceipt200,
   ServiceJob,
   ServiceJobInput,
@@ -5304,6 +5305,76 @@ export const useDeleteServiceJob = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteServiceJobMutationOptions(options));
+    }
+
+export const getSendServiceJobEmailUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-jobs/${id}/email`
+}
+
+/**
+ * @summary Email service job details to customer
+ */
+export const sendServiceJobEmail = async (id: number, options?: RequestInit): Promise<SendServiceJobEmail200> => {
+
+  return customFetch<SendServiceJobEmail200>(getSendServiceJobEmailUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSendServiceJobEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['sendServiceJobEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendServiceJobEmail>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendServiceJobEmail(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendServiceJobEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendServiceJobEmail>>>
+
+    export type SendServiceJobEmailMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Email service job details to customer
+ */
+export const useSendServiceJobEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendServiceJobEmail>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSendServiceJobEmailMutationOptions(options));
     }
 
 export const getGetDashboardCalendarUrl = (params: GetDashboardCalendarParams,) => {

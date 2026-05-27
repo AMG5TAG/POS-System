@@ -2059,6 +2059,20 @@ export const DeleteServiceJobParams = zod.object({
 
 
 /**
+ * @summary Email service job details to customer
+ */
+export const SendServiceJobEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendServiceJobEmailResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional(),
+  "error": zod.string().nullish()
+})
+
+
+/**
  * @summary Get calendar events for a given month
  */
 export const getDashboardCalendarQueryMonthMax = 12;

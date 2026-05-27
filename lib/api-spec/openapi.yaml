@@ -1365,6 +1365,29 @@ paths:
         "204":
           description: Deleted
 
+  /service-jobs/{id}/email:
+    post:
+      operationId: sendServiceJobEmail
+      tags: [service-jobs]
+      summary: Email service job details to customer
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string, nullable: true }
+
   /dashboard/calendar:
     get:
       operationId: getDashboardCalendar

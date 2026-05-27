@@ -1516,6 +1516,12 @@ year?: number;
 month?: number;
 };
 
+export type SendServiceJobEmail200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string | null;
+};
+
 export type GetDashboardCalendarParams = {
 year: number;
 /**
