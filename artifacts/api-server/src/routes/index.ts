@@ -42,6 +42,18 @@ import aiSettingsRouter from "./ai-settings";
 import productRecallsRouter from "./product-recalls";
 import productPreOrdersRouter from "./product-pre-orders";
 import productReturnAuthsRouter from "./product-return-auths";
+import posRegistersRouter from "./pos-registers";
+import laybySettingsRouter from "./layby-settings";
+import kpiRouter from "./kpi";
+import qrRouter from "./qr";
+import emailTemplatesRouter from "./email-templates";
+import emailCampaignsRouter from "./email-campaigns";
+import landingPagesRouter from "./landing-pages";
+import shortlinksRouter from "./shortlinks";
+import onlineStoreRouter from "./online-store";
+import shippingCarriersRouter from "./shipping-carriers";
+import marketplaceConnectionsRouter from "./marketplace-connections";
+import deliveryOrdersRouter from "./delivery-orders";
 
 const router: IRouter = Router();
 
@@ -88,5 +100,17 @@ router.use(aiSettingsRouter);
 router.use(productRecallsRouter);
 router.use(productPreOrdersRouter);
 router.use(productReturnAuthsRouter);
+router.use(posRegistersRouter);
+router.use(laybySettingsRouter);
+router.use(kpiRouter);
+router.use(qrRouter);
+router.use(emailTemplatesRouter);
+router.use(emailCampaignsRouter);
+router.use(landingPagesRouter);
+router.use(shortlinksRouter);
+router.use(onlineStoreRouter);
+router.use(shippingCarriersRouter);
+router.use(marketplaceConnectionsRouter);
+router.use(deliveryOrdersRouter);
 
 export default router;

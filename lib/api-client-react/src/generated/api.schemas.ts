@@ -1837,6 +1837,511 @@ export interface ProductReturnAuthListResponse {
   total: number;
 }
 
+export interface PosRegister {
+  id: number;
+  merchantId: number;
+  registerId: string;
+  name: string;
+  type: string;
+  staffName: string;
+  staffEmail: string;
+}
+
+export interface PosRegisterInput {
+  registerId: string;
+  name: string;
+  type: string;
+  staffName?: string;
+  staffEmail?: string;
+}
+
+export interface PosRegisterListResponse {
+  items: PosRegister[];
+  total: number;
+}
+
+export interface PosSettings {
+  id: number;
+  merchantId: number;
+  enabledPaymentMethods: string;
+  enabledIntegrationPayments: string;
+  gridColumns: number;
+  gridTileSize: string;
+  gridShowPrices: string;
+  gridShowStockBadges: string;
+  gridCartPosition: string;
+  forceStaffLogin: string;
+  staffLoginMessage: string;
+  activeRegisterId: string;
+  hardwareConfig: string;
+  enabledShortcuts: string;
+}
+
+export interface PosSettingsInput {
+  enabledPaymentMethods?: string;
+  enabledIntegrationPayments?: string;
+  gridColumns?: number;
+  gridTileSize?: string;
+  gridShowPrices?: string;
+  gridShowStockBadges?: string;
+  gridCartPosition?: string;
+  forceStaffLogin?: string;
+  staffLoginMessage?: string;
+  activeRegisterId?: string;
+  hardwareConfig?: string;
+  enabledShortcuts?: string;
+}
+
+export interface LaybySettings {
+  id: number;
+  merchantId: number;
+  durationValue: number;
+  durationUnit: string;
+  paymentFrequency: string;
+  minimumDepositType: string;
+  minimumDepositValue: number;
+  allowPartialPayments: string;
+  autoEmailOnCreation: string;
+  printTermsOnReceipt: string;
+  termsAndConditions: string;
+}
+
+export interface LaybySettingsInput {
+  durationValue?: number;
+  durationUnit?: string;
+  paymentFrequency?: string;
+  minimumDepositType?: string;
+  minimumDepositValue?: number;
+  allowPartialPayments?: string;
+  autoEmailOnCreation?: string;
+  printTermsOnReceipt?: string;
+  termsAndConditions?: string;
+}
+
+export interface KpiSettings {
+  id: number;
+  merchantId: number;
+  trackCategories: string;
+  trackAppointments: string;
+  trackServices: string;
+}
+
+export interface KpiSettingsInput {
+  trackCategories?: string;
+  trackAppointments?: string;
+  trackServices?: string;
+}
+
+export interface KpiTarget {
+  id: number;
+  merchantId: number;
+  targetId: string;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  staffIds: string;
+  reward?: string;
+  notes: string;
+  isActive: string;
+}
+
+export interface KpiTargetInput {
+  targetId: string;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  staffIds?: string;
+  reward?: string;
+  notes?: string;
+  isActive?: string;
+}
+
+export interface KpiTargetListResponse {
+  items: KpiTarget[];
+  total: number;
+}
+
+export interface QrCode {
+  id: number;
+  merchantId: number;
+  entryId: string;
+  label: string;
+  url: string;
+  qrType: string;
+  content: string;
+  settings: string;
+  createdAt: string;
+}
+
+export interface QrCodeInput {
+  entryId: string;
+  label: string;
+  url?: string;
+  qrType?: string;
+  content?: string;
+  settings?: string;
+}
+
+export interface QrCodeListResponse {
+  items: QrCode[];
+  total: number;
+}
+
+export interface QrSettings {
+  id: number;
+  merchantId: number;
+  patternColor: string;
+  eyeColor: string;
+  eyeDotColor: string;
+  bgColor: string;
+  dotStyle: string;
+  cornerSquareStyle: string;
+  cornerDotStyle: string;
+  template: string;
+  size: number;
+  level: string;
+  logoUrl: string;
+}
+
+export interface QrSettingsInput {
+  patternColor?: string;
+  eyeColor?: string;
+  eyeDotColor?: string;
+  bgColor?: string;
+  dotStyle?: string;
+  cornerSquareStyle?: string;
+  cornerDotStyle?: string;
+  template?: string;
+  size?: number;
+  level?: string;
+  logoUrl?: string;
+}
+
+export interface QrSavedTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  settings: string;
+  createdAt: string;
+}
+
+export interface QrSavedTemplateInput {
+  templateId: string;
+  name: string;
+  settings: string;
+}
+
+export interface QrSavedTemplateListResponse {
+  items: QrSavedTemplate[];
+  total: number;
+}
+
+export interface EmailTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailTemplateInput {
+  templateId: string;
+  name: string;
+  category?: string;
+  subject?: string;
+  body?: string;
+}
+
+export interface EmailTemplateListResponse {
+  items: EmailTemplate[];
+  total: number;
+}
+
+export interface EmailCampaign {
+  id: number;
+  merchantId: number;
+  campaignId: string;
+  name: string;
+  audience: string;
+  audienceLabel: string;
+  subject: string;
+  body: string;
+  ctaEnabled: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  scheduled: string;
+  scheduledAt: string;
+  status: string;
+  sentAt: string;
+  opens: number;
+  bounces: number;
+  recipientCount: number;
+  customerId?: number | null;
+  createdAt: string;
+}
+
+export interface EmailCampaignInput {
+  campaignId: string;
+  name: string;
+  audience?: string;
+  audienceLabel?: string;
+  subject?: string;
+  body?: string;
+  ctaEnabled?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  scheduled?: string;
+  scheduledAt?: string;
+  status?: string;
+  sentAt?: string;
+  opens?: number;
+  bounces?: number;
+  recipientCount?: number;
+  customerId?: number;
+}
+
+export interface EmailCampaignListResponse {
+  items: EmailCampaign[];
+  total: number;
+}
+
+export interface LandingPage {
+  id: number;
+  merchantId: number;
+  pageId: string;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  bio?: string;
+  profileImage?: string;
+  bgType?: string;
+  bgColor?: string;
+  bgFrom?: string;
+  bgTo?: string;
+  bgDir?: string;
+  bgImage?: string;
+  btnStyle?: string;
+  btnVariant?: string;
+  btnBg?: string;
+  btnText?: string;
+  btnBorder?: string;
+  textColor?: string;
+  font?: string;
+  links: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LandingPageInput {
+  pageId: string;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  bio?: string;
+  profileImage?: string;
+  bgType?: string;
+  bgColor?: string;
+  bgFrom?: string;
+  bgTo?: string;
+  bgDir?: string;
+  bgImage?: string;
+  btnStyle?: string;
+  btnVariant?: string;
+  btnBg?: string;
+  btnText?: string;
+  btnBorder?: string;
+  textColor?: string;
+  font?: string;
+  links?: string;
+}
+
+export interface LandingPageListResponse {
+  items: LandingPage[];
+  total: number;
+}
+
+export interface Shortlink {
+  id: number;
+  merchantId: number;
+  linkId: string;
+  label: string;
+  longUrl: string;
+  slug: string;
+  baseDomain: string;
+  clicks: number;
+  tags: string;
+  createdAt: string;
+}
+
+export interface ShortlinkInput {
+  linkId: string;
+  label: string;
+  longUrl: string;
+  slug: string;
+  baseDomain?: string;
+  tags?: string;
+}
+
+export interface ShortlinkListResponse {
+  items: Shortlink[];
+  total: number;
+}
+
+export interface ShortlinkSettings {
+  id: number;
+  merchantId: number;
+  baseDomain: string;
+  prefix: string;
+}
+
+export interface ShortlinkSettingsInput {
+  baseDomain?: string;
+  prefix?: string;
+}
+
+export interface OnlineStoreSettings {
+  id: number;
+  merchantId: number;
+  mode: string;
+  storeName: string;
+  tagline: string;
+  logoUrl: string;
+  faviconUrl: string;
+  domain: string;
+  published: string;
+  theme: string;
+  payments: string;
+  features: string;
+  pages: string;
+  quickCodes: string;
+}
+
+export interface OnlineStoreSettingsInput {
+  mode?: string;
+  storeName?: string;
+  tagline?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  domain?: string;
+  published?: string;
+  theme?: string;
+  payments?: string;
+  features?: string;
+  pages?: string;
+  quickCodes?: string;
+}
+
+export interface OnlineStoreThirdparty {
+  id: number;
+  merchantId: number;
+  providerId: string;
+  storeUrl: string;
+  apiKey: string;
+  connected: string;
+  connectedAt: string;
+}
+
+export interface OnlineStoreThirdpartyInput {
+  providerId?: string;
+  storeUrl?: string;
+  apiKey?: string;
+  connected?: string;
+  connectedAt?: string;
+}
+
+export interface ShippingCarrier {
+  id: number;
+  merchantId: number;
+  carrierId: string;
+  connected: string;
+}
+
+export interface ShippingCarrierListResponse {
+  items: ShippingCarrier[];
+  total: number;
+}
+
+export interface MarketplaceConnection {
+  id: number;
+  merchantId: number;
+  marketplaceId: string;
+  connected: string;
+  connectedAt: string;
+  lastSync: string;
+  productsCount: number;
+  ordersCount: number;
+  config: string;
+}
+
+export interface MarketplaceConnectionInput {
+  connected?: string;
+  connectedAt?: string;
+  lastSync?: string;
+  productsCount?: number;
+  ordersCount?: number;
+  config?: string;
+}
+
+export interface MarketplaceConnectionListResponse {
+  items: MarketplaceConnection[];
+  total: number;
+}
+
+export interface DeliveryOrder {
+  id: number;
+  merchantId: number;
+  orderId: string;
+  number: string;
+  channel: string;
+  customer: string;
+  customerEmail: string;
+  phone: string;
+  address: string;
+  city: string;
+  postcode: string;
+  state: string;
+  shippingMethod: string;
+  status: string;
+  placedAt: string;
+  total: number;
+  items: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface DeliveryOrderInput {
+  orderId: string;
+  number: string;
+  channel: string;
+  customer: string;
+  customerEmail?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  postcode?: string;
+  state?: string;
+  shippingMethod?: string;
+  status?: string;
+  placedAt?: string;
+  total?: number;
+  items?: string;
+  notes?: string;
+}
+
+export interface DeliveryOrderListResponse {
+  items: DeliveryOrder[];
+  total: number;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -2054,5 +2559,9 @@ status?: string;
 export type ListProductReturnAuthsParams = {
 search?: string;
 status?: string;
+};
+
+export type UpdateShippingCarrierBody = {
+  connected: boolean;
 };
 

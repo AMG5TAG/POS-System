@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Package2, Save, RotateCcw, Info } from "lucide-react";
+import { toast } from "sonner";
+import { useGetLaybySettings, useUpsertLaybySettings } from "@workspace/api-client-react";
 
 const LAYBY_TABS = [
   { href: "#duration",      label: "Duration & Payments" },
@@ -16,9 +18,6 @@ const LAYBY_TABS = [
   { href: "#notifications", label: "Notifications" },
   { href: "#terms",         label: "Terms & Conditions" },
 ];
-import { toast } from "sonner";
-
-const STORAGE_KEY = "koapos_layby_settings";
 
 const DEFAULT_SETTINGS = {
   durationValue: 12,
@@ -42,21 +41,33 @@ const DEFAULT_SETTINGS = {
 
 type LaybySettings = typeof DEFAULT_SETTINGS;
 
-function loadSettings(): LaybySettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    /* ignore */
-  }
-  return { ...DEFAULT_SETTINGS };
+function apiToLocal(row: Record<string, unknown>): LaybySettings {
+  return {
+    durationValue: Number(row.durationValue) || DEFAULT_SETTINGS.durationValue,
+    durationUnit: (row.durationUnit as LaybySettings["durationUnit"]) || DEFAULT_SETTINGS.durationUnit,
+    paymentFrequency: (row.paymentFrequency as LaybySettings["paymentFrequency"]) || DEFAULT_SETTINGS.paymentFrequency,
+    minimumDepositType: (row.minimumDepositType as LaybySettings["minimumDepositType"]) || DEFAULT_SETTINGS.minimumDepositType,
+    minimumDepositValue: Number(row.minimumDepositValue) || DEFAULT_SETTINGS.minimumDepositValue,
+    allowPartialPayments: row.allowPartialPayments === "true" || row.allowPartialPayments === true,
+    autoEmailOnCreation: row.autoEmailOnCreation === "true" || row.autoEmailOnCreation === true,
+    printTermsOnReceipt: row.printTermsOnReceipt === "true" || row.printTermsOnReceipt === true,
+    termsAndConditions: (row.termsAndConditions as string) || DEFAULT_SETTINGS.termsAndConditions,
+  };
 }
 
 export default function ManagementLaybyPage() {
-  const [settings, setSettings] = useState<LaybySettings>(loadSettings);
+  const { data: apiSettings, isLoading } = useGetLaybySettings({ query: { queryKey: ["layby-settings"] } });
+  const upsert = useUpsertLaybySettings();
+
+  const [settings, setSettings] = useState<LaybySettings>({ ...DEFAULT_SETTINGS });
   const [dirty, setDirty] = useState(false);
 
-  useEffect(() => { setDirty(false); }, []);
+  useEffect(() => {
+    if (apiSettings) {
+      setSettings(apiToLocal(apiSettings as unknown as Record<string, unknown>));
+      setDirty(false);
+    }
+  }, [apiSettings]);
 
   function update<K extends keyof LaybySettings>(key: K, value: LaybySettings[K]) {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -64,9 +75,22 @@ export default function ManagementLaybyPage() {
   }
 
   function handleSave() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    setDirty(false);
-    toast.success("Layby settings saved");
+    upsert.mutate({
+      data: {
+        durationValue: settings.durationValue,
+        durationUnit: settings.durationUnit,
+        paymentFrequency: settings.paymentFrequency,
+        minimumDepositType: settings.minimumDepositType,
+        minimumDepositValue: settings.minimumDepositValue,
+        allowPartialPayments: String(settings.allowPartialPayments),
+        autoEmailOnCreation: String(settings.autoEmailOnCreation),
+        printTermsOnReceipt: String(settings.printTermsOnReceipt),
+        termsAndConditions: settings.termsAndConditions,
+      },
+    }, {
+      onSuccess: () => { setDirty(false); toast.success("Layby settings saved"); },
+      onError: () => toast.error("Failed to save layby settings"),
+    });
   }
 
   function handleReset() {
@@ -78,10 +102,11 @@ export default function ManagementLaybyPage() {
     ? `${settings.minimumDepositValue}% of total`
     : `$${settings.minimumDepositValue.toFixed(2)} fixed`;
 
+  if (isLoading) return <AppLayout><div className="p-8 text-muted-foreground">Loading…</div></AppLayout>;
+
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Package2 className="w-6 h-6 text-primary" />
@@ -95,16 +120,14 @@ export default function ManagementLaybyPage() {
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset defaults
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={!dirty}>
+            <Button size="sm" onClick={handleSave} disabled={!dirty || upsert.isPending}>
               <Save className="w-3.5 h-3.5 mr-1.5" /> Save settings
             </Button>
           </div>
         </div>
 
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
-        {/* Duration & Payments */}
         <Card id="duration">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Duration & Payments</CardTitle>
@@ -116,17 +139,13 @@ export default function ManagementLaybyPage() {
                 <Label>Maximum Duration</Label>
                 <div className="flex gap-2">
                   <Input
-                    type="number"
-                    min={1}
-                    max={999}
+                    type="number" min={1} max={999}
                     value={settings.durationValue}
                     onChange={(e) => update("durationValue", Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-24"
                   />
                   <Select value={settings.durationUnit} onValueChange={(v) => update("durationUnit", v as LaybySettings["durationUnit"])}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="weeks">Weeks</SelectItem>
                       <SelectItem value="months">Months</SelectItem>
@@ -135,13 +154,10 @@ export default function ManagementLaybyPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">Customer must collect within this period</p>
               </div>
-
               <div className="space-y-1.5">
                 <Label>Payment Frequency</Label>
                 <Select value={settings.paymentFrequency} onValueChange={(v) => update("paymentFrequency", v as LaybySettings["paymentFrequency"])}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="fortnightly">Fortnightly</SelectItem>
@@ -151,21 +167,16 @@ export default function ManagementLaybyPage() {
                 <p className="text-xs text-muted-foreground">Default instalment schedule</p>
               </div>
             </div>
-
             <div className="flex items-center justify-between py-2 border-t">
               <div>
                 <p className="text-sm font-medium">Allow partial payments</p>
                 <p className="text-xs text-muted-foreground">Customers can pay any amount above the minimum instalment</p>
               </div>
-              <Switch
-                checked={settings.allowPartialPayments}
-                onCheckedChange={(v) => update("allowPartialPayments", v)}
-              />
+              <Switch checked={settings.allowPartialPayments} onCheckedChange={(v) => update("allowPartialPayments", v)} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Minimum Deposit */}
         <Card id="deposit">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Minimum Deposit</CardTitle>
@@ -176,21 +187,17 @@ export default function ManagementLaybyPage() {
               <div className="space-y-1.5">
                 <Label>Deposit Type</Label>
                 <Select value={settings.minimumDepositType} onValueChange={(v) => update("minimumDepositType", v as LaybySettings["minimumDepositType"])}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="percentage">Percentage of total</SelectItem>
                     <SelectItem value="fixed">Fixed amount ($)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1.5">
                 <Label>{settings.minimumDepositType === "percentage" ? "Percentage (%)" : "Fixed Amount ($)"}</Label>
                 <Input
-                  type="number"
-                  min={0}
+                  type="number" min={0}
                   step={settings.minimumDepositType === "percentage" ? 1 : 0.01}
                   max={settings.minimumDepositType === "percentage" ? 100 : undefined}
                   value={settings.minimumDepositValue}
@@ -198,17 +205,13 @@ export default function ManagementLaybyPage() {
                 />
               </div>
             </div>
-
             <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5">
               <Info className="w-4 h-4 text-primary shrink-0" />
-              <p className="text-sm text-primary">
-                Current setting: <strong>{depositLabel}</strong> required at time of layby
-              </p>
+              <p className="text-sm text-primary">Current setting: <strong>{depositLabel}</strong> required at time of layby</p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Notifications */}
         <Card id="notifications">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Notifications & Receipt</CardTitle>
@@ -220,25 +223,18 @@ export default function ManagementLaybyPage() {
                 <p className="text-sm font-medium">Email terms on creation</p>
                 <p className="text-xs text-muted-foreground">Automatically email the layby agreement and T&amp;C when a new layby is created</p>
               </div>
-              <Switch
-                checked={settings.autoEmailOnCreation}
-                onCheckedChange={(v) => update("autoEmailOnCreation", v)}
-              />
+              <Switch checked={settings.autoEmailOnCreation} onCheckedChange={(v) => update("autoEmailOnCreation", v)} />
             </div>
             <div className="flex items-center justify-between py-3">
               <div>
                 <p className="text-sm font-medium">Print terms on A4 receipt</p>
                 <p className="text-xs text-muted-foreground">Include the full terms &amp; conditions on the printed A4 layby receipt</p>
               </div>
-              <Switch
-                checked={settings.printTermsOnReceipt}
-                onCheckedChange={(v) => update("printTermsOnReceipt", v)}
-              />
+              <Switch checked={settings.printTermsOnReceipt} onCheckedChange={(v) => update("printTermsOnReceipt", v)} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Terms & Conditions */}
         <Card id="terms">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Terms & Conditions</CardTitle>
@@ -257,19 +253,16 @@ export default function ManagementLaybyPage() {
             />
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <p>
-                Tip: number each clause for clarity. This text is printed verbatim on the A4 receipt and included in customer emails.
-              </p>
+              <p>Tip: number each clause for clarity. This text is printed verbatim on the A4 receipt and included in customer emails.</p>
             </div>
           </CardContent>
         </Card>
 
-        </div>{/* end 2-col grid */}
+        </div>
 
-        {/* Save footer */}
         <div className="flex justify-end gap-2 pt-2 pb-8">
           <Button variant="outline" onClick={handleReset}>Reset to defaults</Button>
-          <Button onClick={handleSave} disabled={!dirty}>
+          <Button onClick={handleSave} disabled={!dirty || upsert.isPending}>
             <Save className="w-4 h-4 mr-2" /> Save settings
           </Button>
         </div>

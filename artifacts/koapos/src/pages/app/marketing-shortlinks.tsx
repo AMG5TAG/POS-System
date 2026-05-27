@@ -5,127 +5,108 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Copy, Trash2, ExternalLink, Settings2, Plus, Link as LinkIcon, Clock } from "lucide-react";
+import { Link2, Copy, Trash2, ExternalLink, Clock, Plus, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Link } from "wouter";
+import {
+  useListShortlinks,
+  useCreateShortlink,
+  useDeleteShortlink,
+  useGetShortlinkSettings,
+} from "@workspace/api-client-react";
 
-/* ── Types ─────────────────────────────────────────────────────────────── */
-
-interface ShortlinkEntry {
-  id: string;
-  label: string;
-  longUrl: string;
-  slug: string;
-  baseDomain: string;
-  createdAt: string;
-  clicks: number;
-  tags: string;
-}
-
-interface ShortlinkSettings {
-  baseDomain: string;
-  prefix: string;
-}
-
-/* ── Constants ─────────────────────────────────────────────────────────── */
-
-const HISTORY_KEY  = "koapos_shortlinks";
-const SETTINGS_KEY = "koapos_shortlink_settings";
-
-const DEFAULT_SETTINGS: ShortlinkSettings = {
-  baseDomain: typeof window !== "undefined" ? window.location.hostname : "koapos.com",
-  prefix: "s",
+type ShortlinkFromApi = {
+  id?: number;
+  linkId?: string | number;
+  label?: string;
+  longUrl?: string;
+  slug?: string;
+  baseDomain?: string;
+  tags?: string;
+  clicks?: number;
+  createdAt?: string;
 };
-
-/* ── Helpers ───────────────────────────────────────────────────────────── */
 
 function randomSlug(len = 6): string {
   const chars = "abcdefghijkmnpqrstuvwxyz23456789";
   return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function loadHistory(): ShortlinkEntry[] {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]"); } catch { return []; }
+function buildShortUrl(entry: ShortlinkFromApi): string {
+  return `https://${entry.baseDomain || "go.koapos.com"}/${entry.slug || entry.linkId}`;
 }
-function saveHistory(h: ShortlinkEntry[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 200))); } catch { /* ignore */ }
-}
-
-function loadSettings(): ShortlinkSettings {
-  try {
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<ShortlinkSettings>;
-    return { ...DEFAULT_SETTINGS, ...s };
-  } catch { return DEFAULT_SETTINGS; }
-}
-
-function buildShortUrl(entry: ShortlinkEntry): string {
-  const prefix = entry.baseDomain;
-  return `https://${prefix}/${entry.slug}`;
-}
-
-/* ── Component ─────────────────────────────────────────────────────────── */
 
 export default function MarketingShortlinksPage() {
+  const { data: linksRaw = [], refetch } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
+  const { data: settingsRaw } = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
+  const createShortlink = useCreateShortlink();
+  const deleteShortlink = useDeleteShortlink();
+
+  const links = linksRaw as ShortlinkFromApi[];
+  const settings = settingsRaw as Record<string, unknown> | undefined;
+  const baseDomain = (settings?.baseDomain as string) || "go.koapos.com";
+  const prefix = (settings?.prefix as string) || "s";
+
   const [longUrl, setLongUrl]   = useState("https://");
   const [label, setLabel]       = useState("");
   const [tags, setTags]         = useState("");
   const [customSlug, setCustomSlug] = useState("");
-  const [history, setHistory]   = useState<ShortlinkEntry[]>(loadHistory);
   const [search, setSearch]     = useState("");
-  const [created, setCreated]   = useState<ShortlinkEntry | null>(null);
-  const settings = loadSettings();
+  const [lastCreated, setLastCreated] = useState<ShortlinkFromApi | null>(null);
 
   const isValidUrl = longUrl.trim().startsWith("http") && longUrl.trim().length > 10;
 
   const create = useCallback(() => {
     if (!isValidUrl) { toast.error("Enter a valid URL starting with http:// or https://"); return; }
     const slug = customSlug.trim().replace(/\s+/g, "-").toLowerCase() || randomSlug();
-    const existing = history.find((e) => e.slug === slug);
-    if (existing) { toast.error("That slug is already in use — try another"); return; }
-    const entry: ShortlinkEntry = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      label: label.trim() || longUrl.trim(),
-      longUrl: longUrl.trim(),
-      slug,
-      baseDomain: `${settings.baseDomain}/${settings.prefix}`,
-      createdAt: new Date().toISOString(),
-      clicks: 0,
-      tags: tags.trim(),
-    };
-    const next = [entry, ...history];
-    setHistory(next);
-    saveHistory(next);
-    setCreated(entry);
-    setLongUrl("https://");
-    setLabel("");
-    setCustomSlug("");
-    setTags("");
-    toast.success("Shortlink created");
-  }, [longUrl, label, customSlug, tags, history, settings, isValidUrl]);
+    createShortlink.mutate({
+      data: {
+        linkId: `link-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        label: label.trim() || longUrl.trim(),
+        longUrl: longUrl.trim(),
+        slug,
+        baseDomain: `${baseDomain}/${prefix}`,
+        tags: tags.trim() || undefined,
+      },
+    }, {
+      onSuccess: (created) => {
+        setLastCreated(created as ShortlinkFromApi);
+        setLongUrl("https://");
+        setLabel("");
+        setCustomSlug("");
+        setTags("");
+        toast.success("Shortlink created");
+        refetch();
+      },
+      onError: () => toast.error("Failed to create shortlink"),
+    });
+  }, [longUrl, label, customSlug, tags, baseDomain, prefix, isValidUrl, createShortlink, refetch]);
 
-  const copyLink = (entry: ShortlinkEntry) => {
+  const copyLink = (entry: ShortlinkFromApi) => {
     navigator.clipboard.writeText(buildShortUrl(entry))
       .then(() => toast.success("Shortlink copied"))
       .catch(() => toast.error("Copy failed"));
   };
 
-  const deleteEntry = (id: string) => {
-    const next = history.filter((e) => e.id !== id);
-    setHistory(next);
-    saveHistory(next);
-    if (created?.id === id) setCreated(null);
-    toast.success("Deleted");
+  const deleteEntry = (id: number) => {
+    deleteShortlink.mutate({ id }, {
+      onSuccess: () => {
+        if (lastCreated?.id === id) setLastCreated(null);
+        toast.success("Deleted");
+        refetch();
+      },
+      onError: () => toast.error("Failed to delete shortlink"),
+    });
   };
 
   const filtered = search
-    ? history.filter((e) =>
-        e.label.toLowerCase().includes(search.toLowerCase()) ||
-        e.slug.includes(search.toLowerCase()) ||
-        e.longUrl.toLowerCase().includes(search.toLowerCase()) ||
-        e.tags.toLowerCase().includes(search.toLowerCase())
+    ? links.filter((e) =>
+        (e.label || "").toLowerCase().includes(search.toLowerCase()) ||
+        (e.slug || "").includes(search.toLowerCase()) ||
+        (e.longUrl || "").toLowerCase().includes(search.toLowerCase()) ||
+        (e.tags || "").toLowerCase().includes(search.toLowerCase())
       )
-    : history;
+    : links;
 
   return (
     <AppLayout>
@@ -168,7 +149,7 @@ export default function MarketingShortlinksPage() {
                   <Label>Custom slug <span className="text-muted-foreground font-normal">(optional — leave blank to auto-generate)</span></Label>
                   <div className="flex items-center gap-0 rounded-md border overflow-hidden focus-within:ring-2 focus-within:ring-ring">
                     <span className="bg-muted px-3 py-2 text-sm text-muted-foreground whitespace-nowrap border-r shrink-0">
-                      {settings.baseDomain}/{settings.prefix}/
+                      {baseDomain}/{prefix}/
                     </span>
                     <input
                       className="flex-1 px-3 py-2 text-sm font-mono bg-background outline-none min-w-0"
@@ -189,7 +170,7 @@ export default function MarketingShortlinksPage() {
                   <p className="text-[11px] text-muted-foreground">Comma-separated tags to help organise your links.</p>
                 </div>
 
-                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl}>
+                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl || createShortlink.isPending}>
                   <Link2 className="w-4 h-4" /> Create Shortlink
                 </Button>
               </CardContent>
@@ -203,35 +184,35 @@ export default function MarketingShortlinksPage() {
                 <CardTitle className="text-base">Your Shortlink</CardTitle>
               </CardHeader>
               <CardContent>
-                {created ? (
+                {lastCreated ? (
                   <div className="space-y-4">
                     <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
                       <div className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Short URL</p>
                         <div className="flex items-center gap-2">
-                          <p className="text-lg font-bold text-primary break-all flex-1">{buildShortUrl(created)}</p>
-                          <Button size="icon" variant="outline" onClick={() => copyLink(created)} className="shrink-0">
+                          <p className="text-lg font-bold text-primary break-all flex-1">{buildShortUrl(lastCreated)}</p>
+                          <Button size="icon" variant="outline" onClick={() => copyLink(lastCreated!)} className="shrink-0">
                             <Copy className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
                       <div className="border-t pt-3 space-y-1">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Destination</p>
-                        <p className="text-sm break-all text-foreground/70">{created.longUrl}</p>
+                        <p className="text-sm break-all text-foreground/70">{lastCreated.longUrl}</p>
                       </div>
-                      {created.tags && (
+                      {lastCreated.tags && (
                         <div className="flex flex-wrap gap-1">
-                          {created.tags.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
+                          {String(lastCreated.tags).split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
                             <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
                           ))}
                         </div>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1 gap-1.5" onClick={() => copyLink(created)}>
+                      <Button variant="outline" className="flex-1 gap-1.5" onClick={() => copyLink(lastCreated!)}>
                         <Copy className="w-4 h-4" /> Copy Link
                       </Button>
-                      <Button variant="outline" size="icon" onClick={() => window.open(created.longUrl, "_blank")}>
+                      <Button variant="outline" size="icon" onClick={() => window.open(lastCreated!.longUrl, "_blank")}>
                         <ExternalLink className="w-4 h-4" />
                       </Button>
                     </div>
@@ -253,13 +234,13 @@ export default function MarketingShortlinksPage() {
         </div>
 
         {/* ── History ── */}
-        {history.length > 0 && (
+        {links.length > 0 && (
           <div>
             <div className="flex items-center gap-3 mb-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-muted-foreground" />
                 <h2 className="font-semibold text-sm">All Shortlinks</h2>
-                <Badge variant="secondary" className="text-xs">{history.length}</Badge>
+                <Badge variant="secondary" className="text-xs">{links.length}</Badge>
               </div>
               <Input
                 placeholder="Search links, slugs, tags..."
@@ -283,7 +264,7 @@ export default function MarketingShortlinksPage() {
                 </thead>
                 <tbody className="divide-y">
                   {filtered.map((entry) => (
-                    <tr key={entry.id} className={cn("hover:bg-muted/20 transition-colors", created?.id === entry.id && "bg-primary/5")}>
+                    <tr key={String(entry.linkId)} className={cn("hover:bg-muted/20 transition-colors", lastCreated?.linkId === entry.linkId && "bg-primary/5")}>
                       <td className="p-3">
                         <p className="font-medium truncate max-w-[140px]">{entry.label}</p>
                       </td>
@@ -296,7 +277,7 @@ export default function MarketingShortlinksPage() {
                       <td className="p-3 hidden sm:table-cell">
                         {entry.tags ? (
                           <div className="flex flex-wrap gap-0.5">
-                            {entry.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 3).map((t) => (
+                            {String(entry.tags).split(",").map((t) => t.trim()).filter(Boolean).slice(0, 3).map((t) => (
                               <Badge key={t} variant="outline" className="text-[10px] px-1 py-0">{t}</Badge>
                             ))}
                           </div>
@@ -304,7 +285,7 @@ export default function MarketingShortlinksPage() {
                       </td>
                       <td className="p-3 hidden lg:table-cell">
                         <span className="text-muted-foreground text-xs">
-                          {new Date(entry.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                          {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                         </span>
                       </td>
                       <td className="p-3">
@@ -315,7 +296,7 @@ export default function MarketingShortlinksPage() {
                           <button onClick={() => window.open(entry.longUrl, "_blank")} title="Open" className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => deleteEntry(entry.id)} title="Delete" className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors">
+                          <button onClick={() => deleteEntry(Number(entry.id ?? 0))} title="Delete" className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

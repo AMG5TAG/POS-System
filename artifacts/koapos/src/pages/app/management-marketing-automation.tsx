@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useListEmailTemplates } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -89,11 +90,6 @@ const EMPTY_FORM = {
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
-function readLocalTemplates(): EmailTemplate[] {
-  try { return JSON.parse(localStorage.getItem("koapos_email_templates") ?? "[]") ?? []; }
-  catch { return []; }
-}
-
 function triggerInfo(value: string) {
   return TRIGGER_EVENTS.find((t) => t.value === value);
 }
@@ -152,23 +148,27 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
 export default function ManagementMarketingAutomationPage() {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [log, setLog] = useState<DispatchLog[]>([]);
-  const [localTemplates, setLocalTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [logLoading, setLogLoading] = useState(true);
 
-  // Dialog state
+  const { data: rawTemplates = [] } = useListEmailTemplates({ query: { queryKey: ["email-templates"] } });
+  const emailTemplates: EmailTemplate[] = (rawTemplates as Record<string, unknown>[]).map((t) => ({
+    id: String(t.templateId ?? t.id ?? ""),
+    name: String(t.name ?? ""),
+    subject: String(t.subject ?? ""),
+    body: String(t.body ?? ""),
+    category: t.category ? String(t.category) : undefined,
+  }));
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editRule, setEditRule] = useState<AutomationRule | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-
-  // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<AutomationRule | null>(null);
-
-  // Running state
   const [runningId, setRunningId] = useState<number | null>(null);
 
-  // Load data
+  const selectedTemplate = emailTemplates.find((t) => t.id === form.templateId) ?? null;
+
   const loadRules = useCallback(async () => {
     try {
       const data = await apiFetch<AutomationRule[]>("/marketing-automation");
@@ -188,13 +188,7 @@ export default function ManagementMarketingAutomationPage() {
   useEffect(() => {
     loadRules();
     loadLog();
-    setLocalTemplates(readLocalTemplates());
   }, [loadRules, loadLog]);
-
-  // Compute selected template from form.templateId
-  const selectedTemplate = localTemplates.find((t) => t.id === form.templateId) ?? null;
-
-  /* ── Open create/edit dialog ────────────────────────────────────────── */
 
   function openCreate() {
     setEditRule(null);
@@ -213,13 +207,11 @@ export default function ManagementMarketingAutomationPage() {
     setDialogOpen(true);
   }
 
-  /* ── Save rule ──────────────────────────────────────────────────────── */
-
   async function handleSave() {
     if (!form.name.trim())     { toast.error("Rule name is required"); return; }
     if (!form.triggerEvent)    { toast.error("Please select a trigger event"); return; }
     if (!form.templateId)      { toast.error("Please link an email template"); return; }
-    const tpl = localTemplates.find((t) => t.id === form.templateId);
+    const tpl = emailTemplates.find((t) => t.id === form.templateId);
     if (!tpl) { toast.error("Selected template not found"); return; }
 
     setSaving(true);
@@ -250,8 +242,6 @@ export default function ManagementMarketingAutomationPage() {
     }
   }
 
-  /* ── Toggle active ──────────────────────────────────────────────────── */
-
   async function handleToggle(rule: AutomationRule) {
     try {
       const updated = await apiFetch<AutomationRule>(`/marketing-automation/${rule.id}`, {
@@ -261,8 +251,6 @@ export default function ManagementMarketingAutomationPage() {
       setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
     } catch { toast.error("Failed to update rule"); }
   }
-
-  /* ── Delete ─────────────────────────────────────────────────────────── */
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -274,8 +262,6 @@ export default function ManagementMarketingAutomationPage() {
       loadLog();
     } catch { toast.error("Failed to delete rule"); }
   }
-
-  /* ── Run now ────────────────────────────────────────────────────────── */
 
   async function handleRunNow(rule: AutomationRule) {
     setRunningId(rule.id);
@@ -294,8 +280,6 @@ export default function ManagementMarketingAutomationPage() {
       setRunningId(null);
     }
   }
-
-  /* ── Render ─────────────────────────────────────────────────────────── */
 
   const logByRule = (ruleId: number) => log.filter((l) => l.ruleId === ruleId);
 
@@ -373,10 +357,7 @@ export default function ManagementMarketingAutomationPage() {
                     return (
                       <TableRow key={rule.id}>
                         <TableCell className="text-center">
-                          <Switch
-                            checked={rule.isActive}
-                            onCheckedChange={() => handleToggle(rule)}
-                          />
+                          <Switch checked={rule.isActive} onCheckedChange={() => handleToggle(rule)} />
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{rule.name}</div>
@@ -399,27 +380,17 @@ export default function ManagementMarketingAutomationPage() {
                         </TableCell>
                         <TableCell className="text-right pr-4">
                           <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost" size="icon" className="h-8 w-8"
-                              title="Run now"
-                              disabled={runningId === rule.id}
-                              onClick={() => handleRunNow(rule)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Run now"
+                              disabled={runningId === rule.id} onClick={() => handleRunNow(rule)}>
                               {runningId === rule.id
                                 ? <RefreshCw className="w-4 h-4 animate-spin" />
-                                : <Play className="w-4 h-4" />
-                              }
+                                : <Play className="w-4 h-4" />}
                             </Button>
-                            <Button
-                              variant="ghost" size="icon" className="h-8 w-8"
-                              onClick={() => openEdit(rule)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(rule)}>
                               <Pencil className="w-4 h-4" />
                             </Button>
-                            <Button
-                              variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTarget(rule)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(rule)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -465,9 +436,7 @@ export default function ManagementMarketingAutomationPage() {
                       <TableRow key={entry.id}>
                         <TableCell className="text-sm">{rule?.name ?? `Rule #${entry.ruleId}`}</TableCell>
                         <TableCell>
-                          <span className="text-xs text-muted-foreground capitalize">
-                            {entry.recordType ?? "—"}
-                          </span>
+                          <span className="text-xs text-muted-foreground capitalize">{entry.recordType ?? "—"}</span>
                         </TableCell>
                         <TableCell><ChannelBadge value={entry.channel} /></TableCell>
                         <TableCell>
@@ -476,9 +445,9 @@ export default function ManagementMarketingAutomationPage() {
                             entry.status === "failed"  ? "text-red-500" :
                             "text-muted-foreground"
                           )}>
-                            {entry.status === "sent"   && <CheckCircle2 className="w-3.5 h-3.5" />}
-                            {entry.status === "failed" && <XCircle className="w-3.5 h-3.5" />}
-                            {entry.status === "skipped"&& <AlertTriangle className="w-3.5 h-3.5" />}
+                            {entry.status === "sent"    && <CheckCircle2 className="w-3.5 h-3.5" />}
+                            {entry.status === "failed"  && <XCircle className="w-3.5 h-3.5" />}
+                            {entry.status === "skipped" && <AlertTriangle className="w-3.5 h-3.5" />}
                             {entry.status}
                           </span>
                         </TableCell>
@@ -508,26 +477,16 @@ export default function ManagementMarketingAutomationPage() {
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
-            {/* Name */}
             <div className="space-y-1.5">
               <Label>Rule Name <span className="text-destructive">*</span></Label>
-              <Input
-                placeholder="e.g. Birthday Email"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
+              <Input placeholder="e.g. Birthday Email" value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
 
-            {/* Trigger Event */}
             <div className="space-y-1.5">
               <Label>Trigger Event <span className="text-destructive">*</span></Label>
-              <Select
-                value={form.triggerEvent}
-                onValueChange={(v) => setForm((f) => ({ ...f, triggerEvent: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a trigger…" />
-                </SelectTrigger>
+              <Select value={form.triggerEvent} onValueChange={(v) => setForm((f) => ({ ...f, triggerEvent: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select a trigger…" /></SelectTrigger>
                 <SelectContent>
                   {TRIGGER_EVENTS.map((t) => {
                     const Icon = t.icon;
@@ -543,30 +502,21 @@ export default function ManagementMarketingAutomationPage() {
                 </SelectContent>
               </Select>
               {form.triggerEvent && (
-                <p className="text-xs text-muted-foreground">
-                  {triggerInfo(form.triggerEvent)?.desc}
-                </p>
+                <p className="text-xs text-muted-foreground">{triggerInfo(form.triggerEvent)?.desc}</p>
               )}
             </div>
 
-            {/* Channel */}
             <div className="space-y-1.5">
               <Label>Channel <span className="text-destructive">*</span></Label>
-              <Select
-                value={form.channel}
-                onValueChange={(v) => setForm((f) => ({ ...f, channel: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.channel} onValueChange={(v) => setForm((f) => ({ ...f, channel: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CHANNELS.map((c) => {
                     const Icon = c.icon;
                     return (
                       <SelectItem key={c.value} value={c.value}>
                         <span className="flex items-center gap-2">
-                          <Icon className="w-4 h-4 text-muted-foreground" />
-                          {c.label}
+                          <Icon className="w-4 h-4 text-muted-foreground" />{c.label}
                         </span>
                       </SelectItem>
                     );
@@ -583,25 +533,19 @@ export default function ManagementMarketingAutomationPage() {
 
             <Separator />
 
-            {/* Template picker */}
             <div className="space-y-1.5">
               <Label>Message Template <span className="text-destructive">*</span></Label>
-              {localTemplates.length === 0 ? (
+              {emailTemplates.length === 0 ? (
                 <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   No email templates found. Create templates in{" "}
                   <a href="/marketing/email/templates" className="underline">Marketing → Email Templates</a>.
                 </p>
               ) : (
-                <Select
-                  value={form.templateId}
-                  onValueChange={(v) => setForm((f) => ({ ...f, templateId: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template…" />
-                  </SelectTrigger>
+                <Select value={form.templateId} onValueChange={(v) => setForm((f) => ({ ...f, templateId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select a template…" /></SelectTrigger>
                   <SelectContent>
-                    {localTemplates.map((t) => (
+                    {emailTemplates.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         <span className="flex items-center gap-2">
                           <Mail className="w-3.5 h-3.5 text-muted-foreground" />
@@ -615,7 +559,6 @@ export default function ManagementMarketingAutomationPage() {
               )}
             </div>
 
-            {/* Template preview */}
             {selectedTemplate && (
               <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
@@ -626,9 +569,6 @@ export default function ManagementMarketingAutomationPage() {
                   className="text-xs text-muted-foreground line-clamp-3 border-t pt-1.5 mt-1.5 prose prose-sm max-w-none [&>*]:text-xs [&>*]:text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: selectedTemplate.body }}
                 />
-                <p className="text-xs text-muted-foreground/60 italic">
-                  Variables like &#123;&#123;first_name&#125;&#125; and &#123;&#123;business_name&#125;&#125; are substituted at dispatch time.
-                </p>
               </div>
             )}
           </div>

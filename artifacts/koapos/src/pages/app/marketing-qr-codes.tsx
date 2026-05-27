@@ -16,6 +16,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  useListQrCodes,
+  useCreateQrCode,
+  useDeleteQrCode,
+  useGetQrSettings,
+  useUpsertQrSettings,
+  useListQrSavedTemplates,
+  useCreateQrSavedTemplate,
+  useDeleteQrSavedTemplate,
+} from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -66,10 +76,6 @@ interface QREntry {
 }
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
-
-const HISTORY_KEY    = "koapos_qr_history";
-const SETTINGS_KEY   = "koapos_qr_settings";
-const SAVED_TMPL_KEY = "koapos_qr_saved_templates";
 
 const DEFAULT_SETTINGS: QRSettings = {
   patternColor: "#000000",
@@ -124,20 +130,20 @@ const ECC_LEVELS = [
 ];
 
 const QR_TYPES: { id: QRCodeType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
-  { id: "website",  label: "Website URL",   icon: Globe,          desc: "Link to any webpage"          },
-  { id: "static",   label: "Static",        icon: FileText,       desc: "Plain text or custom data"    },
-  { id: "dynamic",  label: "Dynamic",       icon: RefreshCcw,     desc: "Editable redirect URL"        },
-  { id: "vcard",    label: "vCard / meCard",icon: User,           desc: "Shareable contact card"       },
-  { id: "social",   label: "Social Media",  icon: Share2,         desc: "Social profile link"          },
-  { id: "document", label: "PDF / Doc",     icon: File,           desc: "Link to a file or PDF"        },
-  { id: "wifi",     label: "Wi-Fi",         icon: Wifi,           desc: "Network credentials"          },
-  { id: "event",    label: "Event",         icon: Calendar,       desc: "Calendar event"               },
-  { id: "email",    label: "Email",         icon: Mail,           desc: "Pre-filled email"             },
-  { id: "sms",      label: "SMS",           icon: MessageSquare,  desc: "Pre-filled text message"      },
-  { id: "micro",    label: "Micro QR",      icon: Minimize2,      desc: "Compact format"               },
-  { id: "frame",    label: "Frame QR",      icon: LayoutTemplate, desc: "With call-to-action frame"    },
-  { id: "sqrc",     label: "SQRC",          icon: Lock,           desc: "Secure / encrypted format"    },
-  { id: "iqr",      label: "iQR Code",      icon: Grid3x3,        desc: "Extended data density"        },
+  { id: "website",  label: "Website URL",    icon: Globe,          desc: "Link to any webpage"          },
+  { id: "static",   label: "Static",         icon: FileText,       desc: "Plain text or custom data"    },
+  { id: "dynamic",  label: "Dynamic",        icon: RefreshCcw,     desc: "Editable redirect URL"        },
+  { id: "vcard",    label: "vCard / meCard", icon: User,           desc: "Shareable contact card"       },
+  { id: "social",   label: "Social Media",   icon: Share2,         desc: "Social profile link"          },
+  { id: "document", label: "PDF / Doc",      icon: File,           desc: "Link to a file or PDF"        },
+  { id: "wifi",     label: "Wi-Fi",          icon: Wifi,           desc: "Network credentials"          },
+  { id: "event",    label: "Event",          icon: Calendar,       desc: "Calendar event"               },
+  { id: "email",    label: "Email",          icon: Mail,           desc: "Pre-filled email"             },
+  { id: "sms",      label: "SMS",            icon: MessageSquare,  desc: "Pre-filled text message"      },
+  { id: "micro",    label: "Micro QR",       icon: Minimize2,      desc: "Compact format"               },
+  { id: "frame",    label: "Frame QR",       icon: LayoutTemplate, desc: "With call-to-action frame"    },
+  { id: "sqrc",     label: "SQRC",           icon: Lock,           desc: "Secure / encrypted format"    },
+  { id: "iqr",      label: "iQR Code",       icon: Grid3x3,        desc: "Extended data density"        },
 ];
 
 const SOCIAL_PLATFORMS = [
@@ -151,25 +157,49 @@ const SOCIAL_PLATFORMS = [
   { value: "snapchat",  label: "Snapchat"     },
 ];
 
-/* ── Storage helpers ───────────────────────────────────────────────────── */
+/* ── API converters ────────────────────────────────────────────────────── */
 
-function loadHistory(): QREntry[] {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]"); } catch { return []; }
+function apiToEntry(r: Record<string, unknown>): QREntry {
+  let settings = { ...DEFAULT_SETTINGS };
+  let content: QRTypeContent = {};
+  try { if (r.settings) settings = { ...DEFAULT_SETTINGS, ...JSON.parse(r.settings as string) }; } catch { /* ignore */ }
+  try { if (r.content)  content  = JSON.parse(r.content as string); } catch { /* ignore */ }
+  return {
+    id:        String(r.id ?? ""),
+    label:     String(r.label    ?? ""),
+    url:       String(r.url      ?? ""),
+    qrType:    (String(r.qrType  ?? "website")) as QRCodeType,
+    content,
+    createdAt: String(r.createdAt ?? new Date().toISOString()),
+    settings,
+  };
 }
-function saveHistory(h: QREntry[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 50))); } catch { /* ignore */ }
+
+function apiToTemplate(r: Record<string, unknown>): SavedQRTemplate {
+  let settings = { ...DEFAULT_SETTINGS };
+  try { if (r.settings) settings = { ...DEFAULT_SETTINGS, ...JSON.parse(r.settings as string) }; } catch { /* ignore */ }
+  return {
+    id:        String(r.id ?? ""),
+    name:      String(r.name ?? ""),
+    settings,
+    createdAt: String(r.createdAt ?? new Date().toISOString()),
+  };
 }
-function loadStoredSettings(): QRSettings {
-  try {
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<QRSettings>;
-    return { ...DEFAULT_SETTINGS, ...s };
-  } catch { return DEFAULT_SETTINGS; }
-}
-function loadSavedTemplates(): SavedQRTemplate[] {
-  try { return JSON.parse(localStorage.getItem(SAVED_TMPL_KEY) ?? "[]"); } catch { return []; }
-}
-function saveSavedTemplates(t: SavedQRTemplate[]) {
-  try { localStorage.setItem(SAVED_TMPL_KEY, JSON.stringify(t.slice(0, 30))); } catch { /* ignore */ }
+
+function apiToSettings(r: Record<string, unknown>): QRSettings {
+  return {
+    patternColor:       String(r.patternColor       ?? DEFAULT_SETTINGS.patternColor),
+    eyeColor:           String(r.eyeColor           ?? DEFAULT_SETTINGS.eyeColor),
+    eyeDotColor:        String(r.eyeDotColor        ?? DEFAULT_SETTINGS.eyeDotColor),
+    bgColor:            String(r.bgColor            ?? DEFAULT_SETTINGS.bgColor),
+    dotStyle:           (String(r.dotStyle          ?? DEFAULT_SETTINGS.dotStyle)) as QRSettings["dotStyle"],
+    cornerSquareStyle:  (String(r.cornerSquareStyle ?? DEFAULT_SETTINGS.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
+    cornerDotStyle:     (String(r.cornerDotStyle    ?? DEFAULT_SETTINGS.cornerDotStyle)) as QRSettings["cornerDotStyle"],
+    template:           String(r.template           ?? DEFAULT_SETTINGS.template),
+    size:               Number(r.size               ?? DEFAULT_SETTINGS.size),
+    level:              (String(r.level             ?? DEFAULT_SETTINGS.level)) as QRSettings["level"],
+    logoUrl:            String(r.logoUrl            ?? DEFAULT_SETTINGS.logoUrl),
+  };
 }
 
 /* ── QR data string builder ────────────────────────────────────────────── */
@@ -698,14 +728,25 @@ function QRContentEditor({ type, content, onChange }: {
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 export default function MarketingQRCodesPage() {
-  const [qrType,         setQrType]         = useState<QRCodeType>("website");
-  const [content,        setContent]        = useState<QRTypeContent>({ url: "https://" });
-  const [label,          setLabel]          = useState("");
-  const [settings,       setSettings]       = useState<QRSettings>(loadStoredSettings);
-  const [history,        setHistory]        = useState<QREntry[]>(loadHistory);
-  const [preview,        setPreview]        = useState<QREntry | null>(null);
-  const [advanced,       setAdvanced]       = useState(false);
-  const [savedTemplates, setSavedTemplates] = useState<SavedQRTemplate[]>(loadSavedTemplates);
+  const { data: rawCodes = [],     refetch: refetchCodes }     = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
+  const { data: rawSettings }                                   = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
+  const { data: rawTemplates = [], refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
+
+  const createCode     = useCreateQrCode();
+  const deleteCode     = useDeleteQrCode();
+  const upsertSettings = useUpsertQrSettings();
+  const createTemplate = useCreateQrSavedTemplate();
+  const deleteTemplate = useDeleteQrSavedTemplate();
+
+  const history:        QREntry[]          = (rawCodes     as Record<string, unknown>[]).map(apiToEntry);
+  const savedTemplates: SavedQRTemplate[]  = (rawTemplates as Record<string, unknown>[]).map(apiToTemplate);
+
+  const [qrType,       setQrType]       = useState<QRCodeType>("website");
+  const [content,      setContent]      = useState<QRTypeContent>({ url: "https://" });
+  const [label,        setLabel]        = useState("");
+  const [settings,     setSettings]     = useState<QRSettings>({ ...DEFAULT_SETTINGS });
+  const [preview,      setPreview]      = useState<QREntry | null>(null);
+  const [advanced,     setAdvanced]     = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateName,   setTemplateName]   = useState("");
 
@@ -713,11 +754,29 @@ export default function MarketingQRCodesPage() {
   const liveContainerRef = useRef<HTMLDivElement>(null);
   const logoFileRef      = useRef<HTMLInputElement>(null);
   const templateNameRef  = useRef<HTMLInputElement>(null);
+  const saveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load settings from API on mount
+  useEffect(() => {
+    if (rawSettings) {
+      setSettings(apiToSettings(rawSettings as unknown as Record<string, unknown>));
+    }
+  }, [rawSettings]);
+
+  // Debounce settings save to API
+  const scheduleSettingsSave = useCallback((next: QRSettings) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      upsertSettings.mutate({ data: { ...next } }, {
+        onError: () => toast.error("Failed to save settings"),
+      });
+    }, 600);
+  }, [upsertSettings]);
 
   const set = <K extends keyof QRSettings>(k: K, v: QRSettings[K]) => {
     setSettings((s) => {
       const next = { ...s, [k]: v };
-      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      scheduleSettingsSave(next);
       return next;
     });
   };
@@ -755,24 +814,28 @@ export default function MarketingQRCodesPage() {
     e.target.value = "";
   }, [settings.level]);
 
-  /* Save to history */
+  /* Save to history via API */
   const saveToHistory = useCallback(() => {
     if (!hasValidContent) { toast.error("Enter valid content first"); return; }
-    const entry: QREntry = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      label: label.trim() || qrData.slice(0, 50),
-      url: qrData,
-      qrType,
-      content: { ...content },
-      createdAt: new Date().toISOString(),
-      settings: { ...settings },
-    };
-    const next = [entry, ...history];
-    setHistory(next);
-    saveHistory(next);
-    setPreview(entry);
-    toast.success("QR code saved");
-  }, [qrData, label, settings, history, hasValidContent, qrType, content]);
+    createCode.mutate({
+      data: {
+        entryId:  `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        label:    label.trim() || qrData.slice(0, 50),
+        url:      qrData,
+        qrType,
+        content:  JSON.stringify(content),
+        settings: JSON.stringify(settings),
+      },
+    }, {
+      onSuccess: (res) => {
+        refetchCodes();
+        const newEntry = apiToEntry(res as unknown as Record<string, unknown>);
+        setPreview(newEntry);
+        toast.success("QR code saved");
+      },
+      onError: () => toast.error("Failed to save QR code"),
+    });
+  }, [qrData, label, settings, hasValidContent, qrType, content, createCode, refetchCodes]);
 
   /* Download helpers */
   const downloadBlob = useCallback((blob: Blob, name: string) => {
@@ -799,40 +862,42 @@ export default function MarketingQRCodesPage() {
   }, [downloadBlob]);
 
   const deleteEntry = (id: string) => {
-    const next = history.filter((e) => e.id !== id);
-    setHistory(next);
-    saveHistory(next);
-    if (preview?.id === id) setPreview(null);
-    toast.success("Deleted");
+    deleteCode.mutate({ id: Number(id) }, {
+      onSuccess: () => {
+        refetchCodes();
+        if (preview?.id === id) setPreview(null);
+        toast.success("Deleted");
+      },
+      onError: () => toast.error("Failed to delete"),
+    });
   };
 
   /* Template save / delete */
   const confirmSaveTemplate = useCallback(() => {
     const name = templateName.trim() || `Style ${savedTemplates.length + 1}`;
-    const entry: SavedQRTemplate = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-      name,
-      settings: { ...settings },
-      createdAt: new Date().toISOString(),
-    };
-    const next = [entry, ...savedTemplates];
-    setSavedTemplates(next);
-    saveSavedTemplates(next);
-    setTemplateName("");
-    setSavingTemplate(false);
-    toast.success(`Template "${name}" saved`);
-  }, [templateName, settings, savedTemplates]);
+    createTemplate.mutate({
+      data: { templateId: `tmpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name, settings: JSON.stringify(settings) },
+    }, {
+      onSuccess: () => {
+        refetchTemplates();
+        setTemplateName("");
+        setSavingTemplate(false);
+        toast.success(`Template "${name}" saved`);
+      },
+      onError: () => toast.error("Failed to save template"),
+    });
+  }, [templateName, settings, savedTemplates.length, createTemplate, refetchTemplates]);
 
-  const deleteTemplate = (id: string) => {
-    const next = savedTemplates.filter((t) => t.id !== id);
-    setSavedTemplates(next);
-    saveSavedTemplates(next);
-    toast.success("Template removed");
+  const handleDeleteTemplate = (id: string) => {
+    deleteTemplate.mutate({ id: Number(id) }, {
+      onSuccess: () => { refetchTemplates(); toast.success("Template removed"); },
+      onError: () => toast.error("Failed to remove template"),
+    });
   };
 
   const applyTemplate = (t: SavedQRTemplate) => {
     setSettings(t.settings);
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(t.settings)); } catch { /* ignore */ }
+    scheduleSettingsSave(t.settings);
     toast.success(`Applied "${t.name}"`);
   };
 
@@ -974,10 +1039,7 @@ export default function MarketingQRCodesPage() {
                   <CardTitle className="text-base">Template</CardTitle>
                   {!savingTemplate ? (
                     <Button type="button" variant="outline" size="sm" className="gap-1.5 h-7 text-xs"
-                      onClick={() => {
-                        setSavingTemplate(true);
-                        setTimeout(() => templateNameRef.current?.focus(), 50);
-                      }}>
+                      onClick={() => { setSavingTemplate(true); setTimeout(() => templateNameRef.current?.focus(), 50); }}>
                       <BookmarkPlus className="w-3.5 h-3.5" /> Save current style
                     </Button>
                   ) : (
@@ -1013,12 +1075,9 @@ export default function MarketingQRCodesPage() {
                     <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
                       {savedTemplates.map((tmpl) => (
                         <div key={tmpl.id} className="relative shrink-0 group">
-                          <button
-                            type="button"
-                            onClick={() => applyTemplate(tmpl)}
+                          <button type="button" onClick={() => applyTemplate(tmpl)}
                             className="flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-border hover:border-primary/50 hover:bg-muted/40 transition-all"
-                            style={{ width: 100 }}
-                          >
+                            style={{ width: 100 }}>
                             <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
                               <TemplateWrapper
                                 template={tmpl.settings.template}
@@ -1033,12 +1092,9 @@ export default function MarketingQRCodesPage() {
                               {tmpl.name}
                             </span>
                           </button>
-                          <button
-                            type="button"
-                            title="Remove template"
-                            onClick={(e) => { e.stopPropagation(); deleteTemplate(tmpl.id); }}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                          >
+                          <button type="button" title="Remove template"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(tmpl.id); }}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
                             <X className="w-3 h-3" />
                           </button>
                         </div>
@@ -1151,7 +1207,7 @@ export default function MarketingQRCodesPage() {
                   <Button variant="outline" className="gap-1.5" onClick={downloadLive} disabled={!hasValidContent}>
                     <Download className="w-4 h-4" /> Download
                   </Button>
-                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent}>
+                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent || createCode.isPending}>
                     <Save className="w-4 h-4" /> Save
                   </Button>
                 </div>

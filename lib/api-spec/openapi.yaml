@@ -3157,6 +3157,756 @@ paths:
         "204":
           description: Deleted
 
+  /pos-registers:
+    get:
+      operationId: listPosRegisters
+      summary: List POS registers
+      tags: [POS]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegisterListResponse" }
+    post:
+      operationId: createPosRegister
+      summary: Create POS register
+      tags: [POS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRegisterInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegister" }
+
+  /pos-registers/{id}:
+    patch:
+      operationId: updatePosRegister
+      summary: Update POS register
+      tags: [POS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRegisterInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegister" }
+    delete:
+      operationId: deletePosRegister
+      summary: Delete POS register
+      tags: [POS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /pos-settings:
+    get:
+      operationId: getPosSettings
+      summary: Get POS settings
+      tags: [POS]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosSettings" }
+    put:
+      operationId: upsertPosSettings
+      summary: Upsert POS settings
+      tags: [POS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosSettings" }
+
+  /layby-settings:
+    get:
+      operationId: getLaybySettings
+      summary: Get layby settings
+      tags: [Settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaybySettings" }
+    put:
+      operationId: upsertLaybySettings
+      summary: Upsert layby settings
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LaybySettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaybySettings" }
+
+  /kpi-settings:
+    get:
+      operationId: getKpiSettings
+      summary: Get KPI settings
+      tags: [KPIs]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiSettings" }
+    put:
+      operationId: upsertKpiSettings
+      summary: Upsert KPI settings
+      tags: [KPIs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KpiSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiSettings" }
+
+  /kpi-targets:
+    get:
+      operationId: listKpiTargets
+      summary: List KPI targets
+      tags: [KPIs]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiTargetListResponse" }
+    post:
+      operationId: createKpiTarget
+      summary: Create KPI target
+      tags: [KPIs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KpiTargetInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiTarget" }
+
+  /kpi-targets/{id}:
+    patch:
+      operationId: updateKpiTarget
+      summary: Update KPI target
+      tags: [KPIs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KpiTargetInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiTarget" }
+    delete:
+      operationId: deleteKpiTarget
+      summary: Delete KPI target
+      tags: [KPIs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /qr-codes:
+    get:
+      operationId: listQrCodes
+      summary: List QR codes
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrCodeListResponse" }
+    post:
+      operationId: createQrCode
+      summary: Create QR code
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QrCodeInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrCode" }
+
+  /qr-codes/{id}:
+    delete:
+      operationId: deleteQrCode
+      summary: Delete QR code
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /qr-settings:
+    get:
+      operationId: getQrSettings
+      summary: Get QR settings
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSettings" }
+    put:
+      operationId: upsertQrSettings
+      summary: Upsert QR settings
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QrSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSettings" }
+
+  /qr-saved-templates:
+    get:
+      operationId: listQrSavedTemplates
+      summary: List saved QR templates
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSavedTemplateListResponse" }
+    post:
+      operationId: createQrSavedTemplate
+      summary: Save QR template
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QrSavedTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSavedTemplate" }
+
+  /qr-saved-templates/{id}:
+    delete:
+      operationId: deleteQrSavedTemplate
+      summary: Delete saved QR template
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /email-templates:
+    get:
+      operationId: listEmailTemplates
+      summary: List email templates
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplateListResponse" }
+    post:
+      operationId: createEmailTemplate
+      summary: Create email template
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplate" }
+
+  /email-templates/{id}:
+    patch:
+      operationId: updateEmailTemplate
+      summary: Update email template
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplate" }
+    delete:
+      operationId: deleteEmailTemplate
+      summary: Delete email template
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /email-campaigns:
+    get:
+      operationId: listEmailCampaigns
+      summary: List email campaigns
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailCampaignListResponse" }
+    post:
+      operationId: createEmailCampaign
+      summary: Create email campaign
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailCampaignInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailCampaign" }
+
+  /email-campaigns/{id}:
+    patch:
+      operationId: updateEmailCampaign
+      summary: Update email campaign
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailCampaignInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailCampaign" }
+    delete:
+      operationId: deleteEmailCampaign
+      summary: Delete email campaign
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /landing-pages:
+    get:
+      operationId: listLandingPages
+      summary: List landing pages
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandingPageListResponse" }
+    post:
+      operationId: createLandingPage
+      summary: Create landing page
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LandingPageInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandingPage" }
+
+  /landing-pages/{id}:
+    patch:
+      operationId: updateLandingPage
+      summary: Update landing page
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LandingPageInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandingPage" }
+    delete:
+      operationId: deleteLandingPage
+      summary: Delete landing page
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /shortlinks:
+    get:
+      operationId: listShortlinks
+      summary: List shortlinks
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShortlinkListResponse" }
+    post:
+      operationId: createShortlink
+      summary: Create shortlink
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShortlinkInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shortlink" }
+
+  /shortlinks/{id}:
+    delete:
+      operationId: deleteShortlink
+      summary: Delete shortlink
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /shortlink-settings:
+    get:
+      operationId: getShortlinkSettings
+      summary: Get shortlink settings
+      tags: [Marketing]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShortlinkSettings" }
+    put:
+      operationId: upsertShortlinkSettings
+      summary: Upsert shortlink settings
+      tags: [Marketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShortlinkSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShortlinkSettings" }
+
+  /online-store-settings:
+    get:
+      operationId: getOnlineStoreSettings
+      summary: Get online store settings
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreSettings" }
+    put:
+      operationId: upsertOnlineStoreSettings
+      summary: Upsert online store settings
+      tags: [OnlineStore]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnlineStoreSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreSettings" }
+
+  /online-store-thirdparty:
+    get:
+      operationId: getOnlineStoreThirdparty
+      summary: Get third-party store connection
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreThirdparty" }
+    put:
+      operationId: upsertOnlineStoreThirdparty
+      summary: Upsert third-party store connection
+      tags: [OnlineStore]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnlineStoreThirdpartyInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreThirdparty" }
+
+  /shipping-carriers:
+    get:
+      operationId: listShippingCarriers
+      summary: List shipping carriers with connection state
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingCarrierListResponse" }
+
+  /shipping-carriers/{carrierId}/connect:
+    put:
+      operationId: updateShippingCarrier
+      summary: Toggle carrier connection
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: carrierId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connected]
+              properties:
+                connected: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingCarrier" }
+
+  /marketplace-connections:
+    get:
+      operationId: listMarketplaceConnections
+      summary: List marketplace connections
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceConnectionListResponse" }
+
+  /marketplace-connections/{marketplaceId}:
+    put:
+      operationId: upsertMarketplaceConnection
+      summary: Upsert marketplace connection
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: marketplaceId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarketplaceConnectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceConnection" }
+
+  /delivery-orders:
+    get:
+      operationId: listDeliveryOrders
+      summary: List delivery orders
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryOrderListResponse" }
+    post:
+      operationId: createDeliveryOrder
+      summary: Create delivery order
+      tags: [OnlineStore]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliveryOrderInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryOrder" }
+
+  /delivery-orders/{id}:
+    patch:
+      operationId: updateDeliveryOrder
+      summary: Update delivery order
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliveryOrderInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryOrder" }
+    delete:
+      operationId: deleteDeliveryOrder
+      summary: Delete delivery order
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -5621,4 +6371,615 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProductReturnAuth"
+        total: { type: integer }
+
+    PosRegister:
+      type: object
+      required: [id, merchantId, registerId, name, type, staffName, staffEmail]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        registerId:  { type: string }
+        name:        { type: string }
+        type:        { type: string }
+        staffName:   { type: string }
+        staffEmail:  { type: string }
+
+    PosRegisterInput:
+      type: object
+      required: [registerId, name, type]
+      properties:
+        registerId:  { type: string }
+        name:        { type: string }
+        type:        { type: string }
+        staffName:   { type: string }
+        staffEmail:  { type: string }
+
+    PosRegisterListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PosRegister" }
+        total: { type: integer }
+
+    PosSettings:
+      type: object
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts]
+      properties:
+        id:                          { type: integer }
+        merchantId:                  { type: integer }
+        enabledPaymentMethods:       { type: string }
+        enabledIntegrationPayments:  { type: string }
+        gridColumns:                 { type: integer }
+        gridTileSize:                { type: string }
+        gridShowPrices:              { type: string }
+        gridShowStockBadges:         { type: string }
+        gridCartPosition:            { type: string }
+        forceStaffLogin:             { type: string }
+        staffLoginMessage:           { type: string }
+        activeRegisterId:            { type: string }
+        hardwareConfig:              { type: string }
+        enabledShortcuts:            { type: string }
+
+    PosSettingsInput:
+      type: object
+      properties:
+        enabledPaymentMethods:       { type: string }
+        enabledIntegrationPayments:  { type: string }
+        gridColumns:                 { type: integer }
+        gridTileSize:                { type: string }
+        gridShowPrices:              { type: string }
+        gridShowStockBadges:         { type: string }
+        gridCartPosition:            { type: string }
+        forceStaffLogin:             { type: string }
+        staffLoginMessage:           { type: string }
+        activeRegisterId:            { type: string }
+        hardwareConfig:              { type: string }
+        enabledShortcuts:            { type: string }
+
+    LaybySettings:
+      type: object
+      required: [id, merchantId, durationValue, durationUnit, paymentFrequency, minimumDepositType, minimumDepositValue, allowPartialPayments, autoEmailOnCreation, printTermsOnReceipt, termsAndConditions]
+      properties:
+        id:                   { type: integer }
+        merchantId:           { type: integer }
+        durationValue:        { type: integer }
+        durationUnit:         { type: string }
+        paymentFrequency:     { type: string }
+        minimumDepositType:   { type: string }
+        minimumDepositValue:  { type: number }
+        allowPartialPayments: { type: string }
+        autoEmailOnCreation:  { type: string }
+        printTermsOnReceipt:  { type: string }
+        termsAndConditions:   { type: string }
+
+    LaybySettingsInput:
+      type: object
+      properties:
+        durationValue:        { type: integer }
+        durationUnit:         { type: string }
+        paymentFrequency:     { type: string }
+        minimumDepositType:   { type: string }
+        minimumDepositValue:  { type: number }
+        allowPartialPayments: { type: string }
+        autoEmailOnCreation:  { type: string }
+        printTermsOnReceipt:  { type: string }
+        termsAndConditions:   { type: string }
+
+    KpiSettings:
+      type: object
+      required: [id, merchantId, trackCategories, trackAppointments, trackServices]
+      properties:
+        id:                 { type: integer }
+        merchantId:         { type: integer }
+        trackCategories:    { type: string }
+        trackAppointments:  { type: string }
+        trackServices:      { type: string }
+
+    KpiSettingsInput:
+      type: object
+      properties:
+        trackCategories:    { type: string }
+        trackAppointments:  { type: string }
+        trackServices:      { type: string }
+
+    KpiTarget:
+      type: object
+      required: [id, merchantId, targetId, name, metric, period, target, staffIds, notes, isActive]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        targetId:    { type: string }
+        name:        { type: string }
+        metric:      { type: string }
+        categoryId:  { type: string }
+        period:      { type: string }
+        target:      { type: number }
+        staffIds:    { type: string }
+        reward:      { type: string }
+        notes:       { type: string }
+        isActive:    { type: string }
+
+    KpiTargetInput:
+      type: object
+      required: [targetId, name, metric, period, target]
+      properties:
+        targetId:    { type: string }
+        name:        { type: string }
+        metric:      { type: string }
+        categoryId:  { type: string }
+        period:      { type: string }
+        target:      { type: number }
+        staffIds:    { type: string }
+        reward:      { type: string }
+        notes:       { type: string }
+        isActive:    { type: string }
+
+    KpiTargetListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/KpiTarget" }
+        total: { type: integer }
+
+    QrCode:
+      type: object
+      required: [id, merchantId, entryId, label, url, qrType, content, settings, createdAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        entryId:     { type: string }
+        label:       { type: string }
+        url:         { type: string }
+        qrType:      { type: string }
+        content:     { type: string }
+        settings:    { type: string }
+        createdAt:   { type: string, format: date-time }
+
+    QrCodeInput:
+      type: object
+      required: [entryId, label]
+      properties:
+        entryId:     { type: string }
+        label:       { type: string }
+        url:         { type: string }
+        qrType:      { type: string }
+        content:     { type: string }
+        settings:    { type: string }
+
+    QrCodeListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QrCode" }
+        total: { type: integer }
+
+    QrSettings:
+      type: object
+      required: [id, merchantId, patternColor, eyeColor, eyeDotColor, bgColor, dotStyle, cornerSquareStyle, cornerDotStyle, template, size, level, logoUrl]
+      properties:
+        id:                  { type: integer }
+        merchantId:          { type: integer }
+        patternColor:        { type: string }
+        eyeColor:            { type: string }
+        eyeDotColor:         { type: string }
+        bgColor:             { type: string }
+        dotStyle:            { type: string }
+        cornerSquareStyle:   { type: string }
+        cornerDotStyle:      { type: string }
+        template:            { type: string }
+        size:                { type: integer }
+        level:               { type: string }
+        logoUrl:             { type: string }
+
+    QrSettingsInput:
+      type: object
+      properties:
+        patternColor:        { type: string }
+        eyeColor:            { type: string }
+        eyeDotColor:         { type: string }
+        bgColor:             { type: string }
+        dotStyle:            { type: string }
+        cornerSquareStyle:   { type: string }
+        cornerDotStyle:      { type: string }
+        template:            { type: string }
+        size:                { type: integer }
+        level:               { type: string }
+        logoUrl:             { type: string }
+
+    QrSavedTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, settings, createdAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        templateId:  { type: string }
+        name:        { type: string }
+        settings:    { type: string }
+        createdAt:   { type: string, format: date-time }
+
+    QrSavedTemplateInput:
+      type: object
+      required: [templateId, name, settings]
+      properties:
+        templateId:  { type: string }
+        name:        { type: string }
+        settings:    { type: string }
+
+    QrSavedTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QrSavedTemplate" }
+        total: { type: integer }
+
+    EmailTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, category, subject, body, createdAt, updatedAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        templateId:  { type: string }
+        name:        { type: string }
+        category:    { type: string }
+        subject:     { type: string }
+        body:        { type: string }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    EmailTemplateInput:
+      type: object
+      required: [templateId, name]
+      properties:
+        templateId:  { type: string }
+        name:        { type: string }
+        category:    { type: string }
+        subject:     { type: string }
+        body:        { type: string }
+
+    EmailTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EmailTemplate" }
+        total: { type: integer }
+
+    EmailCampaign:
+      type: object
+      required: [id, merchantId, campaignId, name, audience, audienceLabel, subject, body, ctaEnabled, ctaLabel, ctaUrl, scheduled, scheduledAt, status, sentAt, opens, bounces, recipientCount, createdAt]
+      properties:
+        id:             { type: integer }
+        merchantId:     { type: integer }
+        campaignId:     { type: string }
+        name:           { type: string }
+        audience:       { type: string }
+        audienceLabel:  { type: string }
+        subject:        { type: string }
+        body:           { type: string }
+        ctaEnabled:     { type: string }
+        ctaLabel:       { type: string }
+        ctaUrl:         { type: string }
+        scheduled:      { type: string }
+        scheduledAt:    { type: string }
+        status:         { type: string }
+        sentAt:         { type: string }
+        opens:          { type: integer }
+        bounces:        { type: integer }
+        recipientCount: { type: integer }
+        customerId:     { type: integer, nullable: true }
+        createdAt:      { type: string, format: date-time }
+
+    EmailCampaignInput:
+      type: object
+      required: [campaignId, name]
+      properties:
+        campaignId:     { type: string }
+        name:           { type: string }
+        audience:       { type: string }
+        audienceLabel:  { type: string }
+        subject:        { type: string }
+        body:           { type: string }
+        ctaEnabled:     { type: string }
+        ctaLabel:       { type: string }
+        ctaUrl:         { type: string }
+        scheduled:      { type: string }
+        scheduledAt:    { type: string }
+        status:         { type: string }
+        sentAt:         { type: string }
+        opens:          { type: integer }
+        bounces:        { type: integer }
+        recipientCount: { type: integer }
+        customerId:     { type: integer }
+
+    EmailCampaignListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EmailCampaign" }
+        total: { type: integer }
+
+    LandingPage:
+      type: object
+      required: [id, merchantId, pageId, slug, title, links, createdAt, updatedAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        pageId:        { type: string }
+        slug:          { type: string }
+        title:         { type: string }
+        subtitle:      { type: string }
+        bio:           { type: string }
+        profileImage:  { type: string }
+        bgType:        { type: string }
+        bgColor:       { type: string }
+        bgFrom:        { type: string }
+        bgTo:          { type: string }
+        bgDir:         { type: string }
+        bgImage:       { type: string }
+        btnStyle:      { type: string }
+        btnVariant:    { type: string }
+        btnBg:         { type: string }
+        btnText:       { type: string }
+        btnBorder:     { type: string }
+        textColor:     { type: string }
+        font:          { type: string }
+        links:         { type: string }
+        createdAt:     { type: string, format: date-time }
+        updatedAt:     { type: string, format: date-time }
+
+    LandingPageInput:
+      type: object
+      required: [pageId, slug, title]
+      properties:
+        pageId:        { type: string }
+        slug:          { type: string }
+        title:         { type: string }
+        subtitle:      { type: string }
+        bio:           { type: string }
+        profileImage:  { type: string }
+        bgType:        { type: string }
+        bgColor:       { type: string }
+        bgFrom:        { type: string }
+        bgTo:          { type: string }
+        bgDir:         { type: string }
+        bgImage:       { type: string }
+        btnStyle:      { type: string }
+        btnVariant:    { type: string }
+        btnBg:         { type: string }
+        btnText:       { type: string }
+        btnBorder:     { type: string }
+        textColor:     { type: string }
+        font:          { type: string }
+        links:         { type: string }
+
+    LandingPageListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LandingPage" }
+        total: { type: integer }
+
+    Shortlink:
+      type: object
+      required: [id, merchantId, linkId, label, longUrl, slug, baseDomain, clicks, tags, createdAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        linkId:      { type: string }
+        label:       { type: string }
+        longUrl:     { type: string }
+        slug:        { type: string }
+        baseDomain:  { type: string }
+        clicks:      { type: integer }
+        tags:        { type: string }
+        createdAt:   { type: string, format: date-time }
+
+    ShortlinkInput:
+      type: object
+      required: [linkId, label, longUrl, slug]
+      properties:
+        linkId:      { type: string }
+        label:       { type: string }
+        longUrl:     { type: string }
+        slug:        { type: string }
+        baseDomain:  { type: string }
+        tags:        { type: string }
+
+    ShortlinkListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Shortlink" }
+        total: { type: integer }
+
+    ShortlinkSettings:
+      type: object
+      required: [id, merchantId, baseDomain, prefix]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        baseDomain:  { type: string }
+        prefix:      { type: string }
+
+    ShortlinkSettingsInput:
+      type: object
+      properties:
+        baseDomain:  { type: string }
+        prefix:      { type: string }
+
+    OnlineStoreSettings:
+      type: object
+      required: [id, merchantId, mode, storeName, tagline, logoUrl, faviconUrl, domain, published, theme, payments, features, pages, quickCodes]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        mode:        { type: string }
+        storeName:   { type: string }
+        tagline:     { type: string }
+        logoUrl:     { type: string }
+        faviconUrl:  { type: string }
+        domain:      { type: string }
+        published:   { type: string }
+        theme:       { type: string }
+        payments:    { type: string }
+        features:    { type: string }
+        pages:       { type: string }
+        quickCodes:  { type: string }
+
+    OnlineStoreSettingsInput:
+      type: object
+      properties:
+        mode:        { type: string }
+        storeName:   { type: string }
+        tagline:     { type: string }
+        logoUrl:     { type: string }
+        faviconUrl:  { type: string }
+        domain:      { type: string }
+        published:   { type: string }
+        theme:       { type: string }
+        payments:    { type: string }
+        features:    { type: string }
+        pages:       { type: string }
+        quickCodes:  { type: string }
+
+    OnlineStoreThirdparty:
+      type: object
+      required: [id, merchantId, providerId, storeUrl, apiKey, connected, connectedAt]
+      properties:
+        id:           { type: integer }
+        merchantId:   { type: integer }
+        providerId:   { type: string }
+        storeUrl:     { type: string }
+        apiKey:       { type: string }
+        connected:    { type: string }
+        connectedAt:  { type: string }
+
+    OnlineStoreThirdpartyInput:
+      type: object
+      properties:
+        providerId:   { type: string }
+        storeUrl:     { type: string }
+        apiKey:       { type: string }
+        connected:    { type: string }
+        connectedAt:  { type: string }
+
+    ShippingCarrier:
+      type: object
+      required: [id, merchantId, carrierId, connected]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        carrierId:   { type: string }
+        connected:   { type: string }
+
+    ShippingCarrierListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ShippingCarrier" }
+        total: { type: integer }
+
+    MarketplaceConnection:
+      type: object
+      required: [id, merchantId, marketplaceId, connected, connectedAt, lastSync, productsCount, ordersCount, config]
+      properties:
+        id:             { type: integer }
+        merchantId:     { type: integer }
+        marketplaceId:  { type: string }
+        connected:      { type: string }
+        connectedAt:    { type: string }
+        lastSync:       { type: string }
+        productsCount:  { type: integer }
+        ordersCount:    { type: integer }
+        config:         { type: string }
+
+    MarketplaceConnectionInput:
+      type: object
+      properties:
+        connected:      { type: string }
+        connectedAt:    { type: string }
+        lastSync:       { type: string }
+        productsCount:  { type: integer }
+        ordersCount:    { type: integer }
+        config:         { type: string }
+
+    MarketplaceConnectionListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketplaceConnection" }
+        total: { type: integer }
+
+    DeliveryOrder:
+      type: object
+      required: [id, merchantId, orderId, number, channel, customer, customerEmail, phone, address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes, createdAt]
+      properties:
+        id:             { type: integer }
+        merchantId:     { type: integer }
+        orderId:        { type: string }
+        number:         { type: string }
+        channel:        { type: string }
+        customer:       { type: string }
+        customerEmail:  { type: string }
+        phone:          { type: string }
+        address:        { type: string }
+        city:           { type: string }
+        postcode:       { type: string }
+        state:          { type: string }
+        shippingMethod: { type: string }
+        status:         { type: string }
+        placedAt:       { type: string }
+        total:          { type: number }
+        items:          { type: string }
+        notes:          { type: string }
+        createdAt:      { type: string, format: date-time }
+
+    DeliveryOrderInput:
+      type: object
+      required: [orderId, number, channel, customer]
+      properties:
+        orderId:        { type: string }
+        number:         { type: string }
+        channel:        { type: string }
+        customer:       { type: string }
+        customerEmail:  { type: string }
+        phone:          { type: string }
+        address:        { type: string }
+        city:           { type: string }
+        postcode:       { type: string }
+        state:          { type: string }
+        shippingMethod: { type: string }
+        status:         { type: string }
+        placedAt:       { type: string }
+        total:          { type: number }
+        items:          { type: string }
+        notes:          { type: string }
+
+    DeliveryOrderListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DeliveryOrder" }
         total: { type: integer }

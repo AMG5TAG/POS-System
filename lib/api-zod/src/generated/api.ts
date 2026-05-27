@@ -4075,3 +4075,1070 @@ export const DeleteProductReturnAuthParams = zod.object({
 })
 
 
+/**
+ * @summary List POS registers
+ */
+export const ListPosRegistersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "staffName": zod.string(),
+  "staffEmail": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create POS register
+ */
+export const CreatePosRegisterBody = zod.object({
+  "registerId": zod.string(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "staffName": zod.string().optional(),
+  "staffEmail": zod.string().optional()
+})
+
+
+/**
+ * @summary Update POS register
+ */
+export const UpdatePosRegisterParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePosRegisterBody = zod.object({
+  "registerId": zod.string(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "staffName": zod.string().optional(),
+  "staffEmail": zod.string().optional()
+})
+
+export const UpdatePosRegisterResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "staffName": zod.string(),
+  "staffEmail": zod.string()
+})
+
+
+/**
+ * @summary Delete POS register
+ */
+export const DeletePosRegisterParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get POS settings
+ */
+export const GetPosSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "enabledPaymentMethods": zod.string(),
+  "enabledIntegrationPayments": zod.string(),
+  "gridColumns": zod.number(),
+  "gridTileSize": zod.string(),
+  "gridShowPrices": zod.string(),
+  "gridShowStockBadges": zod.string(),
+  "gridCartPosition": zod.string(),
+  "forceStaffLogin": zod.string(),
+  "staffLoginMessage": zod.string(),
+  "activeRegisterId": zod.string(),
+  "hardwareConfig": zod.string(),
+  "enabledShortcuts": zod.string()
+})
+
+
+/**
+ * @summary Upsert POS settings
+ */
+export const UpsertPosSettingsBody = zod.object({
+  "enabledPaymentMethods": zod.string().optional(),
+  "enabledIntegrationPayments": zod.string().optional(),
+  "gridColumns": zod.number().optional(),
+  "gridTileSize": zod.string().optional(),
+  "gridShowPrices": zod.string().optional(),
+  "gridShowStockBadges": zod.string().optional(),
+  "gridCartPosition": zod.string().optional(),
+  "forceStaffLogin": zod.string().optional(),
+  "staffLoginMessage": zod.string().optional(),
+  "activeRegisterId": zod.string().optional(),
+  "hardwareConfig": zod.string().optional(),
+  "enabledShortcuts": zod.string().optional()
+})
+
+export const UpsertPosSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "enabledPaymentMethods": zod.string(),
+  "enabledIntegrationPayments": zod.string(),
+  "gridColumns": zod.number(),
+  "gridTileSize": zod.string(),
+  "gridShowPrices": zod.string(),
+  "gridShowStockBadges": zod.string(),
+  "gridCartPosition": zod.string(),
+  "forceStaffLogin": zod.string(),
+  "staffLoginMessage": zod.string(),
+  "activeRegisterId": zod.string(),
+  "hardwareConfig": zod.string(),
+  "enabledShortcuts": zod.string()
+})
+
+
+/**
+ * @summary Get layby settings
+ */
+export const GetLaybySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "durationValue": zod.number(),
+  "durationUnit": zod.string(),
+  "paymentFrequency": zod.string(),
+  "minimumDepositType": zod.string(),
+  "minimumDepositValue": zod.number(),
+  "allowPartialPayments": zod.string(),
+  "autoEmailOnCreation": zod.string(),
+  "printTermsOnReceipt": zod.string(),
+  "termsAndConditions": zod.string()
+})
+
+
+/**
+ * @summary Upsert layby settings
+ */
+export const UpsertLaybySettingsBody = zod.object({
+  "durationValue": zod.number().optional(),
+  "durationUnit": zod.string().optional(),
+  "paymentFrequency": zod.string().optional(),
+  "minimumDepositType": zod.string().optional(),
+  "minimumDepositValue": zod.number().optional(),
+  "allowPartialPayments": zod.string().optional(),
+  "autoEmailOnCreation": zod.string().optional(),
+  "printTermsOnReceipt": zod.string().optional(),
+  "termsAndConditions": zod.string().optional()
+})
+
+export const UpsertLaybySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "durationValue": zod.number(),
+  "durationUnit": zod.string(),
+  "paymentFrequency": zod.string(),
+  "minimumDepositType": zod.string(),
+  "minimumDepositValue": zod.number(),
+  "allowPartialPayments": zod.string(),
+  "autoEmailOnCreation": zod.string(),
+  "printTermsOnReceipt": zod.string(),
+  "termsAndConditions": zod.string()
+})
+
+
+/**
+ * @summary Get KPI settings
+ */
+export const GetKpiSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "trackCategories": zod.string(),
+  "trackAppointments": zod.string(),
+  "trackServices": zod.string()
+})
+
+
+/**
+ * @summary Upsert KPI settings
+ */
+export const UpsertKpiSettingsBody = zod.object({
+  "trackCategories": zod.string().optional(),
+  "trackAppointments": zod.string().optional(),
+  "trackServices": zod.string().optional()
+})
+
+export const UpsertKpiSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "trackCategories": zod.string(),
+  "trackAppointments": zod.string(),
+  "trackServices": zod.string()
+})
+
+
+/**
+ * @summary List KPI targets
+ */
+export const ListKpiTargetsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "targetId": zod.string(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "staffIds": zod.string(),
+  "reward": zod.string().optional(),
+  "notes": zod.string(),
+  "isActive": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create KPI target
+ */
+export const CreateKpiTargetBody = zod.object({
+  "targetId": zod.string(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "staffIds": zod.string().optional(),
+  "reward": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+
+/**
+ * @summary Update KPI target
+ */
+export const UpdateKpiTargetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateKpiTargetBody = zod.object({
+  "targetId": zod.string(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "staffIds": zod.string().optional(),
+  "reward": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+export const UpdateKpiTargetResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "targetId": zod.string(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "staffIds": zod.string(),
+  "reward": zod.string().optional(),
+  "notes": zod.string(),
+  "isActive": zod.string()
+})
+
+
+/**
+ * @summary Delete KPI target
+ */
+export const DeleteKpiTargetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List QR codes
+ */
+export const ListQrCodesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "entryId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "qrType": zod.string(),
+  "content": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create QR code
+ */
+export const CreateQrCodeBody = zod.object({
+  "entryId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string().optional(),
+  "qrType": zod.string().optional(),
+  "content": zod.string().optional(),
+  "settings": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete QR code
+ */
+export const DeleteQrCodeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get QR settings
+ */
+export const GetQrSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "patternColor": zod.string(),
+  "eyeColor": zod.string(),
+  "eyeDotColor": zod.string(),
+  "bgColor": zod.string(),
+  "dotStyle": zod.string(),
+  "cornerSquareStyle": zod.string(),
+  "cornerDotStyle": zod.string(),
+  "template": zod.string(),
+  "size": zod.number(),
+  "level": zod.string(),
+  "logoUrl": zod.string()
+})
+
+
+/**
+ * @summary Upsert QR settings
+ */
+export const UpsertQrSettingsBody = zod.object({
+  "patternColor": zod.string().optional(),
+  "eyeColor": zod.string().optional(),
+  "eyeDotColor": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "dotStyle": zod.string().optional(),
+  "cornerSquareStyle": zod.string().optional(),
+  "cornerDotStyle": zod.string().optional(),
+  "template": zod.string().optional(),
+  "size": zod.number().optional(),
+  "level": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+export const UpsertQrSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "patternColor": zod.string(),
+  "eyeColor": zod.string(),
+  "eyeDotColor": zod.string(),
+  "bgColor": zod.string(),
+  "dotStyle": zod.string(),
+  "cornerSquareStyle": zod.string(),
+  "cornerDotStyle": zod.string(),
+  "template": zod.string(),
+  "size": zod.number(),
+  "level": zod.string(),
+  "logoUrl": zod.string()
+})
+
+
+/**
+ * @summary List saved QR templates
+ */
+export const ListQrSavedTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Save QR template
+ */
+export const CreateQrSavedTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "settings": zod.string()
+})
+
+
+/**
+ * @summary Delete saved QR template
+ */
+export const DeleteQrSavedTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List email templates
+ */
+export const ListEmailTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create email template
+ */
+export const CreateEmailTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional()
+})
+
+
+/**
+ * @summary Update email template
+ */
+export const UpdateEmailTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateEmailTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional()
+})
+
+export const UpdateEmailTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete email template
+ */
+export const DeleteEmailTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List email campaigns
+ */
+export const ListEmailCampaignsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string(),
+  "audienceLabel": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "ctaEnabled": zod.string(),
+  "ctaLabel": zod.string(),
+  "ctaUrl": zod.string(),
+  "scheduled": zod.string(),
+  "scheduledAt": zod.string(),
+  "status": zod.string(),
+  "sentAt": zod.string(),
+  "opens": zod.number(),
+  "bounces": zod.number(),
+  "recipientCount": zod.number(),
+  "customerId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create email campaign
+ */
+export const CreateEmailCampaignBody = zod.object({
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string().optional(),
+  "audienceLabel": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "ctaEnabled": zod.string().optional(),
+  "ctaLabel": zod.string().optional(),
+  "ctaUrl": zod.string().optional(),
+  "scheduled": zod.string().optional(),
+  "scheduledAt": zod.string().optional(),
+  "status": zod.string().optional(),
+  "sentAt": zod.string().optional(),
+  "opens": zod.number().optional(),
+  "bounces": zod.number().optional(),
+  "recipientCount": zod.number().optional(),
+  "customerId": zod.number().optional()
+})
+
+
+/**
+ * @summary Update email campaign
+ */
+export const UpdateEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateEmailCampaignBody = zod.object({
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string().optional(),
+  "audienceLabel": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "ctaEnabled": zod.string().optional(),
+  "ctaLabel": zod.string().optional(),
+  "ctaUrl": zod.string().optional(),
+  "scheduled": zod.string().optional(),
+  "scheduledAt": zod.string().optional(),
+  "status": zod.string().optional(),
+  "sentAt": zod.string().optional(),
+  "opens": zod.number().optional(),
+  "bounces": zod.number().optional(),
+  "recipientCount": zod.number().optional(),
+  "customerId": zod.number().optional()
+})
+
+export const UpdateEmailCampaignResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string(),
+  "audienceLabel": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "ctaEnabled": zod.string(),
+  "ctaLabel": zod.string(),
+  "ctaUrl": zod.string(),
+  "scheduled": zod.string(),
+  "scheduledAt": zod.string(),
+  "status": zod.string(),
+  "sentAt": zod.string(),
+  "opens": zod.number(),
+  "bounces": zod.number(),
+  "recipientCount": zod.number(),
+  "customerId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete email campaign
+ */
+export const DeleteEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List landing pages
+ */
+export const ListLandingPagesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "pageId": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "profileImage": zod.string().optional(),
+  "bgType": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "bgFrom": zod.string().optional(),
+  "bgTo": zod.string().optional(),
+  "bgDir": zod.string().optional(),
+  "bgImage": zod.string().optional(),
+  "btnStyle": zod.string().optional(),
+  "btnVariant": zod.string().optional(),
+  "btnBg": zod.string().optional(),
+  "btnText": zod.string().optional(),
+  "btnBorder": zod.string().optional(),
+  "textColor": zod.string().optional(),
+  "font": zod.string().optional(),
+  "links": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create landing page
+ */
+export const CreateLandingPageBody = zod.object({
+  "pageId": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "profileImage": zod.string().optional(),
+  "bgType": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "bgFrom": zod.string().optional(),
+  "bgTo": zod.string().optional(),
+  "bgDir": zod.string().optional(),
+  "bgImage": zod.string().optional(),
+  "btnStyle": zod.string().optional(),
+  "btnVariant": zod.string().optional(),
+  "btnBg": zod.string().optional(),
+  "btnText": zod.string().optional(),
+  "btnBorder": zod.string().optional(),
+  "textColor": zod.string().optional(),
+  "font": zod.string().optional(),
+  "links": zod.string().optional()
+})
+
+
+/**
+ * @summary Update landing page
+ */
+export const UpdateLandingPageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLandingPageBody = zod.object({
+  "pageId": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "profileImage": zod.string().optional(),
+  "bgType": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "bgFrom": zod.string().optional(),
+  "bgTo": zod.string().optional(),
+  "bgDir": zod.string().optional(),
+  "bgImage": zod.string().optional(),
+  "btnStyle": zod.string().optional(),
+  "btnVariant": zod.string().optional(),
+  "btnBg": zod.string().optional(),
+  "btnText": zod.string().optional(),
+  "btnBorder": zod.string().optional(),
+  "textColor": zod.string().optional(),
+  "font": zod.string().optional(),
+  "links": zod.string().optional()
+})
+
+export const UpdateLandingPageResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "pageId": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "profileImage": zod.string().optional(),
+  "bgType": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "bgFrom": zod.string().optional(),
+  "bgTo": zod.string().optional(),
+  "bgDir": zod.string().optional(),
+  "bgImage": zod.string().optional(),
+  "btnStyle": zod.string().optional(),
+  "btnVariant": zod.string().optional(),
+  "btnBg": zod.string().optional(),
+  "btnText": zod.string().optional(),
+  "btnBorder": zod.string().optional(),
+  "textColor": zod.string().optional(),
+  "font": zod.string().optional(),
+  "links": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete landing page
+ */
+export const DeleteLandingPageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List shortlinks
+ */
+export const ListShortlinksResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "longUrl": zod.string(),
+  "slug": zod.string(),
+  "baseDomain": zod.string(),
+  "clicks": zod.number(),
+  "tags": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create shortlink
+ */
+export const CreateShortlinkBody = zod.object({
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "longUrl": zod.string(),
+  "slug": zod.string(),
+  "baseDomain": zod.string().optional(),
+  "tags": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete shortlink
+ */
+export const DeleteShortlinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get shortlink settings
+ */
+export const GetShortlinkSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "baseDomain": zod.string(),
+  "prefix": zod.string()
+})
+
+
+/**
+ * @summary Upsert shortlink settings
+ */
+export const UpsertShortlinkSettingsBody = zod.object({
+  "baseDomain": zod.string().optional(),
+  "prefix": zod.string().optional()
+})
+
+export const UpsertShortlinkSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "baseDomain": zod.string(),
+  "prefix": zod.string()
+})
+
+
+/**
+ * @summary Get online store settings
+ */
+export const GetOnlineStoreSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "mode": zod.string(),
+  "storeName": zod.string(),
+  "tagline": zod.string(),
+  "logoUrl": zod.string(),
+  "faviconUrl": zod.string(),
+  "domain": zod.string(),
+  "published": zod.string(),
+  "theme": zod.string(),
+  "payments": zod.string(),
+  "features": zod.string(),
+  "pages": zod.string(),
+  "quickCodes": zod.string()
+})
+
+
+/**
+ * @summary Upsert online store settings
+ */
+export const UpsertOnlineStoreSettingsBody = zod.object({
+  "mode": zod.string().optional(),
+  "storeName": zod.string().optional(),
+  "tagline": zod.string().optional(),
+  "logoUrl": zod.string().optional(),
+  "faviconUrl": zod.string().optional(),
+  "domain": zod.string().optional(),
+  "published": zod.string().optional(),
+  "theme": zod.string().optional(),
+  "payments": zod.string().optional(),
+  "features": zod.string().optional(),
+  "pages": zod.string().optional(),
+  "quickCodes": zod.string().optional()
+})
+
+export const UpsertOnlineStoreSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "mode": zod.string(),
+  "storeName": zod.string(),
+  "tagline": zod.string(),
+  "logoUrl": zod.string(),
+  "faviconUrl": zod.string(),
+  "domain": zod.string(),
+  "published": zod.string(),
+  "theme": zod.string(),
+  "payments": zod.string(),
+  "features": zod.string(),
+  "pages": zod.string(),
+  "quickCodes": zod.string()
+})
+
+
+/**
+ * @summary Get third-party store connection
+ */
+export const GetOnlineStoreThirdpartyResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "providerId": zod.string(),
+  "storeUrl": zod.string(),
+  "apiKey": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string()
+})
+
+
+/**
+ * @summary Upsert third-party store connection
+ */
+export const UpsertOnlineStoreThirdpartyBody = zod.object({
+  "providerId": zod.string().optional(),
+  "storeUrl": zod.string().optional(),
+  "apiKey": zod.string().optional(),
+  "connected": zod.string().optional(),
+  "connectedAt": zod.string().optional()
+})
+
+export const UpsertOnlineStoreThirdpartyResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "providerId": zod.string(),
+  "storeUrl": zod.string(),
+  "apiKey": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string()
+})
+
+
+/**
+ * @summary List shipping carriers with connection state
+ */
+export const ListShippingCarriersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "carrierId": zod.string(),
+  "connected": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Toggle carrier connection
+ */
+export const UpdateShippingCarrierParams = zod.object({
+  "carrierId": zod.coerce.string()
+})
+
+export const UpdateShippingCarrierBody = zod.object({
+  "connected": zod.boolean()
+})
+
+export const UpdateShippingCarrierResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "carrierId": zod.string(),
+  "connected": zod.string()
+})
+
+
+/**
+ * @summary List marketplace connections
+ */
+export const ListMarketplaceConnectionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "marketplaceId": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "lastSync": zod.string(),
+  "productsCount": zod.number(),
+  "ordersCount": zod.number(),
+  "config": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Upsert marketplace connection
+ */
+export const UpsertMarketplaceConnectionParams = zod.object({
+  "marketplaceId": zod.coerce.string()
+})
+
+export const UpsertMarketplaceConnectionBody = zod.object({
+  "connected": zod.string().optional(),
+  "connectedAt": zod.string().optional(),
+  "lastSync": zod.string().optional(),
+  "productsCount": zod.number().optional(),
+  "ordersCount": zod.number().optional(),
+  "config": zod.string().optional()
+})
+
+export const UpsertMarketplaceConnectionResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "marketplaceId": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "lastSync": zod.string(),
+  "productsCount": zod.number(),
+  "ordersCount": zod.number(),
+  "config": zod.string()
+})
+
+
+/**
+ * @summary List delivery orders
+ */
+export const ListDeliveryOrdersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "orderId": zod.string(),
+  "number": zod.string(),
+  "channel": zod.string(),
+  "customer": zod.string(),
+  "customerEmail": zod.string(),
+  "phone": zod.string(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "postcode": zod.string(),
+  "state": zod.string(),
+  "shippingMethod": zod.string(),
+  "status": zod.string(),
+  "placedAt": zod.string(),
+  "total": zod.number(),
+  "items": zod.string(),
+  "notes": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create delivery order
+ */
+export const CreateDeliveryOrderBody = zod.object({
+  "orderId": zod.string(),
+  "number": zod.string(),
+  "channel": zod.string(),
+  "customer": zod.string(),
+  "customerEmail": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "state": zod.string().optional(),
+  "shippingMethod": zod.string().optional(),
+  "status": zod.string().optional(),
+  "placedAt": zod.string().optional(),
+  "total": zod.number().optional(),
+  "items": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Update delivery order
+ */
+export const UpdateDeliveryOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateDeliveryOrderBody = zod.object({
+  "orderId": zod.string(),
+  "number": zod.string(),
+  "channel": zod.string(),
+  "customer": zod.string(),
+  "customerEmail": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "state": zod.string().optional(),
+  "shippingMethod": zod.string().optional(),
+  "status": zod.string().optional(),
+  "placedAt": zod.string().optional(),
+  "total": zod.number().optional(),
+  "items": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateDeliveryOrderResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "orderId": zod.string(),
+  "number": zod.string(),
+  "channel": zod.string(),
+  "customer": zod.string(),
+  "customerEmail": zod.string(),
+  "phone": zod.string(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "postcode": zod.string(),
+  "state": zod.string(),
+  "shippingMethod": zod.string(),
+  "status": zod.string(),
+  "placedAt": zod.string(),
+  "total": zod.number(),
+  "items": zod.string(),
+  "notes": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete delivery order
+ */
+export const DeleteDeliveryOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
