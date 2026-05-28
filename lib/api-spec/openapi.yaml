@@ -5211,6 +5211,145 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Print3dSettings" }
 
+  # ── Business Profile ──────────────────────────────────────────────────────
+  /business-profile:
+    get:
+      operationId: getBusinessProfile
+      tags: [settings]
+      summary: Get business profile for current merchant
+      responses:
+        "200":
+          description: Business profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessProfile" }
+    put:
+      operationId: updateBusinessProfile
+      tags: [settings]
+      summary: Update business profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessProfileInput" }
+      responses:
+        "200":
+          description: Updated business profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessProfile" }
+
+  # ── Customer Settings ─────────────────────────────────────────────────────
+  /customer-settings:
+    get:
+      operationId: getCustomerSettings
+      tags: [settings]
+      summary: Get customer settings for current merchant
+      responses:
+        "200":
+          description: Customer settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerSettings" }
+    put:
+      operationId: updateCustomerSettings
+      tags: [settings]
+      summary: Update customer settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerSettingsInput" }
+      responses:
+        "200":
+          description: Updated customer settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerSettings" }
+
+  # ── Sticker Templates ─────────────────────────────────────────────────────
+  /sticker-templates:
+    get:
+      operationId: listStickerTemplates
+      tags: [settings]
+      summary: List sticker templates for current merchant
+      responses:
+        "200":
+          description: List of sticker templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StickerTemplate" }
+    post:
+      operationId: createStickerTemplate
+      tags: [settings]
+      summary: Create a sticker template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StickerTemplateInput" }
+      responses:
+        "201":
+          description: Created sticker template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StickerTemplate" }
+
+  /sticker-templates/{id}:
+    put:
+      operationId: updateStickerTemplate
+      tags: [settings]
+      summary: Update a sticker template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StickerTemplateUpdateInput" }
+      responses:
+        "200":
+          description: Updated sticker template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StickerTemplate" }
+    delete:
+      operationId: deleteStickerTemplate
+      tags: [settings]
+      summary: Delete a sticker template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /sticker-templates/{id}/set-default:
+    post:
+      operationId: setDefaultStickerTemplate
+      tags: [settings]
+      summary: Toggle default flag on a sticker template (atomic, unsets other defaults in same type)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated templates list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StickerTemplate" }
+
 components:
   schemas:
     HealthStatus:
@@ -9035,3 +9174,103 @@ components:
         coolingFactor:         { type: number }
         roundingMode:          { type: string }
         roundingValue:         { type: number }
+
+    BusinessProfile:
+      type: object
+      properties:
+        abn:            { type: string }
+        tagline:        { type: string }
+        description:    { type: string }
+        openingDate:    { type: string }
+        categories:     { type: array, items: { type: string } }
+        logo:           { type: string }
+        brandFont:      { type: string }
+        brandColors:    { type: array, items: { type: string } }
+        bgColors:       { type: array, items: { type: string } }
+        textColors:     { type: array, items: { type: string } }
+        contactEmail:   { type: string }
+        website:        { type: string }
+        state:          { type: string }
+        postcode:       { type: string }
+        openingHours:   { type: object }
+        paymentTypes:   { type: array, items: { type: string } }
+        socialLinks:    { type: object }
+        customLinks:    { type: array, items: { type: object } }
+        updatedAt:      { type: string, format: date-time }
+
+    BusinessProfileInput:
+      type: object
+      properties:
+        abn:            { type: string }
+        tagline:        { type: string }
+        description:    { type: string }
+        openingDate:    { type: string }
+        categories:     { type: array, items: { type: string } }
+        logo:           { type: string }
+        brandFont:      { type: string }
+        brandColors:    { type: array, items: { type: string } }
+        bgColors:       { type: array, items: { type: string } }
+        textColors:     { type: array, items: { type: string } }
+        contactEmail:   { type: string }
+        website:        { type: string }
+        state:          { type: string }
+        postcode:       { type: string }
+        openingHours:   { type: object }
+        paymentTypes:   { type: array, items: { type: string } }
+        socialLinks:    { type: object }
+        customLinks:    { type: array, items: { type: object } }
+
+    CustomerSettings:
+      type: object
+      properties:
+        groups:                  { type: array, items: { type: object } }
+        requiredFields:          { type: object }
+        defaultGroup:            { type: string }
+        loyaltyPointsPerDollar:  { type: number }
+        enableLoyalty:           { type: boolean }
+        updatedAt:               { type: string, format: date-time }
+
+    CustomerSettingsInput:
+      type: object
+      properties:
+        groups:                  { type: array, items: { type: object } }
+        requiredFields:          { type: object }
+        defaultGroup:            { type: string }
+        loyaltyPointsPerDollar:  { type: number }
+        enableLoyalty:           { type: boolean }
+
+    StickerTemplate:
+      type: object
+      required: [id, name, typeId, sizeId, fields, createdAt, updatedAt]
+      properties:
+        id:          { type: string }
+        name:        { type: string }
+        description: { type: string }
+        typeId:      { type: string }
+        sizeId:      { type: string }
+        fields:      { type: object }
+        isDefault:   { type: boolean }
+        createdAt:   { type: number }
+        updatedAt:   { type: number }
+
+    StickerTemplateInput:
+      type: object
+      required: [name, typeId, sizeId, fields]
+      properties:
+        id:          { type: string }
+        name:        { type: string }
+        description: { type: string }
+        typeId:      { type: string }
+        sizeId:      { type: string }
+        fields:      { type: object }
+        isDefault:   { type: boolean }
+
+    StickerTemplateUpdateInput:
+      type: object
+      properties:
+        name:        { type: string }
+        description: { type: string }
+        typeId:      { type: string }
+        sizeId:      { type: string }
+        fields:      { type: object }
+        isDefault:   { type: boolean }

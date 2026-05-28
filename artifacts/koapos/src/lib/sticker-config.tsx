@@ -440,43 +440,78 @@ export function LabelPreview({
 
 /* ─── Template persistence hook ──────────────────────────────────────────── */
 
-const TEMPLATES_KEY = "koapos_sticker_templates";
+import {
+  useListStickerTemplates,
+  useCreateStickerTemplate,
+  useUpdateStickerTemplate,
+  useDeleteStickerTemplate,
+  useSetDefaultStickerTemplate,
+  getListStickerTemplatesQueryKey,
+  StickerTemplate as ApiStickerTemplate,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+
+function fromApi(t: ApiStickerTemplate): StickerTemplate {
+  return {
+    id:          t.id,
+    name:        t.name,
+    description: t.description ?? "",
+    typeId:      t.typeId,
+    sizeId:      t.sizeId,
+    fields:      (t.fields ?? {}) as Record<string, string>,
+    isDefault:   t.isDefault ?? false,
+    createdAt:   typeof t.createdAt === "number" ? t.createdAt : 0,
+    updatedAt:   typeof t.updatedAt === "number" ? t.updatedAt : 0,
+  };
+}
 
 export function useStickerTemplates() {
-  const [templates, setTemplates] = useState<StickerTemplate[]>(() => {
-    try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]") as StickerTemplate[]; }
-    catch { return []; }
-  });
+  const qc = useQueryClient();
+  const { data: apiData } = useListStickerTemplates({ query: { queryKey: getListStickerTemplatesQueryKey() } });
 
-  const persist = (next: StickerTemplate[]) => {
-    setTemplates(next);
-    try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next)); } catch {}
-  };
+  const templates: StickerTemplate[] = (apiData ?? []).map(fromApi);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListStickerTemplatesQueryKey() });
+
+  const createMut  = useCreateStickerTemplate();
+  const updateMut  = useUpdateStickerTemplate();
+  const deleteMut  = useDeleteStickerTemplate();
+  const defaultMut = useSetDefaultStickerTemplate();
 
   const create = (data: Omit<StickerTemplate, "id" | "createdAt" | "updatedAt">): StickerTemplate => {
     const now = Date.now();
     const tpl: StickerTemplate = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
-    persist([...templates, tpl]);
+    qc.setQueryData(getListStickerTemplatesQueryKey(), [...(apiData ?? []), tpl as unknown as ApiStickerTemplate]);
+    createMut.mutate({ data: { ...tpl, id: tpl.id } }, { onSuccess: invalidate, onError: invalidate });
     return tpl;
   };
 
   const update = (id: string, data: Partial<Omit<StickerTemplate, "id" | "createdAt">>) => {
-    persist(templates.map((t) => t.id === id ? { ...t, ...data, updatedAt: Date.now() } : t));
+    qc.setQueryData(
+      getListStickerTemplatesQueryKey(),
+      (apiData ?? []).map((t) => t.id === id ? { ...t, ...data, updatedAt: Date.now() } : t),
+    );
+    updateMut.mutate({ id, data }, { onSuccess: invalidate, onError: invalidate });
   };
 
   const remove = (id: string) => {
-    persist(templates.filter((t) => t.id !== id));
+    qc.setQueryData(getListStickerTemplatesQueryKey(), (apiData ?? []).filter((t) => t.id !== id));
+    deleteMut.mutate({ id }, { onSuccess: invalidate, onError: invalidate });
   };
 
   const setDefault = (id: string) => {
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
-    persist(templates.map((t) => ({
-      ...t,
-      isDefault: t.id === id
-        ? !tpl.isDefault
-        : t.typeId === tpl.typeId ? false : t.isDefault,
-    })));
+    qc.setQueryData(
+      getListStickerTemplatesQueryKey(),
+      (apiData ?? []).map((t) => ({
+        ...t,
+        isDefault: t.id === id
+          ? !tpl.isDefault
+          : t.typeId === tpl.typeId ? false : t.isDefault,
+      })),
+    );
+    defaultMut.mutate({ id }, { onSuccess: invalidate, onError: invalidate });
   };
 
   return { templates, create, update, remove, setDefault };

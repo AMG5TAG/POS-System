@@ -6758,3 +6758,239 @@ export const UpdatePrint3dSettingsResponse = zod.object({
 })
 
 
+/**
+ * @summary Get business profile for current merchant
+ */
+export const GetBusinessProfileResponse = zod.object({
+  "abn": zod.string().optional(),
+  "tagline": zod.string().optional(),
+  "description": zod.string().optional(),
+  "openingDate": zod.string().optional(),
+  "categories": zod.array(zod.string()).optional(),
+  "logo": zod.string().optional(),
+  "brandFont": zod.string().optional(),
+  "brandColors": zod.array(zod.string()).optional(),
+  "bgColors": zod.array(zod.string()).optional(),
+  "textColors": zod.array(zod.string()).optional(),
+  "contactEmail": zod.string().optional(),
+  "website": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "openingHours": zod.object({
+
+}).passthrough().optional(),
+  "paymentTypes": zod.array(zod.string()).optional(),
+  "socialLinks": zod.object({
+
+}).passthrough().optional(),
+  "customLinks": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update business profile
+ */
+export const UpdateBusinessProfileBody = zod.object({
+  "abn": zod.string().optional(),
+  "tagline": zod.string().optional(),
+  "description": zod.string().optional(),
+  "openingDate": zod.string().optional(),
+  "categories": zod.array(zod.string()).optional(),
+  "logo": zod.string().optional(),
+  "brandFont": zod.string().optional(),
+  "brandColors": zod.array(zod.string()).optional(),
+  "bgColors": zod.array(zod.string()).optional(),
+  "textColors": zod.array(zod.string()).optional(),
+  "contactEmail": zod.string().optional(),
+  "website": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "openingHours": zod.object({
+
+}).passthrough().optional(),
+  "paymentTypes": zod.array(zod.string()).optional(),
+  "socialLinks": zod.object({
+
+}).passthrough().optional(),
+  "customLinks": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+export const UpdateBusinessProfileResponse = zod.object({
+  "abn": zod.string().optional(),
+  "tagline": zod.string().optional(),
+  "description": zod.string().optional(),
+  "openingDate": zod.string().optional(),
+  "categories": zod.array(zod.string()).optional(),
+  "logo": zod.string().optional(),
+  "brandFont": zod.string().optional(),
+  "brandColors": zod.array(zod.string()).optional(),
+  "bgColors": zod.array(zod.string()).optional(),
+  "textColors": zod.array(zod.string()).optional(),
+  "contactEmail": zod.string().optional(),
+  "website": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postcode": zod.string().optional(),
+  "openingHours": zod.object({
+
+}).passthrough().optional(),
+  "paymentTypes": zod.array(zod.string()).optional(),
+  "socialLinks": zod.object({
+
+}).passthrough().optional(),
+  "customLinks": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Get customer settings for current merchant
+ */
+export const GetCustomerSettingsResponse = zod.object({
+  "groups": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "requiredFields": zod.object({
+
+}).passthrough().optional(),
+  "defaultGroup": zod.string().optional(),
+  "loyaltyPointsPerDollar": zod.number().optional(),
+  "enableLoyalty": zod.boolean().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update customer settings
+ */
+export const UpdateCustomerSettingsBody = zod.object({
+  "groups": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "requiredFields": zod.object({
+
+}).passthrough().optional(),
+  "defaultGroup": zod.string().optional(),
+  "loyaltyPointsPerDollar": zod.number().optional(),
+  "enableLoyalty": zod.boolean().optional()
+})
+
+export const UpdateCustomerSettingsResponse = zod.object({
+  "groups": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "requiredFields": zod.object({
+
+}).passthrough().optional(),
+  "defaultGroup": zod.string().optional(),
+  "loyaltyPointsPerDollar": zod.number().optional(),
+  "enableLoyalty": zod.boolean().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary List sticker templates for current merchant
+ */
+export const ListStickerTemplatesResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "typeId": zod.string(),
+  "sizeId": zod.string(),
+  "fields": zod.object({
+
+}).passthrough(),
+  "isDefault": zod.boolean().optional(),
+  "createdAt": zod.number(),
+  "updatedAt": zod.number()
+})
+export const ListStickerTemplatesResponse = zod.array(ListStickerTemplatesResponseItem)
+
+
+/**
+ * @summary Create a sticker template
+ */
+export const CreateStickerTemplateBody = zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "typeId": zod.string(),
+  "sizeId": zod.string(),
+  "fields": zod.object({
+
+}).passthrough(),
+  "isDefault": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update a sticker template
+ */
+export const UpdateStickerTemplateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateStickerTemplateBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "typeId": zod.string().optional(),
+  "sizeId": zod.string().optional(),
+  "fields": zod.object({
+
+}).passthrough().optional(),
+  "isDefault": zod.boolean().optional()
+})
+
+export const UpdateStickerTemplateResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "typeId": zod.string(),
+  "sizeId": zod.string(),
+  "fields": zod.object({
+
+}).passthrough(),
+  "isDefault": zod.boolean().optional(),
+  "createdAt": zod.number(),
+  "updatedAt": zod.number()
+})
+
+
+/**
+ * @summary Delete a sticker template
+ */
+export const DeleteStickerTemplateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Toggle default flag on a sticker template (atomic, unsets other defaults in same type)
+ */
+export const SetDefaultStickerTemplateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SetDefaultStickerTemplateResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "typeId": zod.string(),
+  "sizeId": zod.string(),
+  "fields": zod.object({
+
+}).passthrough(),
+  "isDefault": zod.boolean().optional(),
+  "createdAt": zod.number(),
+  "updatedAt": zod.number()
+})
+export const SetDefaultStickerTemplateResponse = zod.array(SetDefaultStickerTemplateResponseItem)
+
+

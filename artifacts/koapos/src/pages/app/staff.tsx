@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate } from "@workspace/api-client-react";
+import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate, useListPosRegisters } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -128,7 +128,8 @@ function StepNav({ current }: { current: number }) {
 /* ─── POS Register selector ──────────────────────────────────────────────── */
 
 function PosRegisterSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const registers: { id: string; name: string; type: string }[] = [];
+  const { data: registersData } = useListPosRegisters({ query: { queryKey: ["pos-registers"] } });
+  const registers = (registersData?.items ?? []).map((r) => ({ id: String(r.id), name: r.name, type: r.type ?? "" }));
 
   return (
     <div className="rounded-xl border p-4 bg-muted/10 space-y-3">

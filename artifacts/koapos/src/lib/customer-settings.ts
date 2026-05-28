@@ -1,4 +1,9 @@
-import { useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetCustomerSettings,
+  useUpdateCustomerSettings,
+  getGetCustomerSettingsQueryKey,
+} from "@workspace/api-client-react";
 
 export interface CustomerGroup {
   id: string;
@@ -47,31 +52,30 @@ const DEFAULT_SETTINGS: CustomerSettings = {
   enableLoyalty: true,
 };
 
-const STORAGE_KEY = "koapos_customer_settings";
-
 export function useCustomerSettings() {
-  const [settings, setSettings] = useState<CustomerSettings>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<CustomerSettings>;
-        return {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          requiredFields: { ...DEFAULT_SETTINGS.requiredFields, ...(parsed.requiredFields ?? {}) },
-        };
+  const qc = useQueryClient();
+  const { data, isLoading } = useGetCustomerSettings({ query: { queryKey: getGetCustomerSettingsQueryKey() } });
+
+  const raw = data as Partial<CustomerSettings> | undefined;
+  const settings: CustomerSettings = raw
+    ? {
+        ...DEFAULT_SETTINGS,
+        ...raw,
+        requiredFields: { ...DEFAULT_SETTINGS.requiredFields, ...(raw.requiredFields ?? {}) },
+        groups: (raw.groups as CustomerGroup[]) ?? DEFAULT_CUSTOMER_GROUPS,
       }
-    } catch { /* ignore */ }
-    return DEFAULT_SETTINGS;
-  });
+    : DEFAULT_SETTINGS;
 
-  const save = useCallback((updates: Partial<CustomerSettings>) => {
-    setSettings(prev => {
-      const next = { ...prev, ...updates };
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
+  const { mutate } = useUpdateCustomerSettings();
+
+  const save = (updates: Partial<CustomerSettings>) => {
+    const next = { ...settings, ...updates };
+    qc.setQueryData(getGetCustomerSettingsQueryKey(), next);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutate({ data: next as any }, {
+      onError: () => qc.invalidateQueries({ queryKey: getGetCustomerSettingsQueryKey() }),
     });
-  }, []);
+  };
 
-  return { settings, save };
+  return { settings, save, isLoading };
 }

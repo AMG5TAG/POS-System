@@ -28,6 +28,8 @@ import type {
   Brand,
   BrandInput,
   BrandListResponse,
+  BusinessProfile,
+  BusinessProfileInput,
   CalendarMonth,
   Camera,
   CameraInput,
@@ -50,6 +52,8 @@ import type {
   CustomerList,
   CustomerNote,
   CustomerNoteInput,
+  CustomerSettings,
+  CustomerSettingsInput,
   CustomerUpdate,
   DashboardActivity,
   DashboardConfigResponse,
@@ -262,6 +266,9 @@ import type {
   StaffRosteringSettings,
   StaffRosteringSettingsInput,
   StaffUpdate,
+  StickerTemplate,
+  StickerTemplateInput,
+  StickerTemplateUpdateInput,
   Subscription,
   Supplier,
   SupplierInput,
@@ -21890,5 +21897,661 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdatePrint3dSettingsMutationOptions(options));
+    }
+
+export const getGetBusinessProfileUrl = () => {
+
+
+
+
+  return `/api/business-profile`
+}
+
+/**
+ * @summary Get business profile for current merchant
+ */
+export const getBusinessProfile = async ( options?: RequestInit): Promise<BusinessProfile> => {
+
+  return customFetch<BusinessProfile>(getGetBusinessProfileUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessProfileQueryKey = () => {
+    return [
+    `/api/business-profile`
+    ] as const;
+    }
+
+
+export const getGetBusinessProfileQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessProfile>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessProfileQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessProfile>>> = ({ signal }) => getBusinessProfile({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessProfileQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessProfile>>>
+export type GetBusinessProfileQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get business profile for current merchant
+ */
+
+export function useGetBusinessProfile<TData = Awaited<ReturnType<typeof getBusinessProfile>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessProfileQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateBusinessProfileUrl = () => {
+
+
+
+
+  return `/api/business-profile`
+}
+
+/**
+ * @summary Update business profile
+ */
+export const updateBusinessProfile = async (businessProfileInput: BusinessProfileInput, options?: RequestInit): Promise<BusinessProfile> => {
+
+  return customFetch<BusinessProfile>(getUpdateBusinessProfileUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      businessProfileInput,)
+  }
+);}
+
+
+
+
+export const getUpdateBusinessProfileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessProfile>>, TError,{data: BodyType<BusinessProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBusinessProfile>>, TError,{data: BodyType<BusinessProfileInput>}, TContext> => {
+
+const mutationKey = ['updateBusinessProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBusinessProfile>>, {data: BodyType<BusinessProfileInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateBusinessProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBusinessProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateBusinessProfile>>>
+    export type UpdateBusinessProfileMutationBody = BodyType<BusinessProfileInput>
+    export type UpdateBusinessProfileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update business profile
+ */
+export const useUpdateBusinessProfile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessProfile>>, TError,{data: BodyType<BusinessProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBusinessProfile>>,
+        TError,
+        {data: BodyType<BusinessProfileInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBusinessProfileMutationOptions(options));
+    }
+
+export const getGetCustomerSettingsUrl = () => {
+
+
+
+
+  return `/api/customer-settings`
+}
+
+/**
+ * @summary Get customer settings for current merchant
+ */
+export const getCustomerSettings = async ( options?: RequestInit): Promise<CustomerSettings> => {
+
+  return customFetch<CustomerSettings>(getGetCustomerSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerSettingsQueryKey = () => {
+    return [
+    `/api/customer-settings`
+    ] as const;
+    }
+
+
+export const getGetCustomerSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerSettings>>> = ({ signal }) => getCustomerSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerSettings>>>
+export type GetCustomerSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get customer settings for current merchant
+ */
+
+export function useGetCustomerSettings<TData = Awaited<ReturnType<typeof getCustomerSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCustomerSettingsUrl = () => {
+
+
+
+
+  return `/api/customer-settings`
+}
+
+/**
+ * @summary Update customer settings
+ */
+export const updateCustomerSettings = async (customerSettingsInput: CustomerSettingsInput, options?: RequestInit): Promise<CustomerSettings> => {
+
+  return customFetch<CustomerSettings>(getUpdateCustomerSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      customerSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCustomerSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerSettings>>, TError,{data: BodyType<CustomerSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCustomerSettings>>, TError,{data: BodyType<CustomerSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateCustomerSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCustomerSettings>>, {data: BodyType<CustomerSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCustomerSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCustomerSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateCustomerSettings>>>
+    export type UpdateCustomerSettingsMutationBody = BodyType<CustomerSettingsInput>
+    export type UpdateCustomerSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update customer settings
+ */
+export const useUpdateCustomerSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerSettings>>, TError,{data: BodyType<CustomerSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCustomerSettings>>,
+        TError,
+        {data: BodyType<CustomerSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCustomerSettingsMutationOptions(options));
+    }
+
+export const getListStickerTemplatesUrl = () => {
+
+
+
+
+  return `/api/sticker-templates`
+}
+
+/**
+ * @summary List sticker templates for current merchant
+ */
+export const listStickerTemplates = async ( options?: RequestInit): Promise<StickerTemplate[]> => {
+
+  return customFetch<StickerTemplate[]>(getListStickerTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStickerTemplatesQueryKey = () => {
+    return [
+    `/api/sticker-templates`
+    ] as const;
+    }
+
+
+export const getListStickerTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listStickerTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStickerTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStickerTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStickerTemplates>>> = ({ signal }) => listStickerTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStickerTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStickerTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listStickerTemplates>>>
+export type ListStickerTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List sticker templates for current merchant
+ */
+
+export function useListStickerTemplates<TData = Awaited<ReturnType<typeof listStickerTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStickerTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStickerTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateStickerTemplateUrl = () => {
+
+
+
+
+  return `/api/sticker-templates`
+}
+
+/**
+ * @summary Create a sticker template
+ */
+export const createStickerTemplate = async (stickerTemplateInput: StickerTemplateInput, options?: RequestInit): Promise<StickerTemplate> => {
+
+  return customFetch<StickerTemplate>(getCreateStickerTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      stickerTemplateInput,)
+  }
+);}
+
+
+
+
+export const getCreateStickerTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStickerTemplate>>, TError,{data: BodyType<StickerTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createStickerTemplate>>, TError,{data: BodyType<StickerTemplateInput>}, TContext> => {
+
+const mutationKey = ['createStickerTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStickerTemplate>>, {data: BodyType<StickerTemplateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createStickerTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateStickerTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createStickerTemplate>>>
+    export type CreateStickerTemplateMutationBody = BodyType<StickerTemplateInput>
+    export type CreateStickerTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a sticker template
+ */
+export const useCreateStickerTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStickerTemplate>>, TError,{data: BodyType<StickerTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createStickerTemplate>>,
+        TError,
+        {data: BodyType<StickerTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateStickerTemplateMutationOptions(options));
+    }
+
+export const getUpdateStickerTemplateUrl = (id: string,) => {
+
+
+
+
+  return `/api/sticker-templates/${id}`
+}
+
+/**
+ * @summary Update a sticker template
+ */
+export const updateStickerTemplate = async (id: string,
+    stickerTemplateUpdateInput: StickerTemplateUpdateInput, options?: RequestInit): Promise<StickerTemplate> => {
+
+  return customFetch<StickerTemplate>(getUpdateStickerTemplateUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      stickerTemplateUpdateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateStickerTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStickerTemplate>>, TError,{id: string;data: BodyType<StickerTemplateUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStickerTemplate>>, TError,{id: string;data: BodyType<StickerTemplateUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateStickerTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStickerTemplate>>, {id: string;data: BodyType<StickerTemplateUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateStickerTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStickerTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateStickerTemplate>>>
+    export type UpdateStickerTemplateMutationBody = BodyType<StickerTemplateUpdateInput>
+    export type UpdateStickerTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a sticker template
+ */
+export const useUpdateStickerTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStickerTemplate>>, TError,{id: string;data: BodyType<StickerTemplateUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStickerTemplate>>,
+        TError,
+        {id: string;data: BodyType<StickerTemplateUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateStickerTemplateMutationOptions(options));
+    }
+
+export const getDeleteStickerTemplateUrl = (id: string,) => {
+
+
+
+
+  return `/api/sticker-templates/${id}`
+}
+
+/**
+ * @summary Delete a sticker template
+ */
+export const deleteStickerTemplate = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteStickerTemplateUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteStickerTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStickerTemplate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteStickerTemplate>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteStickerTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStickerTemplate>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteStickerTemplate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteStickerTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStickerTemplate>>>
+
+    export type DeleteStickerTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a sticker template
+ */
+export const useDeleteStickerTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStickerTemplate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteStickerTemplate>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteStickerTemplateMutationOptions(options));
+    }
+
+export const getSetDefaultStickerTemplateUrl = (id: string,) => {
+
+
+
+
+  return `/api/sticker-templates/${id}/set-default`
+}
+
+/**
+ * @summary Toggle default flag on a sticker template (atomic, unsets other defaults in same type)
+ */
+export const setDefaultStickerTemplate = async (id: string, options?: RequestInit): Promise<StickerTemplate[]> => {
+
+  return customFetch<StickerTemplate[]>(getSetDefaultStickerTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSetDefaultStickerTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDefaultStickerTemplate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setDefaultStickerTemplate>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['setDefaultStickerTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setDefaultStickerTemplate>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  setDefaultStickerTemplate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetDefaultStickerTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof setDefaultStickerTemplate>>>
+
+    export type SetDefaultStickerTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Toggle default flag on a sticker template (atomic, unsets other defaults in same type)
+ */
+export const useSetDefaultStickerTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDefaultStickerTemplate>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setDefaultStickerTemplate>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getSetDefaultStickerTemplateMutationOptions(options));
     }
 

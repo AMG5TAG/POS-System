@@ -2964,6 +2964,123 @@ export interface Print3dSettingsInput {
   roundingValue?: number;
 }
 
+export type BusinessProfileOpeningHours = { [key: string]: unknown };
+
+export type BusinessProfileSocialLinks = { [key: string]: unknown };
+
+export type BusinessProfileCustomLinksItem = { [key: string]: unknown };
+
+export interface BusinessProfile {
+  abn?: string;
+  tagline?: string;
+  description?: string;
+  openingDate?: string;
+  categories?: string[];
+  logo?: string;
+  brandFont?: string;
+  brandColors?: string[];
+  bgColors?: string[];
+  textColors?: string[];
+  contactEmail?: string;
+  website?: string;
+  state?: string;
+  postcode?: string;
+  openingHours?: BusinessProfileOpeningHours;
+  paymentTypes?: string[];
+  socialLinks?: BusinessProfileSocialLinks;
+  customLinks?: BusinessProfileCustomLinksItem[];
+  updatedAt?: string;
+}
+
+export type BusinessProfileInputOpeningHours = { [key: string]: unknown };
+
+export type BusinessProfileInputSocialLinks = { [key: string]: unknown };
+
+export type BusinessProfileInputCustomLinksItem = { [key: string]: unknown };
+
+export interface BusinessProfileInput {
+  abn?: string;
+  tagline?: string;
+  description?: string;
+  openingDate?: string;
+  categories?: string[];
+  logo?: string;
+  brandFont?: string;
+  brandColors?: string[];
+  bgColors?: string[];
+  textColors?: string[];
+  contactEmail?: string;
+  website?: string;
+  state?: string;
+  postcode?: string;
+  openingHours?: BusinessProfileInputOpeningHours;
+  paymentTypes?: string[];
+  socialLinks?: BusinessProfileInputSocialLinks;
+  customLinks?: BusinessProfileInputCustomLinksItem[];
+}
+
+export type CustomerSettingsGroupsItem = { [key: string]: unknown };
+
+export type CustomerSettingsRequiredFields = { [key: string]: unknown };
+
+export interface CustomerSettings {
+  groups?: CustomerSettingsGroupsItem[];
+  requiredFields?: CustomerSettingsRequiredFields;
+  defaultGroup?: string;
+  loyaltyPointsPerDollar?: number;
+  enableLoyalty?: boolean;
+  updatedAt?: string;
+}
+
+export type CustomerSettingsInputGroupsItem = { [key: string]: unknown };
+
+export type CustomerSettingsInputRequiredFields = { [key: string]: unknown };
+
+export interface CustomerSettingsInput {
+  groups?: CustomerSettingsInputGroupsItem[];
+  requiredFields?: CustomerSettingsInputRequiredFields;
+  defaultGroup?: string;
+  loyaltyPointsPerDollar?: number;
+  enableLoyalty?: boolean;
+}
+
+export type StickerTemplateFields = { [key: string]: unknown };
+
+export interface StickerTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  typeId: string;
+  sizeId: string;
+  fields: StickerTemplateFields;
+  isDefault?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type StickerTemplateInputFields = { [key: string]: unknown };
+
+export interface StickerTemplateInput {
+  id?: string;
+  name: string;
+  description?: string;
+  typeId: string;
+  sizeId: string;
+  fields: StickerTemplateInputFields;
+  isDefault?: boolean;
+}
+
+export type StickerTemplateUpdateInputFields = { [key: string]: unknown };
+
+export interface StickerTemplateUpdateInput {
+  name?: string;
+  description?: string;
+  typeId?: string;
+  sizeId?: string;
+  fields?: StickerTemplateUpdateInputFields;
+  isDefault?: boolean;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

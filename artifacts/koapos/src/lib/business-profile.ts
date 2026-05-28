@@ -1,4 +1,9 @@
-import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetBusinessProfile,
+  useUpdateBusinessProfile,
+  getGetBusinessProfileQueryKey,
+} from "@workspace/api-client-react";
 
 export interface DayHours {
   enabled: boolean;
@@ -66,31 +71,31 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   customLinks: [],
 };
 
-const STORAGE_KEY = "koapos_business_profile";
-
 export function useBusinessProfile() {
-  const [profile, setProfile] = useState<BusinessProfile>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<BusinessProfile>;
-        return {
-          ...DEFAULT_BUSINESS_PROFILE,
-          ...parsed,
-          openingHours: { ...DEFAULT_HOURS, ...(parsed.openingHours ?? {}) },
-          socialLinks: { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(parsed.socialLinks ?? {}) },
-        };
+  const qc = useQueryClient();
+  const { data, isLoading } = useGetBusinessProfile({ query: { queryKey: getGetBusinessProfileQueryKey() } });
+
+  const raw = data as Partial<BusinessProfile> | undefined;
+  const profile: BusinessProfile = raw
+    ? {
+        ...DEFAULT_BUSINESS_PROFILE,
+        ...raw,
+        openingHours: { ...DEFAULT_HOURS, ...(raw.openingHours ?? {}) },
+        socialLinks: { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(raw.socialLinks ?? {}) },
       }
-    } catch {}
-    return DEFAULT_BUSINESS_PROFILE;
-  });
+    : DEFAULT_BUSINESS_PROFILE;
+
+  const { mutate } = useUpdateBusinessProfile();
 
   const save = (next: BusinessProfile) => {
-    setProfile(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    qc.setQueryData(getGetBusinessProfileQueryKey(), next);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutate({ data: next as any }, {
+      onError: () => qc.invalidateQueries({ queryKey: getGetBusinessProfileQueryKey() }),
+    });
   };
 
-  return { profile, save };
+  return { profile, save, isLoading };
 }
 
 export { DAYS };
