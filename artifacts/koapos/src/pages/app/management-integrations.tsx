@@ -3,6 +3,10 @@ import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip, TooltipTrigger, TooltipContent, TooltipProvider,
+} from "@/components/ui/tooltip";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -10,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useGetSocialFeedSettings, useUpdateSocialFeedSettings } from "@workspace/api-client-react";
+import type { SocialFeedSettingsInput } from "@workspace/api-client-react";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
