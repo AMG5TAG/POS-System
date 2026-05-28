@@ -12,8 +12,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
-  ShieldCheck, Clock, HardDrive, Briefcase, Share2, ChevronDown, ChevronRight, Zap,
-  Receipt, CreditCard, Wallet, Truck, Users, Mail, Sparkles, KeyRound, RefreshCw,
+  ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
+  CreditCard, KeyRound, RefreshCw,
+  Landmark, ShoppingBag, Megaphone, Cloud,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -56,42 +57,50 @@ type LogoCfg =
   | { type: "text"; bg: string; color: string; label: string; cls?: string };
 
 const LOGO_MAP: Record<string, LogoCfg> = {
-  google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",  "4285F4") },
-  onedrive:             { type: "img",  bg: "bg-[#0078D4]",    src: SI("onedrive",      "ffffff") },
-  dropbox:              { type: "img",  bg: "bg-[#0061FF]",    src: SI("dropbox",       "ffffff") },
-  proton_drive:         { type: "img",  bg: "bg-[#6D4AFF]",    src: SI("proton",        "ffffff") },
-  xero:                 { type: "img",  bg: "bg-[#13B5EA]",    src: SI("xero",          "ffffff") },
-  quickbooks:           { type: "img",  bg: "bg-[#2CA01C]",    src: SI("quickbooks",    "ffffff") },
-  myob:                 { type: "img",  bg: "bg-[#6A1F70]",    src: SI("myob",          "ffffff") },
-  stripe_own:           { type: "img",  bg: "bg-[#635BFF]",    src: SI("stripe",        "ffffff") },
-  square_terminal:      { type: "img",  bg: "bg-black",         src: SI("square",        "ffffff") },
-  shopify:              { type: "img",  bg: "bg-[#96BF48]",    src: SI("shopify",       "ffffff") },
-  meta_business:        { type: "img",  bg: "bg-[#0082FB]",    src: SI("meta",          "ffffff") },
-  instagram_business:   { type: "img",  bg: "bg-[#E4405F]",    src: SI("instagram",     "ffffff") },
-  twitter_x:            { type: "img",  bg: "bg-black",         src: SI("x",             "ffffff") },
-  linkedin_business:    { type: "img",  bg: "bg-[#0A66C2]",    src: SI("linkedin",      "ffffff") },
-  tiktok_business:      { type: "img",  bg: "bg-black",         src: SI("tiktok",        "ffffff") },
-  google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  youtube_channel:      { type: "img",  bg: "bg-[#FF0000]",    src: SI("youtube",       "ffffff") },
-  google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
-  mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",    src: SI("mailchimp",     "000000") },
-  commbank_eftpos:      { type: "text", bg: "bg-[#FFD200]",    color: "text-black",   label: "CBA",  cls: "text-[11px] font-black tracking-tight" },
-  tyro_eftpos:          { type: "text", bg: "bg-[#00B9E4]",    color: "text-white",   label: "TYRO", cls: "text-[10px] font-black tracking-tight" },
-  paypal:               { type: "img",  bg: "bg-[#003087]",    src: SI("paypal",        "ffffff") },
-  wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",    src: SI("wechat",        "ffffff") },
-  afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",    src: SI("afterpay",      "000000") },
-  zip:                  { type: "img",  bg: "bg-[#1A0826]",    src: SI("zippay",        "ffffff") },
-  klarna:               { type: "img",  bg: "bg-[#FFB3C7]",    src: SI("klarna",        "000000") },
-  apple_wallet:         { type: "img",  bg: "bg-black",         src: SI("apple",         "ffffff") },
-  google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
-  deputy:               { type: "img",  bg: "bg-[#FF8C00]",    src: SI("deputy",        "ffffff") },
-  australia_post:       { type: "img",  bg: "bg-[#DC1928]",    src: SI("australiapost", "ffffff"), pad: true },
-  sendle:               { type: "text", bg: "bg-[#00BFA5]",    color: "text-white",   label: "SND",  cls: "text-[10px] font-black tracking-tight" },
+  /* Cloud Storage & Productivity */
+  google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",   "4285F4") },
+  onedrive:             { type: "img",  bg: "bg-[#0078D4]",     src: SI("onedrive",      "ffffff") },
+  dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
+  proton_drive:         { type: "img",  bg: "bg-[#6D4AFF]",     src: SI("proton",        "ffffff") },
   google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  microsoft_contacts:   { type: "img",  bg: "bg-[#0078D4]",    src: SI("microsoft",     "ffffff") },
-  apple_contacts:       { type: "img",  bg: "bg-black",         src: SI("apple",         "ffffff") },
-  openai:               { type: "img",  bg: "bg-black",         src: SI("openai",        "ffffff") },
-  zapier:               { type: "img",  bg: "bg-[#FF4A00]",    src: SI("zapier",        "ffffff") },
+  microsoft_contacts:   { type: "img",  bg: "bg-[#0078D4]",     src: SI("microsoft",     "ffffff") },
+  apple_contacts:       { type: "img",  bg: "bg-black",          src: SI("apple",         "ffffff") },
+  openai:               { type: "img",  bg: "bg-black",          src: SI("openai",        "ffffff") },
+  zapier:               { type: "img",  bg: "bg-[#FF4A00]",     src: SI("zapier",        "ffffff") },
+  deputy:               { type: "img",  bg: "bg-[#FF8C00]",     src: SI("deputy",        "ffffff") },
+  /* Accounting & Finance */
+  xero:                 { type: "img",  bg: "bg-[#13B5EA]",     src: SI("xero",          "ffffff") },
+  quickbooks:           { type: "img",  bg: "bg-[#2CA01C]",     src: SI("quickbooks",    "ffffff") },
+  myob:                 { type: "img",  bg: "bg-[#6A1F70]",     src: SI("myob",          "ffffff") },
+  /* E-Commerce & Marketplaces */
+  shopify:              { type: "img",  bg: "bg-[#96BF48]",     src: SI("shopify",       "ffffff") },
+  ebay:                 { type: "img",  bg: "bg-white border",  src: SI("ebay",          "E53238") },
+  amazon:               { type: "img",  bg: "bg-[#232F3E]",     src: SI("amazon",        "FF9900") },
+  woocommerce:          { type: "img",  bg: "bg-[#96588A]",     src: SI("woocommerce",   "ffffff") },
+  australia_post:       { type: "img",  bg: "bg-[#DC1928]",     src: SI("australiapost", "ffffff"), pad: true },
+  sendle:               { type: "text", bg: "bg-[#00BFA5]",     color: "text-white",   label: "SND",  cls: "text-[10px] font-black tracking-tight" },
+  /* Payments & Terminals */
+  stripe_own:           { type: "img",  bg: "bg-[#635BFF]",     src: SI("stripe",        "ffffff") },
+  commbank_eftpos:      { type: "text", bg: "bg-[#FFD200]",     color: "text-black",   label: "CBA",  cls: "text-[11px] font-black tracking-tight" },
+  square_terminal:      { type: "img",  bg: "bg-black",          src: SI("square",        "ffffff") },
+  tyro_eftpos:          { type: "text", bg: "bg-[#00B9E4]",     color: "text-white",   label: "TYRO", cls: "text-[10px] font-black tracking-tight" },
+  paypal:               { type: "img",  bg: "bg-[#003087]",     src: SI("paypal",        "ffffff") },
+  wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",     src: SI("wechat",        "ffffff") },
+  afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",     src: SI("afterpay",      "000000") },
+  zip:                  { type: "img",  bg: "bg-[#1A0826]",     src: SI("zippay",        "ffffff") },
+  klarna:               { type: "img",  bg: "bg-[#FFB3C7]",     src: SI("klarna",        "000000") },
+  apple_wallet:         { type: "img",  bg: "bg-black",          src: SI("apple",         "ffffff") },
+  google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
+  /* Marketing & Socials */
+  google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
+  meta_business:        { type: "img",  bg: "bg-[#0082FB]",     src: SI("meta",          "ffffff") },
+  twitter_x:            { type: "img",  bg: "bg-black",          src: SI("x",             "ffffff") },
+  tiktok_business:      { type: "img",  bg: "bg-black",          src: SI("tiktok",        "ffffff") },
+  linkedin_business:    { type: "img",  bg: "bg-[#0A66C2]",     src: SI("linkedin",      "ffffff") },
+  instagram_business:   { type: "img",  bg: "bg-[#E4405F]",     src: SI("instagram",     "ffffff") },
+  google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
+  youtube_channel:      { type: "img",  bg: "bg-[#FF0000]",     src: SI("youtube",       "ffffff") },
+  mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",     src: SI("mailchimp",     "000000") },
 };
 
 function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: string; size?: "sm" | "md" | "lg" }) {
@@ -164,7 +173,7 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
 
   return (
     <div className={cn(
-      "rounded-2xl border bg-card flex flex-col overflow-hidden transition-all duration-200",
+      "rounded-2xl border bg-card flex flex-col overflow-hidden transition-all duration-200 h-full",
       "hover:shadow-md",
       isConnected
         ? "border-emerald-300 dark:border-emerald-700 shadow-sm shadow-emerald-100 dark:shadow-emerald-950"
@@ -180,15 +189,18 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
       <div className="p-5 flex flex-col gap-4 flex-1">
         {/* Logo + title row */}
         <div className="flex items-start gap-3.5">
-          <IntegrationLogo integrationKey={intg.key} size="lg" />
-          <div className="flex-1 min-w-0 pt-1">
+          {/* Logo with Coming Soon overlay badge */}
+          <div className="relative shrink-0">
+            <IntegrationLogo integrationKey={intg.key} size="lg" />
+            {intg.comingSoon && (
+              <span className="absolute -bottom-1.5 -right-1.5 inline-flex items-center gap-0.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow">
+                <Clock className="w-2 h-2" /> Soon
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 pt-1 min-h-[40px]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm leading-tight">{intg.label}</span>
-              {intg.comingSoon && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted text-muted-foreground">
-                  <Clock className="w-2.5 h-2.5" /> Soon
-                </span>
-              )}
               {!intg.comingSoon && intg.authType === "oauth" && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900">
                   <ShieldCheck className="w-3 h-3" /> OAuth
@@ -196,16 +208,16 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
               )}
             </div>
             {isConnected && intg.accountHandle ? (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium truncate max-w-[180px]">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium truncate">
                 {intg.accountHandle}
               </p>
             ) : needsReconnect && intg.accountHandle ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 font-medium truncate max-w-[180px]">
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 font-medium truncate">
                 {intg.accountHandle}
               </p>
             ) : (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                {intg.comingSoon ? "Coming soon" : intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
               </p>
             )}
           </div>
@@ -335,7 +347,7 @@ function Section({
       </button>
 
       {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
           {items.map((intg) => (
             <IntegrationCard
               key={intg.key}
