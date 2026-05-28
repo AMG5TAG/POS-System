@@ -3777,6 +3777,25 @@ paths:
         "204":
           description: Deleted
 
+  /landing-pages/public/{slug}:
+    get:
+      operationId: getLandingPagePublic
+      summary: Get a published landing page by slug (public, no auth)
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandingPage" }
+        "404":
+          description: Not found
+
   /landing-pages:
     get:
       operationId: listLandingPages

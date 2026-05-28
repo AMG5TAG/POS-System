@@ -15250,6 +15250,83 @@ export const useDeleteEmailCampaign = <TError = ErrorType<unknown>,
       return useMutation(getDeleteEmailCampaignMutationOptions(options));
     }
 
+export const getGetLandingPagePublicUrl = (slug: string,) => {
+
+
+
+
+  return `/api/landing-pages/public/${slug}`
+}
+
+/**
+ * @summary Get a published landing page by slug (public, no auth)
+ */
+export const getLandingPagePublic = async (slug: string, options?: RequestInit): Promise<LandingPage> => {
+
+  return customFetch<LandingPage>(getGetLandingPagePublicUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLandingPagePublicQueryKey = (slug: string,) => {
+    return [
+    `/api/landing-pages/public/${slug}`
+    ] as const;
+    }
+
+
+export const getGetLandingPagePublicQueryOptions = <TData = Awaited<ReturnType<typeof getLandingPagePublic>>, TError = ErrorType<void>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandingPagePublic>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLandingPagePublicQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLandingPagePublic>>> = ({ signal }) => getLandingPagePublic(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(slug), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLandingPagePublic>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLandingPagePublicQueryResult = NonNullable<Awaited<ReturnType<typeof getLandingPagePublic>>>
+export type GetLandingPagePublicQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a published landing page by slug (public, no auth)
+ */
+
+export function useGetLandingPagePublic<TData = Awaited<ReturnType<typeof getLandingPagePublic>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandingPagePublic>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLandingPagePublicQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getListLandingPagesUrl = () => {
 
 

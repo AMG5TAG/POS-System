@@ -1,31 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "wouter";
-import type { LandingPage } from "@/pages/app/marketing-landing-pages";
-
-const LS_KEY = "koapos_landing_pages";
-
-function loadPage(slug: string): LandingPage | null {
-  try {
-    const pages: LandingPage[] = JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
-    return pages.find((p) => p.slug === slug) ?? null;
-  } catch { return null; }
-}
+import { useGetLandingPagePublic } from "@workspace/api-client-react";
+import type { LandingPageLink } from "@/pages/app/marketing-landing-pages";
 
 export default function LandingPagePublicView() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug ?? "";
-  const [page, setPage] = useState<LandingPage | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const found = loadPage(slug);
-    setPage(found);
-    setLoading(false);
-  }, [slug]);
+  const { data: row, isLoading, isError } = useGetLandingPagePublic(slug);
+
+  const links: LandingPageLink[] = (() => {
+    if (!row?.links) return [];
+    try { return typeof row.links === "string" ? JSON.parse(row.links) : []; }
+    catch { return []; }
+  })();
 
   /* Load Google Font if needed */
   useEffect(() => {
-    if (!page?.font) return;
+    if (!row?.font) return;
     const GOOGLE_FONTS = [
       "Barlow","Bebas Neue","Cabin","Comfortaa","Dancing Script","DM Sans","DM Serif Display",
       "Exo 2","Fira Sans","Inter","Josefin Sans","Karla","Lato","Merriweather","Montserrat",
@@ -33,19 +25,19 @@ export default function LandingPagePublicView() {
       "Poppins","PT Sans","Quicksand","Raleway","Roboto","Roboto Mono","Rubik","Source Sans 3",
       "Titillium Web","Ubuntu","Work Sans",
     ];
-    if (GOOGLE_FONTS.includes(page.font)) {
+    if (GOOGLE_FONTS.includes(row.font)) {
       const existing = document.getElementById("lp-font");
       if (!existing) {
         const link = document.createElement("link");
         link.id = "lp-font";
         link.rel = "stylesheet";
-        link.href = `https://fonts.googleapis.com/css2?family=${page.font.replace(/ /g, "+")}:wght@400;600;700&display=swap`;
+        link.href = `https://fonts.googleapis.com/css2?family=${row.font.replace(/ /g, "+")}:wght@400;600;700&display=swap`;
         document.head.appendChild(link);
       }
     }
-  }, [page?.font]);
+  }, [row?.font]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -53,7 +45,7 @@ export default function LandingPagePublicView() {
     );
   }
 
-  if (!page) {
+  if (isError || !row) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
         <p className="text-5xl mb-4">🔍</p>
@@ -64,37 +56,37 @@ export default function LandingPagePublicView() {
   }
 
   const bgStyle: React.CSSProperties =
-    page.bgType === "gradient"
-      ? { background: `linear-gradient(${page.bgDir}, ${page.bgFrom}, ${page.bgTo})` }
-      : page.bgType === "image" && page.bgImage
-      ? { backgroundImage: `url(${page.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }
-      : { background: page.bgColor };
+    row.bgType === "gradient"
+      ? { background: `linear-gradient(${row.bgDir}, ${row.bgFrom}, ${row.bgTo})` }
+      : row.bgType === "image" && row.bgImage
+      ? { backgroundImage: `url(${row.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }
+      : { background: row.bgColor };
 
   const btnRadius =
-    page.btnStyle === "pill" ? "9999px"
-    : page.btnStyle === "rounded" ? "12px"
+    row.btnStyle === "pill" ? "9999px"
+    : row.btnStyle === "rounded" ? "12px"
     : "4px";
 
   const btnStyle: React.CSSProperties =
-    page.btnVariant === "filled"
-      ? { background: page.btnBg, color: page.btnText, border: "none" }
-      : page.btnVariant === "outline"
-      ? { background: "transparent", color: page.btnBg, border: `2px solid ${page.btnBorder || page.btnBg}` }
-      : { background: "rgba(255,255,255,0.1)", color: page.btnText, border: "none", backdropFilter: "blur(4px)" };
+    row.btnVariant === "filled"
+      ? { background: row.btnBg, color: row.btnText, border: "none" }
+      : row.btnVariant === "outline"
+      ? { background: "transparent", color: row.btnBg, border: `2px solid ${row.btnBorder || row.btnBg}` }
+      : { background: "rgba(255,255,255,0.1)", color: row.btnText, border: "none", backdropFilter: "blur(4px)" };
 
-  const enabledLinks = page.links.filter((l) => l.enabled);
+  const enabledLinks = links.filter((l) => l.enabled);
 
   return (
     <div
       className="min-h-screen"
-      style={{ ...bgStyle, fontFamily: page.font ? `"${page.font}", sans-serif` : "system-ui, sans-serif" }}
+      style={{ ...bgStyle, fontFamily: row.font ? `"${row.font}", sans-serif` : "system-ui, sans-serif" }}
     >
       <div className="min-h-screen flex flex-col items-center justify-start py-14 px-5 max-w-sm mx-auto">
         {/* Profile */}
-        {page.profileImage ? (
+        {row.profileImage ? (
           <img
-            src={page.profileImage}
-            alt={page.title}
+            src={row.profileImage}
+            alt={row.title}
             className="w-24 h-24 rounded-full object-cover mb-5 shadow-lg"
             style={{ outline: "3px solid rgba(255,255,255,0.3)", outlineOffset: "2px" }}
           />
@@ -109,18 +101,18 @@ export default function LandingPagePublicView() {
 
         <h1
           className="text-2xl font-bold text-center leading-snug"
-          style={{ color: page.textColor }}
+          style={{ color: row.textColor }}
         >
-          {page.title}
+          {row.title}
         </h1>
-        {page.subtitle && (
-          <p className="text-base mt-1.5 text-center" style={{ color: page.textColor, opacity: 0.85 }}>
-            {page.subtitle}
+        {row.subtitle && (
+          <p className="text-base mt-1.5 text-center" style={{ color: row.textColor, opacity: 0.85 }}>
+            {row.subtitle}
           </p>
         )}
-        {page.bio && (
-          <p className="text-sm mt-3 text-center leading-relaxed max-w-xs" style={{ color: page.textColor, opacity: 0.75 }}>
-            {page.bio}
+        {row.bio && (
+          <p className="text-sm mt-3 text-center leading-relaxed max-w-xs" style={{ color: row.textColor, opacity: 0.75 }}>
+            {row.bio}
           </p>
         )}
 
@@ -140,7 +132,7 @@ export default function LandingPagePublicView() {
             </a>
           ))}
           {enabledLinks.length === 0 && (
-            <p className="text-center text-sm py-4" style={{ color: page.textColor, opacity: 0.4 }}>
+            <p className="text-center text-sm py-4" style={{ color: row.textColor, opacity: 0.4 }}>
               Coming soon…
             </p>
           )}
@@ -148,7 +140,7 @@ export default function LandingPagePublicView() {
 
         {/* KoaPOS footer */}
         <div className="mt-12 text-center">
-          <p className="text-[11px]" style={{ color: page.textColor, opacity: 0.4 }}>
+          <p className="text-[11px]" style={{ color: row.textColor, opacity: 0.4 }}>
             Powered by KoaPOS
           </p>
         </div>

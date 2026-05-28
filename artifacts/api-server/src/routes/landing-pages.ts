@@ -5,6 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
+router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
+  const slug = req.params.slug as string;
+  const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
 router.get("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(landingPagesTable).where(eq(landingPagesTable.merchantId, merchantId));

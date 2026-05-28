@@ -4881,6 +4881,41 @@ export const DeleteEmailCampaignParams = zod.object({
 
 
 /**
+ * @summary Get a published landing page by slug (public, no auth)
+ */
+export const GetLandingPagePublicParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetLandingPagePublicResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "pageId": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "profileImage": zod.string().optional(),
+  "bgType": zod.string().optional(),
+  "bgColor": zod.string().optional(),
+  "bgFrom": zod.string().optional(),
+  "bgTo": zod.string().optional(),
+  "bgDir": zod.string().optional(),
+  "bgImage": zod.string().optional(),
+  "btnStyle": zod.string().optional(),
+  "btnVariant": zod.string().optional(),
+  "btnBg": zod.string().optional(),
+  "btnText": zod.string().optional(),
+  "btnBorder": zod.string().optional(),
+  "textColor": zod.string().optional(),
+  "font": zod.string().optional(),
+  "links": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List landing pages
  */
 export const ListLandingPagesResponse = zod.object({
