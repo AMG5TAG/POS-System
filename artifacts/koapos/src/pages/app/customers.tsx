@@ -42,7 +42,7 @@ import {
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
-  Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown,
+  Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown, Filter,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -837,7 +837,8 @@ function CustomerDetailInner({
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
-  const [uploadingFile, setUploadingFile]       = useState(false);
+  const [showMergeOnly, setShowMergeOnly]           = useState(false);
+  const [uploadingFile, setUploadingFile]           = useState(false);
   const [viewingSub, setViewingSub]             = useState<FormSubmission | null>(null);
   const [selectedTx, setSelectedTx]             = useState<Transaction | null>(null);
   const [selectedAppt, setSelectedAppt]         = useState<Appointment | null>(null);
@@ -978,6 +979,9 @@ function CustomerDetailInner({
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
   const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
+  const displayedNotes = showMergeOnly
+    ? notes.filter((n: CustomerNote) => isMergeNote(n.note))
+    : notes;
 
   const billingAddr = [
     customer.billingStreet, customer.billingCity,
@@ -1394,16 +1398,36 @@ function CustomerDetailInner({
             </div>
           </div>
 
+          {/* Merge-only filter */}
+          {mergeNoteCount > 0 && (
+            <div className="flex items-center justify-between">
+              <Button
+                variant={showMergeOnly ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowMergeOnly(v => !v)}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                {showMergeOnly ? "Showing merge events only" : "Show merge events only"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {mergeNoteCount} merge event{mergeNoteCount !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+
           {/* Note list */}
           {notesLoading ? (
             <div className="flex items-center justify-center py-4 text-muted-foreground gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading notes...
             </div>
-          ) : !notes.length ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No notes yet.</p>
+          ) : !displayedNotes.length ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {showMergeOnly ? "No merge events found." : "No notes yet."}
+            </p>
           ) : (
             <div className="space-y-2">
-              {notes.map((note: CustomerNote) => {
+              {displayedNotes.map((note: CustomerNote) => {
                 if (isMergeNote(note.note)) {
                   const parsed = parseMergeNote(note.note);
                   return (
