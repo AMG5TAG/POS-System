@@ -359,21 +359,23 @@ export default function SettingsBusinessPage() {
 
   const addCategory = () => {
     const trimmed = catInput.trim();
-    if (trimmed && !ext.categories.includes(trimmed)) {
-      setExtField("categories", [...ext.categories, trimmed]);
+    const cats = ext.categories ?? [];
+    if (trimmed && !cats.includes(trimmed)) {
+      setExtField("categories", [...cats, trimmed]);
     }
     setCatInput("");
   };
 
   const removeCategory = (cat: string) =>
-    setExtField("categories", ext.categories.filter((c) => c !== cat));
+    setExtField("categories", (ext.categories ?? []).filter((c) => c !== cat));
 
   const togglePayment = (type: string) => {
+    const types = ext.paymentTypes ?? [];
     setExtField(
       "paymentTypes",
-      ext.paymentTypes.includes(type)
-        ? ext.paymentTypes.filter((p) => p !== type)
-        : [...ext.paymentTypes, type]
+      types.includes(type)
+        ? types.filter((p) => p !== type)
+        : [...types, type]
     );
   };
 
@@ -388,28 +390,28 @@ export default function SettingsBusinessPage() {
 
   const addCustomLink = () => {
     if (linkDraft.label && linkDraft.url) {
-      setExtField("customLinks", [...ext.customLinks, linkDraft]);
+      setExtField("customLinks", [...(ext.customLinks ?? []), linkDraft]);
       setLinkDraft({ label: "", url: "" });
     }
   };
 
   const removeCustomLink = (i: number) =>
-    setExtField("customLinks", ext.customLinks.filter((_, idx) => idx !== i));
+    setExtField("customLinks", (ext.customLinks ?? []).filter((_, idx) => idx !== i));
 
   const setBrandColor = (idx: number, val: string) => {
-    const next = [...ext.brandColors];
+    const next = [...(ext.brandColors ?? [])];
     next[idx] = val;
     setExtField("brandColors", next);
   };
 
   const setBgColor = (idx: number, val: string) => {
-    const next = [...ext.bgColors];
+    const next = [...(ext.bgColors ?? [])];
     next[idx] = val;
     setExtField("bgColors", next);
   };
 
   const setTextColor = (idx: number, val: string) => {
-    const next = [...ext.textColors];
+    const next = [...(ext.textColors ?? [])];
     next[idx] = val;
     setExtField("textColors", next);
   };
@@ -521,9 +523,9 @@ export default function SettingsBusinessPage() {
               />
               <Button type="button" variant="outline" size="sm" onClick={addCategory}><Plus className="h-4 w-4" /></Button>
             </div>
-            {ext.categories.length > 0 && (
+            {(ext.categories ?? []).length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {ext.categories.map((cat) => (
+                {(ext.categories ?? []).map((cat) => (
                   <Badge key={cat} variant="secondary" className="flex items-center gap-1 pr-1">
                     {cat}
                     <button onClick={() => removeCategory(cat)} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
@@ -568,7 +570,7 @@ export default function SettingsBusinessPage() {
               <Label className="block mb-1">Brand Colours</Label>
               <p className="text-xs text-muted-foreground mb-2">These are applied as the default colours throughout the app.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {ext.brandColors.map((c, i) => (
+                {(ext.brandColors ?? []).map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setBrandColor(i, v)} />
                 ))}
               </div>
@@ -578,7 +580,7 @@ export default function SettingsBusinessPage() {
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Background &amp; UI Colours</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {ext.bgColors.map((c, i) => (
+                {(ext.bgColors ?? []).map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setBgColor(i, v)} />
                 ))}
               </div>
@@ -588,7 +590,7 @@ export default function SettingsBusinessPage() {
             <div>
               <Label className="block mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Text Colours</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {ext.textColors.map((c, i) => (
+                {(ext.textColors ?? []).map((c, i) => (
                   <ColourPicker key={i} value={c} onChange={(v) => setTextColor(i, v)} />
                 ))}
               </div>
@@ -734,7 +736,7 @@ export default function SettingsBusinessPage() {
                 <label key={type} className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    checked={ext.paymentTypes.includes(type)}
+                    checked={(ext.paymentTypes ?? []).includes(type)}
                     onChange={() => togglePayment(type)}
                     className="rounded border-border"
                   />
@@ -780,10 +782,10 @@ export default function SettingsBusinessPage() {
             ))}
 
             {/* Custom links */}
-            {ext.customLinks.length > 0 && (
+            {(ext.customLinks ?? []).length > 0 && (
               <div className="pt-2 space-y-2">
                 <SectionTitle>Custom Links</SectionTitle>
-                {ext.customLinks.map((link, i) => (
+                {(ext.customLinks ?? []).map((link, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm">
                     <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="font-medium w-24 truncate">{link.label}</span>

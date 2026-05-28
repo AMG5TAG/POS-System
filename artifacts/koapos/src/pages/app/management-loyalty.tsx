@@ -1006,7 +1006,7 @@ export default function ManagementLoyaltyPage() {
               <p>Customers earn <strong>{form.pointsPerDollar} point{parseFloat(form.pointsPerDollar) !== 1 ? "s" : ""} per $1</strong> spent. Each point is worth <strong>${form.dollarPerPoint}</strong>.</p>
             )}
             {form.isEnabled && form.programType === "tiered" && (
-              <p>Tiered cashback: {form.tiers.map(t => `${t.name} (${t.rate}% from $${t.minSpend})`).join(", ")}.</p>
+              <p>Tiered cashback: {form.tiers.map(t => `${t.name} (${t.rate ?? 0}% from $${t.minSpend ?? 0})`).join(", ")}.</p>
             )}
             {form.isEnabled && form.programType === "stamp" && (
               <p>Customers earn 1 stamp per visit. Every <strong>{form.stampsRequired} stamps</strong> earns a <strong>${form.stampRewardValue}</strong> reward.</p>
