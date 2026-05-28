@@ -6,6 +6,7 @@ import {
   useListCustomers,
   useUpdateCustomer,
   useDeleteCustomer,
+  useMergeCustomerProfiles,
   useGetCustomerHistory,
   useListCustomerNotes,
   useCreateCustomerNote,
@@ -160,6 +161,18 @@ const MERGE_TEXT_FIELDS: { key: keyof Customer; label: string }[] = [
   { key: "warningNote",  label: "Warning Note" },
 ];
 
+const CASCADED_ENTITIES = [
+  { label: "Sales & transactions",   icon: Receipt },
+  { label: "Invoices & quotes",      icon: FileText },
+  { label: "Service & repair jobs",  icon: Wrench },
+  { label: "Appointments",           icon: Calendar },
+  { label: "Laybys",                 icon: Wallet },
+  { label: "Parked sales",           icon: Clock },
+  { label: "Notes & files",          icon: StickyNote },
+  { label: "Form submissions",       icon: Hash },
+  { label: "Marketing automations",  icon: Mail },
+];
+
 function MergeWizardModal({
   pair, open, onOpenChange, onComplete,
 }: {
@@ -168,14 +181,19 @@ function MergeWizardModal({
   onOpenChange: (v: boolean) => void;
   onComplete: () => void;
 }) {
-  const queryClient     = useQueryClient();
-  const updateMutation  = useUpdateCustomer();
-  const deleteMutation  = useDeleteCustomer();
-  const [selected, setSelected] = useState<Record<string, "a" | "b">>({});
-  const [pending, setPending]   = useState(false);
+  const queryClient    = useQueryClient();
+  const updateMutation = useUpdateCustomer();
+  const mergeMutation  = useMergeCustomerProfiles();
+
+  // "primary" = the side that is kept; "secondary" = absorbed and deleted.
+  // primarySide tracks which of pair.a / pair.b is the primary record.
+  const [primarySide, setPrimarySide] = useState<"a" | "b">("a");
+  const [selected, setSelected]       = useState<Record<string, "a" | "b">>({});
+  const [pending, setPending]         = useState(false);
 
   useEffect(() => {
     if (!pair) return;
+    setPrimarySide("a");
     const defaults: Record<string, "a" | "b"> = {};
     MERGE_TEXT_FIELDS.forEach(({ key }) => { defaults[key as string] = "a"; });
     setSelected(defaults);
@@ -184,107 +202,244 @@ function MergeWizardModal({
   if (!pair) return null;
   const { a, b } = pair;
 
+  const primary   = primarySide === "a" ? a : b;
+  const secondary = primarySide === "a" ? b : a;
+  const secSide   = primarySide === "a" ? "b" : "a";
+
+  const swapRoles = () => {
+    setPrimarySide(prev => prev === "a" ? "b" : "a");
+    // Flip all field selections to stay pointing to what was the secondary
+    setSelected(prev => {
+      const flipped: Record<string, "a" | "b"> = {};
+      for (const k of Object.keys(prev)) flipped[k] = prev[k] === "a" ? "b" : "a";
+      return flipped;
+    });
+  };
+
   const handleMerge = async () => {
     setPending(true);
     try {
-      const merged: Record<string, unknown> = {
-        loyaltyPoints: (a.loyaltyPoints ?? 0) + (b.loyaltyPoints ?? 0),
-        visitCount:    (a.visitCount    ?? 0) + (b.visitCount    ?? 0),
-      };
+      // 1. Apply the operator-chosen contact-detail values to the primary record
+      const contactPatch: Record<string, unknown> = {};
       for (const { key } of MERGE_TEXT_FIELDS) {
         const src = selected[key as string] === "a" ? a : b;
-        merged[key as string] = (src as unknown as Record<string, unknown>)[key as string] ?? null;
+        contactPatch[key as string] = (src as unknown as Record<string, unknown>)[key as string] ?? null;
       }
-      await updateMutation.mutateAsync({ id: a.id, data: merged as any });
-      await deleteMutation.mutateAsync({ id: b.id });
+      await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
+
+      // 2. Transactional merge: cascade FKs, aggregate loyalty, audit note, delete secondary
+      await mergeMutation.mutateAsync({ primaryId: primary.id, secondaryId: secondary.id });
+
       queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
-      toast.success("Profiles merged successfully");
+      toast.success(`Profiles merged — #${secondary.id} absorbed into #${primary.id}`);
       onComplete();
       onOpenChange(false);
     } catch {
-      toast.error("Failed to merge profiles");
+      toast.error("Merge failed. No data was changed.");
     } finally {
       setPending(false);
     }
   };
 
+  const primaryName   = [primary.firstName,   primary.lastName].filter(Boolean).join(" ")   || "Unknown";
+  const secondaryName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || "Unknown";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Merge Customer Profiles</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Merge Customer Profiles
+          </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Click the value you want to keep for each field. Loyalty points and visit counts are
-            combined automatically.{" "}
-            <span className="font-medium text-foreground">
-              Profile #{a.id} will be kept; #{b.id} will be deleted.
-            </span>
-          </p>
 
-          {/* Column headers */}
-          <div className="grid grid-cols-[120px_1fr_1fr] text-xs font-semibold text-muted-foreground px-1">
-            <span>Field</span>
-            <span className="text-center">
-              #{a.id} — {[a.firstName, a.lastName].filter(Boolean).join(" ") || "Unknown"}
-            </span>
-            <span className="text-center">
-              #{b.id} — {[b.firstName, b.lastName].filter(Boolean).join(" ") || "Unknown"}
-            </span>
+        <div className="space-y-5">
+          {/* ── Step 1: Role assignment ─────────────────────────────────────── */}
+          <div className="rounded-lg border overflow-hidden">
+            <div className="px-4 py-2.5 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Step 1 — Assign Primary &amp; Secondary Roles
+            </div>
+            <div className="grid grid-cols-2 divide-x">
+              {(["a", "b"] as const).map((side) => {
+                const cust      = side === "a" ? a : b;
+                const isPrimary = primarySide === side;
+                const name      = [cust.firstName, cust.lastName].filter(Boolean).join(" ") || "Unknown";
+                return (
+                  <button
+                    key={side}
+                    type="button"
+                    onClick={() => {
+                      if (!isPrimary) swapRoles();
+                    }}
+                    className={cn(
+                      "flex flex-col gap-1 px-4 py-3 text-left transition-colors",
+                      isPrimary
+                        ? "bg-green-50 dark:bg-green-950/30"
+                        : "bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/30",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-sm">{name}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold shrink-0",
+                          isPrimary
+                            ? "border-green-500 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40"
+                            : "border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40",
+                        )}
+                      >
+                        {isPrimary ? "PRIMARY — KEPT" : "SECONDARY — DELETED"}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      ID #{cust.id}
+                      {cust.email ? ` · ${cust.email}` : ""}
+                      {cust.phone ? ` · ${cust.phone}` : ""}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {cust.loyaltyPoints ?? 0} pts · ${parseFloat(String(cust.totalSpent ?? "0")).toFixed(2)} spent · {cust.visitCount ?? 0} visits
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-center px-4 py-2 border-t bg-muted/20">
+              <Button type="button" variant="ghost" size="sm" onClick={swapRoles} className="gap-1.5 text-xs h-7">
+                <X className="w-3 h-3 rotate-45" />
+                Swap roles
+              </Button>
+            </div>
           </div>
 
-          <div className="rounded-lg border divide-y overflow-hidden text-sm">
-            {MERGE_TEXT_FIELDS.map(({ key, label }) => {
-              const aVal = String((a as unknown as Record<string, unknown>)[key as string] ?? "");
-              const bVal = String((b as unknown as Record<string, unknown>)[key as string] ?? "");
-              if (!aVal && !bVal) return null;
-              return (
-                <div key={key as string} className="grid grid-cols-[120px_1fr_1fr] items-stretch">
+          {/* ── What gets transferred ───────────────────────────────────────── */}
+          <div className="rounded-lg border overflow-hidden">
+            <div className="px-4 py-2.5 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Historical Data — Transferred to Primary Record
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-y sm:divide-y-0">
+              {CASCADED_ENTITIES.map(({ label, icon: Icon }) => (
+                <div key={label} className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground border-b last:border-b-0">
+                  <Icon className="w-3.5 h-3.5 shrink-0 text-green-600 dark:text-green-400" />
+                  {label}
+                </div>
+              ))}
+              <div className="flex items-center gap-2 px-3 py-2 text-xs border-b last:border-b-0">
+                <Star className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                <span>
+                  <span className="font-medium text-foreground">
+                    {((primary.loyaltyPoints ?? 0) + (secondary.loyaltyPoints ?? 0)).toFixed(0)} pts
+                  </span>
+                  <span className="text-muted-foreground ml-1">
+                    ({primary.loyaltyPoints ?? 0} + {secondary.loyaltyPoints ?? 0} combined)
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Step 2: Contact detail selection ───────────────────────────── */}
+          <div className="rounded-lg border overflow-hidden">
+            <div className="px-4 py-2.5 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Step 2 — Choose Contact Details to Keep
+            </div>
+
+            {/* Column headers */}
+            <div className="grid grid-cols-[120px_1fr_1fr] text-xs font-semibold text-muted-foreground px-1 pt-2 pb-1 border-b bg-muted/10">
+              <span className="px-2">Field</span>
+              <span className="text-center">
+                <Badge variant="outline" className="border-green-500 text-green-700 dark:text-green-400 text-[10px]">PRIMARY</Badge>
+                <span className="block mt-0.5 font-normal truncate">{primaryName} #{primary.id}</span>
+              </span>
+              <span className="text-center">
+                <Badge variant="outline" className="border-red-400 text-red-600 dark:text-red-400 text-[10px]">SECONDARY</Badge>
+                <span className="block mt-0.5 font-normal truncate">{secondaryName} #{secondary.id}</span>
+              </span>
+            </div>
+
+            <div className="divide-y text-sm">
+              {MERGE_TEXT_FIELDS.map(({ key, label }) => {
+                const aVal = String((a as unknown as Record<string, unknown>)[key as string] ?? "");
+                const bVal = String((b as unknown as Record<string, unknown>)[key as string] ?? "");
+                if (!aVal && !bVal) return null;
+                const primVal = primarySide === "a" ? aVal : bVal;
+                const secVal  = primarySide === "a" ? bVal : aVal;
+                const primSel = selected[key as string] === primarySide;
+                return (
+                  <div key={key as string} className="grid grid-cols-[120px_1fr_1fr] items-stretch">
+                    <div className="flex items-center px-3 py-2 bg-muted/30 text-xs font-medium text-muted-foreground border-r">
+                      {label}
+                    </div>
+                    {/* Primary column */}
+                    <button
+                      type="button"
+                      onClick={() => setSelected(prev => ({ ...prev, [key as string]: primarySide }))}
+                      className={cn(
+                        "px-3 py-2 text-left transition-colors border-r",
+                        primSel
+                          ? "bg-green-50 dark:bg-green-950/30 font-medium text-green-800 dark:text-green-300 ring-1 ring-inset ring-green-400/40"
+                          : "hover:bg-muted/50 text-muted-foreground",
+                      )}
+                    >
+                      {primVal
+                        ? <span>{primVal} {primSel && <Check className="w-3 h-3 inline ml-0.5 text-green-600" />}</span>
+                        : <span className="italic text-muted-foreground/40">empty</span>}
+                    </button>
+                    {/* Secondary column */}
+                    <button
+                      type="button"
+                      onClick={() => setSelected(prev => ({ ...prev, [key as string]: secSide }))}
+                      className={cn(
+                        "px-3 py-2 text-left transition-colors",
+                        !primSel
+                          ? "bg-primary/10 font-medium text-primary ring-1 ring-inset ring-primary/30"
+                          : "hover:bg-muted/50 text-muted-foreground",
+                      )}
+                    >
+                      {secVal
+                        ? <span>{secVal} {!primSel && <Check className="w-3 h-3 inline ml-0.5 text-primary" />}</span>
+                        : <span className="italic text-muted-foreground/40">empty</span>}
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Combined numerics — always aggregated */}
+              {[
+                { label: "Loyalty Pts", pV: primary.loyaltyPoints ?? 0,   sV: secondary.loyaltyPoints ?? 0 },
+                { label: "Visits",      pV: primary.visitCount    ?? 0,    sV: secondary.visitCount    ?? 0 },
+                { label: "Total Spent", pV: parseFloat(String(primary.totalSpent   ?? "0")),
+                                        sV: parseFloat(String(secondary.totalSpent ?? "0")), isCurrency: true },
+              ].map(({ label, pV, sV, isCurrency }) => (
+                <div key={label} className="grid grid-cols-[120px_1fr] items-stretch">
                   <div className="flex items-center px-3 py-2 bg-muted/30 text-xs font-medium text-muted-foreground border-r">
                     {label}
                   </div>
-                  {(["a", "b"] as const).map((side) => {
-                    const val        = side === "a" ? aVal : bVal;
-                    const isSelected = selected[key as string] === side;
-                    return (
-                      <button
-                        key={side}
-                        type="button"
-                        onClick={() => setSelected((prev) => ({ ...prev, [key as string]: side }))}
-                        className={cn(
-                          "px-3 py-2 text-left transition-colors",
-                          isSelected
-                            ? "bg-primary/10 font-medium text-primary ring-1 ring-inset ring-primary/30"
-                            : "hover:bg-muted/50 text-muted-foreground",
-                          side === "a" ? "border-r" : "",
-                        )}
-                      >
-                        {val
-                          ? <span>{val} {isSelected && <Check className="w-3 h-3 inline ml-0.5 text-primary" />}</span>
-                          : <span className="italic text-muted-foreground/40">empty</span>}
-                      </button>
-                    );
-                  })}
+                  <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                    <Star className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span className="font-medium text-foreground">
+                      {isCurrency ? `$${(pV + sV).toFixed(2)}` : (pV + sV)}
+                    </span>
+                    <span className="text-xs">
+                      ({isCurrency ? `$${pV.toFixed(2)}` : pV} + {isCurrency ? `$${sV.toFixed(2)}` : sV} combined)
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
 
-            {/* Combined numerics — auto */}
-            {[
-              { label: "Loyalty Pts", aV: a.loyaltyPoints ?? 0, bV: b.loyaltyPoints ?? 0 },
-              { label: "Visits",      aV: a.visitCount    ?? 0, bV: b.visitCount    ?? 0 },
-            ].map(({ label, aV, bV }) => (
-              <div key={label} className="grid grid-cols-[120px_1fr] items-stretch">
-                <div className="flex items-center px-3 py-2 bg-muted/30 text-xs font-medium text-muted-foreground border-r">
-                  {label}
-                </div>
-                <div className="px-3 py-2 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{aV + bV}</span>
-                  <span className="ml-1 text-xs">(combined: {aV} + {bV})</span>
-                </div>
-              </div>
-            ))}
+          {/* ── Danger warning ──────────────────────────────────────────────── */}
+          <div className="flex items-start gap-2.5 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 px-4 py-3 text-xs text-red-700 dark:text-red-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold">This action is permanent and cannot be undone.</span>
+              {" "}Profile <span className="font-semibold">#{secondary.id} ({secondaryName})</span> will be
+              permanently deleted. All its historical records will be transferred to
+              primary profile <span className="font-semibold">#{primary.id} ({primaryName})</span>.
+              A system audit note will be added to the primary record.
+            </div>
           </div>
         </div>
 
@@ -292,11 +447,15 @@ function MergeWizardModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button onClick={handleMerge} disabled={pending}>
+          <Button
+            variant="destructive"
+            onClick={handleMerge}
+            disabled={pending}
+          >
             {pending
               ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               : <CheckCircle2 className="w-4 h-4 mr-2" />}
-            Confirm Merge
+            Confirm and Merge Records
           </Button>
         </DialogFooter>
       </DialogContent>

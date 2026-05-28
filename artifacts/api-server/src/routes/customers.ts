@@ -1,5 +1,12 @@
 import { Router, type IRouter } from "express";
-import { db, customersTable, customerNotesTable, customerFilesTable, transactionsTable, appointmentsTable, serviceJobsTable, merchantsTable } from "@workspace/db";
+import {
+  db,
+  customersTable, customerNotesTable, customerFilesTable,
+  transactionsTable, appointmentsTable, serviceJobsTable,
+  laybysTable, invoicesTable, parkedSalesTable,
+  formSubmissionsTable, marketingAutomationLogTable,
+  merchantsTable,
+} from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -349,6 +356,117 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
   const username = merchant?.username;
   const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
   res.json({ token, portalUrl: `${origin}${portalPath}` });
+});
+
+/* ─── Merge profiles ──────────────────────────────────────────────────────── */
+
+router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const primaryId   = parseInt(String(req.params.primaryId),   10);
+  const secondaryId = parseInt(String(req.params.secondaryId), 10);
+
+  if (isNaN(primaryId) || isNaN(secondaryId)) {
+    res.status(400).json({ error: "Invalid customer ID" }); return;
+  }
+  if (primaryId === secondaryId) {
+    res.status(400).json({ error: "Cannot merge a profile with itself" }); return;
+  }
+
+  // Verify both records belong to this merchant
+  const [primary] = await db.select().from(customersTable)
+    .where(and(eq(customersTable.id, primaryId),   eq(customersTable.merchantId, merchantId))).limit(1);
+  const [secondary] = await db.select().from(customersTable)
+    .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId))).limit(1);
+
+  if (!primary || !secondary) {
+    res.status(404).json({ error: "One or both customer profiles not found" }); return;
+  }
+
+  await db.transaction(async (tx) => {
+    // ── 1. Cascade all customer_id FKs to the primary record ──────────────
+    await tx.update(transactionsTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(transactionsTable.customerId, secondaryId), eq(transactionsTable.merchantId, merchantId)));
+
+    await tx.update(invoicesTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(invoicesTable.customerId, secondaryId), eq(invoicesTable.merchantId, merchantId)));
+
+    await tx.update(serviceJobsTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(serviceJobsTable.customerId, secondaryId), eq(serviceJobsTable.merchantId, merchantId)));
+
+    await tx.update(appointmentsTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(appointmentsTable.customerId, secondaryId), eq(appointmentsTable.merchantId, merchantId)));
+
+    await tx.update(laybysTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(laybysTable.customerId, secondaryId), eq(laybysTable.merchantId, merchantId)));
+
+    await tx.update(parkedSalesTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(parkedSalesTable.customerId, secondaryId), eq(parkedSalesTable.merchantId, merchantId)));
+
+    await tx.update(customerNotesTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(customerNotesTable.customerId, secondaryId), eq(customerNotesTable.merchantId, merchantId)));
+
+    await tx.update(customerFilesTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(customerFilesTable.customerId, secondaryId), eq(customerFilesTable.merchantId, merchantId)));
+
+    await tx.update(formSubmissionsTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(formSubmissionsTable.customerId, secondaryId), eq(formSubmissionsTable.merchantId, merchantId)));
+
+    await tx.update(marketingAutomationLogTable)
+      .set({ customerId: primaryId })
+      .where(and(eq(marketingAutomationLogTable.customerId, secondaryId), eq(marketingAutomationLogTable.merchantId, merchantId)));
+
+    // ── 2. Aggregate loyalty balances and stats ────────────────────────────
+    const combinedPoints = (primary.loyaltyPoints ?? 0) + (secondary.loyaltyPoints ?? 0);
+    const combinedSpent  = parseFloat(primary.totalSpent)  + parseFloat(secondary.totalSpent);
+    const combinedVisits = (primary.visitCount ?? 0)       + (secondary.visitCount ?? 0);
+
+    await tx.update(customersTable)
+      .set({
+        loyaltyPoints: combinedPoints,
+        totalSpent:    combinedSpent.toFixed(2),
+        visitCount:    combinedVisits,
+        updatedAt:     new Date(),
+      })
+      .where(eq(customersTable.id, primaryId));
+
+    // ── 3. Append permanent merge audit note ──────────────────────────────
+    const mergeDate = new Date().toLocaleDateString("en-AU", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    });
+    const secName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || `ID ${secondaryId}`;
+    const auditNote = [
+      `[System] Profile merged on ${mergeDate}.`,
+      `Absorbed Profile ID: ${secondaryId} (${secName}).`,
+      `Loyalty consolidated: +${secondary.loyaltyPoints ?? 0} pts, +$${parseFloat(secondary.totalSpent).toFixed(2)} total spent, +${secondary.visitCount ?? 0} visits.`,
+    ].join(" ");
+
+    await tx.insert(customerNotesTable).values({
+      merchantId,
+      customerId:     primaryId,
+      note:           auditNote,
+      popupOnBooking: false,
+      popupOnSale:    false,
+    });
+
+    // ── 4. Permanently delete the secondary record ─────────────────────────
+    await tx.delete(customersTable)
+      .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId)));
+  });
+
+  // Return the updated primary
+  const [updated] = await db.select().from(customersTable)
+    .where(eq(customersTable.id, primaryId)).limit(1);
+
+  res.json(formatCustomer(updated));
 });
 
 export default router;

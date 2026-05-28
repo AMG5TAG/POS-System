@@ -3312,6 +3312,80 @@ export const useDeleteCustomerFile = <TError = ErrorType<unknown>,
       return useMutation(getDeleteCustomerFileMutationOptions(options));
     }
 
+export const getMergeCustomerProfilesUrl = (primaryId: number,
+    secondaryId: number,) => {
+
+
+
+
+  return `/api/customers/${primaryId}/merge/${secondaryId}`
+}
+
+/**
+ * Transfers all historical data (sales, invoices, service jobs, appointments, laybys, parked sales, notes, files, form submissions, marketing automations) from the secondary profile to the primary, aggregates loyalty balances, appends a merge audit note, then permanently deletes the secondary record.
+
+ * @summary Merge two customer profiles into one atomic DB transaction
+ */
+export const mergeCustomerProfiles = async (primaryId: number,
+    secondaryId: number, options?: RequestInit): Promise<Customer> => {
+
+  return customFetch<Customer>(getMergeCustomerProfilesUrl(primaryId,secondaryId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMergeCustomerProfilesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext> => {
+
+const mutationKey = ['mergeCustomerProfiles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeCustomerProfiles>>, {primaryId: number;secondaryId: number}> = (props) => {
+          const {primaryId,secondaryId} = props ?? {};
+
+          return  mergeCustomerProfiles(primaryId,secondaryId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeCustomerProfilesMutationResult = NonNullable<Awaited<ReturnType<typeof mergeCustomerProfiles>>>
+
+    export type MergeCustomerProfilesMutationError = ErrorType<void>
+
+    /**
+ * @summary Merge two customer profiles into one atomic DB transaction
+ */
+export const useMergeCustomerProfiles = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeCustomerProfiles>>,
+        TError,
+        {primaryId: number;secondaryId: number},
+        TContext
+      > => {
+      return useMutation(getMergeCustomerProfilesMutationOptions(options));
+    }
+
 export const getRequestUploadUrlUrl = () => {
 
 

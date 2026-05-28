@@ -854,6 +854,41 @@ paths:
         "204":
           description: Deleted
 
+  /customers/{primaryId}/merge/{secondaryId}:
+    post:
+      operationId: mergeCustomerProfiles
+      tags: [customers]
+      summary: Merge two customer profiles into one atomic DB transaction
+      description: >
+        Transfers all historical data (sales, invoices, service jobs, appointments,
+        laybys, parked sales, notes, files, form submissions, marketing automations)
+        from the secondary profile to the primary, aggregates loyalty balances,
+        appends a merge audit note, then permanently deletes the secondary record.
+      parameters:
+        - name: primaryId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the profile to keep (master record)
+        - name: secondaryId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the profile to absorb and delete
+      responses:
+        "200":
+          description: Merge succeeded — returns the updated primary customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          description: Cannot merge a profile with itself
+        "404":
+          description: One or both customer profiles not found
+
   # ── Storage ───────────────────────────────────────────────────────────────
 
   /storage/uploads/request-url:

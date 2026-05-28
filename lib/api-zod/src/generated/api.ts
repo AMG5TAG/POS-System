@@ -1081,6 +1081,52 @@ export const DeleteCustomerFileParams = zod.object({
 
 
 /**
+ * Transfers all historical data (sales, invoices, service jobs, appointments, laybys, parked sales, notes, files, form submissions, marketing automations) from the secondary profile to the primary, aggregates loyalty balances, appends a merge audit note, then permanently deletes the secondary record.
+
+ * @summary Merge two customer profiles into one atomic DB transaction
+ */
+export const MergeCustomerProfilesParams = zod.object({
+  "primaryId": zod.coerce.number().describe('ID of the profile to keep (master record)'),
+  "secondaryId": zod.coerce.number().describe('ID of the profile to absorb and delete')
+})
+
+export const MergeCustomerProfilesResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
+})
+
+
+/**
  * @summary Request a presigned URL for file upload
  */
 
