@@ -56,6 +56,7 @@ import {
   useListForms,
   useDeleteFormSubmission,
   type FormSubmission,
+  type FormTemplate,
 } from "@/lib/forms-api";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -1688,6 +1689,8 @@ function CustomerDetailInner({
                 appointments: (history?.appointments ?? []) as Appointment[],
                 serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
                 notes:        notes as CustomerNote[],
+                formSubmissions: (formSubmissions as FormSubmission[]),
+                allForms:      (allForms as FormTemplate[]),
                 merchantName: merchantUsername ?? undefined,
               });
             }}

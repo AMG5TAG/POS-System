@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import type { Customer, CustomerNote, Transaction, Appointment, ServiceJob } from "@workspace/api-client-react";
+import type { FormSubmission, FormTemplate } from "@/lib/forms-api";
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -78,11 +79,13 @@ interface ExportOptions {
   appointments: Appointment[];
   serviceJobs: ServiceJob[];
   notes: CustomerNote[];
+  formSubmissions?: FormSubmission[];
+  allForms?: FormTemplate[];
   merchantName?: string;
 }
 
 export function exportCustomerPDF(opts: ExportOptions): void {
-  const { customer, transactions, appointments, serviceJobs, notes, merchantName } = opts;
+  const { customer, transactions, appointments, serviceJobs, notes, formSubmissions, allForms, merchantName } = opts;
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   let y = 0;
@@ -528,7 +531,65 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   }
 
   /* ──────────────────────────────────────────────────────────────────────── */
-  /* 7. Footer on each page                                                   */
+  /* 7. Form Submissions (if any)                                             */
+  /* ──────────────────────────────────────────────────────────────────────── */
+
+  const subs = formSubmissions ?? [];
+  if (subs.length > 0) {
+    sectionHeading(`Form Submissions (${subs.length})`);
+
+    for (const sub of subs) {
+      const form = allForms?.find(f => f.id === sub.formId);
+      const formName = form?.name ?? "Form";
+      const fields = form?.fields ?? [];
+      const dataEntries = Object.entries(sub.data ?? {});
+
+      const cardH = 12 + (dataEntries.length > 0 ? dataEntries.length * 6 + 4 : 0);
+      checkPage(cardH + 4);
+
+      doc.setFillColor(...C.bg);
+      doc.roundedRect(ML, y, CONTENT_W, cardH, 1.5, 1.5, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...C.dark);
+      doc.text(formName, ML + 3, y + 5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...C.light);
+      const dateStr = fmtDateTime(sub.createdAt);
+      const dateW = doc.getStringUnitWidth(dateStr) * 7.5 * 0.352778;
+      doc.text(dateStr, ML + CONTENT_W - dateW - 3, y + 5);
+
+      let rowY = y + 10;
+      for (const [key, value] of dataEntries) {
+        const field = fields.find(f => f.id === key);
+        const label = field?.label ?? key;
+        const displayValue = Array.isArray(value) ? value.join(", ") : String(value ?? "—");
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...C.mid);
+        doc.text(label, ML + 3, rowY + 4);
+
+        doc.setTextColor(...C.dark);
+        const valLines = doc.splitTextToSize(displayValue, CONTENT_W - 55) as string[];
+        doc.text(valLines, ML + 50, rowY + 4);
+
+        doc.setDrawColor(229, 231, 235);
+        doc.setLineWidth(0.2);
+        doc.line(ML + 3, rowY + 5.5, ML + CONTENT_W - 3, rowY + 5.5);
+
+        rowY += 6;
+      }
+
+      y += cardH + 4;
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────── */
+  /* 8. Footer on each page                                                   */
   /* ──────────────────────────────────────────────────────────────────────── */
 
   const pageCount = doc.getNumberOfPages();
