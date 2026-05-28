@@ -2124,6 +2124,24 @@ export default function CustomersPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </Button>
                   )}
+                  {canMerge && checked.size === 2 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 h-8"
+                      onClick={() => {
+                        const [idA, idB] = [...checked];
+                        const custA = sorted.find((x) => x.id === idA);
+                        const custB = sorted.find((x) => x.id === idB);
+                        if (custA && custB) {
+                          setMergePair({ key: `${idA}-${idB}`, a: custA, b: custB, reason: "manual" });
+                          setMergeWizardOpen(true);
+                        }
+                      }}
+                    >
+                      <GitMerge className="w-3.5 h-3.5" /> Merge
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -2360,6 +2378,7 @@ export default function CustomersPage() {
         onComplete={() => {
           setMergePair(null);
           setDuplicateModalOpen(false);
+          setChecked(new Set());
         }}
       />
     </AppLayout>
