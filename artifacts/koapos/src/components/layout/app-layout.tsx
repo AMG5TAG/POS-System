@@ -57,6 +57,7 @@ const CUSTOMERS_SUBNAV = [
 ];
 
 const STAFF_SUBNAV: NavItem[] = [
+  { name: "Overview",    href: "/staff/overview",     icon: LayoutGrid    },
   { name: "Rostering",   href: "/staff/rostering",    icon: CalendarClock },
   { name: "Notes",       href: "/staff/notes",        icon: StickyNote    },
   { name: "KPIs",        href: "/staff/kpis",         icon: Target        },

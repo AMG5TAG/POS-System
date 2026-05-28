@@ -47,6 +47,7 @@ import CustomersFormsPage from "@/pages/app/customers-forms";
 import TransactionsPage from "@/pages/app/transactions";
 import InventoryPage from "@/pages/app/inventory";
 import StaffPage from "@/pages/app/staff";
+import StaffOverviewPage from "@/pages/app/staff-overview";
 import StaffTimesheetPage from "@/pages/app/staff-timesheet";
 import StaffRosteringPage from "@/pages/app/staff-rostering";
 import StaffLeaveRequestsPage from "@/pages/app/staff-leave-requests";
@@ -285,6 +286,9 @@ function Router() {
       </Route>
       <Route path="/service-jobs">
         <ProtectedRoute component={ServiceJobsPage} />
+      </Route>
+      <Route path="/staff/overview">
+        <ProtectedRoute component={StaffOverviewPage} />
       </Route>
       <Route path="/staff/timesheet">
         <ProtectedRoute component={StaffTimesheetPage} />
