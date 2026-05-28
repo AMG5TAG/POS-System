@@ -990,7 +990,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
       </header>
 
-      <main id="main-content" className="flex-1 overflow-auto bg-muted/10">{children}</main>
+      <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10">{children}</main>
     </div>
   );
 }
@@ -1137,7 +1137,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         </div>
       </header>
 
-      <main id="main-content" className="flex-1 overflow-auto bg-muted/10 pb-16">{children}</main>
+      <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10 pb-16">{children}</main>
 
       {/* Fixed bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30" aria-label="Main navigation">
@@ -1320,6 +1320,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
     <Sidebar
       side={isRight ? "right" : "left"}
       collapsible="icon"
+      className="overflow-y-auto"
     >
       <SidebarHeader className="min-h-16 flex items-center px-4 py-3 border-b">
         <Link href="/dashboard" className="flex items-center gap-2 w-full">
@@ -1410,7 +1411,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
             <AccessibilityPicker />
           </header>
 
-          <main id="main-content" className="flex-1 overflow-auto bg-muted/10">{children}</main>
+          <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10">{children}</main>
         </div>
       </div>
     </SidebarProvider>
