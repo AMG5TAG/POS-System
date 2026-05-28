@@ -226,6 +226,7 @@ import type {
   ServiceJobTemplateInput,
   ServiceJobTemplateListResponse,
   ShippingCarrier,
+  ShippingCarrierCredentialsInput,
   ShippingCarrierListResponse,
   Shortlink,
   ShortlinkInput,
@@ -14366,6 +14367,155 @@ export const useCreateQrSavedTemplate = <TError = ErrorType<unknown>,
       return useMutation(getCreateQrSavedTemplateMutationOptions(options));
     }
 
+export const getGetQrSavedTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/qr-saved-templates/${id}`
+}
+
+/**
+ * @summary Get saved QR template
+ */
+export const getQrSavedTemplate = async (id: number, options?: RequestInit): Promise<QrSavedTemplate> => {
+
+  return customFetch<QrSavedTemplate>(getGetQrSavedTemplateUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetQrSavedTemplateQueryKey = (id: number,) => {
+    return [
+    `/api/qr-saved-templates/${id}`
+    ] as const;
+    }
+
+
+export const getGetQrSavedTemplateQueryOptions = <TData = Awaited<ReturnType<typeof getQrSavedTemplate>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQrSavedTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetQrSavedTemplateQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getQrSavedTemplate>>> = ({ signal }) => getQrSavedTemplate(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getQrSavedTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetQrSavedTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof getQrSavedTemplate>>>
+export type GetQrSavedTemplateQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get saved QR template
+ */
+
+export function useGetQrSavedTemplate<TData = Awaited<ReturnType<typeof getQrSavedTemplate>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQrSavedTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetQrSavedTemplateQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateQrSavedTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/qr-saved-templates/${id}`
+}
+
+/**
+ * @summary Update saved QR template
+ */
+export const updateQrSavedTemplate = async (id: number,
+    qrSavedTemplateInput: QrSavedTemplateInput, options?: RequestInit): Promise<QrSavedTemplate> => {
+
+  return customFetch<QrSavedTemplate>(getUpdateQrSavedTemplateUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      qrSavedTemplateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateQrSavedTemplateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQrSavedTemplate>>, TError,{id: number;data: BodyType<QrSavedTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateQrSavedTemplate>>, TError,{id: number;data: BodyType<QrSavedTemplateInput>}, TContext> => {
+
+const mutationKey = ['updateQrSavedTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateQrSavedTemplate>>, {id: number;data: BodyType<QrSavedTemplateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateQrSavedTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateQrSavedTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateQrSavedTemplate>>>
+    export type UpdateQrSavedTemplateMutationBody = BodyType<QrSavedTemplateInput>
+    export type UpdateQrSavedTemplateMutationError = ErrorType<void>
+
+    /**
+ * @summary Update saved QR template
+ */
+export const useUpdateQrSavedTemplate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQrSavedTemplate>>, TError,{id: number;data: BodyType<QrSavedTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateQrSavedTemplate>>,
+        TError,
+        {id: number;data: BodyType<QrSavedTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateQrSavedTemplateMutationOptions(options));
+    }
+
 export const getDeleteQrSavedTemplateUrl = (id: number,) => {
 
 
@@ -16194,6 +16344,225 @@ export function useListShippingCarriers<TData = Awaited<ReturnType<typeof listSh
 
 
 
+export const getGetShippingCarrierUrl = (carrierId: string,) => {
+
+
+
+
+  return `/api/shipping-carriers/${carrierId}`
+}
+
+/**
+ * @summary Get shipping carrier connection state
+ */
+export const getShippingCarrier = async (carrierId: string, options?: RequestInit): Promise<ShippingCarrier> => {
+
+  return customFetch<ShippingCarrier>(getGetShippingCarrierUrl(carrierId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetShippingCarrierQueryKey = (carrierId: string,) => {
+    return [
+    `/api/shipping-carriers/${carrierId}`
+    ] as const;
+    }
+
+
+export const getGetShippingCarrierQueryOptions = <TData = Awaited<ReturnType<typeof getShippingCarrier>>, TError = ErrorType<void>>(carrierId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShippingCarrier>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShippingCarrierQueryKey(carrierId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShippingCarrier>>> = ({ signal }) => getShippingCarrier(carrierId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(carrierId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShippingCarrier>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetShippingCarrierQueryResult = NonNullable<Awaited<ReturnType<typeof getShippingCarrier>>>
+export type GetShippingCarrierQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get shipping carrier connection state
+ */
+
+export function useGetShippingCarrier<TData = Awaited<ReturnType<typeof getShippingCarrier>>, TError = ErrorType<void>>(
+ carrierId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShippingCarrier>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetShippingCarrierQueryOptions(carrierId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateShippingCarrierConfigUrl = (carrierId: string,) => {
+
+
+
+
+  return `/api/shipping-carriers/${carrierId}`
+}
+
+/**
+ * @summary Update carrier credentials and config
+ */
+export const updateShippingCarrierConfig = async (carrierId: string,
+    shippingCarrierCredentialsInput: ShippingCarrierCredentialsInput, options?: RequestInit): Promise<ShippingCarrier> => {
+
+  return customFetch<ShippingCarrier>(getUpdateShippingCarrierConfigUrl(carrierId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shippingCarrierCredentialsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateShippingCarrierConfigMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShippingCarrierConfig>>, TError,{carrierId: string;data: BodyType<ShippingCarrierCredentialsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShippingCarrierConfig>>, TError,{carrierId: string;data: BodyType<ShippingCarrierCredentialsInput>}, TContext> => {
+
+const mutationKey = ['updateShippingCarrierConfig'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShippingCarrierConfig>>, {carrierId: string;data: BodyType<ShippingCarrierCredentialsInput>}> = (props) => {
+          const {carrierId,data} = props ?? {};
+
+          return  updateShippingCarrierConfig(carrierId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShippingCarrierConfigMutationResult = NonNullable<Awaited<ReturnType<typeof updateShippingCarrierConfig>>>
+    export type UpdateShippingCarrierConfigMutationBody = BodyType<ShippingCarrierCredentialsInput>
+    export type UpdateShippingCarrierConfigMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update carrier credentials and config
+ */
+export const useUpdateShippingCarrierConfig = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShippingCarrierConfig>>, TError,{carrierId: string;data: BodyType<ShippingCarrierCredentialsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShippingCarrierConfig>>,
+        TError,
+        {carrierId: string;data: BodyType<ShippingCarrierCredentialsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShippingCarrierConfigMutationOptions(options));
+    }
+
+export const getDeleteShippingCarrierUrl = (carrierId: string,) => {
+
+
+
+
+  return `/api/shipping-carriers/${carrierId}`
+}
+
+/**
+ * @summary Remove carrier connection record
+ */
+export const deleteShippingCarrier = async (carrierId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteShippingCarrierUrl(carrierId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteShippingCarrierMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShippingCarrier>>, TError,{carrierId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteShippingCarrier>>, TError,{carrierId: string}, TContext> => {
+
+const mutationKey = ['deleteShippingCarrier'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteShippingCarrier>>, {carrierId: string}> = (props) => {
+          const {carrierId} = props ?? {};
+
+          return  deleteShippingCarrier(carrierId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteShippingCarrierMutationResult = NonNullable<Awaited<ReturnType<typeof deleteShippingCarrier>>>
+
+    export type DeleteShippingCarrierMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove carrier connection record
+ */
+export const useDeleteShippingCarrier = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShippingCarrier>>, TError,{carrierId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteShippingCarrier>>,
+        TError,
+        {carrierId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteShippingCarrierMutationOptions(options));
+    }
+
 export const getUpdateShippingCarrierUrl = (carrierId: string,) => {
 
 
@@ -16343,6 +16712,83 @@ export function useListMarketplaceConnections<TData = Awaited<ReturnType<typeof 
 
 
 
+export const getGetMarketplaceConnectionUrl = (marketplaceId: string,) => {
+
+
+
+
+  return `/api/marketplace-connections/${marketplaceId}`
+}
+
+/**
+ * @summary Get marketplace connection
+ */
+export const getMarketplaceConnection = async (marketplaceId: string, options?: RequestInit): Promise<MarketplaceConnection> => {
+
+  return customFetch<MarketplaceConnection>(getGetMarketplaceConnectionUrl(marketplaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMarketplaceConnectionQueryKey = (marketplaceId: string,) => {
+    return [
+    `/api/marketplace-connections/${marketplaceId}`
+    ] as const;
+    }
+
+
+export const getGetMarketplaceConnectionQueryOptions = <TData = Awaited<ReturnType<typeof getMarketplaceConnection>>, TError = ErrorType<void>>(marketplaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarketplaceConnection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMarketplaceConnectionQueryKey(marketplaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarketplaceConnection>>> = ({ signal }) => getMarketplaceConnection(marketplaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(marketplaceId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMarketplaceConnection>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMarketplaceConnectionQueryResult = NonNullable<Awaited<ReturnType<typeof getMarketplaceConnection>>>
+export type GetMarketplaceConnectionQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get marketplace connection
+ */
+
+export function useGetMarketplaceConnection<TData = Awaited<ReturnType<typeof getMarketplaceConnection>>, TError = ErrorType<void>>(
+ marketplaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarketplaceConnection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMarketplaceConnectionQueryOptions(marketplaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getUpsertMarketplaceConnectionUrl = (marketplaceId: string,) => {
 
 
@@ -16413,6 +16859,76 @@ export const useUpsertMarketplaceConnection = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertMarketplaceConnectionMutationOptions(options));
+    }
+
+export const getDeleteMarketplaceConnectionUrl = (marketplaceId: string,) => {
+
+
+
+
+  return `/api/marketplace-connections/${marketplaceId}`
+}
+
+/**
+ * @summary Delete marketplace connection
+ */
+export const deleteMarketplaceConnection = async (marketplaceId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteMarketplaceConnectionUrl(marketplaceId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteMarketplaceConnectionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarketplaceConnection>>, TError,{marketplaceId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMarketplaceConnection>>, TError,{marketplaceId: string}, TContext> => {
+
+const mutationKey = ['deleteMarketplaceConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMarketplaceConnection>>, {marketplaceId: string}> = (props) => {
+          const {marketplaceId} = props ?? {};
+
+          return  deleteMarketplaceConnection(marketplaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMarketplaceConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMarketplaceConnection>>>
+
+    export type DeleteMarketplaceConnectionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete marketplace connection
+ */
+export const useDeleteMarketplaceConnection = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarketplaceConnection>>, TError,{marketplaceId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMarketplaceConnection>>,
+        TError,
+        {marketplaceId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteMarketplaceConnectionMutationOptions(options));
     }
 
 export const getListDeliveryOrdersUrl = () => {

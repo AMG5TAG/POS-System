@@ -3566,6 +3566,45 @@ paths:
               schema: { $ref: "#/components/schemas/QrSavedTemplate" }
 
   /qr-saved-templates/{id}:
+    get:
+      operationId: getQrSavedTemplate
+      summary: Get saved QR template
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSavedTemplate" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateQrSavedTemplate
+      summary: Update saved QR template
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QrSavedTemplateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrSavedTemplate" }
+        "404":
+          description: Not found
     delete:
       operationId: deleteQrSavedTemplate
       summary: Delete saved QR template
@@ -3935,6 +3974,57 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ShippingCarrierListResponse" }
 
+  /shipping-carriers/{carrierId}:
+    get:
+      operationId: getShippingCarrier
+      summary: Get shipping carrier connection state
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: carrierId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingCarrier" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateShippingCarrierConfig
+      summary: Update carrier credentials and config
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: carrierId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingCarrierCredentialsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingCarrier" }
+    delete:
+      operationId: deleteShippingCarrier
+      summary: Remove carrier connection record
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: carrierId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
   /shipping-carriers/{carrierId}/connect:
     put:
       operationId: updateShippingCarrier
@@ -3974,6 +4064,23 @@ paths:
               schema: { $ref: "#/components/schemas/MarketplaceConnectionListResponse" }
 
   /marketplace-connections/{marketplaceId}:
+    get:
+      operationId: getMarketplaceConnection
+      summary: Get marketplace connection
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: marketplaceId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceConnection" }
+        "404":
+          description: Not found
     put:
       operationId: upsertMarketplaceConnection
       summary: Upsert marketplace connection
@@ -3994,6 +4101,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MarketplaceConnection" }
+    delete:
+      operationId: deleteMarketplaceConnection
+      summary: Delete marketplace connection
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: marketplaceId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
 
   /delivery-orders:
     get:

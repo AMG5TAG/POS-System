@@ -4603,6 +4603,46 @@ export const CreateQrSavedTemplateBody = zod.object({
 
 
 /**
+ * @summary Get saved QR template
+ */
+export const GetQrSavedTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetQrSavedTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update saved QR template
+ */
+export const UpdateQrSavedTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateQrSavedTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "settings": zod.string()
+})
+
+export const UpdateQrSavedTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete saved QR template
  */
 export const DeleteQrSavedTemplateParams = zod.object({
@@ -5153,6 +5193,56 @@ export const ListShippingCarriersResponse = zod.object({
 
 
 /**
+ * @summary Get shipping carrier connection state
+ */
+export const GetShippingCarrierParams = zod.object({
+  "carrierId": zod.coerce.string()
+})
+
+export const GetShippingCarrierResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "carrierId": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "config": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update carrier credentials and config
+ */
+export const UpdateShippingCarrierConfigParams = zod.object({
+  "carrierId": zod.coerce.string()
+})
+
+export const UpdateShippingCarrierConfigBody = zod.object({
+  "apiKey": zod.string().optional(),
+  "webhookSecret": zod.string().optional(),
+  "config": zod.string().optional()
+}).describe('Write-only carrier credentials (never returned in responses)')
+
+export const UpdateShippingCarrierConfigResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "carrierId": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "config": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove carrier connection record
+ */
+export const DeleteShippingCarrierParams = zod.object({
+  "carrierId": zod.coerce.string()
+})
+
+
+/**
  * @summary Toggle carrier connection
  */
 export const UpdateShippingCarrierParams = zod.object({
@@ -5194,6 +5284,26 @@ export const ListMarketplaceConnectionsResponse = zod.object({
 
 
 /**
+ * @summary Get marketplace connection
+ */
+export const GetMarketplaceConnectionParams = zod.object({
+  "marketplaceId": zod.coerce.string()
+})
+
+export const GetMarketplaceConnectionResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "marketplaceId": zod.string(),
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "lastSync": zod.string(),
+  "productsCount": zod.number(),
+  "ordersCount": zod.number(),
+  "config": zod.string()
+})
+
+
+/**
  * @summary Upsert marketplace connection
  */
 export const UpsertMarketplaceConnectionParams = zod.object({
@@ -5219,6 +5329,14 @@ export const UpsertMarketplaceConnectionResponse = zod.object({
   "productsCount": zod.number(),
   "ordersCount": zod.number(),
   "config": zod.string()
+})
+
+
+/**
+ * @summary Delete marketplace connection
+ */
+export const DeleteMarketplaceConnectionParams = zod.object({
+  "marketplaceId": zod.coerce.string()
 })
 
 
