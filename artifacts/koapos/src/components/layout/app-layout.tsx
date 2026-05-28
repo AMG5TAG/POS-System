@@ -1351,7 +1351,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <CollapsibleSection
             label="Staff" icon={UserSquare2} isActive={isStaffSection} isOpen={staffOpen}
             onToggle={() => { setStaffOpen((o) => !o); setPosOpen(false); setInvOpen(false); setCustsOpen(false); setMgmtOpen(false); setMarketingOpen(false); }}
-            items={STAFF_SUBNAV} defaultHref="/staff"
+            items={STAFF_SUBNAV} defaultHref="/staff/overview"
           />
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
