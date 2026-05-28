@@ -13,6 +13,10 @@ import {
   useListWastage,
   useGetTaxSettings,
   useGetLoyaltySettings,
+  useGetProfitLoss,
+  useGetSalesSummary,
+  useGetInventoryValuation,
+  useGetProductPerformance,
   GetDashboardSummaryPeriod,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -205,43 +209,72 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
 
 /* ─── Tab: Payments ──────────────────────────────────────────────────────── */
 
-function PaymentsTab({ fromDate }: { fromDate: string }) {
-  const { data, isLoading } = useListTransactions({ limit: 500 });
-  const txs = (data?.items ?? []).filter((tx) => !fromDate || (tx.createdAt ?? "") >= fromDate);
+function PaymentsTab({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const { data, isLoading } = useGetSalesSummary({ startDate, endDate });
 
-  const breakdown = useMemo(() => {
-    const map: Record<string, { count: number; total: number }> = {};
-    for (const tx of txs) {
-      if (tx.status === "voided") continue;
-      const m = tx.paymentMethod;
-      if (!map[m]) map[m] = { count: 0, total: 0 };
-      map[m].count++;
-      map[m].total += tx.total;
-    }
-    return Object.entries(map)
-      .map(([method, d]) => ({ method, ...d }))
-      .sort((a, b) => b.total - a.total);
-  }, [txs]);
+  const breakdown   = data?.paymentBreakdown ?? [];
+  const grandTotal  = data?.totalRevenue     ?? 0;
+  const grandCount  = data?.transactionCount ?? 0;
+  const avgOrder    = data?.avgOrderValue    ?? 0;
+  const dailyRows   = data?.dailyBreakdown   ?? [];
 
-  const grandTotal = breakdown.reduce((s, r) => s + r.total, 0);
-  const grandCount = breakdown.reduce((s, r) => s + r.count, 0);
+  const pieData = breakdown.map((r) => ({
+    name:  r.paymentMethod.replace(/_/g, " "),
+    value: r.totalAmount,
+    fill:  PAYMENT_COLORS[r.paymentMethod] ?? "#94a3b8",
+  }));
 
-  const pieData = breakdown.map((r) => ({ name: r.method.replace("_", " "), value: r.total, fill: PAYMENT_COLORS[r.method] ?? "#94a3b8" }));
+  const dailyChart = dailyRows.map((d) => ({
+    label:        d.date,
+    revenue:      d.grossRevenue,
+    transactions: d.transactionCount,
+  }));
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Total Collected" value={isLoading ? "—" : formatCurrency(grandTotal)} sub="All methods" accent />
-        <KpiTile label="Transactions" value={isLoading ? "—" : grandCount.toString()} sub="Completed sales" />
-        <KpiTile label="Payment Methods" value={isLoading ? "—" : breakdown.length.toString()} sub="In use" />
+        <KpiTile label="Total Collected"   value={isLoading ? "—" : formatCurrency(grandTotal)} sub="All payment methods" accent />
+        <KpiTile label="Transactions"      value={isLoading ? "—" : grandCount.toLocaleString()} sub="Completed sales" />
+        <KpiTile label="Avg Order Value"   value={isLoading ? "—" : formatCurrency(avgOrder)} sub="Per transaction" />
       </div>
+
+      {/* Daily revenue trend */}
+      {(dailyChart.length > 0 || isLoading) && (
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <SectionHeader title="Daily Revenue Trend" action={<ExportBtn />} />
+          <div className="p-5">
+            {isLoading ? (
+              <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
+            ) : dailyChart.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">No transactions found for this period.</p>
+            ) : (
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyChart} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                    <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Method breakdown table */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Breakdown by Method" action={<ExportBtn />} />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : breakdown.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-12">No transactions in this period.</p>
+            <div className="flex flex-col items-center py-14 gap-3">
+              <CreditCard className="w-10 h-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No transactions found for this period.</p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -249,30 +282,40 @@ function PaymentsTab({ fromDate }: { fromDate: string }) {
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">Method</th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">Count</th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">Total</th>
+                  <th className="text-right px-5 py-3 font-medium text-muted-foreground">Avg</th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">Share</th>
                 </tr>
               </thead>
               <tbody>
                 {breakdown.map((r) => (
-                  <tr key={r.method} className="border-b last:border-0 hover:bg-muted/20">
+                  <tr key={r.paymentMethod} className="border-b last:border-0 hover:bg-muted/20">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PAYMENT_COLORS[r.method] ?? "#94a3b8" }} />
-                        <span className="capitalize font-medium">{r.method.replace("_", " ")}</span>
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PAYMENT_COLORS[r.paymentMethod] ?? "#94a3b8" }} />
+                        <span className="capitalize font-medium">{r.paymentMethod.replace(/_/g, " ")}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-right text-muted-foreground">{r.count}</td>
-                    <td className="px-5 py-3 text-right font-medium">{formatCurrency(r.total)}</td>
-                    <td className="px-5 py-3 text-right text-muted-foreground">{grandTotal > 0 ? ((r.total / grandTotal) * 100).toFixed(1) : "0"}%</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">{r.transactionCount.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right font-medium">{formatCurrency(r.totalAmount)}</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(r.avgTransactionValue)}</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">
+                      {grandTotal > 0 ? ((r.totalAmount / grandTotal) * 100).toFixed(1) : "0"}%
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
+
+        {/* Payment mix pie */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Payment Mix" />
-          {pieData.length > 0 ? (
+          {isLoading ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
+          ) : pieData.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
+          ) : (
             <div className="p-5 h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -284,8 +327,6 @@ function PaymentsTab({ fromDate }: { fromDate: string }) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
           )}
         </div>
       </div>
@@ -296,59 +337,97 @@ function PaymentsTab({ fromDate }: { fromDate: string }) {
 /* ─── Tab: Inventory ─────────────────────────────────────────────────────── */
 
 function InventoryTab() {
-  const { data, isLoading } = useListInventory();
-  const items = data ?? [];
-  const lowStock = items.filter((i) => i.isLowStock);
-  const totalValue = 0;
+  const { data, isLoading } = useGetInventoryValuation();
+
+  const items           = data?.items           ?? [];
+  const totalSkus       = data?.totalSkus       ?? 0;
+  const totalUnits      = data?.totalUnits      ?? 0;
+  const totalCostValue  = data?.totalCostValue  ?? 0;
+  const totalRetailValue = data?.totalRetailValue ?? 0;
+  const potentialProfit = data?.potentialProfit ?? 0;
+
+  const zeroStock = items.filter((i) => i.stockQuantity === 0);
+
+  /* Sort by retail value descending */
+  const sorted = [...items].sort((a, b) => b.retailValue - a.retailValue);
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Total SKUs" value={isLoading ? "—" : items.length.toString()} sub="Tracked products" accent />
-        <KpiTile label="Low Stock" value={isLoading ? "—" : lowStock.length.toString()} sub="Below threshold" />
-        <KpiTile label="Stock Value" value={formatCurrency(totalValue)} sub="Cost price basis" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label="Active SKUs"      value={isLoading ? "—" : totalSkus.toLocaleString()} sub="Tracked products" accent />
+        <KpiTile label="Total Units"      value={isLoading ? "—" : totalUnits.toLocaleString()} sub="Units on hand" />
+        <KpiTile label="Cost Value"       value={isLoading ? "—" : formatCurrency(totalCostValue)} sub="At cost price" />
+        <KpiTile label="Retail Value"     value={isLoading ? "—" : formatCurrency(totalRetailValue)} sub="At sell price" />
+        <KpiTile label="Potential Profit" value={isLoading ? "—" : formatCurrency(potentialProfit)} sub="Retail − Cost" />
       </div>
-      {lowStock.length > 0 && (
+
+      {zeroStock.length > 0 && !isLoading && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4 flex items-start gap-3">
           <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            <strong>{lowStock.length} product{lowStock.length !== 1 ? "s" : ""}</strong> below reorder threshold.
+            <strong>{zeroStock.length} product{zeroStock.length !== 1 ? "s" : ""}</strong> currently out of stock.
           </p>
         </div>
       )}
+
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Stock Levels" action={<ExportBtn />} />
+        <SectionHeader title="Inventory Valuation" action={<ExportBtn />} />
         {isLoading ? (
-          <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
+          <div className="flex items-center justify-center py-14 gap-3 text-muted-foreground text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Loading inventory…
+          </div>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No inventory data found.</p>
+          <div className="flex flex-col items-center py-14 gap-3">
+            <Package2 className="w-10 h-10 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No tracked inventory found.</p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/30 border-b">
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Product</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">SKU</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Stock</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Threshold</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Status</th>
+                <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Product</th>
+                <th className="text-left  px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">SKU</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Units</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">Cost ea.</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">Retail ea.</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Cost Value</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Retail Value</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden lg:table-cell">Margin</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sorted.map((item) => (
                 <tr key={item.productId} className="border-b last:border-0 hover:bg-muted/20">
-                  <td className="px-5 py-3 font-medium">{item.productName}</td>
-                  <td className="px-5 py-3 text-muted-foreground font-mono text-xs">{item.sku ?? "—"}</td>
-                  <td className="px-5 py-3 text-right font-medium">{item.stockQuantity}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{item.lowStockThreshold ?? "—"}</td>
-                  <td className="px-5 py-3 text-right">
-                    {item.isLowStock
-                      ? <Badge variant="destructive" className="text-[10px]">Low</Badge>
-                      : <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">OK</Badge>
-                    }
+                  <td className="px-5 py-3 font-medium">
+                    {item.name}
+                    {item.stockQuantity === 0 && (
+                      <Badge variant="destructive" className="ml-2 text-[9px] py-0">Out</Badge>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground font-mono text-xs hidden sm:table-cell">{item.sku ?? "—"}</td>
+                  <td className="px-5 py-3 text-right font-medium">{item.stockQuantity.toLocaleString()}</td>
+                  <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(item.costPrice)}</td>
+                  <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(item.retailPrice)}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(item.costValue)}</td>
+                  <td className="px-5 py-3 text-right font-medium text-primary">{formatCurrency(item.retailValue)}</td>
+                  <td className="px-5 py-3 text-right hidden lg:table-cell">
+                    <span className={cn("font-medium", item.marginPct >= 0 ? "text-emerald-600" : "text-red-500")}>
+                      {item.marginPct.toFixed(1)}%
+                    </span>
                   </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="bg-muted/30 border-t font-semibold">
+                <td className="px-5 py-3" colSpan={2}>Total</td>
+                <td className="px-5 py-3 text-right">{totalUnits.toLocaleString()}</td>
+                <td className="px-5 py-3 hidden md:table-cell" colSpan={2} />
+                <td className="px-5 py-3 text-right">{formatCurrency(totalCostValue)}</td>
+                <td className="px-5 py-3 text-right text-primary">{formatCurrency(totalRetailValue)}</td>
+                <td className="px-5 py-3 hidden lg:table-cell" />
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>
@@ -423,73 +502,186 @@ function RegisterClosuresTab() {
 
 /* ─── Tab: Profit & Loss ─────────────────────────────────────────────────── */
 
-function ProfitLossTab({ summary, summaryLoading }: {
-  summary: { totalSales: number; transactionCount: number; refundTotal?: number } | undefined;
-  summaryLoading: boolean;
-}) {
-  const totalSales  = summary?.totalSales  ?? 0;
-  const refunds     = summary?.refundTotal ?? 0;
-  const netRevenue  = totalSales - refunds;
-  const gst         = netRevenue / 11;
-  const exGst       = netRevenue - gst;
-  const cogs        = exGst * 0.42;
-  const grossProfit = exGst - cogs;
-  const grossMargin = exGst > 0 ? (grossProfit / exGst) * 100 : 0;
+function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const { data, isLoading } = useGetProfitLoss({ startDate, endDate });
 
-  const rows = [
-    { label: "Gross Revenue",      value: totalSales,  positive: true  },
-    { label: "Refunds",            value: -refunds,    positive: false },
-    { label: "Net Revenue",        value: netRevenue,  positive: true,  bold: true  },
-    { label: "GST Collected",      value: -gst,        positive: false },
-    { label: "Revenue (ex-GST)",   value: exGst,       positive: true,  bold: true  },
-    { label: "Est. COGS (42%)",    value: -cogs,       positive: false },
-    { label: "Gross Profit",       value: grossProfit, positive: true,  bold: true, accent: true },
+  const grossRevenue    = data?.grossRevenue    ?? 0;
+  const exGstRevenue    = data?.exGstRevenue    ?? 0;
+  const taxCollected    = data?.taxCollected    ?? 0;
+  const totalCogs       = data?.totalCogs       ?? 0;
+  const netProfit       = data?.netProfit       ?? 0;
+  const grossMarginPct  = data?.grossMarginPct  ?? 0;
+  const refundTotal     = data?.refundTotal     ?? 0;
+  const discountTotal   = data?.discountTotal   ?? 0;
+  const txCount         = data?.transactionCount ?? 0;
+  const dailyRows       = data?.dailyBreakdown  ?? [];
+
+  const netRevenue = grossRevenue - refundTotal;
+  const cogsShare  = exGstRevenue > 0 ? (totalCogs / exGstRevenue) * 100 : 0;
+  const taxShare   = netRevenue   > 0 ? (taxCollected / netRevenue) * 100 : 0;
+
+  const plRows = [
+    { label: "Gross Revenue",         value: grossRevenue,   positive: true                    },
+    { label: "Refunds",               value: -refundTotal,   positive: false                   },
+    { label: "Discounts Applied",     value: -discountTotal, positive: false                   },
+    { label: "Net Revenue",           value: netRevenue - discountTotal, positive: true, bold: true },
+    { label: "GST Collected",         value: -taxCollected,  positive: false                   },
+    { label: "Revenue (ex-GST)",      value: exGstRevenue,   positive: true,  bold: true       },
+    { label: "True COGS",             value: -totalCogs,     positive: false                   },
+    { label: "Net Profit",            value: netProfit,      positive: netProfit >= 0, bold: true, accent: true },
   ];
+
+  /* chart: show net profit per day as a bar */
+  const chartData = dailyRows.map((d) => ({
+    date:      d.date,
+    revenue:   d.grossRevenue,
+    netProfit: d.netProfit,
+    cogs:      d.totalCogs,
+  }));
+
+  const hasSales = grossRevenue > 0;
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiTile label="Net Revenue" value={summaryLoading ? "—" : formatCurrency(netRevenue)} sub="After refunds" accent />
-        <KpiTile label="GST Collected" value={summaryLoading ? "—" : formatCurrency(gst)} sub="10% of inc-GST revenue" />
-        <KpiTile label="Gross Profit" value={summaryLoading ? "—" : formatCurrency(grossProfit)} sub="Est. after COGS" />
-        <KpiTile label="Gross Margin" value={summaryLoading ? "—" : `${grossMargin.toFixed(1)}%`} sub="Before overheads" />
+      {/* ── KPI strip ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label="Gross Revenue"   value={isLoading ? "—" : formatCurrency(grossRevenue)}   sub="All completed sales" accent />
+        <KpiTile label="GST Collected"   value={isLoading ? "—" : formatCurrency(taxCollected)}   sub="Tax portion of sales" />
+        <KpiTile label="True COGS"       value={isLoading ? "—" : formatCurrency(totalCogs)}       sub="From cost prices" />
+        <KpiTile label="Net Profit"      value={isLoading ? "—" : formatCurrency(netProfit)}       sub="Revenue − COGS" />
+        <KpiTile label="Gross Margin"    value={isLoading ? "—" : `${grossMarginPct.toFixed(1)}%`} sub={`${txCount.toLocaleString()} transactions`} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="P&L Summary" action={<ExportBtn />} />
-          <table className="w-full text-sm">
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} className={cn("border-b last:border-0", r.bold ? "bg-muted/20" : "")}>
-                  <td className={cn("px-5 py-3", r.bold ? "font-semibold" : "text-muted-foreground")}>{r.label}</td>
-                  <td className={cn("px-5 py-3 text-right font-medium", r.accent ? "text-primary text-lg" : r.positive ? "" : "text-red-500")}>
-                    {summaryLoading ? "—" : (r.value < 0 ? `(${formatCurrency(Math.abs(r.value))})` : formatCurrency(r.value))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+      {/* empty state */}
+      {!isLoading && !hasSales && (
+        <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-3">
+          <DollarSign className="w-12 h-12 text-muted-foreground/25" />
+          <p className="text-sm font-medium text-muted-foreground">No transactions found for this period.</p>
+          <p className="text-xs text-muted-foreground/70">Adjust the date range above to see P&amp;L data.</p>
         </div>
-        <div className="rounded-xl border bg-card p-5 space-y-4">
-          <p className="font-semibold">Margin Breakdown</p>
-          {[
-            { label: "Gross Margin",  pct: grossMargin,        color: "bg-primary" },
-            { label: "GST Share",     pct: netRevenue > 0 ? (gst / netRevenue) * 100 : 0, color: "bg-amber-400" },
-            { label: "COGS Share",    pct: exGst > 0 ? (cogs / exGst) * 100 : 0, color: "bg-red-400" },
-          ].map((row) => (
-            <div key={row.label} className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{row.label}</span>
-                <span className="font-medium">{row.pct.toFixed(1)}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className={cn("h-full rounded-full", row.color)} style={{ width: `${Math.min(row.pct, 100)}%` }} />
-              </div>
+      )}
+
+      {(isLoading || hasSales) && (
+        <>
+          {/* ── Daily P&L trend chart ─────────────────────────────────────── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title="Daily Revenue vs Net Profit" action={<ExportBtn />} />
+            <div className="p-5">
+              {isLoading ? (
+                <div className="h-44 flex items-center justify-center text-muted-foreground text-sm gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Loading…
+                </div>
+              ) : chartData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-10">No data for this period.</p>
+              ) : (
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                      <Bar dataKey="revenue"   name="Gross Revenue" fill="hsl(var(--primary))"  fillOpacity={0.5} radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="netProfit" name="Net Profit"    fill="hsl(var(--primary))"  radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
-          ))}
-          <p className="text-xs text-muted-foreground pt-2">COGS is an estimate (42% of ex-GST revenue). Connect cost prices in Products for exact figures.</p>
-        </div>
-      </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* ── P&L Summary table ──────────────────────────────────────── */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="P&L Summary" action={<ExportBtn />} />
+              {isLoading ? (
+                <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Loading…
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {plRows.map((r, i) => (
+                      <tr key={i} className={cn("border-b last:border-0", r.bold ? "bg-muted/20" : "")}>
+                        <td className={cn("px-5 py-3", r.bold ? "font-semibold" : "text-muted-foreground")}>{r.label}</td>
+                        <td className={cn(
+                          "px-5 py-3 text-right font-medium",
+                          r.accent ? "text-primary text-lg" : r.value < 0 ? "text-red-500" : "",
+                        )}>
+                          {r.value < 0
+                            ? `(${formatCurrency(Math.abs(r.value))})`
+                            : formatCurrency(r.value)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* ── Margin breakdown bars ───────────────────────────────────── */}
+            <div className="rounded-xl border bg-card p-5 space-y-5">
+              <p className="font-semibold">Margin Breakdown</p>
+              {[
+                { label: "Gross Margin",  pct: grossMarginPct, color: "bg-primary",    note: `${formatCurrency(netProfit)} profit` },
+                { label: "GST Share",     pct: taxShare,        color: "bg-amber-400",  note: `${formatCurrency(taxCollected)} collected` },
+                { label: "COGS Share",    pct: cogsShare,       color: "bg-red-400",    note: `${formatCurrency(totalCogs)} in costs` },
+              ].map((row) => (
+                <div key={row.label} className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className="text-xs text-muted-foreground/60 ml-2">{row.note}</span>
+                    </div>
+                    <span className="font-semibold tabular-nums">{isLoading ? "—" : `${row.pct.toFixed(1)}%`}</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div className={cn("h-full rounded-full transition-all duration-500", row.color)} style={{ width: `${Math.min(Math.max(row.pct, 0), 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+              {!isLoading && totalCogs === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 pt-1">
+                  COGS is $0 — add cost prices to your products to see accurate margin data.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Daily breakdown table ───────────────────────────────────────── */}
+          {dailyRows.length > 0 && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="Daily Breakdown" />
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Date</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Transactions</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Gross Revenue</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">GST</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">COGS</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Net Profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyRows.map((row) => (
+                    <tr key={row.date} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3 text-muted-foreground font-mono text-xs">{row.date}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{row.transactionCount.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right font-medium">{formatCurrency(row.grossRevenue)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(row.taxCollected)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(row.totalCogs)}</td>
+                      <td className={cn("px-5 py-3 text-right font-semibold", row.netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
+                        {formatCurrency(row.netProfit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -1571,10 +1763,10 @@ export default function ReportsPage() {
 
         {/* ── Tab content ──────────────────────────────────────────────────── */}
         {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} />}
-        {activeTab === "payments"          && <PaymentsTab fromDate={fromDate} />}
+        {activeTab === "payments"          && <PaymentsTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "inventory"         && <InventoryTab />}
         {activeTab === "register-closures" && <RegisterClosuresTab />}
-        {activeTab === "profit-loss"       && <ProfitLossTab summary={summary} summaryLoading={summaryLoading} />}
+        {activeTab === "profit-loss"       && <ProfitLossTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "customer-insights" && <CustomerInsightsTab />}
         {activeTab === "top-products"      && <TopProductsTab apiPeriod={apiPeriod} />}
         {activeTab === "user-activity"     && <UserActivityTab fromDate={fromDate} />}
