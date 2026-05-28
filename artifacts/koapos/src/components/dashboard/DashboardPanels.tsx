@@ -1,24 +1,17 @@
 import { useState } from "react";
 import {
   useListServiceJobs,
-  useUpdateServiceJob,
   ServiceJob,
-  ServiceJobInputStatus,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Bell, Circle, AlertTriangle, Wrench, User, CalendarDays, FileText, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Bell, Circle, AlertTriangle, Wrench, User, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,189 +69,8 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-// ─── Service Job Detail Dialog ────────────────────────────────────────────────
-
-interface JobDialogProps {
-  job: ServiceJob;
-  onClose: () => void;
-}
-
-function ServiceJobDialog({ job, onClose }: JobDialogProps) {
-  const queryClient = useQueryClient();
-  const updateMutation = useUpdateServiceJob();
-
-  const [newStatus, setNewStatus] = useState<string>(job.status as string);
-  const [newNote, setNewNote] = useState("");
-  const [isCritical, setIsCritical] = useState(job.isCritical);
-  const [workDesc, setWorkDesc] = useState(job.workDescription ?? "");
-  const [deviceType, setDeviceType] = useState(job.deviceType ?? "");
-  const [deviceDesc, setDeviceDesc] = useState(job.deviceDescription ?? "");
-
-  const isDirty =
-    newStatus !== (job.status as string) ||
-    isCritical !== job.isCritical ||
-    workDesc !== (job.workDescription ?? "") ||
-    deviceType !== (job.deviceType ?? "") ||
-    deviceDesc !== (job.deviceDescription ?? "") ||
-    newNote.trim().length > 0;
-
-  const handleSave = async () => {
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    const ts = `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-    const timestampedNote = newNote.trim() ? `${ts} ${newNote.trim()}` : "";
-    const mergedNotes = [job.notes, timestampedNote].filter(Boolean).join("\n\n---\n\n");
-    await updateMutation.mutateAsync({
-      id: job.id,
-      data: {
-        status: newStatus as ServiceJobInputStatus,
-        isCritical,
-        workDescription: workDesc || null,
-        deviceType: deviceType || null,
-        deviceDescription: deviceDesc || null,
-        notes: mergedNotes || null,
-      },
-    });
-    await queryClient.invalidateQueries({ queryKey: ["service-jobs-panel"] });
-    await queryClient.invalidateQueries({ queryKey: ["service-jobs-dash"] });
-    toast.success("Service job updated");
-    onClose();
-  };
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <Wrench className="w-4 h-4 text-primary shrink-0" />
-            {job.jobNumber}
-            {job.customerName && (
-              <span className="text-muted-foreground font-normal">— {job.customerName}</span>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            View and update service job details, status, and notes.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-5 pt-1">
-          {/* Read-only details */}
-          <div className="rounded-lg bg-muted/40 p-3 space-y-2.5">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-                Book-in: <span className="text-foreground font-medium ml-1">{formatBookDate(job.bookInDate)}</span>
-              </div>
-              {job.customerName && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <User className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-foreground font-medium">{job.customerName}</span>
-                </div>
-              )}
-            </div>
-            <DetailRow label="Device" value={[deviceType, deviceDesc].filter(Boolean).join(" — ") || job.deviceType || job.deviceDescription} />
-            <DetailRow label="Serial #" value={job.serialNumber} />
-            <DetailRow label="Condition" value={job.condition} />
-            {job.estimatedCost != null && (
-              <DetailRow label="Estimate" value={`$${job.estimatedCost.toFixed(2)}`} />
-            )}
-          </div>
-
-          <Separator />
-
-          {/* Editable fields */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Status */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</Label>
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_STATUSES.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Critical toggle */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Priority</Label>
-                <div
-                  className={cn(
-                    "h-9 flex items-center gap-2 px-3 rounded-md border cursor-pointer select-none transition-colors",
-                    isCritical ? "bg-red-50 border-red-300" : "bg-background border-input"
-                  )}
-                  onClick={() => setIsCritical(!isCritical)}
-                >
-                  <Checkbox checked={isCritical} onCheckedChange={(v) => setIsCritical(!!v)} id="critical-cb" />
-                  <label htmlFor="critical-cb" className={cn("text-sm font-medium cursor-pointer", isCritical ? "text-red-700" : "text-foreground")}>
-                    Critical
-                  </label>
-                  {isCritical && <AlertTriangle className="w-3.5 h-3.5 text-red-500 ml-auto" />}
-                </div>
-              </div>
-            </div>
-
-            {/* Device type */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device Type</Label>
-              <Input value={deviceType} onChange={(e) => setDeviceType(e.target.value)} className="h-9 text-sm" placeholder="e.g. iPhone, Laptop..." />
-            </div>
-
-            {/* Work description */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work Description</Label>
-              <Textarea
-                value={workDesc}
-                onChange={(e) => setWorkDesc(e.target.value)}
-                className="text-sm min-h-[70px] resize-none"
-                placeholder="Describe the work to be done..."
-              />
-            </div>
-
-            {/* Existing notes */}
-            {job.notes && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <FileText className="w-3 h-3" /> Existing Notes
-                </Label>
-                <div className="text-xs bg-muted/40 rounded-md p-2.5 text-muted-foreground whitespace-pre-wrap">{job.notes}</div>
-              </div>
-            )}
-
-            {/* Add note */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {job.notes ? "Append Note" : "Add Note"}
-              </Label>
-              <Textarea
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                className="text-sm min-h-[70px] resize-none"
-                placeholder="Type a note to append..."
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button
-              onClick={handleSave}
-              disabled={!isDirty || updateMutation.isPending}
-              className="flex-1"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// ─── (Legacy ServiceJobDialog removed — now uses shared ServiceJobDetailDialog from
+//   @/components/service-jobs/ServiceJobDetailDialog)
 
 // ─── Service Job Row ──────────────────────────────────────────────────────────
 
@@ -337,9 +149,10 @@ function AllServiceJobsPanel() {
       </Card>
 
       {selectedJob && (
-        <ServiceJobDialog
+        <ServiceJobDetailDialog
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
+          queryKeys={[["service-jobs-panel"], ["service-jobs-dash"]]}
         />
       )}
     </>
