@@ -31,8 +31,11 @@ import {
   useDeleteCameraSnapshot,
   useListPosSecurityCaptures,
   useDeletePosSecurityCapture,
+  useListPosRegisters,
+  useUpdatePosRegister,
   type Camera as CameraType,
   type CameraInput,
+  type PosRegister,
 } from "@workspace/api-client-react";
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
@@ -532,18 +535,92 @@ function AccessPipTab() {
 
 type VideoDevice = { deviceId: string; label: string };
 
+/* Per-register camera row */
+function RegisterCameraRow({
+  register,
+  devices,
+}: {
+  register: PosRegister;
+  devices: VideoDevice[];
+}) {
+  const updateRegister = useUpdatePosRegister();
+  const [saving, setSaving] = useState(false);
+
+  const enabled  = register.posCameraEnabled === "true";
+  const deviceId = register.posCameraDeviceId ?? null;
+
+  const save = async (patch: { posCameraEnabled?: string; posCameraDeviceId?: string | null }) => {
+    setSaving(true);
+    try {
+      await updateRegister.mutateAsync({
+        id: register.id,
+        data: {
+          registerId:        register.registerId,
+          name:              register.name,
+          type:              register.type,
+          staffName:         register.staffName,
+          staffEmail:        register.staffEmail,
+          posCameraEnabled:  register.posCameraEnabled,
+          posCameraDeviceId: register.posCameraDeviceId ?? null,
+          ...patch,
+        },
+      });
+      toast.success("Saved");
+    } catch {
+      toast.error("Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border bg-card">
+      {/* Register name + type */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{register.name}</p>
+        <p className="text-xs text-muted-foreground">{register.type} · ID: {register.registerId}</p>
+      </div>
+
+      {/* Device picker (only when enabled) */}
+      <div className="flex items-center gap-3 shrink-0">
+        {enabled && (
+          <Select
+            value={deviceId ?? "default"}
+            onValueChange={(v) => save({ posCameraDeviceId: v === "default" ? null : v })}
+            disabled={saving}
+          >
+            <SelectTrigger className="w-48 h-8 text-xs">
+              <SelectValue placeholder="Default camera" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default system camera</SelectItem>
+              {devices.map((d) => (
+                <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Enable toggle */}
+        <Switch
+          checked={enabled}
+          disabled={saving}
+          onCheckedChange={(v) => save({ posCameraEnabled: v ? "true" : "false" })}
+        />
+      </div>
+    </div>
+  );
+}
+
 function PosCameraTab() {
-  const { data: settings, isLoading } = useGetCameraSettings();
-  const updateSettings = useUpdateCameraSettings();
+  const { data: registersData, isLoading: registersLoading } = useListPosRegisters();
   const { data: captures = [], isLoading: capturesLoading, refetch } = useListPosSecurityCaptures();
   const deleteCapture = useDeletePosSecurityCapture();
 
-  const [saving, setSaving]         = useState(false);
-  const [devices, setDevices]       = useState<VideoDevice[]>([]);
-  const [viewSnap, setViewSnap]     = useState<string | null>(null);
+  const [devices, setDevices]   = useState<VideoDevice[]>([]);
+  const [viewSnap, setViewSnap] = useState<string | null>(null);
 
-  const posWebcamEnabled = settings?.posWebcamEnabled === "true";
-  const posWebcamDeviceId = settings?.posWebcamDeviceId ?? null;
+  const registers = registersData?.items ?? [];
 
   /* Enumerate video input devices */
   useEffect(() => {
@@ -555,25 +632,13 @@ function PosCameraTab() {
           .map((d) => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 6)}` }));
         setDevices(vids);
       } catch {
-        // permissions not granted yet — will enumerate after first getUserMedia call
+        // permissions not granted yet — enumerate after first getUserMedia call
       }
     };
     enumerate();
     navigator.mediaDevices.addEventListener("devicechange", enumerate);
     return () => navigator.mediaDevices.removeEventListener("devicechange", enumerate);
   }, []);
-
-  const save = async (patch: { posWebcamEnabled?: string; posWebcamDeviceId?: string | null }) => {
-    setSaving(true);
-    try {
-      await updateSettings.mutateAsync({ data: patch });
-      toast.success("Settings saved");
-    } catch {
-      toast.error("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleDelete = async (id: number) => {
     try {
@@ -584,70 +649,46 @@ function PosCameraTab() {
     }
   };
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-    </div>
-  );
-
   const photos = captures.filter((c) => c.type === "photo");
   const videos = captures.filter((c) => c.type === "video");
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Enable / device */}
-        <div className="rounded-xl border bg-card p-5 space-y-5">
+        {/* Per-register configuration */}
+        <div className="rounded-xl border bg-card p-5 space-y-4">
           <div>
             <h3 className="font-semibold flex items-center gap-2">
               <ShieldAlert className="w-4 h-4" /> POS Security Webcam
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Add silent photo &amp; video capture buttons to the POS Sell Screen.
-              Captures are saved locally and accessible below.
+              Enable silent photo &amp; video capture buttons on a per-register basis.
+              Toggle each till independently and choose which webcam it uses.
             </p>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Enable POS Camera</p>
-              <p className="text-xs text-muted-foreground">Show capture buttons on POS screen</p>
+          {registersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
-            <Switch
-              checked={posWebcamEnabled}
-              disabled={saving}
-              onCheckedChange={(v) => save({ posWebcamEnabled: v ? "true" : "false" })}
-            />
-          </div>
+          ) : registers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm space-y-1">
+              <Smartphone className="w-7 h-7 mx-auto opacity-30" />
+              <p>No registers configured.</p>
+              <p className="text-xs">Add registers in Management › Registers first.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {registers.map((reg) => (
+                <RegisterCameraRow key={reg.id} register={reg} devices={devices} />
+              ))}
+            </div>
+          )}
 
-          {posWebcamEnabled && (
-            <div className="space-y-1.5">
-              <Label>Webcam Device</Label>
-              {devices.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No cameras detected. Grant browser camera permission first or connect a USB webcam.
-                </p>
-              ) : (
-                <Select
-                  value={posWebcamDeviceId ?? "default"}
-                  onValueChange={(v) => save({ posWebcamDeviceId: v === "default" ? null : v })}
-                  disabled={saving}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Use default camera" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Default system camera</SelectItem>
-                    {devices.map((d) => (
-                      <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Select the USB webcam to use for POS security captures.
-              </p>
-            </div>
+          {devices.length === 0 && registers.length > 0 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              No cameras detected yet. Grant browser camera permission or connect a USB webcam — then the device list will appear.
+            </p>
           )}
         </div>
 

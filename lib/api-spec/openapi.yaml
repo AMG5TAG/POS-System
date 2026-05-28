@@ -6412,25 +6412,29 @@ components:
 
     PosRegister:
       type: object
-      required: [id, merchantId, registerId, name, type, staffName, staffEmail]
+      required: [id, merchantId, registerId, name, type, staffName, staffEmail, posCameraEnabled]
       properties:
-        id:          { type: integer }
-        merchantId:  { type: integer }
-        registerId:  { type: string }
-        name:        { type: string }
-        type:        { type: string }
-        staffName:   { type: string }
-        staffEmail:  { type: string }
+        id:                { type: integer }
+        merchantId:        { type: integer }
+        registerId:        { type: string }
+        name:              { type: string }
+        type:              { type: string }
+        staffName:         { type: string }
+        staffEmail:        { type: string }
+        posCameraEnabled:  { type: string }
+        posCameraDeviceId: { type: string, nullable: true }
 
     PosRegisterInput:
       type: object
       required: [registerId, name, type]
       properties:
-        registerId:  { type: string }
-        name:        { type: string }
-        type:        { type: string }
-        staffName:   { type: string }
-        staffEmail:  { type: string }
+        registerId:        { type: string }
+        name:              { type: string }
+        type:              { type: string }
+        staffName:         { type: string }
+        staffEmail:        { type: string }
+        posCameraEnabled:  { type: string }
+        posCameraDeviceId: { type: string, nullable: true }
 
     PosRegisterListResponse:
       type: object

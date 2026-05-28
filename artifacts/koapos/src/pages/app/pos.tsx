@@ -9,7 +9,7 @@ import {
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
-  useGetMerchant,
+  useGetMerchant, useListPosRegisters,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, Transaction,
 } from "@workspace/api-client-react";
@@ -398,6 +398,9 @@ export default function POSPage() {
   const effectiveCategoryId = posTab === "browse" && categoryPath.length > 0 && !search
     ? categoryPath[categoryPath.length - 1]
     : null;
+
+  const { data: registersData } = useListPosRegisters();
+  const activeRegister = (registersData?.items ?? []).find((r) => r.registerId === activeRegisterId);
 
   const { data: productsData } = useListProducts(
     { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
@@ -1570,7 +1573,10 @@ export default function POSPage() {
               >
                 {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
               </button>
-              <PosWebcamCapture />
+              <PosWebcamCapture
+                enabled={activeRegister?.posCameraEnabled === "true"}
+                deviceId={activeRegister?.posCameraDeviceId}
+              />
               <button
                 onClick={() => window.open("/customer-display", "_blank")}
                 title="Open customer-facing display"

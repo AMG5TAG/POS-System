@@ -1845,6 +1845,8 @@ export interface PosRegister {
   type: string;
   staffName: string;
   staffEmail: string;
+  posCameraEnabled: string;
+  posCameraDeviceId?: string | null;
 }
 
 export interface PosRegisterInput {
@@ -1853,6 +1855,8 @@ export interface PosRegisterInput {
   type: string;
   staffName?: string;
   staffEmail?: string;
+  posCameraEnabled?: string;
+  posCameraDeviceId?: string | null;
 }
 
 export interface PosRegisterListResponse {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useGetCameraSettings, useCreatePosSecurityCapture } from "@workspace/api-client-react";
+import { useCreatePosSecurityCapture } from "@workspace/api-client-react";
 import { Camera, Video, VideoOff, CircleDot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -25,17 +25,20 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-export function PosWebcamCapture() {
-  const { data: settings } = useGetCameraSettings();
+interface PosWebcamCaptureProps {
+  /** Whether the camera is enabled for this register */
+  enabled: boolean;
+  /** The specific hardware device ID to use, or undefined for the default */
+  deviceId?: string | null;
+}
+
+export function PosWebcamCapture({ enabled, deviceId }: PosWebcamCaptureProps) {
   const createCapture = useCreatePosSecurityCapture();
 
-  const enabled    = settings?.posWebcamEnabled === "true";
-  const deviceId   = settings?.posWebcamDeviceId ?? undefined;
-
-  const videoRef      = useRef<HTMLVideoElement>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const recorderRef   = useRef<MediaRecorder | null>(null);
-  const chunksRef     = useRef<Blob[]>([]);
+  const videoRef       = useRef<HTMLVideoElement>(null);
+  const streamRef      = useRef<MediaStream | null>(null);
+  const recorderRef    = useRef<MediaRecorder | null>(null);
+  const chunksRef      = useRef<Blob[]>([]);
   const deviceLabelRef = useRef<string>("");
 
   const [ready,     setReady]     = useState(false);
@@ -64,7 +67,7 @@ export function PosWebcamCapture() {
     }
   }, [deviceId]);
 
-  /* Stop the stream on unmount or when disabled */
+  /* Stop the stream */
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -79,19 +82,11 @@ export function PosWebcamCapture() {
 
   /* ── Photo capture ──────────────────────────────────────────────────── */
   const handlePhoto = async () => {
-    if (!videoRef.current || !ready) {
-      toast.error("Webcam not ready");
-      return;
-    }
+    if (!videoRef.current || !ready) { toast.error("Webcam not ready"); return; }
     const imageData = captureFrame(videoRef.current);
     try {
       await createCapture.mutateAsync({
-        data: {
-          type: "photo",
-          imageData,
-          deviceLabel: deviceLabelRef.current,
-          storedLocally: true,
-        },
+        data: { type: "photo", imageData, deviceLabel: deviceLabelRef.current, storedLocally: true },
       });
       toast.success("Security photo captured", { description: "Saved to POS Camera history." });
     } catch {
@@ -101,18 +96,13 @@ export function PosWebcamCapture() {
 
   /* ── Video recording ────────────────────────────────────────────────── */
   const handleVideo = () => {
-    if (!streamRef.current || !ready) {
-      toast.error("Webcam not ready");
-      return;
-    }
+    if (!streamRef.current || !ready) { toast.error("Webcam not ready"); return; }
 
     if (recording) {
-      /* Stop recording */
       recorderRef.current?.stop();
       return;
     }
 
-    /* Start recording */
     chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
       ? "video/webm;codecs=vp9"
@@ -120,32 +110,18 @@ export function PosWebcamCapture() {
     const recorder = new MediaRecorder(streamRef.current, { mimeType });
     recorderRef.current = recorder;
 
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       setRecording(false);
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const ts   = new Date().toISOString().replace(/[:.]/g, "-");
       const filename = `POS_Security_${ts}.webm`;
-
-      /* Download to device */
       downloadBlob(blob, filename);
-
-      /* Save metadata to server */
       try {
         await createCapture.mutateAsync({
-          data: {
-            type: "video",
-            filename,
-            deviceLabel: deviceLabelRef.current,
-            storedLocally: true,
-          },
+          data: { type: "video", filename, deviceLabel: deviceLabelRef.current, storedLocally: true },
         });
-        toast.success("Video saved", {
-          description: `Downloading ${filename} — check your Downloads folder.`,
-        });
+        toast.success("Video saved", { description: `Downloading ${filename} — check your Downloads folder.` });
       } catch {
         toast("Video downloaded", { description: "Could not log to server, but file was saved locally." });
       }
@@ -196,19 +172,9 @@ export function PosWebcamCapture() {
         )}
         onClick={handleVideo}
         disabled={!ready}
-        title={
-          error      ? "Webcam unavailable"
-          : recording ? "Stop recording"
-          : "Start security recording"
-        }
+        title={error ? "Webcam unavailable" : recording ? "Stop recording" : "Start security recording"}
       >
-        {recording ? (
-          <CircleDot className="w-4 h-4" />
-        ) : error ? (
-          <VideoOff className="w-4 h-4" />
-        ) : (
-          <Video className="w-4 h-4" />
-        )}
+        {recording ? <CircleDot className="w-4 h-4" /> : error ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
       </Button>
     </>
   );

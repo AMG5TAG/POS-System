@@ -4137,7 +4137,9 @@ export const ListPosRegistersResponse = zod.object({
   "name": zod.string(),
   "type": zod.string(),
   "staffName": zod.string(),
-  "staffEmail": zod.string()
+  "staffEmail": zod.string(),
+  "posCameraEnabled": zod.string(),
+  "posCameraDeviceId": zod.string().nullish()
 })),
   "total": zod.number()
 })
@@ -4151,7 +4153,9 @@ export const CreatePosRegisterBody = zod.object({
   "name": zod.string(),
   "type": zod.string(),
   "staffName": zod.string().optional(),
-  "staffEmail": zod.string().optional()
+  "staffEmail": zod.string().optional(),
+  "posCameraEnabled": zod.string().optional(),
+  "posCameraDeviceId": zod.string().nullish()
 })
 
 
@@ -4167,7 +4171,9 @@ export const UpdatePosRegisterBody = zod.object({
   "name": zod.string(),
   "type": zod.string(),
   "staffName": zod.string().optional(),
-  "staffEmail": zod.string().optional()
+  "staffEmail": zod.string().optional(),
+  "posCameraEnabled": zod.string().optional(),
+  "posCameraDeviceId": zod.string().nullish()
 })
 
 export const UpdatePosRegisterResponse = zod.object({
@@ -4177,7 +4183,9 @@ export const UpdatePosRegisterResponse = zod.object({
   "name": zod.string(),
   "type": zod.string(),
   "staffName": zod.string(),
-  "staffEmail": zod.string()
+  "staffEmail": zod.string(),
+  "posCameraEnabled": zod.string(),
+  "posCameraDeviceId": zod.string().nullish()
 })
 
 

@@ -13,17 +13,24 @@ router.get("/api/pos-registers", requireAuth, async (req, res): Promise<void> =>
 
 router.post("/api/pos-registers", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { registerId, name, type = "Cash", staffName = "", staffEmail = "" } = req.body;
+  const { registerId, name, type = "Cash", staffName = "", staffEmail = "", posCameraEnabled = "false", posCameraDeviceId = null } = req.body;
   if (!registerId || !name) { res.status(400).json({ error: "registerId and name are required" }); return; }
-  const [row] = await db.insert(posRegistersTable).values({ merchantId, registerId, name, type, staffName, staffEmail }).returning();
+  const [row] = await db.insert(posRegistersTable).values({ merchantId, registerId, name, type, staffName, staffEmail, posCameraEnabled, posCameraDeviceId }).returning();
   res.status(201).json(row);
 });
 
 router.patch("/api/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const { name, type, staffName, staffEmail } = req.body;
-  const [row] = await db.update(posRegistersTable).set({ name, type, staffName, staffEmail })
+  const { name, type, staffName, staffEmail, posCameraEnabled, posCameraDeviceId } = req.body;
+  const updates: Partial<typeof posRegistersTable.$inferInsert> = {};
+  if (name              !== undefined) updates.name              = name;
+  if (type              !== undefined) updates.type              = type;
+  if (staffName         !== undefined) updates.staffName         = staffName;
+  if (staffEmail        !== undefined) updates.staffEmail        = staffEmail;
+  if (posCameraEnabled  !== undefined) updates.posCameraEnabled  = posCameraEnabled;
+  if (posCameraDeviceId !== undefined) updates.posCameraDeviceId = posCameraDeviceId ?? null;
+  const [row] = await db.update(posRegistersTable).set(updates)
     .where(and(eq(posRegistersTable.id, id), eq(posRegistersTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
