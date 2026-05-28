@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
 import { useAuth } from "@/lib/use-auth";
@@ -117,6 +117,7 @@ import PosEodPage from "@/pages/app/pos-eod";
 import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
 import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
 
+import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -155,6 +156,29 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   }
 
   return <Component />;
+}
+
+function ManagementProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+  const [path] = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  return (
+    <ManagementErrorBoundary key={path}>
+      <Component />
+    </ManagementErrorBoundary>
+  );
 }
 
 function Router() {
@@ -292,87 +316,87 @@ function Router() {
 
       {/* Management > Staff aliases (keep nav context in Management) */}
       <Route path="/management/staff/timesheet">
-        <ProtectedRoute component={StaffTimesheetPage} />
+        <ManagementProtectedRoute component={StaffTimesheetPage} />
       </Route>
       <Route path="/management/staff/cost-summary">
-        <ProtectedRoute component={StaffCostSummaryPage} />
+        <ManagementProtectedRoute component={StaffCostSummaryPage} />
       </Route>
       <Route path="/management/staff">
-        <ProtectedRoute component={StaffPage} />
+        <ManagementProtectedRoute component={StaffPage} />
       </Route>
 
       {/* Management section */}
       <Route path="/management/overview">
-        <ProtectedRoute component={ManagementOverviewPage} />
+        <ManagementProtectedRoute component={ManagementOverviewPage} />
       </Route>
       <Route path="/management/kpis">
-        <ProtectedRoute component={ManagementKpisPage} />
+        <ManagementProtectedRoute component={ManagementKpisPage} />
       </Route>
       <Route path="/management/misc">
-        <ProtectedRoute component={ManagementMiscPage} />
+        <ManagementProtectedRoute component={ManagementMiscPage} />
       </Route>
       <Route path="/management/registers">
-        <ProtectedRoute component={ManagementRegistersPage} />
+        <ManagementProtectedRoute component={ManagementRegistersPage} />
       </Route>
       <Route path="/management/sales-overview">
-        <ProtectedRoute component={ManagementSalesPage} />
+        <ManagementProtectedRoute component={ManagementSalesPage} />
       </Route>
       <Route path="/management/reports/bas">
-        <ProtectedRoute component={ManagementReportsBasPage} />
+        <ManagementProtectedRoute component={ManagementReportsBasPage} />
       </Route>
       <Route path="/management/reports/margin">
-        <ProtectedRoute component={ManagementReportsMarginPage} />
+        <ManagementProtectedRoute component={ManagementReportsMarginPage} />
       </Route>
       <Route path="/management/integrations">
-        <ProtectedRoute component={ManagementIntegrationsPage} />
+        <ManagementProtectedRoute component={ManagementIntegrationsPage} />
       </Route>
       <Route path="/management/xero">
-        <ProtectedRoute component={ManagementXeroPage} />
+        <ManagementProtectedRoute component={ManagementXeroPage} />
       </Route>
       <Route path="/management/import-export">
-        <ProtectedRoute component={ManagementImportExportPage} />
+        <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
       <Route path="/management/loyalty">
-        <ProtectedRoute component={ManagementLoyaltyPage} />
+        <ManagementProtectedRoute component={ManagementLoyaltyPage} />
       </Route>
       <Route path="/management/loyalty/leaderboard">
-        <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
+        <ManagementProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
       <Route path="/management/gift-cards">
-        <ProtectedRoute component={ManagementGiftCardsPage} />
+        <ManagementProtectedRoute component={ManagementGiftCardsPage} />
       </Route>
       <Route path="/management/layby">
-        <ProtectedRoute component={ManagementLaybyPage} />
+        <ManagementProtectedRoute component={ManagementLaybyPage} />
       </Route>
       <Route path="/management/inventory">
-        <ProtectedRoute component={ManagementInventoryPage} />
+        <ManagementProtectedRoute component={ManagementInventoryPage} />
       </Route>
       <Route path="/management/floor-plan">
-        <ProtectedRoute component={ManagementFloorPlanPage} />
+        <ManagementProtectedRoute component={ManagementFloorPlanPage} />
       </Route>
       <Route path="/management/discounts">
-        <ProtectedRoute component={ManagementDiscountsPage} />
+        <ManagementProtectedRoute component={ManagementDiscountsPage} />
       </Route>
       <Route path="/management/templates">
-        <ProtectedRoute component={ManagementTemplatesPage} />
+        <ManagementProtectedRoute component={ManagementTemplatesPage} />
       </Route>
       <Route path="/management/forms">
-        <ProtectedRoute component={ManagementFormsPage} />
+        <ManagementProtectedRoute component={ManagementFormsPage} />
       </Route>
       <Route path="/management/stickers">
-        <ProtectedRoute component={ManagementStickersPage} />
+        <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
       <Route path="/management/sticker-templates">
-        <ProtectedRoute component={ManagementStickerTemplatesPage} />
+        <ManagementProtectedRoute component={ManagementStickerTemplatesPage} />
       </Route>
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />
       </Route>
       <Route path="/management/tax">
-        <ProtectedRoute component={SettingsTaxPage} />
+        <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
       <Route path="/management/email">
-        <ProtectedRoute component={SettingsEmailPage} />
+        <ManagementProtectedRoute component={SettingsEmailPage} />
       </Route>
       <Route path="/settings/tax">
         <Redirect to="/management/tax" />
@@ -385,28 +409,28 @@ function Router() {
         <ProtectedRoute component={ModulesPage} />
       </Route>
       <Route path="/management/business">
-        <ProtectedRoute component={SettingsBusinessPage} />
+        <ManagementProtectedRoute component={SettingsBusinessPage} />
       </Route>
       <Route path="/management/regional">
-        <ProtectedRoute component={SettingsRegionalPage} />
+        <ManagementProtectedRoute component={SettingsRegionalPage} />
       </Route>
       <Route path="/management/account">
-        <ProtectedRoute component={SettingsAccountPage} />
+        <ManagementProtectedRoute component={SettingsAccountPage} />
       </Route>
       <Route path="/settings/pos">
         <ProtectedRoute component={SettingsPOSPage} />
       </Route>
       <Route path="/management/customers">
-        <ProtectedRoute component={SettingsCustomersPage} />
+        <ManagementProtectedRoute component={SettingsCustomersPage} />
       </Route>
       <Route path="/settings/customers">
         <Redirect to="/management/customers" />
       </Route>
       <Route path="/management/calculators/3d-printing">
-        <ProtectedRoute component={ManagementCalculators3DPage} />
+        <ManagementProtectedRoute component={ManagementCalculators3DPage} />
       </Route>
       <Route path="/management/calculators/pc-builder">
-        <ProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
+        <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
@@ -438,38 +462,38 @@ function Router() {
         <ProtectedRoute component={MarketingLoyaltyPromotionsPage} />
       </Route>
       <Route path="/marketing/loyalty/leaderboard">
-        <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
+        <ManagementProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
       <Route path="/marketing/referrals">
         <ProtectedRoute component={MarketingReferralsPage} />
       </Route>
       <Route path="/management/koapos">
-        <ProtectedRoute component={ManagementKoaPOSPage} />
+        <ManagementProtectedRoute component={ManagementKoaPOSPage} />
       </Route>
       <Route path="/management/marketing/referrals">
-        <ProtectedRoute component={ManagementMarketingReferralsPage} />
+        <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
       <Route path="/management/marketing/social-feed">
-        <ProtectedRoute component={ManagementMarketingSocialFeedPage} />
+        <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
       </Route>
       <Route path="/marketing/automation">
-        <ProtectedRoute component={ManagementMarketingAutomationPage} />
+        <ManagementProtectedRoute component={ManagementMarketingAutomationPage} />
       </Route>
       <Route path="/management/online-store">
-        <ProtectedRoute component={ManagementOnlineStorePage} />
+        <ManagementProtectedRoute component={ManagementOnlineStorePage} />
       </Route>
 
       <Route path="/management/feedback">
-        <ProtectedRoute component={ManagementFeedbackPage} />
+        <ManagementProtectedRoute component={ManagementFeedbackPage} />
       </Route>
       <Route path="/cameras">
         <ProtectedRoute component={CamerasPage} />
       </Route>
       <Route path="/management/cameras">
-        <ProtectedRoute component={ManagementCamerasPage} />
+        <ManagementProtectedRoute component={ManagementCamerasPage} />
       </Route>
       <Route path="/management/ai">
-        <ProtectedRoute component={ManagementAIPage} />
+        <ManagementProtectedRoute component={ManagementAIPage} />
       </Route>
       <Route path="/online/delivery-orders">
         <ProtectedRoute component={OnlineDeliveryOrdersPage} />
