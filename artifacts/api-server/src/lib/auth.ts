@@ -12,5 +12,6 @@ declare module "express-session" {
   interface SessionData {
     merchantId?: number;
     staffRole?: "owner" | "manager" | "cashier";
+    staffId?: number;
   }
 }

@@ -87,6 +87,7 @@ type ParsedMergeNote = {
   absorbedName: string;
   loyaltyLine: string;
   reason: string;
+  mergedBy: string;
 };
 
 function isMergeNote(note: string): boolean {
@@ -96,7 +97,8 @@ function isMergeNote(note: string): boolean {
 function parseMergeNote(note: string): ParsedMergeNote | null {
   const dateMatch    = note.match(/merged on ([^.]+)\./);
   const idNameMatch  = note.match(/Profile ID:\s*(\d+)\s*\(([^)]+)\)/);
-  const loyaltyMatch = note.match(/Loyalty consolidated:\s*([^R]+?)(?:\s+Reason:|$)/);
+  const loyaltyMatch = note.match(/Loyalty consolidated:\s*(.*?)(?=\s+Merged by:|\s+Reason:|$)/);
+  const mergedByMatch = note.match(/Merged by:\s*([^.]+)\./);
   const reasonMatch  = note.match(/Reason:\s*(.+)$/);
   if (!dateMatch || !idNameMatch) return null;
   return {
@@ -105,6 +107,7 @@ function parseMergeNote(note: string): ParsedMergeNote | null {
     absorbedName: idNameMatch[2].trim(),
     loyaltyLine:  loyaltyMatch ? loyaltyMatch[1].trim() : "",
     reason:       reasonMatch ? reasonMatch[1].trim() : "",
+    mergedBy:     mergedByMatch ? mergedByMatch[1].trim() : "",
   };
 }
 
@@ -1453,6 +1456,12 @@ function CustomerDetailInner({
                             <div className="flex items-start justify-between px-3 py-2 gap-2">
                               <span className="text-muted-foreground text-xs shrink-0">Consolidated</span>
                               <span className="text-xs text-foreground text-right">{parsed.loyaltyLine}</span>
+                            </div>
+                          )}
+                          {parsed.mergedBy && (
+                            <div className="flex items-center justify-between px-3 py-2 gap-2">
+                              <span className="text-muted-foreground text-xs shrink-0">Merged by</span>
+                              <span className="text-xs text-foreground text-right">{parsed.mergedBy}</span>
                             </div>
                           )}
                           {parsed.reason && (

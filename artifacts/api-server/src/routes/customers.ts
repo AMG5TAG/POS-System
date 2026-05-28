@@ -5,7 +5,7 @@ import {
   transactionsTable, appointmentsTable, serviceJobsTable,
   laybysTable, invoicesTable, parkedSalesTable,
   formSubmissionsTable, marketingAutomationLogTable,
-  merchantsTable,
+  merchantsTable, staffTable,
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
@@ -378,6 +378,8 @@ router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireMana
     .where(and(eq(customersTable.id, primaryId),   eq(customersTable.merchantId, merchantId))).limit(1);
   const [secondary] = await db.select().from(customersTable)
     .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId))).limit(1);
+  const [merchant] = await db.select({ ownerName: merchantsTable.ownerName })
+    .from(merchantsTable).where(eq(merchantsTable.id, merchantId)).limit(1);
 
   if (!primary || !secondary) {
     res.status(404).json({ error: "One or both customer profiles not found" }); return;
@@ -447,10 +449,19 @@ router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireMana
     const reason: string | undefined = typeof req.body?.reason === "string" && req.body.reason.trim()
       ? req.body.reason.trim()
       : undefined;
+    let mergedBy = merchant?.ownerName?.trim() || "Unknown";
+    if (req.session.staffId) {
+      const [staffMember] = await db.select({ name: staffTable.name })
+        .from(staffTable)
+        .where(and(eq(staffTable.id, req.session.staffId), eq(staffTable.merchantId, merchantId)))
+        .limit(1);
+      if (staffMember?.name) mergedBy = staffMember.name;
+    }
     const auditNoteParts = [
       `[System] Profile merged on ${mergeDate}.`,
       `Absorbed Profile ID: ${secondaryId} (${secName}).`,
       `Loyalty consolidated: +${secondary.loyaltyPoints ?? 0} pts, +$${parseFloat(secondary.totalSpent).toFixed(2)} total spent, +${secondary.visitCount ?? 0} visits.`,
+      `Merged by: ${mergedBy}.`,
     ];
     if (reason) auditNoteParts.push(`Reason: ${reason}`);
     const auditNote = auditNoteParts.join(" ");
