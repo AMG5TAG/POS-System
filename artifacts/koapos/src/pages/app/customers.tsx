@@ -36,12 +36,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
+import { exportCustomerPDF } from "@/lib/customer-pdf";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
-  Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical,
+  Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -1676,6 +1677,23 @@ function CustomerDetailInner({
               <Users className="w-3.5 h-3.5" /> Merge with...
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              exportCustomerPDF({
+                customer,
+                transactions: (history?.transactions ?? []) as Transaction[],
+                appointments: (history?.appointments ?? []) as Appointment[],
+                serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
+                notes:        notes as CustomerNote[],
+                merchantName: merchantUsername ?? undefined,
+              });
+            }}
+          >
+            <FileDown className="w-3.5 h-3.5" /> Export PDF
+          </Button>
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
           <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
             <Pencil className="w-3.5 h-3.5" /> Edit
