@@ -45,4 +45,19 @@ router.delete("/email-campaigns/:id", requireAuth, async (req, res): Promise<voi
   res.status(204).end();
 });
 
+router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  const [row] = await db.select().from(emailCampaignsTable)
+    .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId)))
+    .limit(1);
+  if (!row) { res.status(404).json({ error: "Campaign not found" }); return; }
+  const sentAt = new Date().toISOString();
+  const [updated] = await db.update(emailCampaignsTable)
+    .set({ status: "sent", sentAt })
+    .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId)))
+    .returning();
+  res.json({ success: true, sentAt, campaign: updated });
+});
+
 export default router;
