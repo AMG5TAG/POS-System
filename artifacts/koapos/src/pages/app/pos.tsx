@@ -10,8 +10,10 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
+  useCreateGiftCard, useValidateGiftCard, useUpdateGiftCard,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, Transaction,
+  GiftCardValidateResponse,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,7 +44,7 @@ import {
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
-  MessageSquareWarning, Package,
+  MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -55,6 +57,7 @@ type CartItem = {
   itemDiscount: number;
   customPrice?: number;
   itemNote?: string;
+  giftCardNumber?: string;
 };
 
 type WalkIn = { firstName: string; lastName: string };
@@ -147,6 +150,14 @@ export default function POSPage() {
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
   ]);
+
+  /* gift card — issuance */
+  const [gcIssueOpen, setGcIssueOpen]   = useState(false);
+  const [gcIssueForm, setGcIssueForm]   = useState({ cardNumber: "", amount: "" });
+  /* gift card — payment */
+  const [gcPayCardNumber, setGcPayCardNumber] = useState("");
+  const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
+  const [gcRemainingMethod, setGcRemainingMethod] = useState<"cash" | "eftpos">("cash");
 
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -415,7 +426,10 @@ export default function POSPage() {
   const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
-  const createTransactionMutation = useCreateTransaction();
+  const createTransactionMutation  = useCreateTransaction();
+  const createGiftCardMutation     = useCreateGiftCard();
+  const validateGiftCardMutation   = useValidateGiftCard();
+  const updateGiftCardMutation     = useUpdateGiftCard();
 
   const allProducts = productsData?.items || [];
   const categories  = categoriesData || [];
@@ -671,14 +685,21 @@ export default function POSPage() {
       setNumpadInput("");
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
+      setGcPayCardNumber("");
+      setGcValidation(null);
+      setGcRemainingMethod("cash");
     }
   }, [paymentModalOpen]);
 
-  /* Clear numpad when switching to a method that doesn't use it,
-     so a stale partial amount doesn't get sent for EFTPOS/card/etc. */
+  /* Clear numpad when switching to a method that doesn't use it;
+     clear gift-card state when switching away from gift_card. */
   useEffect(() => {
     if (payMethod !== "cash" && payMethod !== "loyalty") {
       setNumpadInput("");
+    }
+    if (payMethod !== "gift_card") {
+      setGcPayCardNumber("");
+      setGcValidation(null);
     }
   }, [payMethod]);
 
@@ -1355,6 +1376,14 @@ export default function POSPage() {
         // Capture total + cart before clearing
         const saleTotal = total;
         setCompletedCart([...cart]);
+        // Issue any gift cards purchased in this sale
+        cart.filter(i => i.giftCardNumber).forEach(item => {
+          createGiftCardMutation.mutate({
+            data: { cardNumber: item.giftCardNumber!, initialValue: item.customPrice ?? item.product.price },
+          }, {
+            onError: () => toast.error(`Failed to activate gift card ${item.giftCardNumber} — check Management > Gift Cards`),
+          });
+        });
         setCompletedPaymentMethod(paymentMethod);
         setCompletedSubtotal(subtotal);
         setCompletedTaxTotal(taxTotal);
@@ -1420,6 +1449,16 @@ export default function POSPage() {
               >
                 <Package className="w-4 h-4" />
                 <span className="hidden sm:inline">Custom</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 gap-1.5 text-violet-700 border-violet-300 hover:bg-violet-50 hover:border-violet-400 dark:text-violet-400 dark:border-violet-700 dark:hover:bg-violet-900/20"
+                onClick={() => { setGcIssueForm({ cardNumber: "", amount: "" }); setGcIssueOpen(true); }}
+                title="Sell a new gift card"
+              >
+                <Gift className="w-4 h-4" />
+                <span className="hidden sm:inline">Gift Card</span>
               </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
@@ -1983,6 +2022,7 @@ export default function POSPage() {
                 const allMethods = [
                   ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
                   ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
+                  { id: "gift_card" as PaymentMethodId, label: "Gift Card", Icon: Gift, isIntegration: false },
                 ];
                 const splitEligible = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id) && m.id !== "split" && m.id !== "laybuy");
                 if (payMethod === "split") {
@@ -2193,6 +2233,106 @@ export default function POSPage() {
                   </div>
                   <div className="flex-1" />
                 </div>
+              ) : payMethod === "gift_card" ? (
+                /* ── Gift card entry ── */
+                <div className="flex-1 flex flex-col gap-4">
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Card Number</p>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-9 uppercase font-mono tracking-widest"
+                          placeholder="GC-XXXXXXXX"
+                          value={gcPayCardNumber}
+                          onChange={e => { setGcPayCardNumber(e.target.value.toUpperCase()); setGcValidation(null); }}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && gcPayCardNumber.trim()) {
+                              validateGiftCardMutation.mutate(
+                                { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: total } },
+                                { onSuccess: d => setGcValidation(d), onError: () => toast.error("Could not validate card") }
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={!gcPayCardNumber.trim() || validateGiftCardMutation.isPending}
+                        onClick={() => validateGiftCardMutation.mutate(
+                          { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: total } },
+                          { onSuccess: d => setGcValidation(d), onError: () => toast.error("Could not validate card") }
+                        )}
+                      >
+                        {validateGiftCardMutation.isPending ? "…" : "Validate"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Validation result */}
+                  {gcValidation && (
+                    <div className={cn(
+                      "rounded-xl border px-4 py-3 space-y-2 text-sm",
+                      gcValidation.valid
+                        ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
+                        : "border-destructive/30 bg-destructive/5"
+                    )}>
+                      {gcValidation.valid ? (
+                        <>
+                          <div className="flex items-center gap-2 font-semibold text-green-700 dark:text-green-400">
+                            <BadgeCheck className="w-4 h-4 shrink-0" />
+                            <span className="font-mono">{gcValidation.cardNumber}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-green-700 dark:text-green-300">
+                            <span className="text-muted-foreground">Balance</span>
+                            <span className="font-semibold tabular-nums">{formatCurrency(gcValidation.currentBalance)}</span>
+                            <span className="text-muted-foreground">Applied</span>
+                            <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">{formatCurrency(gcValidation.applicableAmount)}</span>
+                            {gcValidation.applicableAmount < total - 0.005 && (
+                              <>
+                                <span className="text-muted-foreground">Still needed</span>
+                                <span className="font-semibold tabular-nums text-amber-600">{formatCurrency(total - gcValidation.applicableAmount)}</span>
+                              </>
+                            )}
+                          </div>
+                          {gcValidation.applicableAmount < total - 0.005 && (
+                            <div className="pt-1 border-t border-green-200 dark:border-green-800">
+                              <p className="text-[11px] text-muted-foreground mb-1.5">Collect remaining via</p>
+                              <div className="flex gap-2">
+                                {(["cash", "eftpos"] as const).map(m => (
+                                  <button
+                                    key={m}
+                                    onClick={() => setGcRemainingMethod(m)}
+                                    className={cn(
+                                      "flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all",
+                                      gcRemainingMethod === m
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border bg-background hover:border-primary/40"
+                                    )}
+                                  >
+                                    {m === "cash" ? "Cash" : "EFTPOS"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-start gap-2 text-destructive">
+                          <BadgeX className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-semibold text-xs">Card invalid</p>
+                            <p className="text-xs mt-0.5 text-muted-foreground">{gcValidation.errorMessage}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex-1" />
+                </div>
               ) : (
                 <>
                   {/* Display */}
@@ -2257,6 +2397,8 @@ export default function POSPage() {
                 className="w-full h-12 text-base font-semibold"
                 disabled={
                   createTransactionMutation.isPending ||
+                  updateGiftCardMutation.isPending ||
+                  (payMethod === "gift_card" && (!gcValidation?.valid)) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
@@ -2281,6 +2423,26 @@ export default function POSPage() {
                 }
                 onClick={() => {
                   // Gate flows that need a dedicated lifecycle.
+                  if (payMethod === "gift_card" && gcValidation?.valid) {
+                    const gc = gcValidation;
+                    const applied = gc.applicableAmount;
+                    const remaining = total - applied;
+                    const deductNewBalance = gc.currentBalance - applied;
+                    updateGiftCardMutation.mutate(
+                      { id: gc.cardId, data: { currentBalance: deductNewBalance } },
+                      {
+                        onSuccess: () => {
+                          if (remaining > 0.004) {
+                            handleCheckout("other", total, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`);
+                          } else {
+                            handleCheckout("other", total, `[Gift Card ${gc.cardNumber}]`);
+                          }
+                        },
+                        onError: () => toast.error("Failed to deduct gift card balance — sale cancelled"),
+                      }
+                    );
+                    return;
+                  }
                   if (payMethod === "laybuy") {
                     toast.info("Laybuy uses its own ledger — opening the Laybuys module.");
                     setPaymentModalOpen(false);
@@ -2324,7 +2486,7 @@ export default function POSPage() {
                   handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
-                {createTransactionMutation.isPending ? "Processing…" : "Complete Sale"}
+                {(createTransactionMutation.isPending || updateGiftCardMutation.isPending) ? "Processing…" : "Complete Sale"}
               </Button>
             </div>
           </div>
@@ -2977,6 +3139,84 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setTempItemOpen(false)}>Cancel</Button>
             <Button onClick={addTempToCart}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add to Cart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Sell Gift Card modal ─── */}
+      <Dialog open={gcIssueOpen} onOpenChange={setGcIssueOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-violet-600" />
+              Sell Gift Card
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Card Number</label>
+              <div className="relative">
+                <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="pl-9 uppercase font-mono tracking-widest"
+                  placeholder="GC-XXXXXXXX"
+                  value={gcIssueForm.cardNumber}
+                  onChange={e => setGcIssueForm(f => ({ ...f, cardNumber: e.target.value.toUpperCase() }))}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">Leave blank to auto-generate a card number after sale</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Load Amount (AUD)</label>
+              <Input
+                type="number"
+                min="1"
+                step="0.01"
+                placeholder="50.00"
+                value={gcIssueForm.amount}
+                onChange={e => setGcIssueForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGcIssueOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              disabled={!gcIssueForm.amount || parseFloat(gcIssueForm.amount) <= 0}
+              onClick={() => {
+                const amount = parseFloat(gcIssueForm.amount);
+                if (isNaN(amount) || amount <= 0) { toast.error("Enter a valid amount"); return; }
+                const cardNumber = gcIssueForm.cardNumber.trim() ||
+                  `GC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+                // Create a synthetic product so it appears in the cart
+                const syntheticProduct: Product = {
+                  id: Date.now(),
+                  merchantId: 0,
+                  name: `Gift Card ${cardNumber}`,
+                  price: amount,
+                  category: { id: 0, merchantId: 0, name: "Gift Cards", createdAt: new Date().toISOString() },
+                  description: `Gift card loaded with ${formatCurrency(amount)}`,
+                  sku: cardNumber,
+                  isActive: true,
+                  trackInventory: false,
+                  productType: "gift_card",
+                  createdAt: new Date().toISOString(),
+                };
+                setCart(prev => {
+                  const existing = prev.findIndex(i => i.giftCardNumber === cardNumber);
+                  if (existing >= 0) {
+                    toast.info("That card number is already in the cart");
+                    return prev;
+                  }
+                  return [...prev, { product: syntheticProduct, quantity: 1, itemDiscount: 0, customPrice: amount, giftCardNumber: cardNumber }];
+                });
+                toast.success(`Gift card ${cardNumber} added to cart`);
+                setGcIssueOpen(false);
+              }}
+            >
               <Plus className="w-4 h-4 mr-1" />
               Add to Cart
             </Button>

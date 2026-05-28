@@ -13,7 +13,7 @@ export interface StaffLoginMessage {
 
 export type PaymentMethodId =
   | "cash" | "eftpos" | "card" | "direct_deposit"
-  | "voucher" | "store_credit" | "laybuy" | "loyalty" | "split";
+  | "voucher" | "store_credit" | "laybuy" | "loyalty" | "split" | "gift_card";
 
 export interface PosGridSettings {
   columns: 2 | 3 | 4 | 5;
