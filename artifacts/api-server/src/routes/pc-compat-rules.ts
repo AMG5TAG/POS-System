@@ -34,7 +34,7 @@ router.delete("/pc-compat-rules/:ruleKey", requireAuth, async (req, res): Promis
   const merchantId = req.session.merchantId!;
   const { ruleKey } = req.params;
   await db.delete(pcCompatRulesTable)
-    .where(and(eq(pcCompatRulesTable.merchantId, merchantId), eq(pcCompatRulesTable.ruleKey, ruleKey)));
+    .where(and(eq(pcCompatRulesTable.merchantId, merchantId), eq(pcCompatRulesTable.ruleKey, ruleKey as string)));
   res.status(204).end();
 });
 
