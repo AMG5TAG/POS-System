@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { takePendingCart } from "@/lib/pending-cart";
+import { useSalesTemplate } from "@/lib/use-sales-template";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
@@ -76,14 +77,6 @@ type RegisterSession = {
 
 const DISPLAY_KEY = "koapos_pos_display";
 
-const DEFAULT_RECEIPT_OPTS = {
-  headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
-  customMessage: "", loyaltyQrText: "",
-  showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
-  showPaymentMethods: true, showGstBreakdown: true,
-  showLoyaltyEarned: false, showBarcode: false, showCustomerQr: false,
-  printCustomerCopy: false,
-};
 
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
@@ -123,6 +116,9 @@ export default function POSPage() {
   /* merchant / business data for receipts */
   const { data: merchantData } = useGetMerchant();
   const { profile: businessProfile } = useBusinessProfile();
+
+  /* active print template */
+  const { opts: thermalOpts, fontCss: thermalFontCss } = useSalesTemplate("Thermal_Receipt");
 
   /* parked sales — API-backed */
   const queryClient = useQueryClient();
@@ -1039,8 +1035,7 @@ export default function POSPage() {
     /* Restrict brandColor to a safe hex literal to prevent CSS injection via the inline style attribute */
     const brandColor   = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
 
-    const templateId = "r-pro";
-    const opts = { ...DEFAULT_RECEIPT_OPTS };
+    const opts = thermalOpts;
 
     const receiptNum = completedTx?.receiptNumber ? `#${completedTx.receiptNumber}` : (completedTx ? `#${completedTx.id}` : "");
     const now = new Date();
@@ -1110,7 +1105,7 @@ export default function POSPage() {
 
     const css = `
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: sans-serif; font-size: 12px; color: #1f2937; background: #fff; padding: 16px; }
+      body { font-family: ${thermalFontCss}; font-size: 12px; color: #1f2937; background: #fff; padding: 16px; }
       .receipt { max-width: 300px; margin: 0 auto; }
       .mono * { font-family: 'Courier New', monospace !important; }
       .mono { font-family: 'Courier New', monospace; font-size: 11px; }

@@ -21,12 +21,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
-import {
-  DEFAULT_OPTS as TPL_DEFAULT_OPTS,
-  resolveCode,
-  ACTIVE_STORAGE_KEY,
-  type TplOpts,
-} from "@/pages/app/management-templates";
+import { resolveCode } from "@/pages/app/management-templates";
+import { useSalesTemplate } from "@/lib/use-sales-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
@@ -177,6 +173,8 @@ export default function POSInvoicesPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  const { opts: invoiceOpts, fontCss: invoiceFontCss } = useSalesTemplate("Invoice");
+  const { opts: quoteOpts, fontCss: quoteFontCss } = useSalesTemplate("Quote");
 
   /* ── Data loading ── */
   const load = async () => {
@@ -435,19 +433,18 @@ export default function POSInvoicesPage() {
 
   /* ── Send email ── */
   const getEmailTemplatePayload = () => {
-    const merged = { ...TPL_DEFAULT_OPTS };
     return {
       templateId: "e-pro",
-      subjectLine:        merged.subjectLine,
-      customGreeting:     merged.customGreeting,
-      customMessage:      merged.customMessage,
-      customSignOff:      merged.customSignOff,
-      footerText:         merged.footerText,
-      thankYouMsg:        merged.thankYouMsg,
-      showGstBreakdown:   merged.showGstBreakdown,
-      showWebsite:        merged.showWebsite,
-      showSocialLinks:    merged.showSocialLinks,
-      showLogo:           merged.showLogo,
+      subjectLine:        invoiceOpts.subjectLine,
+      customGreeting:     invoiceOpts.customGreeting,
+      customMessage:      invoiceOpts.customMessage,
+      customSignOff:      invoiceOpts.customSignOff,
+      footerText:         invoiceOpts.footerText,
+      thankYouMsg:        invoiceOpts.thankYouMsg,
+      showGstBreakdown:   invoiceOpts.showGstBreakdown,
+      showWebsite:        invoiceOpts.showWebsite,
+      showSocialLinks:    invoiceOpts.showSocialLinks,
+      showLogo:           invoiceOpts.showLogo,
       brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
       logo:               profile.logo ?? "",
       website:            profile.website ?? "",
@@ -487,16 +484,12 @@ export default function POSInvoicesPage() {
   };
 
   /* ── Helpers ── */
-  function getInvoiceTemplateOpts(): TplOpts {
-    return { ...TPL_DEFAULT_OPTS };
-  }
-
   const resolveStr = (text: string, biz: string, abn: string, web: string, em: string) =>
     resolveCode(text || "", biz, abn, web, em);
 
   /* ── Print ── */
   const printInvoice = async (inv: Invoice) => {
-    const opts        = getInvoiceTemplateOpts();
+    const opts        = invoiceOpts;
     const bizName     = merchant?.businessName ?? "Your Business";
     const abn         = profile.abn ?? "";
     const website     = profile.website ?? "";
@@ -597,7 +590,7 @@ export default function POSInvoicesPage() {
       <title>Invoice ${inv.invoiceNumber}</title>
       <style>
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:760px;margin:0 auto}
+        body{font-family:${invoiceFontCss};padding:40px;color:#222;max-width:760px;margin:0 auto}
         .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${brandColor};padding-bottom:16px;margin-bottom:24px}
         .biz-name{font-size:20px;font-weight:700;margin:0}
         .biz-meta{font-size:12px;color:#666;margin-top:4px;line-height:1.7}
@@ -693,7 +686,7 @@ export default function POSInvoicesPage() {
   };
 
   const downloadInvoicePDF = async (inv: Invoice) => {
-    const opts      = getInvoiceTemplateOpts();
+    const opts      = invoiceOpts;
     const bizName   = merchant?.businessName ?? "Your Business";
     const abn       = profile.abn ?? "";
     const website   = profile.website ?? "";

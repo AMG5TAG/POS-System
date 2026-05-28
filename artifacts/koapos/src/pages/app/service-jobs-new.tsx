@@ -51,7 +51,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { ACTIVE_STORAGE_KEY, DEFAULT_OPTS, type TplOpts } from "@/pages/app/management-templates";
+import { useSalesTemplate } from "@/lib/use-sales-template";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -235,9 +235,7 @@ export default function ServiceJobNewPage() {
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
 
-  const svcOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
-  const emailOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
-  const smsOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
+  const { opts: svcOpts, fontCss: svcFontCss } = useSalesTemplate("Service_Ticket");
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -770,10 +768,10 @@ export default function ServiceJobNewPage() {
                   const custName = `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim();
                   const defaultBody = `Hi ${custName},\n\nYour device has been booked in for service. Your job number is #${jobRef}.\n\nWe will be in touch with an update shortly.\n\nThank you!`;
                   const subject = encodeURIComponent(
-                    emailOpts.subjectLine || `Service Job Confirmation #${jobRef}`,
+                    svcOpts.subjectLine || `Service Job Confirmation #${jobRef}`,
                   );
                   const body = encodeURIComponent(
-                    (emailOpts.messageText || defaultBody)
+                    (svcOpts.messageText || defaultBody)
                       .replace(/\{jobNumber\}/g, jobRef)
                       .replace(/\{customerName\}/g, custName)
                       .replace(/\{businessName\}/g, businessName),
@@ -796,7 +794,7 @@ export default function ServiceJobNewPage() {
                   const custName = `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim();
                   const defaultMsg = `Hi ${custName}, your device has been booked in. Job #${jobRef}. We'll be in touch soon. — ${businessName}`;
                   const msg = encodeURIComponent(
-                    (smsOpts.messageText || defaultMsg)
+                    (svcOpts.messageText || defaultMsg)
                       .replace(/\{jobNumber\}/g, jobRef)
                       .replace(/\{customerName\}/g, custName)
                       .replace(/\{businessName\}/g, businessName),
@@ -953,7 +951,7 @@ export default function ServiceJobNewPage() {
     }} />
 
     {/* ── Job Sheet print area ─────────────────────────────────────── */}
-    <div id="svc-job-sheet-print-area" style={{ width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: "Arial, sans-serif", fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
+    <div id="svc-job-sheet-print-area" style={{ width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: svcFontCss, fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `2px solid ${brandColor}`, paddingBottom: "14px", marginBottom: "22px" }}>
         <div>
