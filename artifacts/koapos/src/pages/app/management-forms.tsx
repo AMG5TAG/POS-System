@@ -36,6 +36,12 @@ const CLOUD_META: Record<string, { label: string; bg: string; text: string; src?
   proton_drive: { label: "Proton Drive", bg: "bg-[#6D4AFF]", text: "P", src: _SI("proton",      "ffffff") },
 };
 
+function CloudFallbackImg({ src, alt, size, fallback }: { src: string; alt: string; size: string; fallback: string }) {
+  const [err, setErr] = useState(false);
+  if (err) return <Cloud className={cn("text-white/90", size)} />;
+  return <img src={src} alt={alt} className={cn("object-contain", size)} onError={() => setErr(true)} />;
+}
+
 // ── Save form as PDF ──────────────────────────────────────────────────────
 
 async function saveFormAsPdf(
@@ -729,9 +735,7 @@ export default function ManagementFormsPage() {
                           <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                             <div className="flex items-center gap-2.5">
                               <div className={cn("w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden", meta.bg)}>
-                                {meta.src
-                                  ? <img src={meta.src} alt={meta.label} className="w-4 h-4 object-contain" />
-                                  : meta.text}
+                                {meta.src ? <CloudFallbackImg src={meta.src} alt={meta.label} size="w-4 h-4" fallback={meta.text} /> : meta.text}
                               </div>
                               <span className="font-semibold text-sm">{meta.label}</span>
                               <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">Connected</Badge>
@@ -771,9 +775,7 @@ export default function ManagementFormsPage() {
                             return (
                               <div key={intg.key} className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
                                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0 opacity-40 overflow-hidden", meta.bg)}>
-                                  {meta.src
-                                    ? <img src={meta.src} alt={meta.label} className="w-5 h-5 object-contain" />
-                                    : meta.text}
+                                  {meta.src ? <CloudFallbackImg src={meta.src} alt={meta.label} size="w-5 h-5" fallback={meta.text} /> : meta.text}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium">{meta.label}</p>

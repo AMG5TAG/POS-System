@@ -93,14 +93,21 @@ interface SyncLogEntry {
 /* ── Xero logo ──────────────────────────────────────────────────────────── */
 
 function XeroLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const [err, setErr] = useState(false);
   const dim = size === "lg" ? "w-16 h-16" : size === "md" ? "w-12 h-12" : "w-8 h-8";
+  const imgDim = size === "lg" ? "w-9 h-9" : size === "md" ? "w-7 h-7" : "w-5 h-5";
   return (
     <div className={cn(dim, "rounded-xl flex items-center justify-center bg-[#13B5EA] shrink-0")}>
-      <img
-        src="https://cdn.simpleicons.org/xero/ffffff"
-        alt="Xero"
-        className={size === "lg" ? "w-9 h-9" : size === "md" ? "w-7 h-7" : "w-5 h-5"}
-      />
+      {err ? (
+        <span className={cn("text-white font-bold", imgDim)}>X</span>
+      ) : (
+        <img
+          src="https://cdn.simpleicons.org/xero/ffffff"
+          alt="Xero"
+          className={imgDim}
+          onError={() => setErr(true)}
+        />
+      )}
     </div>
   );
 }

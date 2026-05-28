@@ -104,6 +104,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
 };
 
 function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: string; size?: "sm" | "md" | "lg" }) {
+  const [imgError, setImgError] = useState(false);
   const dim = size === "lg" ? "w-14 h-14" : size === "md" ? "w-10 h-10" : "w-8 h-8";
   const imgSize = size === "lg" ? "w-8 h-8" : size === "md" ? "w-6 h-6" : "w-5 h-5";
   const cfg = LOGO_MAP[integrationKey];
@@ -111,7 +112,11 @@ function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: stri
   if (cfg.type === "text") return <div className={cn(dim, "rounded-2xl flex items-center justify-center shrink-0", cfg.bg, cfg.color)}><span className={cfg.cls ?? "text-xs font-bold"}>{cfg.label}</span></div>;
   return (
     <div className={cn(dim, "rounded-2xl flex items-center justify-center shrink-0 overflow-hidden", cfg.bg)}>
-      <img src={cfg.src} alt={integrationKey} className={cn("object-contain", cfg.pad ? imgSize : imgSize)} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+      {imgError ? (
+        <Cloud className={cn("text-white/90", imgSize)} />
+      ) : (
+        <img src={cfg.src} alt={integrationKey} className={cn("object-contain", imgSize)} onError={() => setImgError(true)} />
+      )}
     </div>
   );
 }
