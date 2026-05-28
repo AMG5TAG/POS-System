@@ -754,7 +754,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
 
       const isUpdate = conflict?.action === "update" && !!entity.updateUrl;
       const url    = isUpdate ? `${entity.updateUrl}/${conflict!.existingId}` : entity.createUrl;
-      const method = isUpdate ? "PUT" : "POST";
+      const method = isUpdate ? "PATCH" : "POST";
 
       try {
         const r = await fetch(url, {
