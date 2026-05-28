@@ -853,6 +853,27 @@ export interface AppointmentInput {
   notes?: string | null;
 }
 
+export interface DashboardConfigResponse {
+  id: number;
+  merchantId: number;
+  showStatusTiles: boolean;
+  showMetricTiles: boolean;
+  showOverdueBanner: boolean;
+  showNotifications: boolean;
+  showServiceJobsPanel: boolean;
+  showCalendar: boolean;
+  updatedAt: string;
+}
+
+export interface UpsertDashboardConfigBody {
+  showStatusTiles?: boolean;
+  showMetricTiles?: boolean;
+  showOverdueBanner?: boolean;
+  showNotifications?: boolean;
+  showServiceJobsPanel?: boolean;
+  showCalendar?: boolean;
+}
+
 export interface DashboardSummary {
   totalSales: number;
   posSales?: number;

@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable } from "@workspace/db";
 import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams } from "@workspace/api-zod";
+import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams, UpsertDashboardConfigBody } from "@workspace/api-zod";
 
 // Australian public holidays (national + NSW) for 2026
 const AU_HOLIDAYS_2026: Record<string, string> = {
@@ -593,6 +593,68 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     .map(([date, data]) => ({ date, ...data }));
 
   res.json({ year, month, days });
+});
+
+router.get("/dashboard/config", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [row] = await db
+    .select()
+    .from(dashboardConfigTable)
+    .where(eq(dashboardConfigTable.merchantId, merchantId))
+    .limit(1);
+
+  if (!row) {
+    const [created] = await db
+      .insert(dashboardConfigTable)
+      .values({ merchantId })
+      .returning();
+    res.json({ ...created, updatedAt: created.updatedAt.toISOString() });
+    return;
+  }
+
+  res.json({ ...row, updatedAt: row.updatedAt.toISOString() });
+});
+
+router.put("/dashboard/config", requireAuth, async (req, res): Promise<void> => {
+  const parsed = UpsertDashboardConfigBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const merchantId = req.session.merchantId!;
+  const body = parsed.data;
+
+  const patch = {
+    ...(body.showStatusTiles !== undefined && { showStatusTiles: body.showStatusTiles }),
+    ...(body.showMetricTiles !== undefined && { showMetricTiles: body.showMetricTiles }),
+    ...(body.showOverdueBanner !== undefined && { showOverdueBanner: body.showOverdueBanner }),
+    ...(body.showNotifications !== undefined && { showNotifications: body.showNotifications }),
+    ...(body.showServiceJobsPanel !== undefined && { showServiceJobsPanel: body.showServiceJobsPanel }),
+    ...(body.showCalendar !== undefined && { showCalendar: body.showCalendar }),
+  };
+
+  const [existing] = await db
+    .select()
+    .from(dashboardConfigTable)
+    .where(eq(dashboardConfigTable.merchantId, merchantId))
+    .limit(1);
+
+  if (existing) {
+    const [updated] = await db
+      .update(dashboardConfigTable)
+      .set(patch)
+      .where(eq(dashboardConfigTable.merchantId, merchantId))
+      .returning();
+    res.json({ ...updated, updatedAt: updated.updatedAt.toISOString() });
+    return;
+  }
+
+  const [created] = await db
+    .insert(dashboardConfigTable)
+    .values({ merchantId, ...patch })
+    .returning();
+  res.json({ ...created, updatedAt: created.updatedAt.toISOString() });
 });
 
 export default router;

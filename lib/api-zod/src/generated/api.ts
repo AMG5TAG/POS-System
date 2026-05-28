@@ -2238,6 +2238,47 @@ export const GetDashboardCalendarResponse = zod.object({
 
 
 /**
+ * @summary Get dashboard widget visibility config for the authenticated merchant
+ */
+export const GetDashboardConfigResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "showStatusTiles": zod.boolean(),
+  "showMetricTiles": zod.boolean(),
+  "showOverdueBanner": zod.boolean(),
+  "showNotifications": zod.boolean(),
+  "showServiceJobsPanel": zod.boolean(),
+  "showCalendar": zod.boolean(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Create or update dashboard widget visibility config
+ */
+export const UpsertDashboardConfigBody = zod.object({
+  "showStatusTiles": zod.boolean().optional(),
+  "showMetricTiles": zod.boolean().optional(),
+  "showOverdueBanner": zod.boolean().optional(),
+  "showNotifications": zod.boolean().optional(),
+  "showServiceJobsPanel": zod.boolean().optional(),
+  "showCalendar": zod.boolean().optional()
+})
+
+export const UpsertDashboardConfigResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "showStatusTiles": zod.boolean(),
+  "showMetricTiles": zod.boolean(),
+  "showOverdueBanner": zod.boolean(),
+  "showNotifications": zod.boolean(),
+  "showServiceJobsPanel": zod.boolean(),
+  "showCalendar": zod.boolean(),
+  "updatedAt": zod.string()
+})
+
+
+/**
  * @summary List cash drawer entries
  */
 export const ListCashDrawerEntriesQueryParams = zod.object({

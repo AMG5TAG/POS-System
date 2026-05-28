@@ -1,13 +1,20 @@
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetDashboardConfig,
+  useUpsertDashboardConfig,
+  getGetDashboardConfigQueryKey,
+  type DashboardConfigResponse,
+} from "@workspace/api-client-react";
 
-export interface DashboardConfig {
+export type DashboardConfig = {
   showStatusTiles: boolean;
   showMetricTiles: boolean;
   showOverdueBanner: boolean;
   showNotifications: boolean;
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
-}
+};
 
 const DEFAULTS: DashboardConfig = {
   showStatusTiles: true,
@@ -18,29 +25,45 @@ const DEFAULTS: DashboardConfig = {
   showCalendar: true,
 };
 
-const KEY = "koapos-dashboard-config";
-
-function load(): DashboardConfig {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULTS;
-  }
+function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
+  if (!data) return DEFAULTS;
+  return {
+    showStatusTiles: data.showStatusTiles,
+    showMetricTiles: data.showMetricTiles,
+    showOverdueBanner: data.showOverdueBanner,
+    showNotifications: data.showNotifications,
+    showServiceJobsPanel: data.showServiceJobsPanel,
+    showCalendar: data.showCalendar,
+  };
 }
 
 export function useDashboardConfig() {
-  const [config, setConfig] = useState<DashboardConfig>(load);
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useGetDashboardConfig();
+  const { mutate } = useUpsertDashboardConfig();
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(config));
-    } catch {}
-  }, [config]);
+  const config = toConfig(data);
 
-  const toggle = (key: keyof DashboardConfig) =>
-    setConfig((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggle = useCallback(
+    (key: keyof DashboardConfig) => {
+      const current = toConfig(data);
+      const next = { ...current, [key]: !current[key] };
 
-  return { config, toggle };
+      queryClient.setQueryData(getGetDashboardConfigQueryKey(), (old: DashboardConfigResponse | undefined) =>
+        old ? { ...old, [key]: !old[key] } : old
+      );
+
+      mutate(
+        { data: next },
+        {
+          onError: () => {
+            queryClient.setQueryData(getGetDashboardConfigQueryKey(), data);
+          },
+        }
+      );
+    },
+    [data, mutate, queryClient]
+  );
+
+  return { config, toggle, isLoading };
 }

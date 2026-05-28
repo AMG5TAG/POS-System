@@ -1561,6 +1561,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/CalendarMonth"
 
+  /dashboard/config:
+    get:
+      operationId: getDashboardConfig
+      tags: [dashboard]
+      summary: Get dashboard widget visibility config for the authenticated merchant
+      responses:
+        "200":
+          description: Dashboard config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardConfigResponse"
+    put:
+      operationId: upsertDashboardConfig
+      tags: [dashboard]
+      summary: Create or update dashboard widget visibility config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertDashboardConfigBody"
+      responses:
+        "200":
+          description: Updated dashboard config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardConfigResponse"
+
   # ── Cash Drawer ──────────────────────────────────────────────────────────────
   /cash-drawer:
     get:
@@ -6243,6 +6273,45 @@ components:
           enum: [scheduled, completed, cancelled, no-show]
         notes:
           type: ["string", "null"]
+
+    DashboardConfigResponse:
+      type: object
+      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, updatedAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        showStatusTiles:
+          type: boolean
+        showMetricTiles:
+          type: boolean
+        showOverdueBanner:
+          type: boolean
+        showNotifications:
+          type: boolean
+        showServiceJobsPanel:
+          type: boolean
+        showCalendar:
+          type: boolean
+        updatedAt:
+          type: string
+
+    UpsertDashboardConfigBody:
+      type: object
+      properties:
+        showStatusTiles:
+          type: boolean
+        showMetricTiles:
+          type: boolean
+        showOverdueBanner:
+          type: boolean
+        showNotifications:
+          type: boolean
+        showServiceJobsPanel:
+          type: boolean
+        showCalendar:
+          type: boolean
 
     DashboardSummary:
       type: object

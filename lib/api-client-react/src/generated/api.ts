@@ -52,6 +52,7 @@ import type {
   CustomerNoteInput,
   CustomerUpdate,
   DashboardActivity,
+  DashboardConfigResponse,
   DashboardSummary,
   DeleteCashDrawerEntry200,
   DeleteDiscount200,
@@ -273,6 +274,7 @@ import type {
   UpdateShippingCarrierBody,
   UploadUrlRequest,
   UploadUrlResponse,
+  UpsertDashboardConfigBody,
   ValidateDiscountRequest,
   WastageEntry,
   WastageEntryInput
@@ -5904,6 +5906,154 @@ export function useGetDashboardCalendar<TData = Awaited<ReturnType<typeof getDas
 
 
 
+
+export const getGetDashboardConfigUrl = () => {
+
+
+
+
+  return `/api/dashboard/config`
+}
+
+/**
+ * @summary Get dashboard widget visibility config for the authenticated merchant
+ */
+export const getDashboardConfig = async ( options?: RequestInit): Promise<DashboardConfigResponse> => {
+
+  return customFetch<DashboardConfigResponse>(getGetDashboardConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardConfigQueryKey = () => {
+    return [
+    `/api/dashboard/config`
+    ] as const;
+    }
+
+
+export const getGetDashboardConfigQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardConfig>>> = ({ signal }) => getDashboardConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardConfig>>>
+export type GetDashboardConfigQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get dashboard widget visibility config for the authenticated merchant
+ */
+
+export function useGetDashboardConfig<TData = Awaited<ReturnType<typeof getDashboardConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpsertDashboardConfigUrl = () => {
+
+
+
+
+  return `/api/dashboard/config`
+}
+
+/**
+ * @summary Create or update dashboard widget visibility config
+ */
+export const upsertDashboardConfig = async (upsertDashboardConfigBody: UpsertDashboardConfigBody, options?: RequestInit): Promise<DashboardConfigResponse> => {
+
+  return customFetch<DashboardConfigResponse>(getUpsertDashboardConfigUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      upsertDashboardConfigBody,)
+  }
+);}
+
+
+
+
+export const getUpsertDashboardConfigMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertDashboardConfig>>, TError,{data: BodyType<UpsertDashboardConfigBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertDashboardConfig>>, TError,{data: BodyType<UpsertDashboardConfigBody>}, TContext> => {
+
+const mutationKey = ['upsertDashboardConfig'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertDashboardConfig>>, {data: BodyType<UpsertDashboardConfigBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertDashboardConfig(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertDashboardConfigMutationResult = NonNullable<Awaited<ReturnType<typeof upsertDashboardConfig>>>
+    export type UpsertDashboardConfigMutationBody = BodyType<UpsertDashboardConfigBody>
+    export type UpsertDashboardConfigMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create or update dashboard widget visibility config
+ */
+export const useUpsertDashboardConfig = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertDashboardConfig>>, TError,{data: BodyType<UpsertDashboardConfigBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertDashboardConfig>>,
+        TError,
+        {data: BodyType<UpsertDashboardConfigBody>},
+        TContext
+      > => {
+      return useMutation(getUpsertDashboardConfigMutationOptions(options));
+    }
 
 export const getListCashDrawerEntriesUrl = (params?: ListCashDrawerEntriesParams,) => {
   const normalizedParams = new URLSearchParams();
