@@ -74,6 +74,7 @@ type RegisterSession = {
 };
 
 const DISPLAY_KEY = "koapos_pos_display";
+const PENDING_RESTORE_KEY = "koapos_pending_restore";
 
 const DEFAULT_RECEIPT_OPTS = {
   headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
@@ -167,6 +168,7 @@ export default function POSPage() {
   /* customer */
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [walkIn, setWalkIn] = useState<WalkIn | null>(null);
+  const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
@@ -606,8 +608,90 @@ export default function POSPage() {
   const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - total) : 0;
   const amountRemaining = payMethod === "cash" ? Math.max(0, total - enteredAmount) : 0;
 
-  /* Old localStorage parked sales migration removed — data now lives in API */
-  useEffect(() => { /* no-op */ }, []);
+  /* Restore a parked sale that was triggered from the /pos/parked page.
+     pos-parked writes the full sale payload to localStorage and then
+     navigates here; we read it on mount, hydrate the cart, and clear the key. */
+  useEffect(() => {
+    const raw = localStorage.getItem(PENDING_RESTORE_KEY);
+    if (!raw) return;
+    try {
+      localStorage.removeItem(PENDING_RESTORE_KEY);
+      const sale = JSON.parse(raw) as {
+        id: number;
+        reference: string;
+        note: string | null;
+        customerId: number | null;
+        items: Array<{
+          productId: number; name: string; quantity: number; price: number;
+          itemDiscount?: number; customPrice?: number | null; itemNote?: string | null;
+        }>;
+        total: number;
+        createdAt: string;
+      };
+
+      /* Build CartItem[] — fall back to a minimal Product stub if the full
+         product hasn't loaded yet (allProducts may be empty on first render). */
+      const restoredCart: CartItem[] = sale.items.map((item) => {
+        const product = allProducts.find((p) => p.id === item.productId) ?? ({
+          id: item.productId, name: item.name, price: item.price,
+        } as Product);
+        return {
+          product,
+          quantity: item.quantity ?? 1,
+          itemDiscount: item.itemDiscount ?? 0,
+          customPrice: item.customPrice ?? undefined,
+          itemNote: item.itemNote ?? undefined,
+        };
+      });
+
+      setCart(restoredCart);
+      setOverallDiscount("");
+      setSaleNotes("");
+      setSelectedCustomer(null);
+      setWalkIn(null);
+
+      /* Re-parse encoded note → sale notes + overall discount */
+      if (sale.note) {
+        const parts = sale.note.split(" | ");
+        const discountPart = parts.find((p) => p.startsWith("Discount:"));
+        if (discountPart) setOverallDiscount(discountPart.replace("Discount:", ""));
+        const noteParts = parts.filter(
+          (p) =>
+            !p.startsWith("Discount:") &&
+            p !== "No customer" &&
+            (sale.customerId == null || !p.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/)),
+        );
+        if (noteParts.length > 0) setSaleNotes(noteParts.join(" | "));
+      }
+
+      /* Customer restore — attempt immediately if data is ready,
+         otherwise store the ID and let the effect below pick it up. */
+      if (sale.customerId) {
+        const found = customersData?.items?.find((c) => c.id === sale.customerId);
+        if (found) {
+          setSelectedCustomer(found);
+        } else {
+          setPendingRestoreCustomerId(sale.customerId);
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+      toast.success(`${sale.reference} loaded into cart`);
+    } catch {
+      /* ignore malformed data */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); /* run once on mount — allProducts/customersData handled by the effect below */
+
+  /* Once customers finish loading, resolve any pending customer from a restore. */
+  useEffect(() => {
+    if (!pendingRestoreCustomerId || !customersData?.items) return;
+    const found = customersData.items.find((c) => c.id === pendingRestoreCustomerId);
+    if (found) {
+      setSelectedCustomer(found);
+      setPendingRestoreCustomerId(null);
+    }
+  }, [pendingRestoreCustomerId, customersData]);
 
   /* Reset payment modal when it opens */
   useEffect(() => {

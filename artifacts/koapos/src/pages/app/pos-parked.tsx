@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListParkedSales,
@@ -70,9 +71,18 @@ export default function POSParkedPage() {
     );
   };
 
+  const [, navigate] = useLocation();
+
   const handleResume = (id: number, reference: string) => {
     restoreSale.mutate({ id }, {
-      onSuccess: () => toast.success(`${reference} restored — head to POS to complete`),
+      onSuccess: (data) => {
+        /* Write the full payload to localStorage so the POS page can hydrate
+           the cart immediately when it mounts. The API already deleted the
+           parked sale from the DB at this point, so this is the only copy. */
+        localStorage.setItem("koapos_pending_restore", JSON.stringify(data));
+        toast.success(`${reference} restored — loading POS…`);
+        navigate("/pos");
+      },
       onError: () => toast.error("Failed to restore sale"),
     });
   };
