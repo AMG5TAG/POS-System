@@ -113,6 +113,9 @@ import ManagementCamerasPage from "@/pages/app/management-cameras";
 import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
+import PosEodPage from "@/pages/app/pos-eod";
+import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
+import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
 
 import NotFound from "@/pages/not-found";
 
@@ -192,6 +195,9 @@ function Router() {
       </Route>
       <Route path="/pos/pc-builder">
         <ProtectedRoute component={POSPCBuilderPage} />
+      </Route>
+      <Route path="/pos/eod">
+        <ProtectedRoute component={PosEodPage} />
       </Route>
       <Route path="/pos">
         <ProtectedRoute component={POSPage} />
@@ -310,6 +316,12 @@ function Router() {
       </Route>
       <Route path="/management/sales-overview">
         <ProtectedRoute component={ManagementSalesPage} />
+      </Route>
+      <Route path="/management/reports/bas">
+        <ProtectedRoute component={ManagementReportsBasPage} />
+      </Route>
+      <Route path="/management/reports/margin">
+        <ProtectedRoute component={ManagementReportsMarginPage} />
       </Route>
       <Route path="/management/integrations">
         <ProtectedRoute component={ManagementIntegrationsPage} />

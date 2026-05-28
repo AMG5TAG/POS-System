@@ -49,6 +49,7 @@ const POS_SUBNAV = [
   { name: "Parked",    href: "/pos/parked",     icon: ParkingCircle },
   { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
   { name: "Cash",      href: "/pos/cash",       icon: Coins },
+  { name: "End of Day", href: "/pos/eod",       icon: Moon },
 ];
 
 const CUSTOMERS_SUBNAV = [
@@ -170,7 +171,15 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Misc",            href: "/management/misc",           icon: MoreHorizontal },
   { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
   { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
-  { name: "Reports",        href: "/management/sales-overview", icon: TrendingUp     },
+  {
+    name: "Reports",
+    icon: TrendingUp,
+    children: [
+      { name: "Sales Overview", href: "/management/sales-overview",   icon: BarChart2  },
+      { name: "BAS / GST",      href: "/management/reports/bas",      icon: Receipt    },
+      { name: "Margin",         href: "/management/reports/margin",   icon: Percent    },
+    ],
+  },
   { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
   {
     name: "Staff",
@@ -276,6 +285,9 @@ const SEARCH_INDEX = [
   { label: "Reports · Profit & Loss",     href: "/management/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
   { label: "Reports · Top Products",      href: "/management/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
   { label: "Reports · Register Closures", href: "/management/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
+  { label: "POS · End of Day",            href: "/pos/eod",                                       icon: Moon,          group: "POS"        },
+  { label: "Reports · BAS / GST",         href: "/management/reports/bas",                        icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Margin & Profit",   href: "/management/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
   { label: "Reports · Customer Insights", href: "/management/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
   { label: "Reports · GST / BAS",         href: "/management/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
   { label: "Reports · Cash Movements",    href: "/management/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },

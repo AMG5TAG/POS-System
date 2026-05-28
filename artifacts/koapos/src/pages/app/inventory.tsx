@@ -1,15 +1,23 @@
 import { useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListInventory, useUpdateInventory } from "@workspace/api-client-react";
+import {
+  useListInventory, useUpdateInventory, useListSuppliers,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  Boxes, AlertTriangle,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  Boxes, AlertTriangle, ShoppingCart,
+  ChevronUp, ChevronDown, ChevronsUpDown, Plus, Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,6 +58,10 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
   );
 }
 
+/* ─── Reorder quantities state ──────────────────────────────────────────── */
+
+type ReorderLines = Record<number, { qty: number; unitCost: string; selected: boolean }>;
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function InventoryPage() {
@@ -61,11 +73,24 @@ export default function InventoryPage() {
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
 
+  /* ── Reorder dialog state ── */
+  const [reorderDlg, setReorderDlg]     = useState(false);
+  const [reorderLines, setReorderLines] = useState<ReorderLines>({});
+  const [reorderSupplier, setReorderSupplier] = useState("");
+  const [reorderNotes, setReorderNotes] = useState("");
+  const [poSaving, setPoSaving]         = useState(false);
+
   const { data: inventory, isLoading } = useListInventory(
     { lowStock: showLowStock || undefined },
     { query: { queryKey: ["inventory", showLowStock] } }
   );
   const updateMutation = useUpdateInventory();
+
+  const { data: suppliersData } = useListSuppliers(
+    {},
+    { query: { queryKey: ["suppliers-reorder"] } }
+  );
+  const suppliers = (suppliersData as { items?: { id: number; name: string }[] })?.items ?? [];
 
   const openEdit = (item: InventoryItem) => {
     setEditingItem(item);
@@ -97,7 +122,8 @@ export default function InventoryPage() {
   };
 
   const items = (inventory || []) as InventoryItem[];
-  const lowStockCount = items.filter((i) => i.isLowStock).length;
+  const lowStockItems = items.filter((i) => i.isLowStock);
+  const lowStockCount = lowStockItems.length;
 
   /* Sort */
   const sorted = [...items].sort((a, b) => {
@@ -124,13 +150,75 @@ export default function InventoryPage() {
     label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className, align,
   });
 
+  /* ── Open reorder dialog ── */
+  function openReorderDialog() {
+    const initial: ReorderLines = {};
+    lowStockItems.forEach(i => {
+      const suggestedQty = Math.max(1, (i.lowStockThreshold ?? 5) * 3 - i.stockQuantity);
+      initial[i.productId] = { qty: suggestedQty, unitCost: "0.00", selected: true };
+    });
+    setReorderLines(initial);
+    setReorderSupplier("");
+    setReorderNotes("");
+    setReorderDlg(true);
+  }
+
+  function setLineQty(productId: number, qty: number) {
+    setReorderLines(prev => ({ ...prev, [productId]: { ...prev[productId], qty: Math.max(1, qty) } }));
+  }
+
+  function toggleLine(productId: number) {
+    setReorderLines(prev => ({ ...prev, [productId]: { ...prev[productId], selected: !prev[productId].selected } }));
+  }
+
+  const selectedLines = Object.entries(reorderLines)
+    .filter(([, v]) => v.selected)
+    .map(([k, v]) => ({ productId: Number(k), quantity: v.qty, unitCost: parseFloat(v.unitCost) || 0 }));
+
+  async function handleCreatePO() {
+    if (selectedLines.length === 0) {
+      toast.error("Select at least one product");
+      return;
+    }
+    setPoSaving(true);
+    try {
+      const r = await fetch("/api/purchase-orders", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: reorderSupplier ? parseInt(reorderSupplier) : null,
+          status: "draft",
+          notes: reorderNotes || `Auto-reorder: ${selectedLines.length} low-stock item(s)`,
+          items: selectedLines,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      toast.success("Draft purchase order created — visit Purchase Orders to review");
+      setReorderDlg(false);
+    } catch {
+      toast.error("Failed to create purchase order");
+    } finally {
+      setPoSaving(false);
+    }
+  }
+
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold">Inventory</h1>
-          <p className="text-sm text-muted-foreground">Track stock levels, manage replenishment, and monitor low-stock items.</p>
+          <div>
+            <h1 className="text-2xl font-bold">Inventory</h1>
+            <p className="text-sm text-muted-foreground">Track stock levels, manage replenishment, and monitor low-stock items.</p>
+          </div>
           <div className="flex items-center gap-3">
+            {lowStockCount > 0 && (
+              <Button variant="outline" size="sm"
+                className="gap-1.5 border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                onClick={openReorderDialog}>
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Reorder {lowStockCount} low-stock item{lowStockCount !== 1 ? "s" : ""}
+              </Button>
+            )}
             {lowStockCount > 0 && !showLowStock && (
               <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700 bg-amber-50">
                 <AlertTriangle className="w-3 h-3" /> {lowStockCount} low stock
@@ -226,6 +314,7 @@ export default function InventoryPage() {
         )}
       </div>
 
+      {/* ── Edit stock dialog ── */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -258,6 +347,96 @@ export default function InventoryPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingItem(null)}>Cancel</Button>
             <Button onClick={handleSave} disabled={updateMutation.isPending}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reorder PO dialog ── */}
+      <Dialog open={reorderDlg} onOpenChange={setReorderDlg}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-primary" /> Create Reorder Purchase Order
+            </DialogTitle>
+            <DialogDescription>
+              A draft PO will be created for the selected low-stock items. Review and confirm it on the Purchase Orders page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Supplier */}
+            <div>
+              <Label>Supplier (optional)</Label>
+              <Select value={reorderSupplier} onValueChange={setReorderSupplier}>
+                <SelectTrigger>
+                  <SelectValue placeholder="No supplier selected" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No supplier</SelectItem>
+                  {suppliers.map(s => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Lines */}
+            <div>
+              <Label className="mb-2 block">Items to reorder</Label>
+              <div className="rounded-lg border overflow-hidden divide-y max-h-64 overflow-y-auto">
+                {lowStockItems.map(item => {
+                  const line = reorderLines[item.productId];
+                  if (!line) return null;
+                  return (
+                    <div key={item.productId}
+                      className={cn("flex items-center gap-3 p-3 text-sm", !line.selected && "opacity-50")}>
+                      <input type="checkbox" checked={line.selected}
+                        onChange={() => toggleLine(item.productId)}
+                        className="rounded border-muted-foreground/40 accent-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{item.productName}</p>
+                        <p className="text-xs text-amber-600">In stock: {item.stockQuantity}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                          onClick={() => setLineQty(item.productId, line.qty - 1)}
+                          disabled={!line.selected}>
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <Input
+                          type="number" min="1"
+                          className="w-16 h-7 text-center text-sm p-1"
+                          value={line.qty}
+                          disabled={!line.selected}
+                          onChange={e => setLineQty(item.productId, parseInt(e.target.value) || 1)} />
+                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                          onClick={() => setLineQty(item.productId, line.qty + 1)}
+                          disabled={!line.selected}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground w-6">units</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {selectedLines.length} of {lowStockItems.length} item{lowStockItems.length !== 1 ? "s" : ""} selected
+              </p>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label>Notes (optional)</Label>
+              <Textarea rows={2} placeholder="Any notes for the supplier…"
+                value={reorderNotes} onChange={e => setReorderNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReorderDlg(false)}>Cancel</Button>
+            <Button onClick={handleCreatePO} disabled={poSaving || selectedLines.length === 0}>
+              <ShoppingCart className="w-4 h-4" />
+              Create Draft PO
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
