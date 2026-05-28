@@ -3459,6 +3459,45 @@ paths:
               schema: { $ref: "#/components/schemas/QrCode" }
 
   /qr-codes/{id}:
+    get:
+      operationId: getQrCode
+      summary: Get QR code
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrCode" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateQrCode
+      summary: Update QR code
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QrCodeInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QrCode" }
+        "404":
+          description: Not found
     delete:
       operationId: deleteQrCode
       summary: Delete QR code
@@ -3751,6 +3790,45 @@ paths:
               schema: { $ref: "#/components/schemas/Shortlink" }
 
   /shortlinks/{id}:
+    get:
+      operationId: getShortlink
+      summary: Get shortlink
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shortlink" }
+        "404":
+          description: Not found
+    patch:
+      operationId: updateShortlink
+      summary: Update shortlink
+      tags: [Marketing]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShortlinkInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shortlink" }
+        "404":
+          description: Not found
     delete:
       operationId: deleteShortlink
       summary: Delete shortlink
@@ -3945,6 +4023,23 @@ paths:
               schema: { $ref: "#/components/schemas/DeliveryOrder" }
 
   /delivery-orders/{id}:
+    get:
+      operationId: getDeliveryOrder
+      summary: Get delivery order
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryOrder" }
+        "404":
+          description: Not found
     patch:
       operationId: updateDeliveryOrder
       summary: Update delivery order
@@ -7641,17 +7736,23 @@ components:
 
     ShippingCarrier:
       type: object
-      required: [id, merchantId, carrierId, connected, connectedAt, apiKey, webhookSecret, config, updatedAt]
+      required: [id, merchantId, carrierId, connected, connectedAt, config, updatedAt]
       properties:
-        id:            { type: integer }
-        merchantId:    { type: integer }
-        carrierId:     { type: string }
-        connected:     { type: string }
-        connectedAt:   { type: string }
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        carrierId:   { type: string }
+        connected:   { type: string }
+        connectedAt: { type: string }
+        config:      { type: string }
+        updatedAt:   { type: string, format: date-time }
+
+    ShippingCarrierCredentialsInput:
+      type: object
+      description: Write-only carrier credentials (never returned in responses)
+      properties:
         apiKey:        { type: string }
         webhookSecret: { type: string }
         config:        { type: string }
-        updatedAt:     { type: string, format: date-time }
 
     ShippingCarrierListResponse:
       type: object

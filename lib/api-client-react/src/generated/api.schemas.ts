@@ -2281,10 +2281,17 @@ export interface ShippingCarrier {
   carrierId: string;
   connected: string;
   connectedAt: string;
-  apiKey: string;
-  webhookSecret: string;
   config: string;
   updatedAt: string;
+}
+
+/**
+ * Write-only carrier credentials (never returned in responses)
+ */
+export interface ShippingCarrierCredentialsInput {
+  apiKey?: string;
+  webhookSecret?: string;
+  config?: string;
 }
 
 export interface ShippingCarrierListResponse {

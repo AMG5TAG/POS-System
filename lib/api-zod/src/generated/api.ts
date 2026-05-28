@@ -4464,6 +4464,55 @@ export const CreateQrCodeBody = zod.object({
 
 
 /**
+ * @summary Get QR code
+ */
+export const GetQrCodeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetQrCodeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "entryId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "qrType": zod.string(),
+  "content": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update QR code
+ */
+export const UpdateQrCodeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateQrCodeBody = zod.object({
+  "entryId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string().optional(),
+  "qrType": zod.string().optional(),
+  "content": zod.string().optional(),
+  "settings": zod.string().optional()
+})
+
+export const UpdateQrCodeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "entryId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "qrType": zod.string(),
+  "content": zod.string(),
+  "settings": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete QR code
  */
 export const DeleteQrCodeParams = zod.object({
@@ -4902,6 +4951,57 @@ export const CreateShortlinkBody = zod.object({
 
 
 /**
+ * @summary Get shortlink
+ */
+export const GetShortlinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetShortlinkResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "longUrl": zod.string(),
+  "slug": zod.string(),
+  "baseDomain": zod.string(),
+  "clicks": zod.number(),
+  "tags": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update shortlink
+ */
+export const UpdateShortlinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateShortlinkBody = zod.object({
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "longUrl": zod.string(),
+  "slug": zod.string(),
+  "baseDomain": zod.string().optional(),
+  "tags": zod.string().optional()
+})
+
+export const UpdateShortlinkResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "longUrl": zod.string(),
+  "slug": zod.string(),
+  "baseDomain": zod.string(),
+  "clicks": zod.number(),
+  "tags": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete shortlink
  */
 export const DeleteShortlinkParams = zod.object({
@@ -5045,8 +5145,6 @@ export const ListShippingCarriersResponse = zod.object({
   "carrierId": zod.string(),
   "connected": zod.string(),
   "connectedAt": zod.string(),
-  "apiKey": zod.string(),
-  "webhookSecret": zod.string(),
   "config": zod.string(),
   "updatedAt": zod.coerce.date()
 })),
@@ -5071,8 +5169,6 @@ export const UpdateShippingCarrierResponse = zod.object({
   "carrierId": zod.string(),
   "connected": zod.string(),
   "connectedAt": zod.string(),
-  "apiKey": zod.string(),
-  "webhookSecret": zod.string(),
   "config": zod.string(),
   "updatedAt": zod.coerce.date()
 })
@@ -5175,6 +5271,36 @@ export const CreateDeliveryOrderBody = zod.object({
   "total": zod.number().optional(),
   "items": zod.string().optional(),
   "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Get delivery order
+ */
+export const GetDeliveryOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDeliveryOrderResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "orderId": zod.string(),
+  "number": zod.string(),
+  "channel": zod.string(),
+  "customer": zod.string(),
+  "customerEmail": zod.string(),
+  "phone": zod.string(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "postcode": zod.string(),
+  "state": zod.string(),
+  "shippingMethod": zod.string(),
+  "status": zod.string(),
+  "placedAt": zod.string(),
+  "total": zod.number(),
+  "items": zod.string(),
+  "notes": zod.string(),
+  "createdAt": zod.coerce.date()
 })
 
 

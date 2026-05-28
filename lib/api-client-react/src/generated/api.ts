@@ -13851,6 +13851,155 @@ export const useCreateQrCode = <TError = ErrorType<unknown>,
       return useMutation(getCreateQrCodeMutationOptions(options));
     }
 
+export const getGetQrCodeUrl = (id: number,) => {
+
+
+
+
+  return `/api/qr-codes/${id}`
+}
+
+/**
+ * @summary Get QR code
+ */
+export const getQrCode = async (id: number, options?: RequestInit): Promise<QrCode> => {
+
+  return customFetch<QrCode>(getGetQrCodeUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetQrCodeQueryKey = (id: number,) => {
+    return [
+    `/api/qr-codes/${id}`
+    ] as const;
+    }
+
+
+export const getGetQrCodeQueryOptions = <TData = Awaited<ReturnType<typeof getQrCode>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQrCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetQrCodeQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getQrCode>>> = ({ signal }) => getQrCode(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getQrCode>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetQrCodeQueryResult = NonNullable<Awaited<ReturnType<typeof getQrCode>>>
+export type GetQrCodeQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get QR code
+ */
+
+export function useGetQrCode<TData = Awaited<ReturnType<typeof getQrCode>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQrCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetQrCodeQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateQrCodeUrl = (id: number,) => {
+
+
+
+
+  return `/api/qr-codes/${id}`
+}
+
+/**
+ * @summary Update QR code
+ */
+export const updateQrCode = async (id: number,
+    qrCodeInput: QrCodeInput, options?: RequestInit): Promise<QrCode> => {
+
+  return customFetch<QrCode>(getUpdateQrCodeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      qrCodeInput,)
+  }
+);}
+
+
+
+
+export const getUpdateQrCodeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQrCode>>, TError,{id: number;data: BodyType<QrCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateQrCode>>, TError,{id: number;data: BodyType<QrCodeInput>}, TContext> => {
+
+const mutationKey = ['updateQrCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateQrCode>>, {id: number;data: BodyType<QrCodeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateQrCode(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateQrCodeMutationResult = NonNullable<Awaited<ReturnType<typeof updateQrCode>>>
+    export type UpdateQrCodeMutationBody = BodyType<QrCodeInput>
+    export type UpdateQrCodeMutationError = ErrorType<void>
+
+    /**
+ * @summary Update QR code
+ */
+export const useUpdateQrCode = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQrCode>>, TError,{id: number;data: BodyType<QrCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateQrCode>>,
+        TError,
+        {id: number;data: BodyType<QrCodeInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateQrCodeMutationOptions(options));
+    }
+
 export const getDeleteQrCodeUrl = (id: number,) => {
 
 
@@ -15305,6 +15454,155 @@ export const useCreateShortlink = <TError = ErrorType<unknown>,
       return useMutation(getCreateShortlinkMutationOptions(options));
     }
 
+export const getGetShortlinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/shortlinks/${id}`
+}
+
+/**
+ * @summary Get shortlink
+ */
+export const getShortlink = async (id: number, options?: RequestInit): Promise<Shortlink> => {
+
+  return customFetch<Shortlink>(getGetShortlinkUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetShortlinkQueryKey = (id: number,) => {
+    return [
+    `/api/shortlinks/${id}`
+    ] as const;
+    }
+
+
+export const getGetShortlinkQueryOptions = <TData = Awaited<ReturnType<typeof getShortlink>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShortlink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShortlinkQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShortlink>>> = ({ signal }) => getShortlink(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShortlink>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetShortlinkQueryResult = NonNullable<Awaited<ReturnType<typeof getShortlink>>>
+export type GetShortlinkQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get shortlink
+ */
+
+export function useGetShortlink<TData = Awaited<ReturnType<typeof getShortlink>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShortlink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetShortlinkQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateShortlinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/shortlinks/${id}`
+}
+
+/**
+ * @summary Update shortlink
+ */
+export const updateShortlink = async (id: number,
+    shortlinkInput: ShortlinkInput, options?: RequestInit): Promise<Shortlink> => {
+
+  return customFetch<Shortlink>(getUpdateShortlinkUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shortlinkInput,)
+  }
+);}
+
+
+
+
+export const getUpdateShortlinkMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShortlink>>, TError,{id: number;data: BodyType<ShortlinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShortlink>>, TError,{id: number;data: BodyType<ShortlinkInput>}, TContext> => {
+
+const mutationKey = ['updateShortlink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShortlink>>, {id: number;data: BodyType<ShortlinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateShortlink(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShortlinkMutationResult = NonNullable<Awaited<ReturnType<typeof updateShortlink>>>
+    export type UpdateShortlinkMutationBody = BodyType<ShortlinkInput>
+    export type UpdateShortlinkMutationError = ErrorType<void>
+
+    /**
+ * @summary Update shortlink
+ */
+export const useUpdateShortlink = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShortlink>>, TError,{id: number;data: BodyType<ShortlinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShortlink>>,
+        TError,
+        {id: number;data: BodyType<ShortlinkInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShortlinkMutationOptions(options));
+    }
+
 export const getDeleteShortlinkUrl = (id: number,) => {
 
 
@@ -16264,6 +16562,83 @@ export const useCreateDeliveryOrder = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateDeliveryOrderMutationOptions(options));
     }
+
+export const getGetDeliveryOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/delivery-orders/${id}`
+}
+
+/**
+ * @summary Get delivery order
+ */
+export const getDeliveryOrder = async (id: number, options?: RequestInit): Promise<DeliveryOrder> => {
+
+  return customFetch<DeliveryOrder>(getGetDeliveryOrderUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDeliveryOrderQueryKey = (id: number,) => {
+    return [
+    `/api/delivery-orders/${id}`
+    ] as const;
+    }
+
+
+export const getGetDeliveryOrderQueryOptions = <TData = Awaited<ReturnType<typeof getDeliveryOrder>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeliveryOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDeliveryOrderQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeliveryOrder>>> = ({ signal }) => getDeliveryOrder(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeliveryOrder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDeliveryOrderQueryResult = NonNullable<Awaited<ReturnType<typeof getDeliveryOrder>>>
+export type GetDeliveryOrderQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get delivery order
+ */
+
+export function useGetDeliveryOrder<TData = Awaited<ReturnType<typeof getDeliveryOrder>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeliveryOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDeliveryOrderQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getUpdateDeliveryOrderUrl = (id: number,) => {
 
