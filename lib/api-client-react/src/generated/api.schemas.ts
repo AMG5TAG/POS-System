@@ -2698,6 +2698,39 @@ export interface MarketingGeneratorListResponse {
   total: number;
 }
 
+export type SalesTemplateOptions = { [key: string]: unknown };
+
+export interface SalesTemplate {
+  id: string;
+  merchantId: number;
+  templateType: string;
+  headerHtml: string;
+  footerHtml: string;
+  showLogo: boolean;
+  fontFamily: string;
+  isDefault: boolean;
+  selectedStyle: string;
+  options: SalesTemplateOptions;
+  updatedAt: string;
+}
+
+export type SalesTemplateInputOptions = { [key: string]: unknown };
+
+export interface SalesTemplateInput {
+  headerHtml?: string;
+  footerHtml?: string;
+  showLogo?: boolean;
+  fontFamily?: string;
+  isDefault?: boolean;
+  selectedStyle?: string;
+  options?: SalesTemplateInputOptions;
+}
+
+export interface SalesTemplateListResponse {
+  items: SalesTemplate[];
+  total: number;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

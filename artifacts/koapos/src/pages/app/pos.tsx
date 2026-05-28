@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { takePendingCart } from "@/lib/pending-cart";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
@@ -74,7 +75,6 @@ type RegisterSession = {
 };
 
 const DISPLAY_KEY = "koapos_pos_display";
-const PENDING_RESTORE_KEY = "koapos_pending_restore";
 
 const DEFAULT_RECEIPT_OPTS = {
   headerText: "", footerText: "", thankYouMsg: "Thank you for your purchase!",
@@ -609,13 +609,12 @@ export default function POSPage() {
   const amountRemaining = payMethod === "cash" ? Math.max(0, total - enteredAmount) : 0;
 
   /* Restore a parked sale that was triggered from the /pos/parked page.
-     pos-parked writes the full sale payload to localStorage and then
-     navigates here; we read it on mount, hydrate the cart, and clear the key. */
+     pos-parked writes the full sale payload to a module store and then
+     navigates here; we take it on mount and hydrate the cart. */
   useEffect(() => {
-    const raw = localStorage.getItem(PENDING_RESTORE_KEY);
+    const raw = takePendingCart();
     if (!raw) return;
     try {
-      localStorage.removeItem(PENDING_RESTORE_KEY);
       const sale = JSON.parse(raw) as {
         id: number;
         reference: string;

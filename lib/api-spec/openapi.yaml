@@ -80,6 +80,8 @@ tags:
     description: Service job templates
   - name: marketing-generators
     description: Marketing content generators
+  - name: sales-templates
+    description: Print template configuration engine
   - name: POS
     description: Point of sale registers and settings
   - name: Settings
@@ -4899,6 +4901,59 @@ paths:
         "204":
           description: Deleted
 
+  /sales-templates:
+    get:
+      operationId: listSalesTemplates
+      summary: List all print template configs (auto-seeds 4 types if missing)
+      tags: [sales-templates]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesTemplateListResponse" }
+
+  /sales-templates/active:
+    get:
+      operationId: getActiveSalesTemplates
+      summary: Get all active/default templates for the print engine
+      tags: [sales-templates]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesTemplateListResponse" }
+
+  /sales-templates/{templateType}:
+    put:
+      operationId: upsertSalesTemplate
+      summary: Create or update config for a specific template type
+      tags: [sales-templates]
+      parameters:
+        - in: path
+          name: templateType
+          required: true
+          schema:
+            type: string
+            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SalesTemplateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesTemplate" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesTemplate" }
+
 components:
   schemas:
     HealthStatus:
@@ -8407,4 +8462,40 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/MarketingGenerator" }
+        total: { type: integer }
+
+    SalesTemplate:
+      type: object
+      required: [id, merchantId, templateType, headerHtml, footerHtml, showLogo, fontFamily, isDefault, selectedStyle, options, updatedAt]
+      properties:
+        id: { type: string }
+        merchantId: { type: integer }
+        templateType: { type: string }
+        headerHtml: { type: string }
+        footerHtml: { type: string }
+        showLogo: { type: boolean }
+        fontFamily: { type: string }
+        isDefault: { type: boolean }
+        selectedStyle: { type: string }
+        options: { type: object, additionalProperties: true }
+        updatedAt: { type: string }
+
+    SalesTemplateInput:
+      type: object
+      properties:
+        headerHtml: { type: string }
+        footerHtml: { type: string }
+        showLogo: { type: boolean }
+        fontFamily: { type: string }
+        isDefault: { type: boolean }
+        selectedStyle: { type: string }
+        options: { type: object, additionalProperties: true }
+
+    SalesTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SalesTemplate" }
         total: { type: integer }

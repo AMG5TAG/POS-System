@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { setPendingCart } from "@/lib/pending-cart";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListParkedSales,
@@ -76,10 +77,10 @@ export default function POSParkedPage() {
   const handleResume = (id: number, reference: string) => {
     restoreSale.mutate({ id }, {
       onSuccess: (data) => {
-        /* Write the full payload to localStorage so the POS page can hydrate
-           the cart immediately when it mounts. The API already deleted the
-           parked sale from the DB at this point, so this is the only copy. */
-        localStorage.setItem("koapos_pending_restore", JSON.stringify(data));
+        /* Write the full payload to a module-level store so the POS page can
+           hydrate the cart immediately when it mounts. The API already deleted
+           the parked sale from the DB at this point, so this is the only copy. */
+        setPendingCart(data);
         toast.success(`${reference} restored — loading POS…`);
         navigate("/pos");
       },

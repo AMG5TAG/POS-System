@@ -90,16 +90,14 @@ const defaultForm: CustomerForm = {
 type DuplicateReason = "phone" | "name";
 type DuplicatePair = { key: string; a: Customer; b: Customer; reason: DuplicateReason };
 
-const DISMISSED_DUPES_KEY = "koapos_dismissed_duplicates";
+const _dismissedDupes = new Set<string>();
 
 function loadDismissed(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISMISSED_DUPES_KEY);
-    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-  } catch { return new Set(); }
+  return new Set(_dismissedDupes);
 }
 function saveDismissed(s: Set<string>) {
-  localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...s]));
+  _dismissedDupes.clear();
+  s.forEach((k) => _dismissedDupes.add(k));
 }
 
 function detectDuplicates(customers: Customer[], dismissed: Set<string>): DuplicatePair[] {

@@ -6291,3 +6291,77 @@ export const DeleteMarketingGeneratorParams = zod.object({
 })
 
 
+/**
+ * @summary List all print template configs (auto-seeds 4 types if missing)
+ */
+export const ListSalesTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "merchantId": zod.number(),
+  "templateType": zod.string(),
+  "headerHtml": zod.string(),
+  "footerHtml": zod.string(),
+  "showLogo": zod.boolean(),
+  "fontFamily": zod.string(),
+  "isDefault": zod.boolean(),
+  "selectedStyle": zod.string(),
+  "options": zod.record(zod.string(), zod.unknown()),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Get all active/default templates for the print engine
+ */
+export const GetActiveSalesTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "merchantId": zod.number(),
+  "templateType": zod.string(),
+  "headerHtml": zod.string(),
+  "footerHtml": zod.string(),
+  "showLogo": zod.boolean(),
+  "fontFamily": zod.string(),
+  "isDefault": zod.boolean(),
+  "selectedStyle": zod.string(),
+  "options": zod.record(zod.string(), zod.unknown()),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create or update config for a specific template type
+ */
+export const UpsertSalesTemplateParams = zod.object({
+  "templateType": zod.enum(['Invoice', 'Thermal_Receipt', 'Quote', 'Service_Ticket'])
+})
+
+export const UpsertSalesTemplateBody = zod.object({
+  "headerHtml": zod.string().optional(),
+  "footerHtml": zod.string().optional(),
+  "showLogo": zod.boolean().optional(),
+  "fontFamily": zod.string().optional(),
+  "isDefault": zod.boolean().optional(),
+  "selectedStyle": zod.string().optional(),
+  "options": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+export const UpsertSalesTemplateResponse = zod.object({
+  "id": zod.string(),
+  "merchantId": zod.number(),
+  "templateType": zod.string(),
+  "headerHtml": zod.string(),
+  "footerHtml": zod.string(),
+  "showLogo": zod.boolean(),
+  "fontFamily": zod.string(),
+  "isDefault": zod.boolean(),
+  "selectedStyle": zod.string(),
+  "options": zod.record(zod.string(), zod.unknown()),
+  "updatedAt": zod.string()
+})
+
+

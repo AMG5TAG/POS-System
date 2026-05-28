@@ -69,3 +69,4 @@ export * from "./staff-rostering-settings";
 export * from "./staff-links";
 export * from "./service-job-templates";
 export * from "./marketing-generators";
+export * from "./sales-templates";

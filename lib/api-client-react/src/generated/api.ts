@@ -213,6 +213,9 @@ import type {
   RegionalExtSettingsInput,
   RegisterInput,
   SalesDataPoint,
+  SalesTemplate,
+  SalesTemplateInput,
+  SalesTemplateListResponse,
   SaveAiSettings200,
   SaveFloorPlan200,
   SendPurchaseOrderEmail200,
@@ -20617,5 +20620,231 @@ export const useDeleteMarketingGenerator = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteMarketingGeneratorMutationOptions(options));
+    }
+
+export const getListSalesTemplatesUrl = () => {
+
+
+
+
+  return `/api/sales-templates`
+}
+
+/**
+ * @summary List all print template configs (auto-seeds 4 types if missing)
+ */
+export const listSalesTemplates = async ( options?: RequestInit): Promise<SalesTemplateListResponse> => {
+
+  return customFetch<SalesTemplateListResponse>(getListSalesTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSalesTemplatesQueryKey = () => {
+    return [
+    `/api/sales-templates`
+    ] as const;
+    }
+
+
+export const getListSalesTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listSalesTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSalesTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSalesTemplates>>> = ({ signal }) => listSalesTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSalesTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSalesTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listSalesTemplates>>>
+export type ListSalesTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all print template configs (auto-seeds 4 types if missing)
+ */
+
+export function useListSalesTemplates<TData = Awaited<ReturnType<typeof listSalesTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSalesTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetActiveSalesTemplatesUrl = () => {
+
+
+
+
+  return `/api/sales-templates/active`
+}
+
+/**
+ * @summary Get all active/default templates for the print engine
+ */
+export const getActiveSalesTemplates = async ( options?: RequestInit): Promise<SalesTemplateListResponse> => {
+
+  return customFetch<SalesTemplateListResponse>(getGetActiveSalesTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetActiveSalesTemplatesQueryKey = () => {
+    return [
+    `/api/sales-templates/active`
+    ] as const;
+    }
+
+
+export const getGetActiveSalesTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof getActiveSalesTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActiveSalesTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetActiveSalesTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActiveSalesTemplates>>> = ({ signal }) => getActiveSalesTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getActiveSalesTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetActiveSalesTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof getActiveSalesTemplates>>>
+export type GetActiveSalesTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get all active/default templates for the print engine
+ */
+
+export function useGetActiveSalesTemplates<TData = Awaited<ReturnType<typeof getActiveSalesTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActiveSalesTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetActiveSalesTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpsertSalesTemplateUrl = (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket',) => {
+
+
+
+
+  return `/api/sales-templates/${templateType}`
+}
+
+/**
+ * @summary Create or update config for a specific template type
+ */
+export const upsertSalesTemplate = async (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket',
+    salesTemplateInput: SalesTemplateInput, options?: RequestInit): Promise<SalesTemplate> => {
+
+  return customFetch<SalesTemplate>(getUpsertSalesTemplateUrl(templateType),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      salesTemplateInput,)
+  }
+);}
+
+
+
+
+export const getUpsertSalesTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext> => {
+
+const mutationKey = ['upsertSalesTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertSalesTemplate>>, {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}> = (props) => {
+          const {templateType,data} = props ?? {};
+
+          return  upsertSalesTemplate(templateType,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertSalesTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof upsertSalesTemplate>>>
+    export type UpsertSalesTemplateMutationBody = BodyType<SalesTemplateInput>
+    export type UpsertSalesTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create or update config for a specific template type
+ */
+export const useUpsertSalesTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertSalesTemplate>>,
+        TError,
+        {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertSalesTemplateMutationOptions(options));
     }
 

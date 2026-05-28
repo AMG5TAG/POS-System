@@ -67,6 +67,7 @@ import staffRosteringSettingsRouter from "./staff-rostering-settings";
 import staffLinksRouter from "./staff-links";
 import serviceJobTemplatesRouter from "./service-job-templates";
 import marketingGeneratorsRouter from "./marketing-generators";
+import salesTemplatesRouter from "./sales-templates";
 
 const router: IRouter = Router();
 
@@ -138,5 +139,6 @@ router.use(staffRosteringSettingsRouter);
 router.use(staffLinksRouter);
 router.use(serviceJobTemplatesRouter);
 router.use(marketingGeneratorsRouter);
+router.use(salesTemplatesRouter);
 
 export default router;

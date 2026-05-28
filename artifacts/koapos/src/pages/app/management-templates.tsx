@@ -4,6 +4,9 @@ import {
   useGetMerchant,
   useGetTaxSettings,
   useUpdateTaxSettings,
+  useListSalesTemplates,
+  useUpsertSalesTemplate,
+  type SalesTemplate,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
@@ -21,12 +24,12 @@ import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer, Info,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
-  Settings2, ClipboardList,
+  Settings2, ClipboardList, FileSearch, Save, ShieldCheck,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "receipts" | "invoices" | "emails" | "sms" | "service";
+type Category = "Thermal_Receipt" | "Invoice" | "Quote" | "Service_Ticket";
 
 interface TemplateOption {
   id: string;
@@ -77,6 +80,8 @@ export interface TplOpts {
   callHistoryRows:      string;
   warrantyText:         string;
   jobNoFontSize:        string;
+  // Font
+  fontFamily:           string;
 }
 
 export const DEFAULT_OPTS: TplOpts = {
@@ -95,10 +100,32 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
+  fontFamily: "inter",
 };
 
-function useTplOpts(_templateId: string) {
+function useTplOpts(category: Category, templates: SalesTemplate[]) {
   const [opts, setOpts] = useState<TplOpts>({ ...DEFAULT_OPTS });
+  const [isDefault, setIsDefault] = useState(true);
+  const upsert = useUpsertSalesTemplate();
+
+  useEffect(() => {
+    const row = templates.find((t) => t.templateType === category);
+    if (row) {
+      const saved = (row.options ?? {}) as Partial<TplOpts>;
+      setOpts({
+        ...DEFAULT_OPTS,
+        ...saved,
+        headerText: row.headerHtml ?? "",
+        footerText: row.footerHtml ?? "",
+        showLogo: row.showLogo ?? true,
+        fontFamily: row.fontFamily ?? "inter",
+      });
+      setIsDefault(row.isDefault ?? true);
+    } else {
+      setOpts({ ...DEFAULT_OPTS });
+      setIsDefault(true);
+    }
+  }, [category, templates]);
 
   const update = useCallback(<K extends keyof TplOpts>(k: K, v: TplOpts[K]) => {
     setOpts((prev) => ({ ...prev, [k]: v }));
@@ -106,9 +133,35 @@ function useTplOpts(_templateId: string) {
 
   const reset = useCallback(() => {
     setOpts({ ...DEFAULT_OPTS });
+    setIsDefault(true);
   }, []);
 
-  return { opts, update, reset };
+  const save = useCallback(
+    (selectedStyle: string) => {
+      const { headerText, footerText, showLogo, fontFamily, ...rest } = opts;
+      upsert.mutate(
+        {
+          templateType: category as "Invoice" | "Thermal_Receipt" | "Quote" | "Service_Ticket",
+          data: {
+            headerHtml: headerText,
+            footerHtml: footerText,
+            showLogo,
+            fontFamily,
+            isDefault,
+            selectedStyle,
+            options: rest as Record<string, unknown>,
+          },
+        },
+        {
+          onSuccess: () => toast.success("Template saved"),
+          onError: () => toast.error("Failed to save template"),
+        },
+      );
+    },
+    [category, opts, isDefault, upsert],
+  );
+
+  return { opts, update, reset, isDefault, setIsDefault, save, saving: upsert.isPending };
 }
 
 /* ─── Options config per category ─────────────────────────────────────────── */
@@ -126,7 +179,7 @@ interface FieldDef {
 
 function getOptionsConfig(category: Category): FieldDef[] {
   switch (category) {
-    case "receipts": return [
+    case "Thermal_Receipt": return [
       { section: "Header", key: "showLogo",          label: "Show Business Logo",  type: "toggle" },
       { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
       { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
@@ -142,11 +195,11 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
       { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
     ];
-    case "invoices": return [
+    case "Invoice": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
       { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
-      { section: "Header",   key: "headerText",              label: "Custom Header Text",        type: "text",     placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
+      { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
@@ -159,32 +212,28 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",             type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
       { section: "Footer",   key: "thankYouMsg",             label: "Thank You Message",         type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
-      { section: "Footer",   key: "customMessage",           label: "Custom Message",            type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
+      { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
       { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
     ];
-    case "emails": return [
-      { section: "Subject", key: "subjectLine",       label: "Subject Line",        type: "text",     placeholder: "Your receipt from {{business.name}}", quickCodes: true },
-      { section: "Header",  key: "showLogo",          label: "Show Logo",           type: "toggle" },
-      { section: "Header",  key: "showAbn",           label: "Show ABN",            type: "toggle" },
-      { section: "Body",    key: "customGreeting",    label: "Opening Greeting",    type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
-      { section: "Body",    key: "customMessage",     label: "Custom Message Body", type: "textarea", placeholder: "e.g. Thank you for shopping with us…", quickCodes: true },
-      { section: "Body",    key: "showGstBreakdown",  label: "Show GST Breakdown",  type: "toggle" },
-      { section: "Footer",  key: "customSignOff",     label: "Sign-off Text",       type: "text",     placeholder: "— The team at {{business.name}}", quickCodes: true },
-      { section: "Footer",  key: "footerText",        label: "Footer Text",         type: "text",     placeholder: "e.g. Questions? Email {{business.email}}", quickCodes: true },
-      { section: "Footer",  key: "showWebsite",       label: "Show Website",        type: "toggle" },
-      { section: "Footer",  key: "showSocialLinks",   label: "Show Social Links",   type: "toggle" },
+    case "Quote": return [
+      { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
+      { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
+      { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
+      { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
+      { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
+      { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
+      { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
+      { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
+      { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Thank you for your enquiry…", quickCodes: true },
+      { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your enquiry!", quickCodes: true },
+      { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
     ];
-    case "sms": return [
-      { section: "Message", key: "messageText",       label: "Message Text",        type: "textarea", placeholder: "Hi {{customer.first_name}}! Thanks for visiting…", quickCodes: true },
-      { section: "Send",    key: "sendAfterSale",     label: "Send After Each Sale",type: "toggle" },
-      { section: "Send",    key: "sendForLayby",      label: "Send for Layby Payments", type: "toggle" },
-    ];
-    case "service": return [
+    case "Service_Ticket": return [
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
-      { section: "Header",   key: "headerText",           label: "Sheet Title",              type: "text",     placeholder: "SERVICE JOB SHEET" },
+      { section: "Header",   key: "headerText",           label: "Custom Header HTML",       type: "textarea", placeholder: "SERVICE JOB SHEET" },
       { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "select",   options: [{ value: "normal", label: "Normal" }, { value: "large", label: "Large" }, { value: "xlarge", label: "X-Large" }] },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
       { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
@@ -445,12 +494,24 @@ function NotificationsPanel() {
   );
 }
 
+const FONT_OPTIONS: { value: string; label: string; css: string }[] = [
+  { value: "inter",    label: "Inter",       css: "Inter, system-ui, sans-serif"         },
+  { value: "roboto",   label: "Roboto",      css: "Roboto, 'Helvetica Neue', sans-serif" },
+  { value: "lato",     label: "Lato",        css: "Lato, 'Helvetica Neue', sans-serif"   },
+  { value: "georgia",  label: "Georgia",     css: "Georgia, 'Times New Roman', serif"    },
+  { value: "courier",  label: "Courier",     css: "'Courier New', Courier, monospace"    },
+];
+
 function OptionsPanel({
   category,
   templateId,
   opts,
   update,
   reset,
+  isDefault,
+  setIsDefault,
+  onSave,
+  saving,
   onFieldFocus,
   onFieldInsert,
 }: {
@@ -459,13 +520,16 @@ function OptionsPanel({
   opts: TplOpts;
   update: <K extends keyof TplOpts>(k: K, v: TplOpts[K]) => void;
   reset: () => void;
+  isDefault: boolean;
+  setIsDefault: (v: boolean) => void;
+  onSave: () => void;
+  saving: boolean;
   onFieldFocus: (key: string | null) => void;
   onFieldInsert: (key: string, insert: (code: string) => void) => void;
 }) {
   const fields = getOptionsConfig(category);
   const sections = [...new Set(fields.map((f) => f.section ?? "General"))];
 
-  // Refs for all text/textarea fields for insert-at-cursor
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
 
   const registerInsert = (key: string) => (code: string) => {
@@ -484,15 +548,52 @@ function OptionsPanel({
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+      {/* Panel header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30 shrink-0">
         <div className="flex items-center gap-2">
           <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-sm font-semibold">Options</span>
-          <Badge variant="outline" className="text-[10px] h-4 px-1.5">{category}</Badge>
         </div>
         <button onClick={reset} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Reset</button>
       </div>
 
+      {/* Font swatches */}
+      <div className="p-4 border-b space-y-2">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Font Family</p>
+        <div className="grid grid-cols-5 gap-1.5">
+          {FONT_OPTIONS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => update("fontFamily", f.value)}
+              title={f.label}
+              className={cn(
+                "rounded-lg border-2 py-2 px-1 text-center transition-all text-[10px] leading-tight",
+                opts.fontFamily === f.value
+                  ? "border-primary bg-primary/5 text-primary font-semibold"
+                  : "border-border hover:border-primary/40 text-muted-foreground",
+              )}
+              style={{ fontFamily: f.css }}
+            >
+              <span className="text-base leading-none">Aa</span>
+              <p className="mt-0.5 truncate">{f.label}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* System default toggle */}
+      <div className="px-4 py-3 border-b bg-muted/10 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+          <div>
+            <p className="text-xs font-medium leading-tight">Set as System Default</p>
+            <p className="text-[10px] text-muted-foreground">Used by all print and export actions</p>
+          </div>
+        </div>
+        <Switch checked={isDefault} onCheckedChange={setIsDefault} />
+      </div>
+
+      {/* Option fields */}
       <div className="overflow-y-auto flex-1 divide-y">
         {sections.map((section) => {
           const sectionFields = fields.filter((f) => (f.section ?? "General") === section);
@@ -503,7 +604,6 @@ function OptionsPanel({
             <div key={section} className="p-4 space-y-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{section}</p>
 
-              {/* Toggles in a compact grid */}
               {toggles.length > 0 && (
                 <div className="space-y-2">
                   {toggles.map((f) => (
@@ -521,7 +621,6 @@ function OptionsPanel({
                 </div>
               )}
 
-              {/* Text/textarea/select fields */}
               {texts.map((f) => {
                 const val = (opts[f.key] as string) ?? "";
                 return (
@@ -565,17 +664,20 @@ function OptionsPanel({
                         className="text-xs h-8 font-mono"
                       />
                     )}
-                    {f.key === "messageText" && (
-                      <p className="text-[10px] text-muted-foreground">
-                        {val.length} chars{val.length > 160 ? ` · ${Math.ceil(val.length / 160)} SMS parts` : ""}
-                      </p>
-                    )}
                   </div>
                 );
               })}
             </div>
           );
         })}
+      </div>
+
+      {/* Save button */}
+      <div className="px-4 py-3 border-t bg-muted/10 shrink-0">
+        <Button size="sm" className="w-full gap-2" onClick={onSave} disabled={saving}>
+          <Save className="w-3.5 h-3.5" />
+          {saving ? "Saving…" : "Save Template"}
+        </Button>
       </div>
     </div>
   );
@@ -584,38 +686,32 @@ function OptionsPanel({
 /* ─── Template catalogue ─────────────────────────────────────────────────── */
 
 const TEMPLATES: Record<Category, TemplateOption[]> = {
-  receipts:   [
+  Thermal_Receipt: [
     { id: "r-pro",     name: "Professional", style: "professional", description: "Clean logo header, bold totals, structured layout"  },
     { id: "r-casual",  name: "Casual",       style: "casual",       description: "Friendly tone, rounded feel, softer typography"     },
     { id: "r-minimal", name: "Minimal",      style: "minimal",      description: "Text-only, ultra-compact, fast printing"            },
   ],
-  invoices:   [
+  Invoice: [
     { id: "i-pro",     name: "Professional", style: "professional", description: "Logo, payment terms, itemised table"                 },
     { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"               },
     { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"               },
   ],
-  emails:     [
-    { id: "e-pro",     name: "Professional", style: "professional", description: "HTML email with header banner, itemised receipt"    },
-    { id: "e-casual",  name: "Casual",       style: "casual",       description: "Warm tone, logo, product summary, return policy"   },
-    { id: "e-minimal", name: "Minimal",      style: "minimal",      description: "Plain-text style, fast loading, high deliverability"},
+  Quote: [
+    { id: "q-pro",     name: "Professional", style: "professional", description: "Logo, validity period, itemised quote table"         },
+    { id: "q-modern",  name: "Modern",       style: "bold",         description: "Bold accent header, two-column quote layout"         },
+    { id: "q-minimal", name: "Minimal",      style: "minimal",      description: "Plain A4, minimal branding, fast to produce"        },
   ],
-  sms:        [
-    { id: "s-receipt", name: "Sale Receipt",         style: "minimal",      description: "Short confirmation with total and thank you"    },
-    { id: "s-appt",    name: "Appointment Reminder", style: "professional", description: "Date, time, business name, cancel link"         },
-    { id: "s-layby",   name: "Layby Reminder",       style: "casual",       description: "Payment due reminder with balance owed"         },
-  ],
-  service:    [
+  Service_Ticket: [
     { id: "ss-standard", name: "Standard", style: "professional", description: "Full A4 sheet — all sections, grid layout, call history" },
     { id: "ss-compact",  name: "Compact",  style: "minimal",      description: "Condensed layout, fewer rows, fits more on one page"     },
   ],
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
-  receipts:   { label: "Receipts",     icon: Receipt,       color: "text-blue-500"    },
-  invoices:   { label: "Invoices",     icon: FileText,      color: "text-violet-500"  },
-  emails:     { label: "Emails",       icon: Mail,          color: "text-amber-500"   },
-  sms:        { label: "SMS",          icon: MessageSquare, color: "text-rose-500"    },
-  service:    { label: "Service Sheet", icon: ClipboardList, color: "text-cyan-500"    },
+  Thermal_Receipt: { label: "Thermal Receipt", icon: Receipt,       color: "text-blue-500"    },
+  Invoice:         { label: "Invoice",          icon: FileText,      color: "text-violet-500"  },
+  Quote:           { label: "Quote",            icon: FileSearch,    color: "text-amber-500"   },
+  Service_Ticket:  { label: "Service Ticket",   icon: ClipboardList, color: "text-cyan-500"    },
 };
 
 const STYLE_ICONS: Record<string, React.ElementType> = {
@@ -1280,26 +1376,39 @@ function ReceiptPrintSettings() {
 
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
-export default function ManagementTemplatesPage() {
-  const [activeCategory, setActiveCategory] = useState<Category>("receipts");
-  const [activeTemplates, setActiveTemplates] = useState<Record<string, string>>({});
-  const [previewId, setPreviewId] = useState<string>("r-pro");
+const DEFAULT_STYLE: Record<Category, string> = {
+  Thermal_Receipt: "r-pro",
+  Invoice:         "i-pro",
+  Quote:           "q-pro",
+  Service_Ticket:  "ss-standard",
+};
 
-  // Focused field tracking for QuickCodesBar insert
+export default function ManagementTemplatesPage() {
+  const [activeCategory, setActiveCategory] = useState<Category>("Thermal_Receipt");
+  const [previewId, setPreviewId]           = useState<string>("r-pro");
+
   const [focusedFieldLabel, setFocusedFieldLabel] = useState<string | null>(null);
   const insertFnRef = useRef<((code: string) => void) | null>(null);
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
 
-  const { opts, update, reset } = useTplOpts(previewId);
+  const { data: tplData, isLoading: tplLoading } = useListSalesTemplates({
+    query: { queryKey: ["sales-templates"] },
+  });
+  const templates: SalesTemplate[] = tplData?.items ?? [];
 
+  const { opts, update, reset, isDefault, setIsDefault, save, saving } = useTplOpts(
+    activeCategory,
+    templates,
+  );
+
+  // Sync previewId from DB selectedStyle when switching category
   useEffect(() => {
-    const defaults: Record<Category, string> = {
-      receipts: "r-pro", invoices: "i-pro", emails: "e-pro", sms: "s-receipt", service: "ss-standard",
-    };
-    setPreviewId(activeTemplates[activeCategory] ?? defaults[activeCategory]);
-  }, [activeCategory, activeTemplates]);
+    const row = templates.find((t) => t.templateType === activeCategory);
+    const style = row?.selectedStyle || DEFAULT_STYLE[activeCategory];
+    setPreviewId(style);
+  }, [activeCategory, templates]);
 
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
@@ -1326,21 +1435,17 @@ export default function ManagementTemplatesPage() {
     [profile.state, profile.postcode].filter(Boolean).join(" "),
   );
 
-  const setActive = (categoryId: Category, templateId: string) => {
-    const next = { ...activeTemplates, [categoryId]: templateId };
-    setActiveTemplates(next);
-  };
-
   const currentTemplates = TEMPLATES[activeCategory];
   const StyleIcon = STYLE_ICONS[currentTemplates.find(t => t.id === previewId)?.style ?? "professional"];
+  const dbRow = templates.find((t) => t.templateType === activeCategory);
+  const activeStyle = dbRow?.selectedStyle ?? DEFAULT_STYLE[activeCategory];
 
   const renderPreview = () => {
     switch (activeCategory) {
-      case "receipts": return <ReceiptPreview    {...previewProps} />;
-      case "invoices": return <InvoicePreview {...previewProps} />;
-      case "emails":  return <EmailPreview       {...previewProps} />;
-      case "sms":     return <SMSPreview          {...previewProps} />;
-      case "service": return <ServiceSheetPreview {...previewProps} />;
+      case "Thermal_Receipt":  return <ReceiptPreview      {...previewProps} />;
+      case "Invoice":          return <InvoicePreview      {...previewProps} />;
+      case "Quote":            return <InvoicePreview      {...previewProps} />;
+      case "Service_Ticket":   return <ServiceSheetPreview {...previewProps} />;
     }
   };
 
@@ -1352,8 +1457,8 @@ export default function ManagementTemplatesPage() {
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">Templates</h1>
-              <p className="text-sm text-muted-foreground">Design and customise your receipts, invoices, emails and messages. All templates use your Business Details automatically.</p>
+              <h1 className="text-2xl font-bold">Sales Templates</h1>
+              <p className="text-sm text-muted-foreground">Configure print templates for receipts, invoices, quotes and service tickets. Changes are saved to the database and used across all print and export actions.</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5 shrink-0">
@@ -1364,133 +1469,122 @@ export default function ManagementTemplatesPage() {
 
         <NotificationsPanel />
 
-        {/* 3-column layout */}
-        <div className="flex gap-4 items-start min-w-0">
+        {tplLoading ? (
+          <div className="text-center py-16 text-muted-foreground text-sm">Loading templates…</div>
+        ) : (
+          <>
+            {/* 3-column layout */}
+            <div className="flex gap-4 items-start min-w-0">
 
-          {/* Col 1: category + template selector */}
-          <div className="w-56 shrink-0 space-y-3">
-            <div className="rounded-xl border bg-card overflow-hidden">
-              {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
-                const { label, icon: Icon, color } = CATEGORY_META[cat];
-                const active = cat === activeCategory;
-                const activeTpl = activeTemplates[cat];
-                return (
-                  <button key={cat} onClick={() => setActiveCategory(cat)}
-                    className={cn("w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-b last:border-b-0",
-                      active ? "bg-primary/5 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
-                    )}
-                  >
-                    <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : color)} />
-                    <span className="flex-1 text-left">{label}</span>
-                    {activeTpl && <Check className="w-3 h-3 text-green-500 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
+              {/* Col 1: category + style selector */}
+              <div className="w-56 shrink-0 space-y-3">
+                <div className="rounded-xl border bg-card overflow-hidden">
+                  {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
+                    const { label, icon: Icon, color } = CATEGORY_META[cat];
+                    const active = cat === activeCategory;
+                    const catRow = templates.find((t) => t.templateType === cat);
+                    const saved  = !!catRow;
+                    return (
+                      <button key={cat} onClick={() => setActiveCategory(cat)}
+                        className={cn("w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-b last:border-b-0",
+                          active ? "bg-primary/5 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
+                        )}
+                      >
+                        <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : color)} />
+                        <span className="flex-1 text-left">{label}</span>
+                        {saved && <Check className="w-3 h-3 text-green-500 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Templates</p>
-              {currentTemplates.map((tpl) => {
-                const selected  = activeTemplates[activeCategory] === tpl.id;
-                const previewing = previewId === tpl.id;
-                const SIcon     = STYLE_ICONS[tpl.style];
-                return (
-                  <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
-                    className={cn("rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
-                      previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-xs">{tpl.name}</span>
-                      {selected && <Badge variant="default" className="text-[9px] h-3.5 px-1 gap-0.5"><Check className="w-2 h-2" /> Active</Badge>}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground leading-snug">{tpl.description}</p>
-                    <span className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
-                      <SIcon className="w-2 h-2" />{tpl.style}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Col 2: live preview */}
-          <div className="flex-1 min-w-0 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="font-semibold text-sm truncate">{currentTemplates.find(t => t.id === previewId)?.name} Preview</span>
-                <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Styles</p>
+                  {currentTemplates.map((tpl) => {
+                    const isActiveStyle = activeStyle === tpl.id;
+                    const previewing    = previewId === tpl.id;
+                    const SIcon         = STYLE_ICONS[tpl.style];
+                    return (
+                      <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
+                        className={cn("rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
+                          previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-xs">{tpl.name}</span>
+                          {isActiveStyle && (
+                            <Badge variant="default" className="text-[9px] h-3.5 px-1 gap-0.5">
+                              <Check className="w-2 h-2" /> Saved
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-snug">{tpl.description}</p>
+                        <span className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
+                          <SIcon className="w-2 h-2" />{tpl.style}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <Button size="sm" onClick={() => setActive(activeCategory, previewId)}
-                disabled={activeTemplates[activeCategory] === previewId} className="gap-1.5 shrink-0"
-              >
-                {activeTemplates[activeCategory] === previewId
-                  ? <><Check className="w-3.5 h-3.5" /> Active</>
-                  : "Set Active"}
-              </Button>
-            </div>
 
-            <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
-              {activeCategory === "receipts" && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
-              )}
-              {activeCategory === "invoices" && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
-              )}
-              {activeCategory === "emails" && (
-                <div className="bg-white shadow rounded-xl border border-gray-200 overflow-hidden w-80">
-                  <div className="bg-gray-100 px-3 py-1.5 flex items-center gap-1.5 border-b">
-                    <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
-                    <span className="ml-2 text-[10px] text-gray-400">Email Preview</span>
+              {/* Col 2: live preview */}
+              <div className="flex-1 min-w-0 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-semibold text-sm truncate">
+                      {currentTemplates.find(t => t.id === previewId)?.name} Preview
+                    </span>
+                    <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
                   </div>
-                  <div className="p-3">{renderPreview()}</div>
                 </div>
-              )}
-              {activeCategory === "sms" && (
-                <div className="bg-gray-900 rounded-3xl p-4 w-56 shadow-xl">
-                  <div className="bg-gray-800 h-2 w-12 rounded mx-auto mb-4" />
-                  <div className="bg-white rounded-2xl p-3 min-h-40">
-                    <p className="text-[9px] text-gray-400 text-center mb-3">{businessName}</p>
-                    {renderPreview()}
-                  </div>
-                  <div className="bg-gray-800 h-1 w-16 rounded mx-auto mt-4" />
+
+                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
+                  {activeCategory === "Thermal_Receipt" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
+                  )}
+                  {(activeCategory === "Invoice" || activeCategory === "Quote") && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
+                  )}
+                  {activeCategory === "Service_Ticket" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                  )}
                 </div>
-              )}
-              {activeCategory === "service" && (
-                <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">
-                  {renderPreview()}
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
                 </div>
-              )}
+              </div>
+
+              {/* Col 3: options + save */}
+              <div className="w-72 shrink-0">
+                <OptionsPanel
+                  key={`${activeCategory}-${previewId}`}
+                  category={activeCategory}
+                  templateId={previewId}
+                  opts={opts}
+                  update={update}
+                  reset={reset}
+                  isDefault={isDefault}
+                  setIsDefault={setIsDefault}
+                  onSave={() => save(previewId)}
+                  saving={saving}
+                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
+                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
-              <Building2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Live preview — changes in the Options panel update instantly. Business info comes from <strong>Management → Business Details</strong>.</span>
-            </div>
-          </div>
-
-          {/* Col 3: options editor */}
-          <div className="w-72 shrink-0">
-            <OptionsPanel
-              key={previewId}
-              category={activeCategory}
-              templateId={previewId}
-              opts={opts}
-              update={update}
-              reset={reset}
-              onFieldFocus={(label) => setFocusedFieldLabel(label)}
-              onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+            {/* Full-width Quick Codes bar */}
+            <QuickCodesBar
+              groups={quickCodeGroups}
+              focusedField={focusedFieldLabel}
+              onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
             />
-          </div>
-        </div>
-
-        {/* Full-width Quick Codes bar */}
-        <QuickCodesBar
-          groups={quickCodeGroups}
-          focusedField={focusedFieldLabel}
-          onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
-        />
+          </>
+        )}
 
         {/* Receipt & Print Settings */}
         <ReceiptPrintSettings />
