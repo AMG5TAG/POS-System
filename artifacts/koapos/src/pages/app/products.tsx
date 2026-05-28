@@ -586,7 +586,7 @@ function ProductDetailDialog({
               {product.trackInventory ? (
                 <>
                   <InfoRow icon={Boxes} label="In Stock" value={product.stockQuantity}
-                    valueClass={isLowStock ? "text-destructive" : undefined} />
+                    valueClass={isLowStock ? "text-amber-600" : undefined} />
                   <InfoRow icon={Boxes} label="Low Stock Alert" value={product.lowStockThreshold ?? 5} />
                 </>
               ) : (
@@ -619,7 +619,7 @@ function ProductDetailDialog({
               </div>
             )}
             {isLowStock && (
-              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-700">
                 ⚠ Stock is below the low stock threshold
               </div>
             )}
@@ -1366,7 +1366,7 @@ export default function ProductsPage() {
                           {isService
                             ? <span className="text-muted-foreground">—</span>
                             : product.trackInventory
-                              ? <span className={isLowStock ? "text-destructive font-medium" : ""}>{product.stockQuantity}</span>
+                              ? <span className={isLowStock ? "text-amber-600 font-medium" : ""}>{product.stockQuantity}</span>
                               : <span className="text-muted-foreground">∞</span>}
                         </td>
                         <td className="p-3">

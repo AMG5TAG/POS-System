@@ -132,7 +132,7 @@ export default function InventoryPage() {
           <p className="text-sm text-muted-foreground">Track stock levels, manage replenishment, and monitor low-stock items.</p>
           <div className="flex items-center gap-3">
             {lowStockCount > 0 && !showLowStock && (
-              <Badge variant="destructive" className="gap-1">
+              <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700 bg-amber-50">
                 <AlertTriangle className="w-3 h-3" /> {lowStockCount} low stock
               </Badge>
             )}
@@ -186,7 +186,7 @@ export default function InventoryPage() {
                       className={cn(
                         "bg-background hover:bg-muted/30 transition-colors cursor-pointer",
                         isChecked && "bg-primary/5",
-                        item.isLowStock && "bg-destructive/5",
+                        item.isLowStock && "bg-amber-50/50",
                       )}
                       onClick={() => openEdit(item)}
                     >
@@ -200,7 +200,7 @@ export default function InventoryPage() {
                       <td className="p-3 hidden md:table-cell text-muted-foreground font-mono text-xs">
                         {item.sku || "—"}
                       </td>
-                      <td className={cn("p-3 text-right font-bold", item.isLowStock && "text-destructive")}>
+                      <td className={cn("p-3 text-right font-bold", item.isLowStock && "text-amber-600")}>
                         {item.trackInventory
                           ? item.stockQuantity
                           : <span className="text-muted-foreground font-normal">∞</span>}
@@ -210,7 +210,7 @@ export default function InventoryPage() {
                       </td>
                       <td className="p-3 hidden lg:table-cell">
                         {item.isLowStock ? (
-                          <Badge variant="destructive" className="gap-1">
+                          <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700 bg-amber-50">
                             <AlertTriangle className="w-3 h-3" /> Low Stock
                           </Badge>
                         ) : (
