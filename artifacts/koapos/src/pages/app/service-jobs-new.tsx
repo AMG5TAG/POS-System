@@ -408,7 +408,7 @@ export default function ServiceJobNewPage() {
       {
         data: {
           customerId: customerId ? Number(customerId) : null,
-          status: status as "pending" | "in-progress" | "completed" | "cancelled",
+          status: status as "pending" | "in-progress" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-stock" | "awaiting-customer" | "completed" | "cancelled",
           bookInDate,
           isPartnerRepair,
           isCritical,
