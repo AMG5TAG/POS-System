@@ -196,6 +196,7 @@ export default function POSPage() {
   const [closeRegisterDialogOpen, setCloseRegisterDialogOpen] = useState(false);
   const [cashMovementPrintOpen, setCashMovementPrintOpen] = useState(false);
   const [eodPrintOpen, setEodPrintOpen] = useState(false);
+  const [tillClosedDialogOpen, setTillClosedDialogOpen] = useState(false);
   const [lastZReport, setLastZReport] = useState<RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string } | null>(null);
   const [openFloat, setOpenFloat] = useState("");
   const [openNotes, setOpenNotes] = useState("");
@@ -807,6 +808,10 @@ export default function POSPage() {
   };
 
   const addToCart = (product: Product) => {
+    if (!registerOpen) {
+      setTillClosedDialogOpen(true);
+      return;
+    }
     if ((product.price ?? 0) === 0) {
       setZeroPricePending(product);
       setZeroPriceForm({ price: "", note: "" });
@@ -1915,6 +1920,10 @@ export default function POSPage() {
                 className="flex-1 h-12 text-base font-bold"
                 disabled={cart.length === 0}
                 onClick={() => {
+                  if (!registerOpen) {
+                    setTillClosedDialogOpen(true);
+                    return;
+                  }
                   if (forceStaffLogin && !currentStaff) {
                     setPendingPaymentAfterPin(true);
                     setPinInput(""); setPinError(""); setPinDialogOpen(true);
@@ -3164,6 +3173,26 @@ export default function POSPage() {
             >
               <Plus className="w-4 h-4 mr-1" />
               Add to Cart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Till Closed Guard Dialog ─── */}
+      <Dialog open={tillClosedDialogOpen} onOpenChange={(o) => { if (!o) setTillClosedDialogOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-500" /> Till Closed
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>The POS register is not open. You need to open the till before you can add items or process a sale.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTillClosedDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setTillClosedDialogOpen(false); setOpenRegisterDialogOpen(true); }}>
+              <DoorOpen className="w-4 h-4 mr-1.5" /> Open Till
             </Button>
           </DialogFooter>
         </DialogContent>
