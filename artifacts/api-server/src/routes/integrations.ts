@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, merchantIntegrationsTable, oauthTokenVaultTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import { upsertVault, deleteVault } from "../services/tokenVault";
 
@@ -55,7 +56,7 @@ export const INTEGRATIONS = [
   { key: "proton_drive",        label: "Proton Drive",        section: "cloud", category: "Cloud Storage & Productivity", description: "Store encrypted backups in Proton Drive for maximum privacy and security.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "google_contacts",     label: "Google Account",      section: "cloud", category: "Cloud Storage & Productivity", description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
-  { key: "apple_contacts",      label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar.",                authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple to sync customers to iCloud Contacts and push appointments to Apple Calendar.", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
   { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "zapier",              label: "Zapier",              section: "cloud", category: "Cloud Storage & Productivity", description: "Connect KoaPOS to 6,000+ apps — automate workflows triggered by sales and inventory.",      authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "deputy",              label: "Deputy",              section: "cloud", category: "Cloud Storage & Productivity", description: "Sync staff rosters, clock-ins, and timesheets with Deputy for seamless Australian payroll.", authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
@@ -83,7 +84,37 @@ function isOAuthConfigured(provider: string): boolean {
     case "twitter":    return !!process.env.TWITTER_CLIENT_ID;
     case "linkedin":   return !!process.env.LINKEDIN_CLIENT_ID;
     case "tiktok":     return !!process.env.TIKTOK_CLIENT_KEY;
+    case "apple":      return !!(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
     default:           return false;
+  }
+}
+
+/* ── Apple Sign In helpers ───────────────────────────────────────────────────── */
+
+function buildAppleClientSecret(): string {
+  const teamId     = process.env.APPLE_TEAM_ID ?? "";
+  const clientId   = process.env.APPLE_CLIENT_ID ?? "";
+  const keyId      = process.env.APPLE_KEY_ID ?? "";
+  const privateKey = process.env.APPLE_PRIVATE_KEY ?? "";
+
+  const now = Math.floor(Date.now() / 1000);
+  const header  = Buffer.from(JSON.stringify({ alg: "ES256", kid: keyId })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ iss: teamId, iat: now, exp: now + 15_777_000, aud: "https://appleid.apple.com", sub: clientId })).toString("base64url");
+  const signingInput = `${header}.${payload}`;
+
+  const sign = crypto.createSign("SHA256");
+  sign.update(signingInput);
+  const derSig = sign.sign({ key: privateKey, dsaEncoding: "ieee-p1363" });
+  return `${signingInput}.${derSig.toString("base64url")}`;
+}
+
+function decodeAppleIdToken(idToken: string): { sub?: string; email?: string } {
+  try {
+    const parts = idToken.split(".");
+    if (parts.length < 2) return {};
+    return JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8")) as { sub?: string; email?: string };
+  } catch {
+    return {};
   }
 }
 
@@ -150,6 +181,11 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
   if (key === "tiktok_business") {
     const k = process.env.TIKTOK_CLIENT_KEY; if (!k) return null;
     return `https://business-api.tiktok.com/portal/auth?${new URLSearchParams({ app_id: k, redirect_uri: cb, state })}`;
+  }
+  if (key === "apple_account") {
+    const cid = process.env.APPLE_CLIENT_ID;
+    if (!cid || !process.env.APPLE_TEAM_ID || !process.env.APPLE_KEY_ID || !process.env.APPLE_PRIVATE_KEY) return null;
+    return `https://appleid.apple.com/auth/authorize?${new URLSearchParams({ response_type: "code id_token", client_id: cid, redirect_uri: cbUrl("apple", req), scope: "name email", response_mode: "form_post", state })}`;
   }
   return null;
 }
@@ -357,6 +393,116 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "disconnected", credentials: null, accessToken: null, refreshToken: null, connectedAt: null }).where(eq(merchantIntegrationsTable.id, existing.id)); }
   res.json({ status: "disconnected" });
+});
+
+/* ── GET /integrations/oauth/apple/start ───────────────────────────────────── */
+
+router.get("/integrations/oauth/apple/start", requireAuth, (req, res): void => {
+  const url = buildOAuthStartUrl("apple_account", req);
+  if (!url) { res.redirect("/management/integrations?error=apple_oauth_not_configured"); return; }
+  res.redirect(url);
+});
+
+/* ── POST /integrations/oauth/apple/callback ────────────────────────────────── */
+/*
+ * Apple uses response_mode=form_post — the authorization server POSTs back here
+ * rather than redirecting with query params. Express must parse the urlencoded body.
+ *
+ * Body fields sent by Apple:
+ *   code        — authorization code for token exchange
+ *   id_token    — signed JWT; payload contains sub (user ID) and email
+ *   state       — merchantId passed in the start URL
+ *   user        — JSON string with name info (first-time auth only)
+ *   error       — set when the user cancels or an error occurs
+ */
+router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, string | undefined>;
+  const { code, id_token, state, error } = body;
+
+  if (error || !code || !state) {
+    res.redirect(`/management/integrations?error=apple_oauth_denied`);
+    return;
+  }
+
+  const merchantId = parseInt(state, 10);
+  if (isNaN(merchantId)) {
+    res.redirect("/management/integrations?error=apple_invalid_state");
+    return;
+  }
+
+  try {
+    const redirectUri = cbUrl("apple", req);
+    const clientSecret = buildAppleClientSecret();
+
+    // Exchange the authorization code for Apple tokens
+    const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id:     process.env.APPLE_CLIENT_ID ?? "",
+        client_secret: clientSecret,
+        code,
+        grant_type:    "authorization_code",
+        redirect_uri:  redirectUri,
+      }),
+    }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; id_token?: string; expires_in?: number; error?: string };
+
+    if (tokenRes.error) {
+      res.redirect(`/management/integrations?error=apple_token_exchange_failed`);
+      return;
+    }
+
+    // Prefer the id_token from the token response; fall back to the one from the POST body
+    const resolvedIdToken = tokenRes.id_token ?? id_token ?? "";
+    const idPayload = decodeAppleIdToken(resolvedIdToken);
+
+    // Apple sends user profile (name) in the POST body only on the first authorization
+    let accountHandle: string | undefined = idPayload.email;
+    try {
+      if (body.user) {
+        const userInfo = JSON.parse(body.user) as { name?: { firstName?: string; lastName?: string } };
+        const fullName = `${userInfo.name?.firstName ?? ""} ${userInfo.name?.lastName ?? ""}`.trim();
+        if (fullName) accountHandle = fullName;
+      }
+    } catch { /* ignore malformed user JSON */ }
+
+    const accessToken  = tokenRes.access_token ?? "";
+    const refreshToken = tokenRes.refresh_token ?? "";
+    const expiresAt    = tokenRes.expires_in ? new Date(Date.now() + tokenRes.expires_in * 1000) : null;
+    const accountId    = idPayload.sub;
+
+    await upsertVault(merchantId, {
+      provider:       "apple_account",
+      accessToken,
+      refreshToken:   refreshToken || undefined,
+      tokenExpiresAt: expiresAt ?? undefined,
+      accountId,
+      accountHandle,
+    });
+
+    // Upsert the merchant integration row
+    const [existing] = await db
+      .select({ id: merchantIntegrationsTable.id })
+      .from(merchantIntegrationsTable)
+      .where(and(
+        eq(merchantIntegrationsTable.merchantId, merchantId),
+        eq(merchantIntegrationsTable.integrationKey, "apple_account"),
+      ))
+      .limit(1);
+
+    if (existing) {
+      await db.update(merchantIntegrationsTable)
+        .set({ status: "connected", connectedAt: new Date() })
+        .where(eq(merchantIntegrationsTable.id, existing.id));
+    } else {
+      await db.insert(merchantIntegrationsTable)
+        .values({ merchantId, integrationKey: "apple_account", status: "connected", connectedAt: new Date() });
+    }
+
+    res.redirect("/management/integrations?success=apple_account");
+  } catch {
+    res.redirect("/management/integrations?error=apple_token_exchange_failed");
+  }
 });
 
 /* ── GET /integrations/oauth/:key/start ────────────────────────────────────── */

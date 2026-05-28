@@ -3127,6 +3127,19 @@ export interface BulkMergeResult {
   results: BulkMergeClusterResult[];
 }
 
+export interface AppleOAuthCallbackBody {
+  /** Authorization code issued by Apple */
+  code?: string;
+  /** Signed JWT containing the authenticated user's identity claims (sub, email) */
+  id_token?: string;
+  /** Opaque value passed in the start URL; carries the merchantId */
+  state?: string;
+  /** JSON-encoded name object sent by Apple on the first authorization only */
+  user?: string;
+  /** Set by Apple when the user cancels or an error occurs */
+  error?: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

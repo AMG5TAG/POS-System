@@ -5370,6 +5370,36 @@ paths:
         "204":
           description: Deleted
 
+  /integrations/oauth/apple/start:
+    get:
+      operationId: startAppleOAuth
+      summary: Initiate Apple Sign In OAuth flow
+      tags: [Integrations]
+      security:
+        - sessionAuth: []
+      responses:
+        "302":
+          description: Redirect to Apple authorization endpoint (response_mode=form_post, scope=name email)
+
+  /integrations/oauth/apple/callback:
+    post:
+      operationId: appleOAuthCallback
+      summary: Apple Sign In OAuth callback (form_post)
+      description: >
+        Receives the Apple form_post callback. Decodes the id_token JWT to extract the user's
+        Apple ID (sub) and email, exchanges the authorization code for access and refresh tokens
+        using a signed ES256 client-secret JWT, and persists the tokens to the encrypted vault.
+      tags: [Integrations]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/AppleOAuthCallbackBody"
+      responses:
+        "302":
+          description: Redirect to /management/integrations with success or error query param
+
   /sticker-templates/{id}/set-default:
     post:
       operationId: setDefaultStickerTemplate
@@ -9372,3 +9402,12 @@ components:
         results:
           type: array
           items: { $ref: "#/components/schemas/BulkMergeClusterResult" }
+
+    AppleOAuthCallbackBody:
+      type: object
+      properties:
+        code:     { type: string, description: "Authorization code issued by Apple" }
+        id_token: { type: string, description: "Signed JWT containing the authenticated user's identity claims (sub, email)" }
+        state:    { type: string, description: "Opaque value passed in the start URL; carries the merchantId" }
+        user:     { type: string, description: "JSON-encoded name object sent by Apple on the first authorization only" }
+        error:    { type: string, description: "Set by Apple when the user cancels or an error occurs" }

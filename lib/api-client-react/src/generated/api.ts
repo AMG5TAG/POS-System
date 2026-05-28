@@ -23,6 +23,7 @@ import type {
   AddLaybyPaymentBody,
   AiSettings,
   AiSettingsInput,
+  AppleOAuthCallbackBody,
   Appointment,
   AppointmentInput,
   Brand,
@@ -22631,6 +22632,172 @@ export const useDeleteStickerTemplate = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteStickerTemplateMutationOptions(options));
+    }
+
+export const getStartAppleOAuthUrl = () => {
+
+
+
+
+  return `/api/integrations/oauth/apple/start`
+}
+
+/**
+ * @summary Initiate Apple Sign In OAuth flow
+ */
+export const startAppleOAuth = async ( options?: RequestInit): Promise<unknown> => {
+
+  return customFetch<unknown>(getStartAppleOAuthUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartAppleOAuthQueryKey = () => {
+    return [
+    `/api/integrations/oauth/apple/start`
+    ] as const;
+    }
+
+
+export const getStartAppleOAuthQueryOptions = <TData = Awaited<ReturnType<typeof startAppleOAuth>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof startAppleOAuth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getStartAppleOAuthQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof startAppleOAuth>>> = ({ signal }) => startAppleOAuth({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof startAppleOAuth>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type StartAppleOAuthQueryResult = NonNullable<Awaited<ReturnType<typeof startAppleOAuth>>>
+export type StartAppleOAuthQueryError = ErrorType<void>
+
+
+/**
+ * @summary Initiate Apple Sign In OAuth flow
+ */
+
+export function useStartAppleOAuth<TData = Awaited<ReturnType<typeof startAppleOAuth>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof startAppleOAuth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getStartAppleOAuthQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAppleOAuthCallbackUrl = () => {
+
+
+
+
+  return `/api/integrations/oauth/apple/callback`
+}
+
+/**
+ * Receives the Apple form_post callback. Decodes the id_token JWT to extract the user's Apple ID (sub) and email, exchanges the authorization code for access and refresh tokens using a signed ES256 client-secret JWT, and persists the tokens to the encrypted vault.
+
+ * @summary Apple Sign In OAuth callback (form_post)
+ */
+export const appleOAuthCallback = async (appleOAuthCallbackBody: AppleOAuthCallbackBody, options?: RequestInit): Promise<unknown> => {
+    const formUrlEncoded = new URLSearchParams();
+if(appleOAuthCallbackBody.code !== undefined) {
+ formUrlEncoded.append(`code`, appleOAuthCallbackBody.code);
+ }
+if(appleOAuthCallbackBody.id_token !== undefined) {
+ formUrlEncoded.append(`id_token`, appleOAuthCallbackBody.id_token);
+ }
+if(appleOAuthCallbackBody.state !== undefined) {
+ formUrlEncoded.append(`state`, appleOAuthCallbackBody.state);
+ }
+if(appleOAuthCallbackBody.user !== undefined) {
+ formUrlEncoded.append(`user`, appleOAuthCallbackBody.user);
+ }
+if(appleOAuthCallbackBody.error !== undefined) {
+ formUrlEncoded.append(`error`, appleOAuthCallbackBody.error);
+ }
+
+  return customFetch<unknown>(getAppleOAuthCallbackUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options?.headers },
+    body:
+      formUrlEncoded,
+  }
+);}
+
+
+
+
+export const getAppleOAuthCallbackMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appleOAuthCallback>>, TError,{data: BodyType<AppleOAuthCallbackBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof appleOAuthCallback>>, TError,{data: BodyType<AppleOAuthCallbackBody>}, TContext> => {
+
+const mutationKey = ['appleOAuthCallback'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof appleOAuthCallback>>, {data: BodyType<AppleOAuthCallbackBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  appleOAuthCallback(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AppleOAuthCallbackMutationResult = NonNullable<Awaited<ReturnType<typeof appleOAuthCallback>>>
+    export type AppleOAuthCallbackMutationBody = BodyType<AppleOAuthCallbackBody>
+    export type AppleOAuthCallbackMutationError = ErrorType<void>
+
+    /**
+ * @summary Apple Sign In OAuth callback (form_post)
+ */
+export const useAppleOAuthCallback = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appleOAuthCallback>>, TError,{data: BodyType<AppleOAuthCallbackBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof appleOAuthCallback>>,
+        TError,
+        {data: BodyType<AppleOAuthCallbackBody>},
+        TContext
+      > => {
+      return useMutation(getAppleOAuthCallbackMutationOptions(options));
     }
 
 export const getSetDefaultStickerTemplateUrl = (id: string,) => {
