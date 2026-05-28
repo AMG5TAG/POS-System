@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const laybySettingsTable = pgTable("layby_settings", {
@@ -13,6 +13,7 @@ export const laybySettingsTable = pgTable("layby_settings", {
   autoEmailOnCreation:  text("auto_email_on_creation").notNull().default("true"),
   printTermsOnReceipt:  text("print_terms_on_receipt").notNull().default("true"),
   termsAndConditions:   text("terms_and_conditions").notNull().default(""),
+  updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type LaybySettings = typeof laybySettingsTable.$inferSelect;

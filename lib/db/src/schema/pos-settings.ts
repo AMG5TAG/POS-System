@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const posSettingsTable = pgTable("pos_settings", {
@@ -16,6 +16,7 @@ export const posSettingsTable = pgTable("pos_settings", {
   activeRegisterId:          text("active_register_id").notNull().default(""),
   hardwareConfig:            text("hardware_config").notNull().default("{}"),
   enabledShortcuts:          text("enabled_shortcuts").notNull().default("[]"),
+  updatedAt:                 timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type PosSettings = typeof posSettingsTable.$inferSelect;

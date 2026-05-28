@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const onlineStoreThirdpartyTable = pgTable("online_store_thirdparty", {
@@ -9,6 +9,7 @@ export const onlineStoreThirdpartyTable = pgTable("online_store_thirdparty", {
   apiKey:      text("api_key").notNull().default(""),
   connected:   text("connected").notNull().default("false"),
   connectedAt: text("connected_at").notNull().default(""),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type OnlineStoreThirdparty = typeof onlineStoreThirdpartyTable.$inferSelect;

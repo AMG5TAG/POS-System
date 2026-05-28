@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const qrSettingsTable = pgTable("qr_settings", {
@@ -15,6 +15,7 @@ export const qrSettingsTable = pgTable("qr_settings", {
   size:               integer("size").notNull().default(256),
   level:              text("level").notNull().default("M"),
   logoUrl:            text("logo_url").notNull().default(""),
+  updatedAt:          timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type QrSettings = typeof qrSettingsTable.$inferSelect;

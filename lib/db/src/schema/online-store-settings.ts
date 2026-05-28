@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const onlineStoreSettingsTable = pgTable("online_store_settings", {
@@ -16,6 +16,7 @@ export const onlineStoreSettingsTable = pgTable("online_store_settings", {
   features:   text("features").notNull().default("{}"),
   pages:      text("pages").notNull().default("[]"),
   quickCodes: text("quick_codes").notNull().default("[]"),
+  updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type OnlineStoreSettings = typeof onlineStoreSettingsTable.$inferSelect;

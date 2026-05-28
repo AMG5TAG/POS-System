@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const kpiTargetsTable = pgTable("kpi_targets", {
@@ -14,6 +14,8 @@ export const kpiTargetsTable = pgTable("kpi_targets", {
   reward:     text("reward").notNull().default("null"),
   notes:      text("notes").notNull().default(""),
   isActive:   text("is_active").notNull().default("true"),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
 export type KpiTarget = typeof kpiTargetsTable.$inferSelect;
