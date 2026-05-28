@@ -294,7 +294,7 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const rows = await db.select().from(merchantIntegrationsTable).where(eq(merchantIntegrationsTable.merchantId, merchantId));
   const rowMap = new Map(rows.map((r) => [r.integrationKey, r]));
-  const vaultRows = await db.select({ provider: oauthTokenVaultTable.provider, connectedAt: oauthTokenVaultTable.connectedAt, accountHandle: oauthTokenVaultTable.accountHandle, accountId: oauthTokenVaultTable.accountId }).from(oauthTokenVaultTable).where(eq(oauthTokenVaultTable.merchantId, merchantId));
+  const vaultRows = await db.select({ provider: oauthTokenVaultTable.provider, connectedAt: oauthTokenVaultTable.connectedAt, accountHandle: oauthTokenVaultTable.accountHandle, accountId: oauthTokenVaultTable.accountId, disconnectedReason: oauthTokenVaultTable.disconnectedReason, disconnectedAt: oauthTokenVaultTable.disconnectedAt }).from(oauthTokenVaultTable).where(eq(oauthTokenVaultTable.merchantId, merchantId));
   const vaultMap = new Map(vaultRows.map((r) => [r.provider, r]));
 
   const result = INTEGRATIONS.map((intg) => {
@@ -304,9 +304,17 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
     const oauthProv  = "oauthProvider" in intg ? intg.oauthProvider : null;
 
     let status = "disconnected", connectedAt: string | null = null, accountHandle: string | null = null, accountId: string | null = null;
+    let disconnectedReason: string | null = null;
+    let disconnectedAt: string | null = null;
     if (!comingSoon) {
-      if (intg.useVault && vaultRow?.connectedAt) {
+      if (intg.useVault && vaultRow?.connectedAt && !vaultRow.disconnectedReason) {
         status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
+        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+      } else if (intg.useVault && vaultRow?.disconnectedReason) {
+        // Vault row was invalidated (e.g. encryption key rotation) — surface a
+        // notice so the merchant knows their previous connection needs re-auth.
+        disconnectedReason = vaultRow.disconnectedReason;
+        disconnectedAt = vaultRow.disconnectedAt?.toISOString() ?? null;
         accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
       } else if (row?.status === "connected") {
         status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
@@ -322,6 +330,7 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       description: intg.description, authType: intg.authType,
       fields: "fields" in intg ? intg.fields : [],
       comingSoon, useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
+      disconnectedReason, disconnectedAt,
       oauthConfigured: oauthProv ? isOAuthConfigured(oauthProv) : null,
     };
   });

@@ -98,10 +98,19 @@ export async function invalidateUnreadableVaultEntries(): Promise<number> {
   );
 
   for (const row of unreadable) {
-    await db.delete(oauthTokenVaultTable).where(eq(oauthTokenVaultTable.id, row.id));
+    // Preserve the row (and accountHandle) so the UI can show "needs reconnect".
+    await db.update(oauthTokenVaultTable)
+      .set({
+        encryptedAccessToken:  null,
+        encryptedRefreshToken: null,
+        tokenExpiresAt:        null,
+        disconnectedReason:    "key_rotated",
+        disconnectedAt:        new Date(),
+      })
+      .where(eq(oauthTokenVaultTable.id, row.id));
     logger.warn(
       { merchantId: row.merchantId, provider: row.provider },
-      "Deleted OAuth vault entry encrypted with old key; merchant must reconnect",
+      "Invalidated OAuth vault entry encrypted with old key; merchant must reconnect",
     );
   }
 
@@ -149,6 +158,8 @@ export async function upsertVault(merchantId: number, entry: VaultEntry): Promis
         tokenExpiresAt:       entry.tokenExpiresAt ?? null,
         scope:                entry.scope ?? null,
         connectedAt:          new Date(),
+        disconnectedReason:   null,
+        disconnectedAt:       null,
       })
       .where(and(
         eq(oauthTokenVaultTable.merchantId, merchantId),
@@ -165,6 +176,8 @@ export async function upsertVault(merchantId: number, entry: VaultEntry): Promis
       tokenExpiresAt:        entry.tokenExpiresAt ?? null,
       scope:                 entry.scope ?? null,
       connectedAt:           new Date(),
+      disconnectedReason:    null,
+      disconnectedAt:        null,
     });
   }
 }

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, Clock, HardDrive, Briefcase, Share2, ChevronDown, ChevronRight, Zap,
-  Receipt, CreditCard, Wallet, Truck, Users, Mail, Sparkles,
+  Receipt, CreditCard, Wallet, Truck, Users, Mail, Sparkles, KeyRound, RefreshCw,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -34,7 +34,17 @@ interface Integration {
   connectedAt: string | null;
   accountHandle: string | null;
   accountId: string | null;
+  disconnectedReason: string | null;
+  disconnectedAt: string | null;
   oauthConfigured: boolean | null;
+}
+
+function disconnectReasonMessage(reason: string | null): string | null {
+  if (!reason) return null;
+  if (reason === "key_rotated") {
+    return "The security key used to store this connection has changed, so the saved tokens could not be re-opened. Please reconnect to resume syncing.";
+  }
+  return "This connection needs to be re-authorised.";
 }
 
 /* ─── Brand logos ────────────────────────────────────────────────────────── */
@@ -150,6 +160,7 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
   onConnect: () => void; onDisconnect: () => void; onOAuth: () => void;
 }) {
   const isConnected = intg.status === "connected";
+  const needsReconnect = !isConnected && !!intg.disconnectedReason;
 
   return (
     <div className={cn(
@@ -157,11 +168,14 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
       "hover:shadow-md",
       isConnected
         ? "border-emerald-300 dark:border-emerald-700 shadow-sm shadow-emerald-100 dark:shadow-emerald-950"
+        : needsReconnect
+        ? "border-amber-300 dark:border-amber-700 shadow-sm shadow-amber-100 dark:shadow-amber-950"
         : "border-border hover:-translate-y-0.5",
       intg.comingSoon && "opacity-60",
     )}>
       {/* Connected accent strip */}
       {isConnected && <div className="h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />}
+      {needsReconnect && <div className="h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-400" />}
 
       <div className="p-5 flex flex-col gap-4 flex-1">
         {/* Logo + title row */}
@@ -185,6 +199,10 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
               <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium truncate max-w-[180px]">
                 {intg.accountHandle}
               </p>
+            ) : needsReconnect && intg.accountHandle ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 font-medium truncate max-w-[180px]">
+                {intg.accountHandle}
+              </p>
             ) : (
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
@@ -203,6 +221,14 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>OAuth credentials not configured — see .env.example</span>
+          </div>
+        )}
+
+        {/* Disconnected by key rotation / similar — needs reconnect */}
+        {needsReconnect && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+            <KeyRound className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{disconnectReasonMessage(intg.disconnectedReason)}</span>
           </div>
         )}
 
@@ -231,16 +257,23 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
           ) : intg.authType === "oauth" ? (
             <Button
               size="sm"
-              className="gap-1.5 w-full"
+              className={cn("gap-1.5 w-full", needsReconnect && "bg-amber-600 hover:bg-amber-700 text-white")}
               onClick={onOAuth}
               disabled={busy || intg.oauthConfigured === false}
             >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-              Connect Account
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : needsReconnect ? <RefreshCw className="w-3.5 h-3.5" /> : <ExternalLink className="w-3.5 h-3.5" />}
+              {needsReconnect ? "Reconnect" : "Connect Account"}
             </Button>
           ) : (
-            <Button size="sm" variant="outline" className="gap-1.5 w-full" onClick={onConnect} disabled={busy}>
-              <Plug className="w-3.5 h-3.5" /> Connect Account
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn("gap-1.5 w-full", needsReconnect && "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/30")}
+              onClick={onConnect}
+              disabled={busy}
+            >
+              {needsReconnect ? <RefreshCw className="w-3.5 h-3.5" /> : <Plug className="w-3.5 h-3.5" />}
+              {needsReconnect ? "Reconnect" : "Connect Account"}
             </Button>
           )}
         </div>
@@ -268,6 +301,7 @@ function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const connected = items.filter((i) => i.status === "connected").length;
+  const needsReconnect = items.filter((i) => !!i.disconnectedReason && i.status !== "connected").length;
   return (
     <section className="space-y-2">
       <button
@@ -278,11 +312,16 @@ function Section({
           <Icon className={cn("w-5 h-5", iconColor)} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h2 className="font-semibold text-base">{title}</h2>
             {connected > 0 && (
               <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 text-[11px]">
                 <CheckCircle2 className="w-3 h-3" /> {connected} connected
+              </Badge>
+            )}
+            {needsReconnect > 0 && (
+              <Badge className="gap-1 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700 text-[11px]">
+                <KeyRound className="w-3 h-3" /> {needsReconnect} needs reconnect
               </Badge>
             )}
           </div>
@@ -419,7 +458,10 @@ export default function ManagementIntegrationsPage() {
   };
 
   const connectedCount = integrations.filter((i) => i.status === "connected").length;
+  const reconnectList = integrations.filter((i) => !!i.disconnectedReason && i.status !== "connected");
+  const keyRotatedReconnect = reconnectList.filter((i) => i.disconnectedReason === "key_rotated");
   const bySection = (id: string) => integrations.filter((i) => i.section === id);
+  const sectionsWithReconnect = new Set(reconnectList.map((i) => i.section));
 
   return (
     <AppLayout>
@@ -436,12 +478,49 @@ export default function ManagementIntegrationsPage() {
               Connect third-party services to extend KoaPOS. OAuth tokens are encrypted and stored securely in the platform vault.
             </p>
           </div>
-          {connectedCount > 0 && (
-            <Badge className="gap-1.5 bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 px-3 py-1.5 text-sm shrink-0">
-              <CheckCircle2 className="w-4 h-4" /> {connectedCount} connected
-            </Badge>
-          )}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {connectedCount > 0 && (
+              <Badge className="gap-1.5 bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 px-3 py-1.5 text-sm">
+                <CheckCircle2 className="w-4 h-4" /> {connectedCount} connected
+              </Badge>
+            )}
+            {reconnectList.length > 0 && (
+              <Badge className="gap-1.5 bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800 px-3 py-1.5 text-sm">
+                <KeyRound className="w-4 h-4" /> {reconnectList.length} needs reconnect
+              </Badge>
+            )}
+          </div>
         </div>
+
+        {/* ── Reconnect banner ── */}
+        {reconnectList.length > 0 && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4 flex items-start gap-3">
+            <div className="rounded-xl p-2 bg-amber-100 dark:bg-amber-900/40 shrink-0">
+              <KeyRound className="w-5 h-5 text-amber-700 dark:text-amber-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+                {reconnectList.length === 1
+                  ? `Your ${reconnectList[0]!.label} connection needs to be re-authorised`
+                  : `${reconnectList.length} integrations need to be re-authorised`}
+              </h3>
+              <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                {keyRotatedReconnect.length > 0
+                  ? "The security key used to store these OAuth tokens has changed, so the saved tokens could not be re-opened. No data was lost — just tap Reconnect on each affected integration below to resume syncing."
+                  : "These connections expired or were invalidated. Tap Reconnect on each one to restore syncing."}
+              </p>
+              {reconnectList.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {reconnectList.map((i) => (
+                    <span key={i.key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white border border-amber-200 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800">
+                      {i.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
@@ -461,6 +540,7 @@ export default function ManagementIntegrationsPage() {
                   onConnect={setModalTarget}
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
+                  defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
               );
             })}

@@ -18,6 +18,14 @@ export const oauthTokenVaultTable = pgTable("oauth_token_vault", {
   tokenExpiresAt:         timestamp("token_expires_at", { withTimezone: true }),
   scope:                  text("scope"),
   connectedAt:            timestamp("connected_at", { withTimezone: true }),
+  /**
+   * If non-null, the integration is no longer usable and the merchant must
+   * reconnect. Set by background processes that invalidate the stored tokens
+   * (e.g. `key_rotated` after a `VAULT_ENCRYPTION_KEY` change).
+   * Cleared on successful re-connect.
+   */
+  disconnectedReason:     text("disconnected_reason"),
+  disconnectedAt:         timestamp("disconnected_at", { withTimezone: true }),
   createdAt:              timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:              timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
