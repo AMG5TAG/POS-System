@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -83,6 +83,323 @@ const defaultForm: CustomerForm = {
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
 };
+
+/* ─── Duplicate detection engine ─────────────────────────────────────────── */
+
+type DuplicateReason = "phone" | "name";
+type DuplicatePair = { key: string; a: Customer; b: Customer; reason: DuplicateReason };
+
+const DISMISSED_DUPES_KEY = "koapos_dismissed_duplicates";
+
+function loadDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_DUPES_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch { return new Set(); }
+}
+function saveDismissed(s: Set<string>) {
+  localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...s]));
+}
+
+function detectDuplicates(customers: Customer[], dismissed: Set<string>): DuplicatePair[] {
+  const pairs = new Map<string, DuplicatePair>();
+  const ordered = (x: Customer, y: Customer): [Customer, Customer] =>
+    x.id <= y.id ? [x, y] : [y, x];
+
+  const byPhone = new Map<string, Customer[]>();
+  for (const c of customers) {
+    const ph = (c.phone ?? "").trim();
+    if (!ph) continue;
+    byPhone.set(ph, [...(byPhone.get(ph) ?? []), c]);
+  }
+  for (const group of byPhone.values()) {
+    if (group.length < 2) continue;
+    for (let i = 0; i < group.length - 1; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const [a, b] = ordered(group[i], group[j]);
+        const key = `${a.id}:${b.id}`;
+        if (!dismissed.has(key) && !pairs.has(key))
+          pairs.set(key, { key, a, b, reason: "phone" });
+      }
+    }
+  }
+
+  const byName = new Map<string, Customer[]>();
+  for (const c of customers) {
+    const nm = `${(c.firstName ?? "").trim()} ${(c.lastName ?? "").trim()}`.toLowerCase().trim();
+    if (!nm) continue;
+    byName.set(nm, [...(byName.get(nm) ?? []), c]);
+  }
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    for (let i = 0; i < group.length - 1; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const [a, b] = ordered(group[i], group[j]);
+        const key = `${a.id}:${b.id}`;
+        if (!dismissed.has(key) && !pairs.has(key))
+          pairs.set(key, { key, a, b, reason: "name" });
+      }
+    }
+  }
+
+  return [...pairs.values()];
+}
+
+/* ─── Merge wizard ────────────────────────────────────────────────────────── */
+
+const MERGE_TEXT_FIELDS: { key: keyof Customer; label: string }[] = [
+  { key: "firstName",    label: "First Name" },
+  { key: "lastName",     label: "Last Name" },
+  { key: "email",        label: "Email" },
+  { key: "phone",        label: "Phone" },
+  { key: "company",      label: "Company" },
+  { key: "abn",          label: "ABN" },
+  { key: "dateOfBirth",  label: "Date of Birth" },
+  { key: "notes",        label: "Notes" },
+  { key: "customerGroup",label: "Customer Group" },
+  { key: "warningNote",  label: "Warning Note" },
+];
+
+function MergeWizardModal({
+  pair, open, onOpenChange, onComplete,
+}: {
+  pair: DuplicatePair | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onComplete: () => void;
+}) {
+  const queryClient     = useQueryClient();
+  const updateMutation  = useUpdateCustomer();
+  const deleteMutation  = useDeleteCustomer();
+  const [selected, setSelected] = useState<Record<string, "a" | "b">>({});
+  const [pending, setPending]   = useState(false);
+
+  useEffect(() => {
+    if (!pair) return;
+    const defaults: Record<string, "a" | "b"> = {};
+    MERGE_TEXT_FIELDS.forEach(({ key }) => { defaults[key as string] = "a"; });
+    setSelected(defaults);
+  }, [pair]);
+
+  if (!pair) return null;
+  const { a, b } = pair;
+
+  const handleMerge = async () => {
+    setPending(true);
+    try {
+      const merged: Record<string, unknown> = {
+        loyaltyPoints: (a.loyaltyPoints ?? 0) + (b.loyaltyPoints ?? 0),
+        visitCount:    (a.visitCount    ?? 0) + (b.visitCount    ?? 0),
+      };
+      for (const { key } of MERGE_TEXT_FIELDS) {
+        const src = selected[key as string] === "a" ? a : b;
+        merged[key as string] = (src as unknown as Record<string, unknown>)[key as string] ?? null;
+      }
+      await updateMutation.mutateAsync({ id: a.id, data: merged as any });
+      await deleteMutation.mutateAsync({ id: b.id });
+      queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+      toast.success("Profiles merged successfully");
+      onComplete();
+      onOpenChange(false);
+    } catch {
+      toast.error("Failed to merge profiles");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Merge Customer Profiles</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Click the value you want to keep for each field. Loyalty points and visit counts are
+            combined automatically.{" "}
+            <span className="font-medium text-foreground">
+              Profile #{a.id} will be kept; #{b.id} will be deleted.
+            </span>
+          </p>
+
+          {/* Column headers */}
+          <div className="grid grid-cols-[120px_1fr_1fr] text-xs font-semibold text-muted-foreground px-1">
+            <span>Field</span>
+            <span className="text-center">
+              #{a.id} — {[a.firstName, a.lastName].filter(Boolean).join(" ") || "Unknown"}
+            </span>
+            <span className="text-center">
+              #{b.id} — {[b.firstName, b.lastName].filter(Boolean).join(" ") || "Unknown"}
+            </span>
+          </div>
+
+          <div className="rounded-lg border divide-y overflow-hidden text-sm">
+            {MERGE_TEXT_FIELDS.map(({ key, label }) => {
+              const aVal = String((a as unknown as Record<string, unknown>)[key as string] ?? "");
+              const bVal = String((b as unknown as Record<string, unknown>)[key as string] ?? "");
+              if (!aVal && !bVal) return null;
+              return (
+                <div key={key as string} className="grid grid-cols-[120px_1fr_1fr] items-stretch">
+                  <div className="flex items-center px-3 py-2 bg-muted/30 text-xs font-medium text-muted-foreground border-r">
+                    {label}
+                  </div>
+                  {(["a", "b"] as const).map((side) => {
+                    const val        = side === "a" ? aVal : bVal;
+                    const isSelected = selected[key as string] === side;
+                    return (
+                      <button
+                        key={side}
+                        type="button"
+                        onClick={() => setSelected((prev) => ({ ...prev, [key as string]: side }))}
+                        className={cn(
+                          "px-3 py-2 text-left transition-colors",
+                          isSelected
+                            ? "bg-primary/10 font-medium text-primary ring-1 ring-inset ring-primary/30"
+                            : "hover:bg-muted/50 text-muted-foreground",
+                          side === "a" ? "border-r" : "",
+                        )}
+                      >
+                        {val
+                          ? <span>{val} {isSelected && <Check className="w-3 h-3 inline ml-0.5 text-primary" />}</span>
+                          : <span className="italic text-muted-foreground/40">empty</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {/* Combined numerics — auto */}
+            {[
+              { label: "Loyalty Pts", aV: a.loyaltyPoints ?? 0, bV: b.loyaltyPoints ?? 0 },
+              { label: "Visits",      aV: a.visitCount    ?? 0, bV: b.visitCount    ?? 0 },
+            ].map(({ label, aV, bV }) => (
+              <div key={label} className="grid grid-cols-[120px_1fr] items-stretch">
+                <div className="flex items-center px-3 py-2 bg-muted/30 text-xs font-medium text-muted-foreground border-r">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">{aV + bV}</span>
+                  <span className="ml-1 text-xs">(combined: {aV} + {bV})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button onClick={handleMerge} disabled={pending}>
+            {pending
+              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              : <CheckCircle2 className="w-4 h-4 mr-2" />}
+            Confirm Merge
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Duplicate review modal ──────────────────────────────────────────────── */
+
+function DuplicateModal({
+  pairs, open, onOpenChange, onDismissPair, onMergePair,
+}: {
+  pairs: DuplicatePair[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onDismissPair: (key: string) => void;
+  onMergePair: (pair: DuplicatePair) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+            Potential Duplicate Profiles
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground -mt-1">
+          {pairs.length} potential duplicate {pairs.length === 1 ? "pair" : "pairs"} found. Choose how to resolve each one.
+        </p>
+
+        <div className="space-y-3 mt-1">
+          {pairs.map((pair) => {
+            const { a, b, reason } = pair;
+            const nameA = [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unknown";
+            const nameB = [b.firstName, b.lastName].filter(Boolean).join(" ") || "Unknown";
+            return (
+              <div key={pair.key} className="rounded-lg border overflow-hidden">
+                {/* Reason badge row */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b">
+                  <span className={cn(
+                    "text-[11px] font-semibold px-2 py-0.5 rounded-full",
+                    reason === "phone"
+                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                  )}>
+                    {reason === "phone" ? "Matching phone number" : "Matching name"}
+                  </span>
+                </div>
+
+                {/* Side-by-side */}
+                <div className="grid grid-cols-2 divide-x">
+                  {([a, b] as [Customer, Customer]).map((c, idx) => (
+                    <div key={c.id} className="p-3 space-y-1 text-sm">
+                      <p className="font-semibold">{idx === 0 ? nameA : nameB}</p>
+                      <p className="text-xs text-muted-foreground">Customer #{c.id}</p>
+                      {c.email   && <p className="text-xs text-muted-foreground flex items-center gap-1"><Mail      className="w-3 h-3 shrink-0" />{c.email}</p>}
+                      {c.phone   && <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone     className="w-3 h-3 shrink-0" />{c.phone}</p>}
+                      {c.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3 shrink-0" />{c.company}</p>}
+                      <p className="text-xs text-muted-foreground">
+                        {c.loyaltyPoints ?? 0} pts · {c.visitCount ?? 0} visits
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action row */}
+                <div className="flex gap-2 px-3 py-2 bg-muted/20 border-t">
+                  <Button
+                    size="sm" variant="outline"
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => onDismissPair(pair.key)}
+                  >
+                    <X className="w-3 h-3 mr-1" /> Leave As Is
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => { onMergePair(pair); onOpenChange(false); }}
+                  >
+                    <Users className="w-3 h-3 mr-1" /> Merge Profiles
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {pairs.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+              <p className="text-sm font-medium">All duplicates resolved</p>
+              <p className="text-xs text-muted-foreground">No further action needed.</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -1269,6 +1586,12 @@ export default function CustomersPage() {
   const [pageSize, setPageSize]             = useState<number | "all">(25);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
+  /* ── Duplicate detection state ── */
+  const [dismissedPairs,    setDismissedPairs]    = useState<Set<string>>(() => loadDismissed());
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [mergePair,          setMergePair]          = useState<DuplicatePair | null>(null);
+  const [mergeWizardOpen,    setMergeWizardOpen]    = useState(false);
+
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
@@ -1280,6 +1603,22 @@ export default function CustomersPage() {
   const deleteMutation = useDeleteCustomer();
 
   const customers = customersData?.items || [];
+
+  /* ── Full customer list (no search) for duplicate scanning ── */
+  const { data: allCustomersRaw } = useListCustomers({ limit: 1000 });
+  const duplicatePairs = useMemo(
+    () => detectDuplicates(allCustomersRaw?.items ?? [], dismissedPairs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allCustomersRaw?.items, dismissedPairs],
+  );
+
+  const dismissPair = (key: string) => {
+    setDismissedPairs((prev) => {
+      const next = new Set(prev).add(key);
+      saveDismissed(next);
+      return next;
+    });
+  };
 
   /* Sort */
   const sorted = [...customers].sort((a, b) => {
@@ -1399,6 +1738,26 @@ export default function CustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {/* ── Duplicate detection banner ── */}
+        {duplicatePairs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setDuplicateModalOpen(true)}
+            className="w-full flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/40 px-4 py-3 text-left hover:bg-amber-100/80 dark:hover:bg-amber-900/30 transition-colors"
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                System detected {duplicatePairs.length} potential duplicate customer {duplicatePairs.length === 1 ? "profile" : "profiles"}.
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                Click to review and resolve — merge records or mark as intentional.
+              </p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
+          </button>
+        )}
 
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading customers...</div>
@@ -1644,6 +2003,29 @@ export default function CustomersPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editingCustomer={editingCustomer}
+      />
+
+      {/* ── Duplicate review modal ── */}
+      <DuplicateModal
+        pairs={duplicatePairs}
+        open={duplicateModalOpen}
+        onOpenChange={setDuplicateModalOpen}
+        onDismissPair={dismissPair}
+        onMergePair={(pair) => {
+          setMergePair(pair);
+          setMergeWizardOpen(true);
+        }}
+      />
+
+      {/* ── Merge wizard ── */}
+      <MergeWizardModal
+        pair={mergePair}
+        open={mergeWizardOpen}
+        onOpenChange={setMergeWizardOpen}
+        onComplete={() => {
+          setMergePair(null);
+          setDuplicateModalOpen(false);
+        }}
       />
     </AppLayout>
   );
