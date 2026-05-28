@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/shortlinks", requireAuth, async (req, res): Promise<void> => {
+router.get("/shortlinks", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(shortlinksTable).where(eq(shortlinksTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/shortlinks", requireAuth, async (req, res): Promise<void> => {
+router.post("/shortlinks", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { linkId, label, longUrl, slug, baseDomain = "", tags = "" } = req.body as { linkId: string; label: string; longUrl: string; slug: string; baseDomain?: string; tags?: string };
   if (!linkId || !label || !longUrl || !slug) { res.status(400).json({ error: "linkId, label, longUrl, and slug are required" }); return; }
@@ -19,14 +19,14 @@ router.post("/api/shortlinks", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.delete("/api/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(shortlinksTable).where(and(eq(shortlinksTable.id, id), eq(shortlinksTable.merchantId, merchantId)));
   res.status(204).end();
 });
 
-router.get("/api/shortlink-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/shortlink-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(shortlinkSettingsTable).where(eq(shortlinkSettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -36,7 +36,7 @@ router.get("/api/shortlink-settings", requireAuth, async (req, res): Promise<voi
   res.json(row);
 });
 
-router.put("/api/shortlink-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/shortlink-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { baseDomain, prefix } = req.body;
   const [existing] = await db.select().from(shortlinkSettingsTable).where(eq(shortlinkSettingsTable.merchantId, merchantId)).limit(1);

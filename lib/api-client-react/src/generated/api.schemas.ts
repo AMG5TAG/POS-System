@@ -2346,6 +2346,82 @@ export interface DeliveryOrderListResponse {
   total: number;
 }
 
+export interface GiftCard {
+  id: number;
+  merchantId: number;
+  cardNumber: string;
+  initialValue: number;
+  currentBalance: number;
+  status: string;
+  expiryDate?: string | null;
+  issuedTo?: string | null;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface GiftCardInput {
+  cardNumber: string;
+  initialValue: number;
+  expiryDate?: string | null;
+  issuedTo?: string | null;
+  note?: string | null;
+}
+
+export interface GiftCardUpdateInput {
+  status?: string;
+  currentBalance?: number;
+  expiryDate?: string | null;
+  issuedTo?: string | null;
+  note?: string | null;
+  adjustmentNote?: string | null;
+}
+
+export interface GiftCardListResponse {
+  items: GiftCard[];
+  total: number;
+}
+
+export interface GiftCardLedgerEntry {
+  id: number;
+  merchantId: number;
+  giftCardId: number;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  note?: string | null;
+  transactionId?: number | null;
+  createdAt: string;
+}
+
+export interface GiftCardValidateInput {
+  cardNumber: string;
+  saleTotal: number;
+}
+
+export interface GiftCardValidateResponse {
+  valid: boolean;
+  cardId: number;
+  cardNumber: string;
+  currentBalance: number;
+  applicableAmount: number;
+  status?: string;
+  errorMessage?: string | null;
+}
+
+export interface GiftCardSettings {
+  id: number;
+  merchantId: number;
+  expiryMonths?: number | null;
+  allowPartialRedemptions: string;
+  prefix: string;
+}
+
+export interface GiftCardSettingsInput {
+  expiryMonths?: number | null;
+  allowPartialRedemptions?: string;
+  prefix?: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -2572,5 +2648,12 @@ status?: string;
 
 export type UpdateShippingCarrierBody = {
   connected: boolean;
+};
+
+export type ListGiftCardsParams = {
+search?: string;
+status?: string;
+limit?: number;
+offset?: number;
 };
 

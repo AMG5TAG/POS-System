@@ -109,6 +109,7 @@ import ManagementMiscPage from "@/pages/app/management-misc";
 import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import CamerasPage from "@/pages/app/cameras";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
+import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 
@@ -323,6 +324,9 @@ function Router() {
       </Route>
       <Route path="/management/loyalty/leaderboard">
         <ProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
+      </Route>
+      <Route path="/management/gift-cards">
+        <ProtectedRoute component={ManagementGiftCardsPage} />
       </Route>
       <Route path="/management/layby">
         <ProtectedRoute component={ManagementLaybyPage} />

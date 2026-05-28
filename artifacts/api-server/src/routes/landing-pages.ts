@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/landing-pages", requireAuth, async (req, res): Promise<void> => {
+router.get("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(landingPagesTable).where(eq(landingPagesTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/landing-pages", requireAuth, async (req, res): Promise<void> => {
+router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { pageId, slug, title, subtitle = "", bio = "", profileImage = "", bgType = "gradient",
     bgColor = "#007b7d", bgFrom = "#007b7d", bgTo = "#1a2340", bgDir = "to bottom", bgImage = "",
@@ -25,7 +25,7 @@ router.post("/api/landing-pages", requireAuth, async (req, res): Promise<void> =
   res.status(201).json(row);
 });
 
-router.patch("/api/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const body = req.body as Partial<typeof landingPagesTable.$inferInsert>;
@@ -35,7 +35,7 @@ router.patch("/api/landing-pages/:id", requireAuth, async (req, res): Promise<vo
   res.json(row);
 });
 
-router.delete("/api/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(landingPagesTable).where(and(eq(landingPagesTable.id, id), eq(landingPagesTable.merchantId, merchantId)));

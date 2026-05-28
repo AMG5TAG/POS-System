@@ -5201,3 +5201,171 @@ export const DeleteDeliveryOrderParams = zod.object({
 })
 
 
+/**
+ * @summary List gift cards
+ */
+export const ListGiftCardsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListGiftCardsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "cardNumber": zod.string(),
+  "initialValue": zod.number(),
+  "currentBalance": zod.number(),
+  "status": zod.string(),
+  "expiryDate": zod.string().nullish(),
+  "issuedTo": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Issue a gift card
+ */
+export const CreateGiftCardBody = zod.object({
+  "cardNumber": zod.string(),
+  "initialValue": zod.number(),
+  "expiryDate": zod.string().nullish(),
+  "issuedTo": zod.string().nullish(),
+  "note": zod.string().nullish()
+})
+
+
+/**
+ * @summary Validate a gift card for POS use
+ */
+export const ValidateGiftCardBody = zod.object({
+  "cardNumber": zod.string(),
+  "saleTotal": zod.number()
+})
+
+export const ValidateGiftCardResponse = zod.object({
+  "valid": zod.boolean(),
+  "cardId": zod.number(),
+  "cardNumber": zod.string(),
+  "currentBalance": zod.number(),
+  "applicableAmount": zod.number(),
+  "status": zod.string().optional(),
+  "errorMessage": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get a gift card
+ */
+export const GetGiftCardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetGiftCardResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "cardNumber": zod.string(),
+  "initialValue": zod.number(),
+  "currentBalance": zod.number(),
+  "status": zod.string(),
+  "expiryDate": zod.string().nullish(),
+  "issuedTo": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a gift card (status, balance adjustment, notes)
+ */
+export const UpdateGiftCardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateGiftCardBody = zod.object({
+  "status": zod.string().optional(),
+  "currentBalance": zod.number().optional(),
+  "expiryDate": zod.string().nullish(),
+  "issuedTo": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "adjustmentNote": zod.string().nullish()
+})
+
+export const UpdateGiftCardResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "cardNumber": zod.string(),
+  "initialValue": zod.number(),
+  "currentBalance": zod.number(),
+  "status": zod.string(),
+  "expiryDate": zod.string().nullish(),
+  "issuedTo": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a gift card
+ */
+export const DeleteGiftCardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List ledger entries for a gift card
+ */
+export const ListGiftCardLedgerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListGiftCardLedgerResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "giftCardId": zod.number(),
+  "type": zod.string(),
+  "amount": zod.number(),
+  "balanceAfter": zod.number(),
+  "note": zod.string().nullish(),
+  "transactionId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListGiftCardLedgerResponse = zod.array(ListGiftCardLedgerResponseItem)
+
+
+/**
+ * @summary Get gift card settings
+ */
+export const GetGiftCardSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "expiryMonths": zod.number().nullish(),
+  "allowPartialRedemptions": zod.string(),
+  "prefix": zod.string()
+})
+
+
+/**
+ * @summary Update gift card settings
+ */
+export const UpdateGiftCardSettingsBody = zod.object({
+  "expiryMonths": zod.number().nullish(),
+  "allowPartialRedemptions": zod.string().optional(),
+  "prefix": zod.string().optional()
+})
+
+export const UpdateGiftCardSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "expiryMonths": zod.number().nullish(),
+  "allowPartialRedemptions": zod.string(),
+  "prefix": zod.string()
+})
+
+

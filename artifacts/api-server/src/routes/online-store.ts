@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/online-store-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/online-store-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(onlineStoreSettingsTable).where(eq(onlineStoreSettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -15,7 +15,7 @@ router.get("/api/online-store-settings", requireAuth, async (req, res): Promise<
   res.json(row);
 });
 
-router.put("/api/online-store-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/online-store-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof onlineStoreSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(onlineStoreSettingsTable).where(eq(onlineStoreSettingsTable.merchantId, merchantId)).limit(1);
@@ -27,7 +27,7 @@ router.put("/api/online-store-settings", requireAuth, async (req, res): Promise<
   res.json(created);
 });
 
-router.get("/api/online-store-thirdparty", requireAuth, async (req, res): Promise<void> => {
+router.get("/online-store-thirdparty", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(onlineStoreThirdpartyTable).where(eq(onlineStoreThirdpartyTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -37,7 +37,7 @@ router.get("/api/online-store-thirdparty", requireAuth, async (req, res): Promis
   res.json(row);
 });
 
-router.put("/api/online-store-thirdparty", requireAuth, async (req, res): Promise<void> => {
+router.put("/online-store-thirdparty", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof onlineStoreThirdpartyTable.$inferInsert>;
   const [existing] = await db.select().from(onlineStoreThirdpartyTable).where(eq(onlineStoreThirdpartyTable.merchantId, merchantId)).limit(1);

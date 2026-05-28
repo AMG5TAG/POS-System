@@ -3944,6 +3944,158 @@ paths:
         "204":
           description: Deleted
 
+  /gift-cards:
+    get:
+      operationId: listGiftCards
+      summary: List gift cards
+      tags: [GiftCards]
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+        - in: query
+          name: offset
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCardListResponse" }
+    post:
+      operationId: createGiftCard
+      summary: Issue a gift card
+      tags: [GiftCards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftCardInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCard" }
+
+  /gift-cards/validate:
+    post:
+      operationId: validateGiftCard
+      summary: Validate a gift card for POS use
+      tags: [GiftCards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftCardValidateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCardValidateResponse" }
+
+  /gift-cards/{id}:
+    get:
+      operationId: getGiftCard
+      summary: Get a gift card
+      tags: [GiftCards]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCard" }
+    patch:
+      operationId: updateGiftCard
+      summary: Update a gift card (status, balance adjustment, notes)
+      tags: [GiftCards]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftCardUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCard" }
+    delete:
+      operationId: deleteGiftCard
+      summary: Delete a gift card
+      tags: [GiftCards]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /gift-cards/{id}/ledger:
+    get:
+      operationId: listGiftCardLedger
+      summary: List ledger entries for a gift card
+      tags: [GiftCards]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GiftCardLedgerEntry" }
+
+  /gift-card-settings:
+    get:
+      operationId: getGiftCardSettings
+      summary: Get gift card settings
+      tags: [GiftCards]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCardSettings" }
+    put:
+      operationId: updateGiftCardSettings
+      summary: Update gift card settings
+      tags: [GiftCards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftCardSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GiftCardSettings" }
+
 components:
   schemas:
     HealthStatus:
@@ -7024,3 +7176,97 @@ components:
           type: array
           items: { $ref: "#/components/schemas/DeliveryOrder" }
         total: { type: integer }
+
+    GiftCard:
+      type: object
+      required: [id, merchantId, cardNumber, initialValue, currentBalance, status, createdAt]
+      properties:
+        id:             { type: integer }
+        merchantId:     { type: integer }
+        cardNumber:     { type: string }
+        initialValue:   { type: number }
+        currentBalance: { type: number }
+        status:         { type: string }
+        expiryDate:     { type: string, nullable: true }
+        issuedTo:       { type: string, nullable: true }
+        note:           { type: string, nullable: true }
+        createdAt:      { type: string }
+
+    GiftCardInput:
+      type: object
+      required: [cardNumber, initialValue]
+      properties:
+        cardNumber:  { type: string }
+        initialValue: { type: number }
+        expiryDate:  { type: string, nullable: true }
+        issuedTo:    { type: string, nullable: true }
+        note:        { type: string, nullable: true }
+
+    GiftCardUpdateInput:
+      type: object
+      properties:
+        status:         { type: string }
+        currentBalance: { type: number }
+        expiryDate:     { type: string, nullable: true }
+        issuedTo:       { type: string, nullable: true }
+        note:           { type: string, nullable: true }
+        adjustmentNote: { type: string, nullable: true }
+
+    GiftCardListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GiftCard" }
+        total: { type: integer }
+
+    GiftCardLedgerEntry:
+      type: object
+      required: [id, merchantId, giftCardId, type, amount, balanceAfter, createdAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        giftCardId:    { type: integer }
+        type:          { type: string }
+        amount:        { type: number }
+        balanceAfter:  { type: number }
+        note:          { type: string, nullable: true }
+        transactionId: { type: integer, nullable: true }
+        createdAt:     { type: string }
+
+    GiftCardValidateInput:
+      type: object
+      required: [cardNumber, saleTotal]
+      properties:
+        cardNumber: { type: string }
+        saleTotal:  { type: number }
+
+    GiftCardValidateResponse:
+      type: object
+      required: [valid, cardId, cardNumber, currentBalance, applicableAmount]
+      properties:
+        valid:             { type: boolean }
+        cardId:            { type: integer }
+        cardNumber:        { type: string }
+        currentBalance:    { type: number }
+        applicableAmount:  { type: number }
+        status:            { type: string }
+        errorMessage:      { type: string, nullable: true }
+
+    GiftCardSettings:
+      type: object
+      required: [id, merchantId, allowPartialRedemptions, prefix]
+      properties:
+        id:                      { type: integer }
+        merchantId:              { type: integer }
+        expiryMonths:            { type: integer, nullable: true }
+        allowPartialRedemptions: { type: string }
+        prefix:                  { type: string }
+
+    GiftCardSettingsInput:
+      type: object
+      properties:
+        expiryMonths:            { type: integer, nullable: true }
+        allowPartialRedemptions: { type: string }
+        prefix:                  { type: string }

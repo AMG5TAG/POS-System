@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/delivery-orders", requireAuth, async (req, res): Promise<void> => {
+router.get("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(deliveryOrdersTable).where(eq(deliveryOrdersTable.merchantId, merchantId));
   res.json({ items: items.map(r => ({ ...r, total: parseFloat(r.total as unknown as string) })), total: items.length });
 });
 
-router.post("/api/delivery-orders", requireAuth, async (req, res): Promise<void> => {
+router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { orderId, number, channel = "website", customer = "", customerEmail = "", phone = "",
     address = "", city = "", postcode = "", state = "", shippingMethod = "",
@@ -24,7 +24,7 @@ router.post("/api/delivery-orders", requireAuth, async (req, res): Promise<void>
   res.status(201).json({ ...row, total: parseFloat(row.total as unknown as string) });
 });
 
-router.patch("/api/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const body = req.body as Partial<typeof deliveryOrdersTable.$inferInsert>;
@@ -34,7 +34,7 @@ router.patch("/api/delivery-orders/:id", requireAuth, async (req, res): Promise<
   res.json({ ...row, total: parseFloat(row.total as unknown as string) });
 });
 
-router.delete("/api/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(deliveryOrdersTable).where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId)));

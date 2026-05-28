@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/shipping-carriers", requireAuth, async (req, res): Promise<void> => {
+router.get("/shipping-carriers", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(shippingCarriersTable).where(eq(shippingCarriersTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.put("/api/shipping-carriers/:carrierId/connect", requireAuth, async (req, res): Promise<void> => {
+router.put("/shipping-carriers/:carrierId/connect", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const carrierId = req.params.carrierId as string;
   const { connected } = req.body as { connected: boolean };

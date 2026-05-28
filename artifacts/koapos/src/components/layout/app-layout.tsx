@@ -156,6 +156,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Floor Plan",     href: "/management/floor-plan",     icon: Map            },
   { name: "KoaPOS",         href: "/management/koapos",         icon: Sparkles       },
   { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
+  { name: "Gift Cards",     href: "/management/gift-cards",     icon: Gift           },
   { name: "Layby",          href: "/management/layby",          icon: Package2       },
   { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
   {
@@ -292,6 +293,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/pos/history":                 ["POS", "History"],
   "/pos/invoices":                ["POS", "Invoices"],
   "/pos/laybuys":                 ["POS", "Laybys"],
+  "/management/gift-cards":       ["Management", "Gift Cards"],
   "/management/layby":            ["Management", "Layby"],
   "/pos/parked":                  ["POS", "Parked"],
   "/pos/refund":                  ["POS", "Refund"],

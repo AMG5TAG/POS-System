@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/layby-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/layby-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(laybySettingsTable).where(eq(laybySettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -15,7 +15,7 @@ router.get("/api/layby-settings", requireAuth, async (req, res): Promise<void> =
   res.json({ ...row, minimumDepositValue: parseFloat(row.minimumDepositValue as unknown as string) });
 });
 
-router.put("/api/layby-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/layby-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof laybySettingsTable.$inferInsert>;
   const [existing] = await db.select().from(laybySettingsTable).where(eq(laybySettingsTable.merchantId, merchantId)).limit(1);

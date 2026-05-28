@@ -54,6 +54,7 @@ import onlineStoreRouter from "./online-store";
 import shippingCarriersRouter from "./shipping-carriers";
 import marketplaceConnectionsRouter from "./marketplace-connections";
 import deliveryOrdersRouter from "./delivery-orders";
+import giftCardsRouter from "./gift-cards";
 
 const router: IRouter = Router();
 
@@ -112,5 +113,6 @@ router.use(onlineStoreRouter);
 router.use(shippingCarriersRouter);
 router.use(marketplaceConnectionsRouter);
 router.use(deliveryOrdersRouter);
+router.use(giftCardsRouter);
 
 export default router;

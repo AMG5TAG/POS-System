@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/pos-registers", requireAuth, async (req, res): Promise<void> => {
+router.get("/pos-registers", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(posRegistersTable).where(eq(posRegistersTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/pos-registers", requireAuth, async (req, res): Promise<void> => {
+router.post("/pos-registers", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { registerId, name, type = "Cash", staffName = "", staffEmail = "", posCameraEnabled = "false", posCameraDeviceId = null } = req.body;
   if (!registerId || !name) { res.status(400).json({ error: "registerId and name are required" }); return; }
@@ -19,7 +19,7 @@ router.post("/api/pos-registers", requireAuth, async (req, res): Promise<void> =
   res.status(201).json(row);
 });
 
-router.patch("/api/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const { name, type, staffName, staffEmail, posCameraEnabled, posCameraDeviceId } = req.body;
@@ -36,14 +36,14 @@ router.patch("/api/pos-registers/:id", requireAuth, async (req, res): Promise<vo
   res.json(row);
 });
 
-router.delete("/api/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(posRegistersTable).where(and(eq(posRegistersTable.id, id), eq(posRegistersTable.merchantId, merchantId)));
   res.status(204).end();
 });
 
-router.get("/api/pos-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/pos-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(posSettingsTable).where(eq(posSettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -53,7 +53,7 @@ router.get("/api/pos-settings", requireAuth, async (req, res): Promise<void> => 
   res.json(row);
 });
 
-router.put("/api/pos-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof posSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(posSettingsTable).where(eq(posSettingsTable.merchantId, merchantId)).limit(1);

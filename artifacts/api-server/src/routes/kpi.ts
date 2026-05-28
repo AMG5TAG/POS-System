@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/kpi-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -15,7 +15,7 @@ router.get("/api/kpi-settings", requireAuth, async (req, res): Promise<void> => 
   res.json(row);
 });
 
-router.put("/api/kpi-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof kpiSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
@@ -27,13 +27,13 @@ router.put("/api/kpi-settings", requireAuth, async (req, res): Promise<void> => 
   res.json(created);
 });
 
-router.get("/api/kpi-targets", requireAuth, async (req, res): Promise<void> => {
+router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(kpiTargetsTable).where(eq(kpiTargetsTable.merchantId, merchantId));
   res.json({ items: items.map(r => ({ ...r, target: parseFloat(r.target as unknown as string) })), total: items.length });
 });
 
-router.post("/api/kpi-targets", requireAuth, async (req, res): Promise<void> => {
+router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true" } = req.body;
   if (!targetId || !name || !metric) { res.status(400).json({ error: "targetId, name, and metric are required" }); return; }
@@ -41,7 +41,7 @@ router.post("/api/kpi-targets", requireAuth, async (req, res): Promise<void> => 
   res.status(201).json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
-router.patch("/api/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive } = req.body;
@@ -51,7 +51,7 @@ router.patch("/api/kpi-targets/:id", requireAuth, async (req, res): Promise<void
   res.json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
-router.delete("/api/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(kpiTargetsTable).where(and(eq(kpiTargetsTable.id, id), eq(kpiTargetsTable.merchantId, merchantId)));

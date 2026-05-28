@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/email-templates", requireAuth, async (req, res): Promise<void> => {
+router.get("/email-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(emailTemplatesTable).where(eq(emailTemplatesTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/email-templates", requireAuth, async (req, res): Promise<void> => {
+router.post("/email-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { templateId, name, category = "Other", subject = "", body = "" } = req.body;
   if (!templateId || !name) { res.status(400).json({ error: "templateId and name are required" }); return; }
@@ -19,7 +19,7 @@ router.post("/api/email-templates", requireAuth, async (req, res): Promise<void>
   res.status(201).json(row);
 });
 
-router.patch("/api/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const { name, category, subject, body } = req.body;
@@ -29,7 +29,7 @@ router.patch("/api/email-templates/:id", requireAuth, async (req, res): Promise<
   res.json(row);
 });
 
-router.delete("/api/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(emailTemplatesTable).where(and(eq(emailTemplatesTable.id, id), eq(emailTemplatesTable.merchantId, merchantId)));

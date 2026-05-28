@@ -54,3 +54,6 @@ export * from "./online-store-thirdparty";
 export * from "./shipping-carriers";
 export * from "./marketplace-connections";
 export * from "./delivery-orders";
+export * from "./gift-cards";
+export * from "./gift-card-ledger";
+export * from "./gift-card-settings";

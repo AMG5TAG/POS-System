@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/qr-codes", requireAuth, async (req, res): Promise<void> => {
+router.get("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(qrCodesTable).where(eq(qrCodesTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/qr-codes", requireAuth, async (req, res): Promise<void> => {
+router.post("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { entryId, label, url = "", qrType = "website", content = "{}", settings = "{}" } = req.body;
   if (!entryId || !label) { res.status(400).json({ error: "entryId and label are required" }); return; }
@@ -19,14 +19,14 @@ router.post("/api/qr-codes", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.delete("/api/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(qrCodesTable).where(and(eq(qrCodesTable.id, id), eq(qrCodesTable.merchantId, merchantId)));
   res.status(204).end();
 });
 
-router.get("/api/qr-settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/qr-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db.select().from(qrSettingsTable).where(eq(qrSettingsTable.merchantId, merchantId)).limit(1);
   if (!row) {
@@ -36,7 +36,7 @@ router.get("/api/qr-settings", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.put("/api/qr-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/qr-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Partial<typeof qrSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(qrSettingsTable).where(eq(qrSettingsTable.merchantId, merchantId)).limit(1);
@@ -48,13 +48,13 @@ router.put("/api/qr-settings", requireAuth, async (req, res): Promise<void> => {
   res.json(created);
 });
 
-router.get("/api/qr-saved-templates", requireAuth, async (req, res): Promise<void> => {
+router.get("/qr-saved-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(qrSavedTemplatesTable).where(eq(qrSavedTemplatesTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/qr-saved-templates", requireAuth, async (req, res): Promise<void> => {
+router.post("/qr-saved-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { templateId, name, settings = "{}" } = req.body;
   if (!templateId || !name) { res.status(400).json({ error: "templateId and name are required" }); return; }
@@ -62,7 +62,7 @@ router.post("/api/qr-saved-templates", requireAuth, async (req, res): Promise<vo
   res.status(201).json(row);
 });
 
-router.delete("/api/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(qrSavedTemplatesTable).where(and(eq(qrSavedTemplatesTable.id, id), eq(qrSavedTemplatesTable.merchantId, merchantId)));

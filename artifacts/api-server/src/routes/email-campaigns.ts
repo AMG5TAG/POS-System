@@ -5,13 +5,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/api/email-campaigns", requireAuth, async (req, res): Promise<void> => {
+router.get("/email-campaigns", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.merchantId, merchantId));
   res.json({ items, total: items.length });
 });
 
-router.post("/api/email-campaigns", requireAuth, async (req, res): Promise<void> => {
+router.post("/email-campaigns", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const {
     campaignId, name, audience = "all", audienceLabel = "All Customers",
@@ -28,7 +28,7 @@ router.post("/api/email-campaigns", requireAuth, async (req, res): Promise<void>
   res.status(201).json(row);
 });
 
-router.patch("/api/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   const body = req.body as Partial<typeof emailCampaignsTable.$inferInsert>;
@@ -38,7 +38,7 @@ router.patch("/api/email-campaigns/:id", requireAuth, async (req, res): Promise<
   res.json(row);
 });
 
-router.delete("/api/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   await db.delete(emailCampaignsTable).where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId)));

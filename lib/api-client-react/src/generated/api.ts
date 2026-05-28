@@ -85,6 +85,15 @@ import type {
   GetRecentTransactionsParams,
   GetSalesChartParams,
   GetTopProductsParams,
+  GiftCard,
+  GiftCardInput,
+  GiftCardLedgerEntry,
+  GiftCardListResponse,
+  GiftCardSettings,
+  GiftCardSettingsInput,
+  GiftCardUpdateInput,
+  GiftCardValidateInput,
+  GiftCardValidateResponse,
   HealthStatus,
   InventoryItem,
   InventoryUpdate,
@@ -105,6 +114,7 @@ import type {
   ListCameraSnapshotsParams,
   ListCashDrawerEntriesParams,
   ListCustomersParams,
+  ListGiftCardsParams,
   ListInventoryParams,
   ListLaybys200,
   ListLaybysParams,
@@ -16362,5 +16372,675 @@ export const useDeleteDeliveryOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteDeliveryOrderMutationOptions(options));
+    }
+
+export const getListGiftCardsUrl = (params?: ListGiftCardsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/gift-cards?${stringifiedParams}` : `/api/gift-cards`
+}
+
+/**
+ * @summary List gift cards
+ */
+export const listGiftCards = async (params?: ListGiftCardsParams, options?: RequestInit): Promise<GiftCardListResponse> => {
+
+  return customFetch<GiftCardListResponse>(getListGiftCardsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGiftCardsQueryKey = (params?: ListGiftCardsParams,) => {
+    return [
+    `/api/gift-cards`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGiftCardsQueryOptions = <TData = Awaited<ReturnType<typeof listGiftCards>>, TError = ErrorType<unknown>>(params?: ListGiftCardsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftCards>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGiftCardsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGiftCards>>> = ({ signal }) => listGiftCards(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGiftCards>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGiftCardsQueryResult = NonNullable<Awaited<ReturnType<typeof listGiftCards>>>
+export type ListGiftCardsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List gift cards
+ */
+
+export function useListGiftCards<TData = Awaited<ReturnType<typeof listGiftCards>>, TError = ErrorType<unknown>>(
+ params?: ListGiftCardsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftCards>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGiftCardsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateGiftCardUrl = () => {
+
+
+
+
+  return `/api/gift-cards`
+}
+
+/**
+ * @summary Issue a gift card
+ */
+export const createGiftCard = async (giftCardInput: GiftCardInput, options?: RequestInit): Promise<GiftCard> => {
+
+  return customFetch<GiftCard>(getCreateGiftCardUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftCardInput,)
+  }
+);}
+
+
+
+
+export const getCreateGiftCardMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftCard>>, TError,{data: BodyType<GiftCardInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGiftCard>>, TError,{data: BodyType<GiftCardInput>}, TContext> => {
+
+const mutationKey = ['createGiftCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGiftCard>>, {data: BodyType<GiftCardInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGiftCard(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGiftCardMutationResult = NonNullable<Awaited<ReturnType<typeof createGiftCard>>>
+    export type CreateGiftCardMutationBody = BodyType<GiftCardInput>
+    export type CreateGiftCardMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Issue a gift card
+ */
+export const useCreateGiftCard = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftCard>>, TError,{data: BodyType<GiftCardInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGiftCard>>,
+        TError,
+        {data: BodyType<GiftCardInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGiftCardMutationOptions(options));
+    }
+
+export const getValidateGiftCardUrl = () => {
+
+
+
+
+  return `/api/gift-cards/validate`
+}
+
+/**
+ * @summary Validate a gift card for POS use
+ */
+export const validateGiftCard = async (giftCardValidateInput: GiftCardValidateInput, options?: RequestInit): Promise<GiftCardValidateResponse> => {
+
+  return customFetch<GiftCardValidateResponse>(getValidateGiftCardUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftCardValidateInput,)
+  }
+);}
+
+
+
+
+export const getValidateGiftCardMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateGiftCard>>, TError,{data: BodyType<GiftCardValidateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateGiftCard>>, TError,{data: BodyType<GiftCardValidateInput>}, TContext> => {
+
+const mutationKey = ['validateGiftCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateGiftCard>>, {data: BodyType<GiftCardValidateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  validateGiftCard(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateGiftCardMutationResult = NonNullable<Awaited<ReturnType<typeof validateGiftCard>>>
+    export type ValidateGiftCardMutationBody = BodyType<GiftCardValidateInput>
+    export type ValidateGiftCardMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Validate a gift card for POS use
+ */
+export const useValidateGiftCard = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateGiftCard>>, TError,{data: BodyType<GiftCardValidateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof validateGiftCard>>,
+        TError,
+        {data: BodyType<GiftCardValidateInput>},
+        TContext
+      > => {
+      return useMutation(getValidateGiftCardMutationOptions(options));
+    }
+
+export const getGetGiftCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/gift-cards/${id}`
+}
+
+/**
+ * @summary Get a gift card
+ */
+export const getGiftCard = async (id: number, options?: RequestInit): Promise<GiftCard> => {
+
+  return customFetch<GiftCard>(getGetGiftCardUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGiftCardQueryKey = (id: number,) => {
+    return [
+    `/api/gift-cards/${id}`
+    ] as const;
+    }
+
+
+export const getGetGiftCardQueryOptions = <TData = Awaited<ReturnType<typeof getGiftCard>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGiftCard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGiftCardQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGiftCard>>> = ({ signal }) => getGiftCard(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGiftCard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGiftCardQueryResult = NonNullable<Awaited<ReturnType<typeof getGiftCard>>>
+export type GetGiftCardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a gift card
+ */
+
+export function useGetGiftCard<TData = Awaited<ReturnType<typeof getGiftCard>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGiftCard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGiftCardQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateGiftCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/gift-cards/${id}`
+}
+
+/**
+ * @summary Update a gift card (status, balance adjustment, notes)
+ */
+export const updateGiftCard = async (id: number,
+    giftCardUpdateInput: GiftCardUpdateInput, options?: RequestInit): Promise<GiftCard> => {
+
+  return customFetch<GiftCard>(getUpdateGiftCardUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftCardUpdateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateGiftCardMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftCard>>, TError,{id: number;data: BodyType<GiftCardUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGiftCard>>, TError,{id: number;data: BodyType<GiftCardUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateGiftCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGiftCard>>, {id: number;data: BodyType<GiftCardUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateGiftCard(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGiftCardMutationResult = NonNullable<Awaited<ReturnType<typeof updateGiftCard>>>
+    export type UpdateGiftCardMutationBody = BodyType<GiftCardUpdateInput>
+    export type UpdateGiftCardMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a gift card (status, balance adjustment, notes)
+ */
+export const useUpdateGiftCard = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftCard>>, TError,{id: number;data: BodyType<GiftCardUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGiftCard>>,
+        TError,
+        {id: number;data: BodyType<GiftCardUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateGiftCardMutationOptions(options));
+    }
+
+export const getDeleteGiftCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/gift-cards/${id}`
+}
+
+/**
+ * @summary Delete a gift card
+ */
+export const deleteGiftCard = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteGiftCardUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGiftCardMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGiftCard>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGiftCard>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteGiftCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGiftCard>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteGiftCard(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGiftCardMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGiftCard>>>
+
+    export type DeleteGiftCardMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a gift card
+ */
+export const useDeleteGiftCard = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGiftCard>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGiftCard>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGiftCardMutationOptions(options));
+    }
+
+export const getListGiftCardLedgerUrl = (id: number,) => {
+
+
+
+
+  return `/api/gift-cards/${id}/ledger`
+}
+
+/**
+ * @summary List ledger entries for a gift card
+ */
+export const listGiftCardLedger = async (id: number, options?: RequestInit): Promise<GiftCardLedgerEntry[]> => {
+
+  return customFetch<GiftCardLedgerEntry[]>(getListGiftCardLedgerUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGiftCardLedgerQueryKey = (id: number,) => {
+    return [
+    `/api/gift-cards/${id}/ledger`
+    ] as const;
+    }
+
+
+export const getListGiftCardLedgerQueryOptions = <TData = Awaited<ReturnType<typeof listGiftCardLedger>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftCardLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGiftCardLedgerQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGiftCardLedger>>> = ({ signal }) => listGiftCardLedger(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGiftCardLedger>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGiftCardLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof listGiftCardLedger>>>
+export type ListGiftCardLedgerQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List ledger entries for a gift card
+ */
+
+export function useListGiftCardLedger<TData = Awaited<ReturnType<typeof listGiftCardLedger>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftCardLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGiftCardLedgerQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetGiftCardSettingsUrl = () => {
+
+
+
+
+  return `/api/gift-card-settings`
+}
+
+/**
+ * @summary Get gift card settings
+ */
+export const getGiftCardSettings = async ( options?: RequestInit): Promise<GiftCardSettings> => {
+
+  return customFetch<GiftCardSettings>(getGetGiftCardSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGiftCardSettingsQueryKey = () => {
+    return [
+    `/api/gift-card-settings`
+    ] as const;
+    }
+
+
+export const getGetGiftCardSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getGiftCardSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGiftCardSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGiftCardSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGiftCardSettings>>> = ({ signal }) => getGiftCardSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGiftCardSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGiftCardSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getGiftCardSettings>>>
+export type GetGiftCardSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get gift card settings
+ */
+
+export function useGetGiftCardSettings<TData = Awaited<ReturnType<typeof getGiftCardSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGiftCardSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGiftCardSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateGiftCardSettingsUrl = () => {
+
+
+
+
+  return `/api/gift-card-settings`
+}
+
+/**
+ * @summary Update gift card settings
+ */
+export const updateGiftCardSettings = async (giftCardSettingsInput: GiftCardSettingsInput, options?: RequestInit): Promise<GiftCardSettings> => {
+
+  return customFetch<GiftCardSettings>(getUpdateGiftCardSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftCardSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateGiftCardSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftCardSettings>>, TError,{data: BodyType<GiftCardSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGiftCardSettings>>, TError,{data: BodyType<GiftCardSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateGiftCardSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGiftCardSettings>>, {data: BodyType<GiftCardSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateGiftCardSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGiftCardSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateGiftCardSettings>>>
+    export type UpdateGiftCardSettingsMutationBody = BodyType<GiftCardSettingsInput>
+    export type UpdateGiftCardSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update gift card settings
+ */
+export const useUpdateGiftCardSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftCardSettings>>, TError,{data: BodyType<GiftCardSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGiftCardSettings>>,
+        TError,
+        {data: BodyType<GiftCardSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateGiftCardSettingsMutationOptions(options));
     }
 
