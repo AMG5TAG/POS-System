@@ -26,10 +26,10 @@ function statusLabel(status: string): string {
     case "pending": return "Pending";
     case "in-progress": return "In Progress";
     case "awaiting-partner-approval": return "Awaiting Partner Approval";
-    case "partner-replacement": return "Partner Replacement";
     case "awaiting-stock": return "Awaiting Stock";
     case "awaiting-customer": return "Awaiting Customer";
     case "completed": return "Completed";
+    case "partner-replacement": return "Partner Replacement";
     case "cancelled": return "Cancelled";
     default: return status.charAt(0).toUpperCase() + status.slice(1);
   }
@@ -40,10 +40,10 @@ function statusColor(status: string) {
     case "pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "in-progress": return "bg-blue-100 text-blue-700 border-blue-200";
     case "awaiting-partner-approval": return "bg-indigo-100 text-indigo-700 border-indigo-200";
-    case "partner-replacement": return "bg-teal-100 text-teal-700 border-teal-200";
     case "awaiting-stock": return "bg-purple-100 text-purple-700 border-purple-200";
     case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";
     case "completed": return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "partner-replacement": return "bg-teal-100 text-teal-700 border-teal-200";
     case "cancelled": return "bg-gray-100 text-gray-500 border-gray-200";
     default: return "bg-muted text-muted-foreground border-border";
   }

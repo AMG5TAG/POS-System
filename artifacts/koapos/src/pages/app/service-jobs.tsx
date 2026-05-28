@@ -39,10 +39,10 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending:                     { label: "Pending",                     className: "bg-amber-50 text-amber-700 border-amber-300" },
   "in-progress":               { label: "In Progress",                 className: "bg-blue-50 text-blue-700 border-blue-300" },
   "awaiting-partner-approval": { label: "Awaiting Partner Approval", className: "bg-indigo-50 text-indigo-700 border-indigo-300" },
-  "partner-replacement":       { label: "Partner Replacement",       className: "bg-teal-50 text-teal-700 border-teal-300" },
   "awaiting-stock":          { label: "Awaiting Stock",              className: "bg-purple-50 text-purple-700 border-purple-300" },
   "awaiting-customer":       { label: "Awaiting Customer",           className: "bg-orange-50 text-orange-600 border-orange-300" },
   completed:                 { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
+  "partner-replacement":     { label: "Partner Replacement",       className: "bg-teal-50 text-teal-700 border-teal-300" },
   cancelled:                 { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };
 
@@ -386,10 +386,10 @@ export default function ServiceJobsPage() {
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="in-progress">In Progress</SelectItem>
                     <SelectItem value="awaiting-partner-approval">Awaiting Partner Approval</SelectItem>
-                    <SelectItem value="partner-replacement">Partner Replacement</SelectItem>
                     <SelectItem value="awaiting-stock">Awaiting Stock</SelectItem>
                     <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="partner-replacement">Partner Replacement</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
