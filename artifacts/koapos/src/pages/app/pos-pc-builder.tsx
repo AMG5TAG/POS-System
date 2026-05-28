@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import {
   Search, X, Plus, ChevronRight, AlertTriangle, Settings,
-  ShoppingCart, Save, RotateCcw, Check, Package, Layers,
+  ShoppingCart, Save, RotateCcw, Check, Package, Layers, FolderOpen, Trash2,
 } from "lucide-react";
 import {
   PC_PART_SLOTS, loadPCCompat, loadPCBuilderSettings,
@@ -29,6 +29,45 @@ interface CompatWarning {
   slotA: string;
   slotB: string;
   message: string;
+}
+
+interface SavedBuild {
+  name: string;
+  build: Build;
+  assemblyHours: number;
+  savedAt: number;
+}
+
+const SAVED_BUILDS_KEY = "koapos_pc_builder_saved";
+const DRAFT_KEY        = "koapos_pc_builder_draft";
+
+function loadSavedBuilds(): SavedBuild[] {
+  try {
+    const raw = localStorage.getItem(SAVED_BUILDS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SavedBuild[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function persistSavedBuilds(builds: SavedBuild[]) {
+  try { localStorage.setItem(SAVED_BUILDS_KEY, JSON.stringify(builds)); } catch { /* ignore */ }
+}
+
+interface DraftBuild {
+  buildName: string;
+  build: Build;
+  assemblyHours: number;
+}
+
+function loadDraft(): DraftBuild | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftBuild;
+    if (!parsed || typeof parsed !== "object" || !parsed.build) return null;
+    return parsed;
+  } catch { return null; }
 }
 
 /* ─── Slot picker ────────────────────────────────────────────────────────── */
@@ -189,12 +228,24 @@ export default function POSPCBuilderPage() {
 
   const [compatMap, setCompatMap]       = useState<PCCompatMap>(() => loadPCCompat());
   const [settings, setSettings]         = useState<PCBuilderSettings>(() => loadPCBuilderSettings());
-  const [buildName, setBuildName]       = useState("Custom PC Build");
-  const [build, setBuild]               = useState<Build>({});
+  const initialDraft = useRef<DraftBuild | null>(loadDraft());
+  const [buildName, setBuildName]       = useState(() => initialDraft.current?.buildName ?? "Custom PC Build");
+  const [build, setBuild]               = useState<Build>(() => initialDraft.current?.build ?? {});
   const [showAllSlots, setShowAllSlots] = useState(false);
-  const [assemblyHours, setAssemblyHours] = useState(() => Math.round(loadPCBuilderSettings().assemblyTimeMinutes / 60));
+  const [assemblyHours, setAssemblyHours] = useState(
+    () => initialDraft.current?.assemblyHours ?? Math.round(loadPCBuilderSettings().assemblyTimeMinutes / 60),
+  );
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState("");
+  const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>(() => loadSavedBuilds());
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+
+  // Auto-persist the current configuration as a draft so a browser refresh
+  // doesn't wipe the user's in-progress build.
+  useEffect(() => {
+    const draft: DraftBuild = { buildName, build, assemblyHours };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
+  }, [buildName, build, assemblyHours]);
 
   const createProductMutation = useCreateProduct();
 
@@ -242,7 +293,39 @@ export default function POSPCBuilderPage() {
   };
 
   const handleSaveQuote = () => {
-    toast.success(`Build "${buildName}" saved (local builds disabled)`);
+    const trimmed = buildName.trim();
+    if (!trimmed) { toast.error("Build name is required"); return; }
+    if (componentCount === 0) { toast.error("Select at least one component before saving"); return; }
+    const entry: SavedBuild = {
+      name: trimmed,
+      build: { ...build },
+      assemblyHours,
+      savedAt: Date.now(),
+    };
+    const next = [
+      entry,
+      ...savedBuilds.filter((b) => b.name !== trimmed),
+    ];
+    setSavedBuilds(next);
+    persistSavedBuilds(next);
+    toast.success(`Build "${trimmed}" saved`);
+  };
+
+  const handleLoadBuild = (name: string) => {
+    const entry = savedBuilds.find((b) => b.name === name);
+    if (!entry) { toast.error("Build not found"); return; }
+    setBuildName(entry.name);
+    setBuild({ ...entry.build });
+    setAssemblyHours(entry.assemblyHours);
+    setLoadDialogOpen(false);
+    toast.success(`Loaded "${entry.name}"`);
+  };
+
+  const handleDeleteSavedBuild = (name: string) => {
+    const next = savedBuilds.filter((b) => b.name !== name);
+    setSavedBuilds(next);
+    persistSavedBuilds(next);
+    toast.success(`Deleted "${name}"`);
   };
 
   const handleAddToCart = () => {
@@ -528,6 +611,15 @@ export default function POSPCBuilderPage() {
                     <Save className="w-4 h-4" />
                     Save Quote
                   </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full gap-1.5 text-muted-foreground"
+                    disabled={savedBuilds.length === 0}
+                    onClick={() => setLoadDialogOpen(true)}
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    Load Build{savedBuilds.length > 0 ? ` (${savedBuilds.length})` : ""}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -602,6 +694,58 @@ export default function POSPCBuilderPage() {
               <Layers className="w-4 h-4 mr-1.5" />
               {createProductMutation.isPending ? "Saving…" : "Save Bundle"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load saved build dialog */}
+      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Load a saved build</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2 max-h-[60vh] overflow-y-auto">
+            {savedBuilds.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No saved builds yet. Use "Save Quote" to keep a configuration here.
+              </p>
+            ) : (
+              savedBuilds.map((b) => {
+                const partCount = Object.values(b.build).filter((id) => id !== null).length;
+                return (
+                  <div
+                    key={b.name}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-accent/50"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleLoadBuild(b.name)}
+                      className="flex-1 min-w-0 text-left"
+                    >
+                      <div className="font-medium text-sm truncate">{b.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {partCount} part{partCount !== 1 ? "s" : ""} ·{" "}
+                        {new Date(b.savedAt).toLocaleDateString("en-AU", {
+                          day: "numeric", month: "short", year: "numeric",
+                        })}
+                      </div>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => handleDeleteSavedBuild(b.name)}
+                      aria-label={`Delete ${b.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLoadDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
