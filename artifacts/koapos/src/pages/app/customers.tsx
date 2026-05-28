@@ -41,8 +41,11 @@ import {
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
-  Download, ChevronLeft, ChevronRight, GitMerge,
+  Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1922,6 +1925,9 @@ export default function CustomersPage() {
   const [mergePair,          setMergePair]          = useState<DuplicatePair | null>(null);
   const [mergeWizardOpen,    setMergeWizardOpen]    = useState(false);
 
+  /* ── Row-level merge picker state ── */
+  const [rowMergePickerCustomer, setRowMergePickerCustomer] = useState<Customer | null>(null);
+
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
@@ -2186,6 +2192,7 @@ export default function CustomersPage() {
                     <th className="p-3 text-left font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
                     <SortTh {...sh("Loyalty", "loyaltyPoints", "hidden md:table-cell")} />
                     <SortTh {...sh("Activity", "visitCount", "hidden lg:table-cell")} />
+                    <th className="p-3 w-10" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -2244,6 +2251,43 @@ export default function CustomersPage() {
                         </td>
                         <td className="p-3 hidden lg:table-cell text-muted-foreground">
                           {customer.visitCount ?? 0} visits
+                        </td>
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Row actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(customer)}>
+                                <Pencil className="w-4 h-4 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              {canMerge && (
+                                <DropdownMenuItem
+                                  onClick={() => setRowMergePickerCustomer(customer)}
+                                >
+                                  <GitMerge className="w-4 h-4 mr-2" /> Merge with another profile...
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  setDeletingCustomer(customer);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     );
@@ -2369,6 +2413,21 @@ export default function CustomersPage() {
           setMergeWizardOpen(true);
         } : () => {}}
       />
+
+      {/* ── Row-level merge picker ── */}
+      {rowMergePickerCustomer && (
+        <ManualMergePickerDialog
+          open={true}
+          onOpenChange={(v) => { if (!v) setRowMergePickerCustomer(null); }}
+          excludeId={rowMergePickerCustomer.id}
+          onSelect={(other) => {
+            const source = rowMergePickerCustomer;
+            setRowMergePickerCustomer(null);
+            setMergePair({ key: `${source.id}:${other.id}`, a: source, b: other, reason: "manual" });
+            setMergeWizardOpen(true);
+          }}
+        />
+      )}
 
       {/* ── Merge wizard ── */}
       <MergeWizardModal
