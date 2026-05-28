@@ -44,8 +44,21 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="border-t border-border py-12 bg-muted/20">
-        <div className="container mx-auto px-4 md:px-8 text-center text-muted-foreground text-sm">
-          &copy; {new Date().getFullYear()} KoaPOS. All rights reserved.
+        <div className="container mx-auto px-4 md:px-8 text-center text-muted-foreground text-sm space-y-2">
+          <p>
+            &copy; {new Date().getFullYear()} KoaPOS. All rights reserved.
+          </p>
+          <p className="text-xs">
+            Proudly Australian. 🇦🇺 Designed and Hosted by{" "}
+            <a
+              href="https://koastal.com.au"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground transition-colors"
+            >
+              KoaSOFT – Web Design, Software and App Development
+            </a>
+          </p>
         </div>
       </footer>
     </div>

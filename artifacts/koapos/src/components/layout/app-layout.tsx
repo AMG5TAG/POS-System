@@ -1407,6 +1407,17 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           </header>
 
           <main id="main-content" className="flex-1 overflow-auto bg-muted/10">{children}</main>
+          <footer className="border-t border-border py-3 bg-muted/20 text-center text-muted-foreground text-xs shrink-0">
+            Proudly Australian. 🇦🇺 Designed and Hosted by{" "}
+            <a
+              href="https://koastal.com.au"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground transition-colors"
+            >
+              KoaSOFT – Web Design, Software and App Development
+            </a>
+          </footer>
         </div>
       </div>
     </SidebarProvider>
