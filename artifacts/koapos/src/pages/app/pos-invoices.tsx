@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useGetMerchant } from "@workspace/api-client-react";
+import { useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
@@ -186,6 +186,7 @@ export default function POSInvoicesPage() {
   const allProducts = productsData?.items ?? [];
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
+  const { data: loyaltySettings } = useGetLoyaltySettings();
 
   /* ── Data loading ── */
   const load = async () => {
@@ -629,9 +630,9 @@ export default function POSInvoicesPage() {
         table{width:100%;border-collapse:collapse;margin:0 0 16px}
         th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px}
         td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
-        .totals{margin-left:auto;width:260px;margin-top:4px}
-        .totals .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}
-        .totals .grand{font-weight:700;border-top:2px solid #ddd;padding-top:8px;margin-top:4px;font-size:16px;color:#111;display:flex;justify-content:space-between}
+        .totals{margin-left:auto;width:270px;margin-top:8px}
+        .totals .row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0}
+        .totals .grand{font-weight:700;border-top:2px solid #ddd;padding-top:10px;margin-top:4px;font-size:15px;color:#111;display:flex;justify-content:space-between;align-items:center}
         .terms{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-left:3px solid ${brandColor};border-radius:0 6px 6px 0;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
         .terms-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#aaa;margin-bottom:6px}
         .inv-notes{margin-top:12px;padding:12px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
@@ -685,7 +686,20 @@ export default function POSInvoicesPage() {
         ${inv.discountTotal ? `<div class="row" style="color:#b45309"><span>Discount</span><span>-$${inv.discountTotal.toFixed(2)}</span></div>` : ""}
         <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
       </div>
-      ${opts.showLoyaltyEarned ? `<div class="loyalty-block"><span>&#9733; Loyalty Earned</span><span>+${Math.round(inv.total)} pts</span></div>` : ""}
+      ${opts.showLoyaltyEarned ? (() => {
+        const lType = loyaltySettings?.programType ?? "points";
+        let lIcon: string, lLabel: string, lValue: string;
+        if (lType === "cashback") {
+          const rate = loyaltySettings?.cashbackRate ?? 0.01;
+          const earned = Math.round(inv.total * rate * 100) / 100;
+          lIcon = "$"; lLabel = "Cashback Earned"; lValue = `+ $${earned.toFixed(2)}`;
+        } else {
+          const ppd = loyaltySettings?.pointsPerDollar ?? 1;
+          const pts = Math.floor(inv.total * ppd);
+          lIcon = "&#9733;"; lLabel = "Loyalty Earned"; lValue = `+${pts} pts`;
+        }
+        return `<div class="loyalty-block"><span>${lIcon} ${lLabel}</span><span>${lValue}</span></div>`;
+      })() : ""}
       ${paymentBlock}
       ${termsText ? `<div class="terms"><div class="terms-title">Payment Terms</div><div>${termsText}</div>${notesText ? `<div style="margin-top:8px;font-style:italic">${notesText}</div>` : ""}</div>` : notesText ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${notesText}</div>` : ""}
       ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
@@ -917,6 +931,19 @@ export default function POSInvoicesPage() {
 
     /* ── Loyalty Earned ── */
     if (opts.showLoyaltyEarned) {
+      const lPdfType = (loyaltySettings as LoyaltySettings | undefined)?.programType ?? "points";
+      let lPdfLeft: string, lPdfRight: string;
+      if (lPdfType === "cashback") {
+        const rate = (loyaltySettings as LoyaltySettings | undefined)?.cashbackRate ?? 0.01;
+        const earned = Math.round(inv.total * rate * 100) / 100;
+        lPdfLeft = "$ Cashback Earned";
+        lPdfRight = `+ $${earned.toFixed(2)}`;
+      } else {
+        const ppd = (loyaltySettings as LoyaltySettings | undefined)?.pointsPerDollar ?? 1;
+        const pts = Math.floor(inv.total * ppd);
+        lPdfLeft = "\u2605 Loyalty Earned";
+        lPdfRight = `+${pts} pts`;
+      }
       doc.setFillColor(236, 253, 245);
       doc.setDrawColor(167, 243, 208);
       doc.setLineWidth(0.3);
@@ -924,8 +951,8 @@ export default function POSInvoicesPage() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(6, 95, 70);
-      doc.text("★ Loyalty Earned", ML + 4, y + 5.5);
-      doc.text(`+${Math.round(inv.total)} pts`, W - MR - 2, y + 5.5, { align: "right" });
+      doc.text(lPdfLeft, ML + 4, y + 5.5);
+      doc.text(lPdfRight, W - MR - 2, y + 5.5, { align: "right" });
       y += 13;
     } else {
       y += 2;
