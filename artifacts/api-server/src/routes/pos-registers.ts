@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, posRegistersTable, posSettingsTable } from "@workspace/db";
+import { db, posRegistersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
@@ -41,28 +41,6 @@ router.delete("/pos-registers/:id", requireAuth, async (req, res): Promise<void>
   const id = parseInt(req.params.id as string, 10);
   await db.delete(posRegistersTable).where(and(eq(posRegistersTable.id, id), eq(posRegistersTable.merchantId, merchantId)));
   res.status(204).end();
-});
-
-router.get("/pos-settings", requireAuth, async (req, res): Promise<void> => {
-  const merchantId = req.session.merchantId!;
-  const [row] = await db.select().from(posSettingsTable).where(eq(posSettingsTable.merchantId, merchantId)).limit(1);
-  if (!row) {
-    const [created] = await db.insert(posSettingsTable).values({ merchantId }).returning();
-    res.json(created); return;
-  }
-  res.json(row);
-});
-
-router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
-  const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof posSettingsTable.$inferInsert>;
-  const [existing] = await db.select().from(posSettingsTable).where(eq(posSettingsTable.merchantId, merchantId)).limit(1);
-  if (existing) {
-    const [updated] = await db.update(posSettingsTable).set(body).where(eq(posSettingsTable.merchantId, merchantId)).returning();
-    res.json(updated); return;
-  }
-  const [created] = await db.insert(posSettingsTable).values({ merchantId, ...body }).returning();
-  res.json(created);
 });
 
 export default router;
