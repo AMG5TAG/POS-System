@@ -149,6 +149,7 @@ import type {
   MarketplaceConnectionListResponse,
   Merchant,
   MerchantUpdate,
+  MergeCustomerProfilesBody,
   Module,
   OnlineStoreSettings,
   OnlineStoreSettingsInput,
@@ -3339,14 +3340,16 @@ export const getMergeCustomerProfilesUrl = (primaryId: number,
  * @summary Merge two customer profiles into one atomic DB transaction
  */
 export const mergeCustomerProfiles = async (primaryId: number,
-    secondaryId: number, options?: RequestInit): Promise<Customer> => {
+    secondaryId: number,
+    mergeCustomerProfilesBody?: MergeCustomerProfilesBody, options?: RequestInit): Promise<Customer> => {
 
   return customFetch<Customer>(getMergeCustomerProfilesUrl(primaryId,secondaryId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mergeCustomerProfilesBody,)
   }
 );}
 
@@ -3354,8 +3357,8 @@ export const mergeCustomerProfiles = async (primaryId: number,
 
 
 export const getMergeCustomerProfilesMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number;data?: BodyType<MergeCustomerProfilesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number;data?: BodyType<MergeCustomerProfilesBody>}, TContext> => {
 
 const mutationKey = ['mergeCustomerProfiles'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -3367,10 +3370,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeCustomerProfiles>>, {primaryId: number;secondaryId: number}> = (props) => {
-          const {primaryId,secondaryId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeCustomerProfiles>>, {primaryId: number;secondaryId: number;data?: BodyType<MergeCustomerProfilesBody>}> = (props) => {
+          const {primaryId,secondaryId,data} = props ?? {};
 
-          return  mergeCustomerProfiles(primaryId,secondaryId,requestOptions)
+          return  mergeCustomerProfiles(primaryId,secondaryId,data,requestOptions)
         }
 
 
@@ -3381,18 +3384,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type MergeCustomerProfilesMutationResult = NonNullable<Awaited<ReturnType<typeof mergeCustomerProfiles>>>
-
+    export type MergeCustomerProfilesMutationBody = BodyType<MergeCustomerProfilesBody> | undefined
     export type MergeCustomerProfilesMutationError = ErrorType<void>
 
     /**
  * @summary Merge two customer profiles into one atomic DB transaction
  */
 export const useMergeCustomerProfiles = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCustomerProfiles>>, TError,{primaryId: number;secondaryId: number;data?: BodyType<MergeCustomerProfilesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof mergeCustomerProfiles>>,
         TError,
-        {primaryId: number;secondaryId: number},
+        {primaryId: number;secondaryId: number;data?: BodyType<MergeCustomerProfilesBody>},
         TContext
       > => {
       return useMutation(getMergeCustomerProfilesMutationOptions(options));

@@ -444,11 +444,16 @@ router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireMana
       day: "2-digit", month: "2-digit", year: "numeric",
     });
     const secName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || `ID ${secondaryId}`;
-    const auditNote = [
+    const reason: string | undefined = typeof req.body?.reason === "string" && req.body.reason.trim()
+      ? req.body.reason.trim()
+      : undefined;
+    const auditNoteParts = [
       `[System] Profile merged on ${mergeDate}.`,
       `Absorbed Profile ID: ${secondaryId} (${secName}).`,
       `Loyalty consolidated: +${secondary.loyaltyPoints ?? 0} pts, +$${parseFloat(secondary.totalSpent).toFixed(2)} total spent, +${secondary.visitCount ?? 0} visits.`,
-    ].join(" ");
+    ];
+    if (reason) auditNoteParts.push(`Reason: ${reason}`);
+    const auditNote = auditNoteParts.join(" ");
 
     await tx.insert(customerNotesTable).values({
       merchantId,

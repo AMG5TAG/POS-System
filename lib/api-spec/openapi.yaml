@@ -879,6 +879,16 @@ paths:
           schema:
             type: integer
           description: ID of the profile to absorb and delete
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Optional reason or note for the merge, recorded in the audit trail
       responses:
         "200":
           description: Merge succeeded — returns the updated primary customer

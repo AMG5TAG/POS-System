@@ -2863,6 +2863,11 @@ export type GenerateMissingReferralCodes200 = {
   updated: number;
 };
 
+export type MergeCustomerProfilesBody = {
+  /** Optional reason or note for the merge, recorded in the audit trail */
+  reason?: string;
+};
+
 export type ListTransactionsParams = {
 limit?: number;
 offset?: number;

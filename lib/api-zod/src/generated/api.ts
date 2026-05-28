@@ -1094,6 +1094,10 @@ export const MergeCustomerProfilesParams = zod.object({
   "secondaryId": zod.coerce.number().describe('ID of the profile to absorb and delete')
 })
 
+export const MergeCustomerProfilesBody = zod.object({
+  "reason": zod.string().optional().describe('Optional reason or note for the merge, recorded in the audit trail')
+})
+
 export const MergeCustomerProfilesResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),

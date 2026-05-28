@@ -84,6 +84,7 @@ type ParsedMergeNote = {
   absorbedId: string;
   absorbedName: string;
   loyaltyLine: string;
+  reason: string;
 };
 
 function isMergeNote(note: string): boolean {
@@ -93,13 +94,15 @@ function isMergeNote(note: string): boolean {
 function parseMergeNote(note: string): ParsedMergeNote | null {
   const dateMatch    = note.match(/merged on ([^.]+)\./);
   const idNameMatch  = note.match(/Profile ID:\s*(\d+)\s*\(([^)]+)\)/);
-  const loyaltyMatch = note.match(/Loyalty consolidated:\s*(.+)$/);
+  const loyaltyMatch = note.match(/Loyalty consolidated:\s*([^R]+?)(?:\s+Reason:|$)/);
+  const reasonMatch  = note.match(/Reason:\s*(.+)$/);
   if (!dateMatch || !idNameMatch) return null;
   return {
     date:         dateMatch[1].trim(),
     absorbedId:   idNameMatch[1].trim(),
     absorbedName: idNameMatch[2].trim(),
     loyaltyLine:  loyaltyMatch ? loyaltyMatch[1].trim() : "",
+    reason:       reasonMatch ? reasonMatch[1].trim() : "",
   };
 }
 
@@ -218,10 +221,12 @@ function MergeWizardModal({
   const [primarySide, setPrimarySide] = useState<"a" | "b">("a");
   const [selected, setSelected]       = useState<Record<string, "a" | "b">>({});
   const [pending, setPending]         = useState(false);
+  const [mergeReason, setMergeReason] = useState("")
 
   useEffect(() => {
     if (!pair) return;
     setPrimarySide("a");
+    setMergeReason("");
     const defaults: Record<string, "a" | "b"> = {};
     MERGE_TEXT_FIELDS.forEach(({ key }) => { defaults[key as string] = "a"; });
     setSelected(defaults);
@@ -256,7 +261,11 @@ function MergeWizardModal({
       await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
 
       // 2. Transactional merge: cascade FKs, aggregate loyalty, audit note, delete secondary
-      await mergeMutation.mutateAsync({ primaryId: primary.id, secondaryId: secondary.id });
+      await mergeMutation.mutateAsync({
+        primaryId: primary.id,
+        secondaryId: secondary.id,
+        ...(mergeReason.trim() ? { data: { reason: mergeReason.trim() } } : {}),
+      });
 
       queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
       toast.success(`Profiles merged — #${secondary.id} absorbed into #${primary.id}`);
@@ -455,6 +464,25 @@ function MergeWizardModal({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* ── Optional merge reason ───────────────────────────────────────── */}
+          <div className="rounded-lg border overflow-hidden">
+            <div className="px-4 py-2.5 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Reason / Note <span className="font-normal normal-case">(optional)</span>
+            </div>
+            <div className="px-4 py-3">
+              <textarea
+                className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 min-h-[72px]"
+                placeholder="e.g. Duplicate email — customer confirmed, created twice at checkout…"
+                value={mergeReason}
+                onChange={(e) => setMergeReason(e.target.value)}
+                maxLength={500}
+              />
+              {mergeReason.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1 text-right">{mergeReason.length}/500</p>
+              )}
             </div>
           </div>
 
@@ -1399,6 +1427,12 @@ function CustomerDetailInner({
                             <div className="flex items-start justify-between px-3 py-2 gap-2">
                               <span className="text-muted-foreground text-xs shrink-0">Consolidated</span>
                               <span className="text-xs text-foreground text-right">{parsed.loyaltyLine}</span>
+                            </div>
+                          )}
+                          {parsed.reason && (
+                            <div className="flex items-start justify-between px-3 py-2 gap-2">
+                              <span className="text-muted-foreground text-xs shrink-0">Reason</span>
+                              <span className="text-xs text-foreground text-right">{parsed.reason}</span>
                             </div>
                           )}
                         </div>
