@@ -5114,6 +5114,103 @@ paths:
         "401":
           description: Unauthorized
 
+  /pc-builder-settings:
+    get:
+      operationId: getPcBuilderSettings
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: PC builder settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PcBuilderSettings" }
+    put:
+      operationId: updatePcBuilderSettings
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PcBuilderSettingsInput" }
+      responses:
+        "200":
+          description: Updated PC builder settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PcBuilderSettings" }
+
+  /pc-compat-rules:
+    get:
+      operationId: listPcCompatRules
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: PC compatibility rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PcCompatRule" }
+    put:
+      operationId: upsertPcCompatRule
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PcCompatRuleInput" }
+      responses:
+        "200":
+          description: Upserted PC compatibility rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PcCompatRule" }
+
+  /pc-compat-rules/{ruleKey}:
+    delete:
+      operationId: deletePcCompatRule
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: ruleKey
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /print-3d-settings:
+    get:
+      operationId: getPrint3dSettings
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: 3D print settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Print3dSettings" }
+    put:
+      operationId: updatePrint3dSettings
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Print3dSettingsInput" }
+      responses:
+        "200":
+          description: Updated 3D print settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Print3dSettings" }
+
 components:
   schemas:
     HealthStatus:
@@ -7659,7 +7756,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -7675,6 +7772,8 @@ components:
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
         enabledShortcuts:            { type: string }
+        defaultSkuPrefix:            { type: string }
+        mapProvider:                 { type: string }
         updatedAt:                   { type: string, format: date-time }
 
     PosSettingsInput:
@@ -7692,6 +7791,8 @@ components:
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
         enabledShortcuts:            { type: string }
+        defaultSkuPrefix:            { type: string }
+        mapProvider:                 { type: string }
 
     LaybySettings:
       type: object
@@ -8497,7 +8598,7 @@ components:
 
     PosCodePrefixes:
       type: object
-      required: [id, merchantId, receiptPrefix, receiptDigits, invoicePrefix, invoiceDigits, servicePrefix, serviceDigits]
+      required: [id, merchantId, receiptPrefix, receiptDigits, invoicePrefix, invoiceDigits, servicePrefix, serviceDigits, appointmentPrefix, appointmentDigits, poPrefix, poDigits]
       properties:
         id: { type: integer }
         merchantId: { type: integer }
@@ -8507,6 +8608,10 @@ components:
         invoiceDigits: { type: integer }
         servicePrefix: { type: string }
         serviceDigits: { type: integer }
+        appointmentPrefix: { type: string }
+        appointmentDigits: { type: integer }
+        poPrefix: { type: string }
+        poDigits: { type: integer }
 
     PosCodePrefixesInput:
       type: object
@@ -8517,6 +8622,10 @@ components:
         invoiceDigits: { type: integer }
         servicePrefix: { type: string }
         serviceDigits: { type: integer }
+        appointmentPrefix: { type: string }
+        appointmentDigits: { type: integer }
+        poPrefix: { type: string }
+        poDigits: { type: integer }
 
     InventorySettings:
       type: object
@@ -8537,7 +8646,7 @@ components:
 
     RegionalExtSettings:
       type: object
-      required: [id, merchantId, abn, taxRates, defaultTaxRate, receiptPaperSize]
+      required: [id, merchantId, abn, taxRates, defaultTaxRate, receiptPaperSize, language, dateFormat, timeFormat, decimalSeparator, thousandsSeparator, measurementSystem, paperSize, firstDayOfWeek, fiscalYearStart, taxLabel, customTaxLabel, taxNumberLabel]
       properties:
         id: { type: integer }
         merchantId: { type: integer }
@@ -8545,6 +8654,18 @@ components:
         taxRates: { type: string }
         defaultTaxRate: { type: string }
         receiptPaperSize: { type: string }
+        language: { type: string }
+        dateFormat: { type: string }
+        timeFormat: { type: string }
+        decimalSeparator: { type: string }
+        thousandsSeparator: { type: string }
+        measurementSystem: { type: string }
+        paperSize: { type: string }
+        firstDayOfWeek: { type: string }
+        fiscalYearStart: { type: integer }
+        taxLabel: { type: string }
+        customTaxLabel: { type: string }
+        taxNumberLabel: { type: string }
 
     RegionalExtSettingsInput:
       type: object
@@ -8553,6 +8674,18 @@ components:
         taxRates: { type: string }
         defaultTaxRate: { type: string }
         receiptPaperSize: { type: string }
+        language: { type: string }
+        dateFormat: { type: string }
+        timeFormat: { type: string }
+        decimalSeparator: { type: string }
+        thousandsSeparator: { type: string }
+        measurementSystem: { type: string }
+        paperSize: { type: string }
+        firstDayOfWeek: { type: string }
+        fiscalYearStart: { type: integer }
+        taxLabel: { type: string }
+        customTaxLabel: { type: string }
+        taxNumberLabel: { type: string }
 
     StaffRosteringSettings:
       type: object
@@ -8811,3 +8944,94 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ProductPerformanceItem" }
+
+    PcBuilderSettings:
+      type: object
+      required: [id, merchantId, applyDefaultMarkup, defaultMarkup, laborRate, assemblyTimeMinutes, includeGst, showCompatWarnings, enabledSlots, updatedAt]
+      properties:
+        id:                  { type: integer }
+        merchantId:          { type: integer }
+        applyDefaultMarkup:  { type: string }
+        defaultMarkup:       { type: number }
+        laborRate:           { type: number }
+        assemblyTimeMinutes: { type: integer }
+        includeGst:          { type: string }
+        showCompatWarnings:  { type: string }
+        enabledSlots:        { type: string }
+        updatedAt:           { type: string, format: date-time }
+
+    PcBuilderSettingsInput:
+      type: object
+      properties:
+        applyDefaultMarkup:  { type: string }
+        defaultMarkup:       { type: number }
+        laborRate:           { type: number }
+        assemblyTimeMinutes: { type: integer }
+        includeGst:          { type: string }
+        showCompatWarnings:  { type: string }
+        enabledSlots:        { type: string }
+
+    PcCompatRule:
+      type: object
+      required: [id, merchantId, ruleKey, partType, socket, specs, updatedAt]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        ruleKey:    { type: string }
+        partType:   { type: string }
+        socket:     { type: string }
+        specs:      { type: string }
+        updatedAt:  { type: string, format: date-time }
+
+    PcCompatRuleInput:
+      type: object
+      required: [ruleKey]
+      properties:
+        ruleKey:  { type: string }
+        partType: { type: string }
+        socket:   { type: string }
+        specs:    { type: string }
+
+    Print3dSettings:
+      type: object
+      required: [id, merchantId, printerId, customPrinterName, printerWattage, purchasePrice, lifetimeHours, profitMargin, electricityRate, overheadPerHour, laborRate, setupTimeMinutes, failureRate, filamentWastePercent, postProcessingMinutes, coolingFactor, roundingMode, roundingValue, updatedAt]
+      properties:
+        id:                    { type: integer }
+        merchantId:            { type: integer }
+        printerId:             { type: string }
+        customPrinterName:     { type: string }
+        printerWattage:        { type: integer }
+        purchasePrice:         { type: number }
+        lifetimeHours:         { type: integer }
+        profitMargin:          { type: number }
+        electricityRate:       { type: number }
+        overheadPerHour:       { type: number }
+        laborRate:             { type: number }
+        setupTimeMinutes:      { type: integer }
+        failureRate:           { type: number }
+        filamentWastePercent:  { type: number }
+        postProcessingMinutes: { type: integer }
+        coolingFactor:         { type: number }
+        roundingMode:          { type: string }
+        roundingValue:         { type: number }
+        updatedAt:             { type: string, format: date-time }
+
+    Print3dSettingsInput:
+      type: object
+      properties:
+        printerId:             { type: string }
+        customPrinterName:     { type: string }
+        printerWattage:        { type: integer }
+        purchasePrice:         { type: number }
+        lifetimeHours:         { type: integer }
+        profitMargin:          { type: number }
+        electricityRate:       { type: number }
+        overheadPerHour:       { type: number }
+        laborRate:             { type: number }
+        setupTimeMinutes:      { type: integer }
+        failureRate:           { type: number }
+        filamentWastePercent:  { type: number }
+        postProcessingMinutes: { type: integer }
+        coolingFactor:         { type: number }
+        roundingMode:          { type: string }
+        roundingValue:         { type: number }

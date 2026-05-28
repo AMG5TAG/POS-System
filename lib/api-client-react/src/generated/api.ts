@@ -162,6 +162,10 @@ import type {
   OpenaiMessageInput,
   ParkedSale,
   ParkedSaleInput,
+  PcBuilderSettings,
+  PcBuilderSettingsInput,
+  PcCompatRule,
+  PcCompatRuleInput,
   Plan,
   PosCodePrefixes,
   PosCodePrefixesInput,
@@ -187,6 +191,8 @@ import type {
   PosTemplateListResponse,
   PriceTier,
   PriceTierInput,
+  Print3dSettings,
+  Print3dSettingsInput,
   Product,
   ProductBundle,
   ProductBundleInput,
@@ -21413,4 +21419,476 @@ export function useGetProductPerformance<TData = Awaited<ReturnType<typeof getPr
 
 
 
+
+export const getGetPcBuilderSettingsUrl = () => {
+
+
+
+
+  return `/api/pc-builder-settings`
+}
+
+export const getPcBuilderSettings = async ( options?: RequestInit): Promise<PcBuilderSettings> => {
+
+  return customFetch<PcBuilderSettings>(getGetPcBuilderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPcBuilderSettingsQueryKey = () => {
+    return [
+    `/api/pc-builder-settings`
+    ] as const;
+    }
+
+
+export const getGetPcBuilderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPcBuilderSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPcBuilderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPcBuilderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPcBuilderSettings>>> = ({ signal }) => getPcBuilderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPcBuilderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPcBuilderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPcBuilderSettings>>>
+export type GetPcBuilderSettingsQueryError = ErrorType<unknown>
+
+
+
+export function useGetPcBuilderSettings<TData = Awaited<ReturnType<typeof getPcBuilderSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPcBuilderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPcBuilderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdatePcBuilderSettingsUrl = () => {
+
+
+
+
+  return `/api/pc-builder-settings`
+}
+
+export const updatePcBuilderSettings = async (pcBuilderSettingsInput: PcBuilderSettingsInput, options?: RequestInit): Promise<PcBuilderSettings> => {
+
+  return customFetch<PcBuilderSettings>(getUpdatePcBuilderSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pcBuilderSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdatePcBuilderSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePcBuilderSettings>>, TError,{data: BodyType<PcBuilderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePcBuilderSettings>>, TError,{data: BodyType<PcBuilderSettingsInput>}, TContext> => {
+
+const mutationKey = ['updatePcBuilderSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePcBuilderSettings>>, {data: BodyType<PcBuilderSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePcBuilderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePcBuilderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updatePcBuilderSettings>>>
+    export type UpdatePcBuilderSettingsMutationBody = BodyType<PcBuilderSettingsInput>
+    export type UpdatePcBuilderSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdatePcBuilderSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePcBuilderSettings>>, TError,{data: BodyType<PcBuilderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePcBuilderSettings>>,
+        TError,
+        {data: BodyType<PcBuilderSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePcBuilderSettingsMutationOptions(options));
+    }
+
+export const getListPcCompatRulesUrl = () => {
+
+
+
+
+  return `/api/pc-compat-rules`
+}
+
+export const listPcCompatRules = async ( options?: RequestInit): Promise<PcCompatRule[]> => {
+
+  return customFetch<PcCompatRule[]>(getListPcCompatRulesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPcCompatRulesQueryKey = () => {
+    return [
+    `/api/pc-compat-rules`
+    ] as const;
+    }
+
+
+export const getListPcCompatRulesQueryOptions = <TData = Awaited<ReturnType<typeof listPcCompatRules>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPcCompatRules>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPcCompatRulesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPcCompatRules>>> = ({ signal }) => listPcCompatRules({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPcCompatRules>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPcCompatRulesQueryResult = NonNullable<Awaited<ReturnType<typeof listPcCompatRules>>>
+export type ListPcCompatRulesQueryError = ErrorType<unknown>
+
+
+
+export function useListPcCompatRules<TData = Awaited<ReturnType<typeof listPcCompatRules>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPcCompatRules>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPcCompatRulesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpsertPcCompatRuleUrl = () => {
+
+
+
+
+  return `/api/pc-compat-rules`
+}
+
+export const upsertPcCompatRule = async (pcCompatRuleInput: PcCompatRuleInput, options?: RequestInit): Promise<PcCompatRule> => {
+
+  return customFetch<PcCompatRule>(getUpsertPcCompatRuleUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pcCompatRuleInput,)
+  }
+);}
+
+
+
+
+export const getUpsertPcCompatRuleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertPcCompatRule>>, TError,{data: BodyType<PcCompatRuleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertPcCompatRule>>, TError,{data: BodyType<PcCompatRuleInput>}, TContext> => {
+
+const mutationKey = ['upsertPcCompatRule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertPcCompatRule>>, {data: BodyType<PcCompatRuleInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertPcCompatRule(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertPcCompatRuleMutationResult = NonNullable<Awaited<ReturnType<typeof upsertPcCompatRule>>>
+    export type UpsertPcCompatRuleMutationBody = BodyType<PcCompatRuleInput>
+    export type UpsertPcCompatRuleMutationError = ErrorType<unknown>
+
+    export const useUpsertPcCompatRule = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertPcCompatRule>>, TError,{data: BodyType<PcCompatRuleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertPcCompatRule>>,
+        TError,
+        {data: BodyType<PcCompatRuleInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertPcCompatRuleMutationOptions(options));
+    }
+
+export const getDeletePcCompatRuleUrl = (ruleKey: string,) => {
+
+
+
+
+  return `/api/pc-compat-rules/${ruleKey}`
+}
+
+export const deletePcCompatRule = async (ruleKey: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePcCompatRuleUrl(ruleKey),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeletePcCompatRuleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePcCompatRule>>, TError,{ruleKey: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePcCompatRule>>, TError,{ruleKey: string}, TContext> => {
+
+const mutationKey = ['deletePcCompatRule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePcCompatRule>>, {ruleKey: string}> = (props) => {
+          const {ruleKey} = props ?? {};
+
+          return  deletePcCompatRule(ruleKey,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePcCompatRuleMutationResult = NonNullable<Awaited<ReturnType<typeof deletePcCompatRule>>>
+
+    export type DeletePcCompatRuleMutationError = ErrorType<unknown>
+
+    export const useDeletePcCompatRule = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePcCompatRule>>, TError,{ruleKey: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePcCompatRule>>,
+        TError,
+        {ruleKey: string},
+        TContext
+      > => {
+      return useMutation(getDeletePcCompatRuleMutationOptions(options));
+    }
+
+export const getGetPrint3dSettingsUrl = () => {
+
+
+
+
+  return `/api/print-3d-settings`
+}
+
+export const getPrint3dSettings = async ( options?: RequestInit): Promise<Print3dSettings> => {
+
+  return customFetch<Print3dSettings>(getGetPrint3dSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPrint3dSettingsQueryKey = () => {
+    return [
+    `/api/print-3d-settings`
+    ] as const;
+    }
+
+
+export const getGetPrint3dSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPrint3dSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPrint3dSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPrint3dSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPrint3dSettings>>> = ({ signal }) => getPrint3dSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPrint3dSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPrint3dSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPrint3dSettings>>>
+export type GetPrint3dSettingsQueryError = ErrorType<unknown>
+
+
+
+export function useGetPrint3dSettings<TData = Awaited<ReturnType<typeof getPrint3dSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPrint3dSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPrint3dSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdatePrint3dSettingsUrl = () => {
+
+
+
+
+  return `/api/print-3d-settings`
+}
+
+export const updatePrint3dSettings = async (print3dSettingsInput: Print3dSettingsInput, options?: RequestInit): Promise<Print3dSettings> => {
+
+  return customFetch<Print3dSettings>(getUpdatePrint3dSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      print3dSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdatePrint3dSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePrint3dSettings>>, TError,{data: BodyType<Print3dSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePrint3dSettings>>, TError,{data: BodyType<Print3dSettingsInput>}, TContext> => {
+
+const mutationKey = ['updatePrint3dSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePrint3dSettings>>, {data: BodyType<Print3dSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePrint3dSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePrint3dSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updatePrint3dSettings>>>
+    export type UpdatePrint3dSettingsMutationBody = BodyType<Print3dSettingsInput>
+    export type UpdatePrint3dSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdatePrint3dSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePrint3dSettings>>, TError,{data: BodyType<Print3dSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePrint3dSettings>>,
+        TError,
+        {data: BodyType<Print3dSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePrint3dSettingsMutationOptions(options));
+    }
 

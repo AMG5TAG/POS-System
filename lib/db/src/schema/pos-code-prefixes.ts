@@ -10,6 +10,10 @@ export const posCodePrefixesTable = pgTable("pos_code_prefixes", {
   invoiceDigits: integer("invoice_digits").notNull().default(5),
   servicePrefix: text("service_prefix").notNull().default("SJ"),
   serviceDigits: integer("service_digits").notNull().default(5),
+  appointmentPrefix: text("appointment_prefix").notNull().default("APT"),
+  appointmentDigits: integer("appointment_digits").notNull().default(5),
+  poPrefix:      text("po_prefix").notNull().default("PO"),
+  poDigits:      integer("po_digits").notNull().default(5),
 });
 
 export type PosCodePrefixes = typeof posCodePrefixesTable.$inferSelect;

@@ -4310,6 +4310,8 @@ export const GetPosSettingsResponse = zod.object({
   "activeRegisterId": zod.string(),
   "hardwareConfig": zod.string(),
   "enabledShortcuts": zod.string(),
+  "defaultSkuPrefix": zod.string(),
+  "mapProvider": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -4329,7 +4331,9 @@ export const UpsertPosSettingsBody = zod.object({
   "staffLoginMessage": zod.string().optional(),
   "activeRegisterId": zod.string().optional(),
   "hardwareConfig": zod.string().optional(),
-  "enabledShortcuts": zod.string().optional()
+  "enabledShortcuts": zod.string().optional(),
+  "defaultSkuPrefix": zod.string().optional(),
+  "mapProvider": zod.string().optional()
 })
 
 export const UpsertPosSettingsResponse = zod.object({
@@ -4347,6 +4351,8 @@ export const UpsertPosSettingsResponse = zod.object({
   "activeRegisterId": zod.string(),
   "hardwareConfig": zod.string(),
   "enabledShortcuts": zod.string(),
+  "defaultSkuPrefix": zod.string(),
+  "mapProvider": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -6055,7 +6061,11 @@ export const GetPosCodePrefixesResponse = zod.object({
   "invoicePrefix": zod.string(),
   "invoiceDigits": zod.number(),
   "servicePrefix": zod.string(),
-  "serviceDigits": zod.number()
+  "serviceDigits": zod.number(),
+  "appointmentPrefix": zod.string(),
+  "appointmentDigits": zod.number(),
+  "poPrefix": zod.string(),
+  "poDigits": zod.number()
 })
 
 
@@ -6068,7 +6078,11 @@ export const UpdatePosCodePrefixesBody = zod.object({
   "invoicePrefix": zod.string().optional(),
   "invoiceDigits": zod.number().optional(),
   "servicePrefix": zod.string().optional(),
-  "serviceDigits": zod.number().optional()
+  "serviceDigits": zod.number().optional(),
+  "appointmentPrefix": zod.string().optional(),
+  "appointmentDigits": zod.number().optional(),
+  "poPrefix": zod.string().optional(),
+  "poDigits": zod.number().optional()
 })
 
 export const UpdatePosCodePrefixesResponse = zod.object({
@@ -6079,7 +6093,11 @@ export const UpdatePosCodePrefixesResponse = zod.object({
   "invoicePrefix": zod.string(),
   "invoiceDigits": zod.number(),
   "servicePrefix": zod.string(),
-  "serviceDigits": zod.number()
+  "serviceDigits": zod.number(),
+  "appointmentPrefix": zod.string(),
+  "appointmentDigits": zod.number(),
+  "poPrefix": zod.string(),
+  "poDigits": zod.number()
 })
 
 
@@ -6122,7 +6140,19 @@ export const GetRegionalExtSettingsResponse = zod.object({
   "abn": zod.string(),
   "taxRates": zod.string(),
   "defaultTaxRate": zod.string(),
-  "receiptPaperSize": zod.string()
+  "receiptPaperSize": zod.string(),
+  "language": zod.string(),
+  "dateFormat": zod.string(),
+  "timeFormat": zod.string(),
+  "decimalSeparator": zod.string(),
+  "thousandsSeparator": zod.string(),
+  "measurementSystem": zod.string(),
+  "paperSize": zod.string(),
+  "firstDayOfWeek": zod.string(),
+  "fiscalYearStart": zod.number(),
+  "taxLabel": zod.string(),
+  "customTaxLabel": zod.string(),
+  "taxNumberLabel": zod.string()
 })
 
 
@@ -6133,7 +6163,19 @@ export const UpdateRegionalExtSettingsBody = zod.object({
   "abn": zod.string().optional(),
   "taxRates": zod.string().optional(),
   "defaultTaxRate": zod.string().optional(),
-  "receiptPaperSize": zod.string().optional()
+  "receiptPaperSize": zod.string().optional(),
+  "language": zod.string().optional(),
+  "dateFormat": zod.string().optional(),
+  "timeFormat": zod.string().optional(),
+  "decimalSeparator": zod.string().optional(),
+  "thousandsSeparator": zod.string().optional(),
+  "measurementSystem": zod.string().optional(),
+  "paperSize": zod.string().optional(),
+  "firstDayOfWeek": zod.string().optional(),
+  "fiscalYearStart": zod.number().optional(),
+  "taxLabel": zod.string().optional(),
+  "customTaxLabel": zod.string().optional(),
+  "taxNumberLabel": zod.string().optional()
 })
 
 export const UpdateRegionalExtSettingsResponse = zod.object({
@@ -6142,7 +6184,19 @@ export const UpdateRegionalExtSettingsResponse = zod.object({
   "abn": zod.string(),
   "taxRates": zod.string(),
   "defaultTaxRate": zod.string(),
-  "receiptPaperSize": zod.string()
+  "receiptPaperSize": zod.string(),
+  "language": zod.string(),
+  "dateFormat": zod.string(),
+  "timeFormat": zod.string(),
+  "decimalSeparator": zod.string(),
+  "thousandsSeparator": zod.string(),
+  "measurementSystem": zod.string(),
+  "paperSize": zod.string(),
+  "firstDayOfWeek": zod.string(),
+  "fiscalYearStart": zod.number(),
+  "taxLabel": zod.string(),
+  "customTaxLabel": zod.string(),
+  "taxNumberLabel": zod.string()
 })
 
 
@@ -6563,6 +6617,144 @@ export const GetProductPerformanceResponse = zod.object({
   "grossProfit": zod.number(),
   "marginPct": zod.number()
 }))
+})
+
+
+export const GetPcBuilderSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "applyDefaultMarkup": zod.string(),
+  "defaultMarkup": zod.number(),
+  "laborRate": zod.number(),
+  "assemblyTimeMinutes": zod.number(),
+  "includeGst": zod.string(),
+  "showCompatWarnings": zod.string(),
+  "enabledSlots": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdatePcBuilderSettingsBody = zod.object({
+  "applyDefaultMarkup": zod.string().optional(),
+  "defaultMarkup": zod.number().optional(),
+  "laborRate": zod.number().optional(),
+  "assemblyTimeMinutes": zod.number().optional(),
+  "includeGst": zod.string().optional(),
+  "showCompatWarnings": zod.string().optional(),
+  "enabledSlots": zod.string().optional()
+})
+
+export const UpdatePcBuilderSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "applyDefaultMarkup": zod.string(),
+  "defaultMarkup": zod.number(),
+  "laborRate": zod.number(),
+  "assemblyTimeMinutes": zod.number(),
+  "includeGst": zod.string(),
+  "showCompatWarnings": zod.string(),
+  "enabledSlots": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const ListPcCompatRulesResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "ruleKey": zod.string(),
+  "partType": zod.string(),
+  "socket": zod.string(),
+  "specs": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPcCompatRulesResponse = zod.array(ListPcCompatRulesResponseItem)
+
+
+export const UpsertPcCompatRuleBody = zod.object({
+  "ruleKey": zod.string(),
+  "partType": zod.string().optional(),
+  "socket": zod.string().optional(),
+  "specs": zod.string().optional()
+})
+
+export const UpsertPcCompatRuleResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "ruleKey": zod.string(),
+  "partType": zod.string(),
+  "socket": zod.string(),
+  "specs": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeletePcCompatRuleParams = zod.object({
+  "ruleKey": zod.coerce.string()
+})
+
+
+export const GetPrint3dSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "printerId": zod.string(),
+  "customPrinterName": zod.string(),
+  "printerWattage": zod.number(),
+  "purchasePrice": zod.number(),
+  "lifetimeHours": zod.number(),
+  "profitMargin": zod.number(),
+  "electricityRate": zod.number(),
+  "overheadPerHour": zod.number(),
+  "laborRate": zod.number(),
+  "setupTimeMinutes": zod.number(),
+  "failureRate": zod.number(),
+  "filamentWastePercent": zod.number(),
+  "postProcessingMinutes": zod.number(),
+  "coolingFactor": zod.number(),
+  "roundingMode": zod.string(),
+  "roundingValue": zod.number(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdatePrint3dSettingsBody = zod.object({
+  "printerId": zod.string().optional(),
+  "customPrinterName": zod.string().optional(),
+  "printerWattage": zod.number().optional(),
+  "purchasePrice": zod.number().optional(),
+  "lifetimeHours": zod.number().optional(),
+  "profitMargin": zod.number().optional(),
+  "electricityRate": zod.number().optional(),
+  "overheadPerHour": zod.number().optional(),
+  "laborRate": zod.number().optional(),
+  "setupTimeMinutes": zod.number().optional(),
+  "failureRate": zod.number().optional(),
+  "filamentWastePercent": zod.number().optional(),
+  "postProcessingMinutes": zod.number().optional(),
+  "coolingFactor": zod.number().optional(),
+  "roundingMode": zod.string().optional(),
+  "roundingValue": zod.number().optional()
+})
+
+export const UpdatePrint3dSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "printerId": zod.string(),
+  "customPrinterName": zod.string(),
+  "printerWattage": zod.number(),
+  "purchasePrice": zod.number(),
+  "lifetimeHours": zod.number(),
+  "profitMargin": zod.number(),
+  "electricityRate": zod.number(),
+  "overheadPerHour": zod.number(),
+  "laborRate": zod.number(),
+  "setupTimeMinutes": zod.number(),
+  "failureRate": zod.number(),
+  "filamentWastePercent": zod.number(),
+  "postProcessingMinutes": zod.number(),
+  "coolingFactor": zod.number(),
+  "roundingMode": zod.string(),
+  "roundingValue": zod.number(),
+  "updatedAt": zod.coerce.date()
 })
 
 

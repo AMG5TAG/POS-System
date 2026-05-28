@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetPrint3dSettings, useUpdatePrint3dSettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -259,16 +261,39 @@ function NumInput({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementCalculators3DPage() {
+  const queryClient = useQueryClient();
+  const { data: serverSettings } = useGetPrint3dSettings({ query: { queryKey: ["print-3d-settings"] } });
+  const updateMutation = useUpdatePrint3dSettings();
+
   const [settings, setSettings] = useState<Settings3D>(DEFAULTS);
   const [dirty, setDirty] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<string>("Elegoo");
 
   useEffect(() => {
-    const loaded = load3DSettings();
-    setSettings(loaded);
-    const preset = PRINTER_PRESETS.find((p) => p.id === loaded.printerId);
-    if (preset) setSelectedBrand(preset.brand);
-  }, []);
+    if (serverSettings) {
+      const loaded: Settings3D = {
+        printerId:             serverSettings.printerId || DEFAULTS.printerId,
+        customPrinterName:     serverSettings.customPrinterName,
+        printerWattage:        serverSettings.printerWattage,
+        purchasePrice:         serverSettings.purchasePrice,
+        lifetimeHours:         serverSettings.lifetimeHours,
+        profitMargin:          serverSettings.profitMargin,
+        electricityRate:       serverSettings.electricityRate,
+        overheadPerHour:       serverSettings.overheadPerHour,
+        laborRate:             serverSettings.laborRate,
+        setupTimeMinutes:      serverSettings.setupTimeMinutes,
+        failureRate:           serverSettings.failureRate,
+        filamentWastePercent:  serverSettings.filamentWastePercent,
+        postProcessingMinutes: serverSettings.postProcessingMinutes,
+        coolingFactor:         serverSettings.coolingFactor,
+        roundingMode:          (serverSettings.roundingMode as Settings3D["roundingMode"]) || "none",
+        roundingValue:         serverSettings.roundingValue,
+      };
+      setSettings(loaded);
+      const preset = PRINTER_PRESETS.find((p) => p.id === loaded.printerId);
+      if (preset) setSelectedBrand(preset.brand);
+    }
+  }, [serverSettings]);
 
   function update<K extends keyof Settings3D>(key: K, value: Settings3D[K]) {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -288,19 +313,24 @@ export default function ManagementCalculators3DPage() {
     }
   }
 
-  function handleSave() {
-    save3DSettings(settings);
-    setDirty(false);
-    toast.success("3D Printing settings saved");
+  function persist(s: Settings3D, successMsg: string) {
+    updateMutation.mutate({ data: s }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["print-3d-settings"] });
+        setDirty(false);
+        toast.success(successMsg);
+      },
+      onError: () => toast.error("Failed to save settings"),
+    });
   }
+
+  function handleSave() { persist(settings, "3D Printing settings saved"); }
 
   function handleReset() {
     setSettings(DEFAULTS);
-    save3DSettings(DEFAULTS);
-    setDirty(false);
     const preset = PRINTER_PRESETS.find((p) => p.id === DEFAULTS.printerId);
     if (preset) setSelectedBrand(preset.brand);
-    toast.success("Settings reset to defaults");
+    persist(DEFAULTS, "Settings reset to defaults");
   }
 
   const selectedPreset = PRINTER_PRESETS.find((p) => p.id === settings.printerId);

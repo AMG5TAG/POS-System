@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant } from "@workspace/api-client-react";
+import {
+  useGetMerchant, useUpdateMerchant,
+  useGetRegionalExtSettings, useUpdateRegionalExtSettings,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
@@ -296,8 +299,30 @@ export default function SettingsBusinessPage() {
   /* Regional settings */
   const [regCurrency, setRegCurrency] = useState("AUD");
   const [regTimezone, setRegTimezone] = useState("Australia/Sydney");
-  const [regExt, setRegExt] = useState<RegExtSettings>(() => loadRegExt());
+  const [regExt, setRegExt] = useState<RegExtSettings>(REG_DEFAULT);
   const patchRegExt = (patch: Partial<RegExtSettings>) => setRegExt(prev => ({ ...prev, ...patch }));
+
+  const { data: regExtData } = useGetRegionalExtSettings({ query: { queryKey: ["regional-ext-settings"] } });
+  const updateRegExtMutation = useUpdateRegionalExtSettings();
+  useEffect(() => {
+    if (regExtData) {
+      setRegExt({
+        language:           regExtData.language,
+        dateFormat:         regExtData.dateFormat,
+        timeFormat:         regExtData.timeFormat as "12" | "24",
+        decimalSeparator:   regExtData.decimalSeparator as "." | ",",
+        thousandsSeparator: regExtData.thousandsSeparator as RegExtSettings["thousandsSeparator"],
+        measurementSystem:  regExtData.measurementSystem as "metric" | "imperial",
+        paperSize:          regExtData.paperSize as "A4" | "letter",
+        firstDayOfWeek:     regExtData.firstDayOfWeek as RegExtSettings["firstDayOfWeek"],
+        fiscalYearStart:    regExtData.fiscalYearStart,
+        taxLabel:           regExtData.taxLabel,
+        customTaxLabel:     regExtData.customTaxLabel,
+        taxNumberLabel:     regExtData.taxNumberLabel,
+        receiptPaperSize:   regExtData.receiptPaperSize as RegExtSettings["receiptPaperSize"],
+      });
+    }
+  }, [regExtData]);
 
   /* Category input */
   const [catInput, setCatInput] = useState("");
@@ -395,7 +420,11 @@ export default function SettingsBusinessPage() {
       { data: { currency: regCurrency || undefined, timezone: regTimezone || undefined } },
       {
         onSuccess: (updated) => {
-          saveRegExt(regExt);
+          updateRegExtMutation.mutate({ data: regExt }, {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: ["regional-ext-settings"] });
+            },
+          });
           login(updated);
           queryClient.invalidateQueries({ queryKey: ["merchant"] });
           toast.success("Regional settings saved");

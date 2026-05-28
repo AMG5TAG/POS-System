@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetPcBuilderSettings, useUpdatePcBuilderSettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,8 +98,28 @@ function savePCBuilderSettings(_s: PCBuilderSettings) {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementCalculatorsPCBuilderPage() {
-  const [settings, setSettings] = useState<PCBuilderSettings>(() => loadPCBuilderSettings());
+  const queryClient = useQueryClient();
+  const { data: serverSettings } = useGetPcBuilderSettings({ query: { queryKey: ["pc-builder-settings"] } });
+  const updateMutation = useUpdatePcBuilderSettings();
+
+  const [settings, setSettings] = useState<PCBuilderSettings>(DEFAULTS);
   const [dirty, setDirty]       = useState(false);
+
+  useEffect(() => {
+    if (serverSettings) {
+      let slots: string[] = DEFAULTS.enabledSlots;
+      try { const parsed = JSON.parse(serverSettings.enabledSlots); if (Array.isArray(parsed)) slots = parsed; } catch {}
+      setSettings({
+        applyDefaultMarkup:  serverSettings.applyDefaultMarkup === "true",
+        defaultMarkup:       serverSettings.defaultMarkup,
+        laborRate:           serverSettings.laborRate,
+        assemblyTimeMinutes: serverSettings.assemblyTimeMinutes,
+        includeGST:          serverSettings.includeGst === "true",
+        showCompatWarnings:  serverSettings.showCompatWarnings === "true",
+        enabledSlots:        slots,
+      });
+    }
+  }, [serverSettings]);
 
   const update = <K extends keyof PCBuilderSettings>(k: K, v: PCBuilderSettings[K]) => {
     setSettings((prev) => ({ ...prev, [k]: v }));
@@ -111,18 +133,27 @@ export default function ManagementCalculatorsPCBuilderPage() {
     update("enabledSlots", next);
   };
 
-  const handleSave = () => {
-    savePCBuilderSettings(settings);
-    setDirty(false);
-    toast.success("PC Builder settings saved");
+  const persist = (s: PCBuilderSettings, successMsg: string) => {
+    updateMutation.mutate({ data: {
+      applyDefaultMarkup:  s.applyDefaultMarkup ? "true" : "false",
+      defaultMarkup:       s.defaultMarkup,
+      laborRate:           s.laborRate,
+      assemblyTimeMinutes: s.assemblyTimeMinutes,
+      includeGst:          s.includeGST ? "true" : "false",
+      showCompatWarnings:  s.showCompatWarnings ? "true" : "false",
+      enabledSlots:        JSON.stringify(s.enabledSlots),
+    } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["pc-builder-settings"] });
+        setDirty(false);
+        toast.success(successMsg);
+      },
+      onError: () => toast.error("Failed to save settings"),
+    });
   };
 
-  const handleReset = () => {
-    setSettings(DEFAULTS);
-    savePCBuilderSettings(DEFAULTS);
-    setDirty(false);
-    toast.success("Settings reset to defaults");
-  };
+  const handleSave  = () => persist(settings, "PC Builder settings saved");
+  const handleReset = () => { setSettings(DEFAULTS); persist(DEFAULTS, "Settings reset to defaults"); };
 
   return (
     <AppLayout>

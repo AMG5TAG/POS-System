@@ -1912,6 +1912,8 @@ export interface PosSettings {
   activeRegisterId: string;
   hardwareConfig: string;
   enabledShortcuts: string;
+  defaultSkuPrefix: string;
+  mapProvider: string;
   updatedAt: string;
 }
 
@@ -1928,6 +1930,8 @@ export interface PosSettingsInput {
   activeRegisterId?: string;
   hardwareConfig?: string;
   enabledShortcuts?: string;
+  defaultSkuPrefix?: string;
+  mapProvider?: string;
 }
 
 export interface LaybySettings {
@@ -2602,6 +2606,10 @@ export interface PosCodePrefixes {
   invoiceDigits: number;
   servicePrefix: string;
   serviceDigits: number;
+  appointmentPrefix: string;
+  appointmentDigits: number;
+  poPrefix: string;
+  poDigits: number;
 }
 
 export interface PosCodePrefixesInput {
@@ -2611,6 +2619,10 @@ export interface PosCodePrefixesInput {
   invoiceDigits?: number;
   servicePrefix?: string;
   serviceDigits?: number;
+  appointmentPrefix?: string;
+  appointmentDigits?: number;
+  poPrefix?: string;
+  poDigits?: number;
 }
 
 export interface InventorySettings {
@@ -2634,6 +2646,18 @@ export interface RegionalExtSettings {
   taxRates: string;
   defaultTaxRate: string;
   receiptPaperSize: string;
+  language: string;
+  dateFormat: string;
+  timeFormat: string;
+  decimalSeparator: string;
+  thousandsSeparator: string;
+  measurementSystem: string;
+  paperSize: string;
+  firstDayOfWeek: string;
+  fiscalYearStart: number;
+  taxLabel: string;
+  customTaxLabel: string;
+  taxNumberLabel: string;
 }
 
 export interface RegionalExtSettingsInput {
@@ -2641,6 +2665,18 @@ export interface RegionalExtSettingsInput {
   taxRates?: string;
   defaultTaxRate?: string;
   receiptPaperSize?: string;
+  language?: string;
+  dateFormat?: string;
+  timeFormat?: string;
+  decimalSeparator?: string;
+  thousandsSeparator?: string;
+  measurementSystem?: string;
+  paperSize?: string;
+  firstDayOfWeek?: string;
+  fiscalYearStart?: number;
+  taxLabel?: string;
+  customTaxLabel?: string;
+  taxNumberLabel?: string;
 }
 
 export interface StaffRosteringSettings {
@@ -2845,6 +2881,87 @@ export interface ProductPerformanceReport {
   startDate: string;
   endDate: string;
   items: ProductPerformanceItem[];
+}
+
+export interface PcBuilderSettings {
+  id: number;
+  merchantId: number;
+  applyDefaultMarkup: string;
+  defaultMarkup: number;
+  laborRate: number;
+  assemblyTimeMinutes: number;
+  includeGst: string;
+  showCompatWarnings: string;
+  enabledSlots: string;
+  updatedAt: string;
+}
+
+export interface PcBuilderSettingsInput {
+  applyDefaultMarkup?: string;
+  defaultMarkup?: number;
+  laborRate?: number;
+  assemblyTimeMinutes?: number;
+  includeGst?: string;
+  showCompatWarnings?: string;
+  enabledSlots?: string;
+}
+
+export interface PcCompatRule {
+  id: number;
+  merchantId: number;
+  ruleKey: string;
+  partType: string;
+  socket: string;
+  specs: string;
+  updatedAt: string;
+}
+
+export interface PcCompatRuleInput {
+  ruleKey: string;
+  partType?: string;
+  socket?: string;
+  specs?: string;
+}
+
+export interface Print3dSettings {
+  id: number;
+  merchantId: number;
+  printerId: string;
+  customPrinterName: string;
+  printerWattage: number;
+  purchasePrice: number;
+  lifetimeHours: number;
+  profitMargin: number;
+  electricityRate: number;
+  overheadPerHour: number;
+  laborRate: number;
+  setupTimeMinutes: number;
+  failureRate: number;
+  filamentWastePercent: number;
+  postProcessingMinutes: number;
+  coolingFactor: number;
+  roundingMode: string;
+  roundingValue: number;
+  updatedAt: string;
+}
+
+export interface Print3dSettingsInput {
+  printerId?: string;
+  customPrinterName?: string;
+  printerWattage?: number;
+  purchasePrice?: number;
+  lifetimeHours?: number;
+  profitMargin?: number;
+  electricityRate?: number;
+  overheadPerHour?: number;
+  laborRate?: number;
+  setupTimeMinutes?: number;
+  failureRate?: number;
+  filamentWastePercent?: number;
+  postProcessingMinutes?: number;
+  coolingFactor?: number;
+  roundingMode?: string;
+  roundingValue?: number;
 }
 
 export type ListProductsParams = {

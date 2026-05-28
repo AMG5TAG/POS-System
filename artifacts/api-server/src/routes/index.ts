@@ -70,6 +70,9 @@ import serviceJobTemplatesRouter from "./service-job-templates";
 import marketingGeneratorsRouter from "./marketing-generators";
 import salesTemplatesRouter from "./sales-templates";
 import reportsRouter from "./reports";
+import pcBuilderSettingsRouter from "./pc-builder-settings";
+import pcCompatRulesRouter from "./pc-compat-rules";
+import print3dSettingsRouter from "./print-3d-settings";
 
 const router: IRouter = Router();
 
@@ -144,5 +147,8 @@ router.use(serviceJobTemplatesRouter);
 router.use(marketingGeneratorsRouter);
 router.use(salesTemplatesRouter);
 router.use(reportsRouter);
+router.use(pcBuilderSettingsRouter);
+router.use(pcCompatRulesRouter);
+router.use(print3dSettingsRouter);
 
 export default router;

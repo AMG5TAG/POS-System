@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Map, ExternalLink, Hash } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetPosSettings, useUpsertPosSettings,
+  useGetPosCodePrefixes, useUpdatePosCodePrefixes,
+} from "@workspace/api-client-react";
 
 export const MAP_PROVIDER_KEY = "koapos_map_provider";
 
@@ -85,19 +90,52 @@ export function previewCode(prefix: string, digits: number) {
 }
 
 export default function ManagementMiscPage() {
+  const queryClient = useQueryClient();
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const { data: prefixesData } = useGetPosCodePrefixes({ query: { queryKey: ["pos-code-prefixes"] } });
+  const upsertPosSettings = useUpsertPosSettings();
+  const updatePrefixes = useUpdatePosCodePrefixes();
+
   const [provider, setProvider] = useState<MapProvider>("google");
-  const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(() => loadCodePrefixes());
+  const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(CODE_PREFIX_DEFAULTS);
+
+  useEffect(() => {
+    if (posSettings?.mapProvider) setProvider(posSettings.mapProvider as MapProvider);
+  }, [posSettings]);
+
+  useEffect(() => {
+    if (prefixesData) {
+      setCodePrefixes({
+        receiptPrefix: prefixesData.receiptPrefix, receiptDigits: prefixesData.receiptDigits,
+        invoicePrefix: prefixesData.invoicePrefix, invoiceDigits: prefixesData.invoiceDigits,
+        servicePrefix: prefixesData.servicePrefix, serviceDigits: prefixesData.serviceDigits,
+        appointmentPrefix: prefixesData.appointmentPrefix, appointmentDigits: prefixesData.appointmentDigits,
+        poPrefix: prefixesData.poPrefix, poDigits: prefixesData.poDigits,
+      });
+    }
+  }, [prefixesData]);
 
   const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
     setCodePrefixes((prev) => ({ ...prev, [key]: value }));
 
   function saveMap() {
-    toast.success("Map provider saved");
+    upsertPosSettings.mutate({ data: { mapProvider: provider } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["pos-settings"] });
+        toast.success("Map provider saved");
+      },
+      onError: () => toast.error("Failed to save map provider"),
+    });
   }
 
   function saveCodePrefixesHandler() {
-    saveCodePrefixes(codePrefixes);
-    toast.success("Document code prefixes saved");
+    updatePrefixes.mutate({ data: codePrefixes }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["pos-code-prefixes"] });
+        toast.success("Document code prefixes saved");
+      },
+      onError: () => toast.error("Failed to save code prefixes"),
+    });
   }
 
   return (

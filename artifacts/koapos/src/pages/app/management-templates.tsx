@@ -6,8 +6,11 @@ import {
   useUpdateTaxSettings,
   useListSalesTemplates,
   useUpsertSalesTemplate,
+  useGetRegionalExtSettings,
+  useUpdateRegionalExtSettings,
   type SalesTemplate,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1309,19 +1312,17 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
 
 /* ─── Receipt & Print Settings ───────────────────────────────────────────── */
 
-const EXT_KEY = "koapos_regional_ext";
 type PaperSize = "58mm" | "80mm" | "a4";
 
-function loadPaperSize(): PaperSize {
-  return "80mm";
-}
-
-function savePaperSize(_size: PaperSize) {
-  /* no-op */
-}
-
 function ReceiptPrintSettings() {
-  const [selected, setSelected] = useState<PaperSize>(() => loadPaperSize());
+  const queryClient = useQueryClient();
+  const { data: regExtData } = useGetRegionalExtSettings({ query: { queryKey: ["regional-ext-settings"] } });
+  const updateRegExt = useUpdateRegionalExtSettings();
+  const [selected, setSelected] = useState<PaperSize>("80mm");
+
+  useEffect(() => {
+    if (regExtData?.receiptPaperSize) setSelected(regExtData.receiptPaperSize as PaperSize);
+  }, [regExtData]);
 
   const sizes: { value: PaperSize; label: string; desc: string; w: number; h: number }[] = [
     { value: "58mm", label: "58 mm",  desc: "Small handheld printers",             w: 24, h: 36 },
@@ -1330,8 +1331,13 @@ function ReceiptPrintSettings() {
   ];
 
   const handleSave = () => {
-    savePaperSize(selected);
-    toast.success("Print settings saved");
+    updateRegExt.mutate({ data: { receiptPaperSize: selected } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["regional-ext-settings"] });
+        toast.success("Print settings saved");
+      },
+      onError: () => toast.error("Failed to save print settings"),
+    });
   };
 
   return (

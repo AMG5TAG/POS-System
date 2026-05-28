@@ -12,6 +12,8 @@ import {
   useGetProductPricingHistory,
   useListFloorPlanZones,
   useGetFloorPlan,
+  useGetPosSettings,
+  useUpsertPosSettings,
   Product,
 } from "@workspace/api-client-react";
 import {
@@ -125,14 +127,6 @@ const NO_STOCK_TYPES = new Set(["service", "digital", "digital_code"]);
 
 /* ─── SKU helpers ────────────────────────────────────────────────────────── */
 
-const SKU_PREFIX_KEY = "koapos_sku_prefix";
-
-function getSavedPrefix() {
-  return "KP";
-}
-function savePrefix(_v: string) {
-  /* no-op */
-}
 function generateSKU(prefix: string) {
   const n = Math.floor(Math.random() * 90000) + 10000;
   return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
@@ -753,7 +747,12 @@ export default function ProductsPage() {
   const [pcPartType, setPcPartType]     = useState("");
   const [pcSocket, setPcSocket]         = useState("");
   const [pcCompatNotes, setPcCompatNotes] = useState("");
-  const [skuPrefix, setSkuPrefix]       = useState(getSavedPrefix);
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const upsertPosSettings = useUpsertPosSettings();
+  const [skuPrefix, setSkuPrefix]       = useState("KP");
+  useEffect(() => {
+    if (posSettings?.defaultSkuPrefix) setSkuPrefix(posSettings.defaultSkuPrefix);
+  }, [posSettings]);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("name");
@@ -1096,7 +1095,9 @@ export default function ProductsPage() {
   const handleSkuPrefixChange = (v: string) => {
     const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
     setSkuPrefix(clean);
-    savePrefix(clean);
+    upsertPosSettings.mutate({ data: { defaultSkuPrefix: clean } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pos-settings"] }),
+    });
   };
 
   const marginPct = form.costPrice && form.price && parseFloat(form.price) > 0
