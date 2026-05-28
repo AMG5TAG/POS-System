@@ -40,7 +40,7 @@ import {
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
-  Download, ChevronLeft, ChevronRight,
+  Download, ChevronLeft, ChevronRight, GitMerge,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
@@ -72,6 +72,32 @@ type CustomerForm = {
   shippingPostcode: string; shippingCountry: string;
   customerGroup: string; warningNote: string; agreedToMarketing: boolean; notes: string;
 };
+
+/* ─── Merge note helpers ─────────────────────────────────────────────────── */
+
+type ParsedMergeNote = {
+  date: string;
+  absorbedId: string;
+  absorbedName: string;
+  loyaltyLine: string;
+};
+
+function isMergeNote(note: string): boolean {
+  return note.startsWith("[System] Profile merged");
+}
+
+function parseMergeNote(note: string): ParsedMergeNote | null {
+  const dateMatch    = note.match(/merged on ([^.]+)\./);
+  const idNameMatch  = note.match(/Profile ID:\s*(\d+)\s*\(([^)]+)\)/);
+  const loyaltyMatch = note.match(/Loyalty consolidated:\s*(.+)$/);
+  if (!dateMatch || !idNameMatch) return null;
+  return {
+    date:         dateMatch[1].trim(),
+    absorbedId:   idNameMatch[1].trim(),
+    absorbedName: idNameMatch[2].trim(),
+    loyaltyLine:  loyaltyMatch ? loyaltyMatch[1].trim() : "",
+  };
+}
 
 const defaultForm: CustomerForm = {
   firstName: "", lastName: "", email: "", phone: "",
@@ -917,6 +943,7 @@ function CustomerDetailInner({
 
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
+  const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
 
   const billingAddr = [
     customer.billingStreet, customer.billingCity,
@@ -1032,6 +1059,12 @@ function CustomerDetailInner({
                   <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                     {customer.loyaltyPoints} pts
+                  </span>
+                )}
+                {mergeNoteCount > 0 && (
+                  <span className="flex items-center gap-0.5 text-xs text-indigo-600 font-medium">
+                    <GitMerge className="w-3 h-3" />
+                    Merged {mergeNoteCount} {mergeNoteCount === 1 ? "profile" : "profiles"}
                   </span>
                 )}
               </div>
@@ -1336,29 +1369,65 @@ function CustomerDetailInner({
             <p className="text-sm text-muted-foreground text-center py-4">No notes yet.</p>
           ) : (
             <div className="space-y-2">
-              {notes.map((note: CustomerNote) => (
-                <div key={note.id} className="rounded-xl border bg-background p-4 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm whitespace-pre-wrap">{note.note}</p>
+              {notes.map((note: CustomerNote) => {
+                if (isMergeNote(note.note)) {
+                  const parsed = parseMergeNote(note.note);
+                  return (
+                    <div key={note.id} className="rounded-xl border border-indigo-200 bg-indigo-50/60 dark:border-indigo-800 dark:bg-indigo-950/30 p-4 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
+                          <GitMerge className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Profile Merged</span>
+                        <span className="text-xs text-muted-foreground ml-auto">{parsed?.date ?? new Date(note.createdAt).toLocaleDateString("en-AU")}</span>
+                      </div>
+                      {parsed ? (
+                        <div className="rounded-lg border border-indigo-200/70 dark:border-indigo-800/70 bg-white/60 dark:bg-indigo-950/20 divide-y divide-indigo-100 dark:divide-indigo-900 text-sm">
+                          <div className="flex items-center justify-between px-3 py-2 gap-2">
+                            <span className="text-muted-foreground text-xs">Absorbed profile</span>
+                            <span className="font-medium text-foreground">{parsed.absorbedName}</span>
+                          </div>
+                          <div className="flex items-center justify-between px-3 py-2 gap-2">
+                            <span className="text-muted-foreground text-xs">Profile ID</span>
+                            <span className="font-mono text-xs text-foreground">#{parsed.absorbedId}</span>
+                          </div>
+                          {parsed.loyaltyLine && (
+                            <div className="flex items-start justify-between px-3 py-2 gap-2">
+                              <span className="text-muted-foreground text-xs shrink-0">Consolidated</span>
+                              <span className="text-xs text-foreground text-right">{parsed.loyaltyLine}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{note.note}</p>
+                      )}
                     </div>
-                    <Button
-                      variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeleteNote(note.id)}
-                      disabled={deleteNoteMutation.isPending}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                  );
+                }
+                return (
+                  <div key={note.id} className="rounded-xl border bg-background p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm whitespace-pre-wrap">{note.note}</p>
+                      </div>
+                      <Button
+                        variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteNote(note.id)}
+                        disabled={deleteNoteMutation.isPending}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {note.popupOnSale && <Badge variant="secondary" className="text-xs">Popup on sale</Badge>}
+                      {note.popupOnBooking && <Badge variant="secondary" className="text-xs">Popup on booking</Badge>}
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {new Date(note.createdAt).toLocaleDateString("en-AU")}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {note.popupOnSale && <Badge variant="secondary" className="text-xs">Popup on sale</Badge>}
-                    {note.popupOnBooking && <Badge variant="secondary" className="text-xs">Popup on booking</Badge>}
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {new Date(note.createdAt).toLocaleDateString("en-AU")}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
