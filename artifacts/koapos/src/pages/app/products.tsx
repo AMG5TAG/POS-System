@@ -503,7 +503,7 @@ function ProductDetailDialog({
   return (
     <>
     <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             <div className="flex items-center gap-3">
