@@ -6127,7 +6127,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -6180,7 +6180,7 @@ components:
           type: ["integer", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:

@@ -16,12 +16,13 @@ import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDeta
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const ALL_STATUSES: { value: string; label: string }[] = [
-  { value: "pending",           label: "Pending" },
-  { value: "in-progress",       label: "In Progress" },
-  { value: "awaiting-stock",    label: "Awaiting Stock" },
-  { value: "awaiting-customer", label: "Awaiting Customer" },
-  { value: "completed",         label: "Completed" },
-  { value: "cancelled",         label: "Cancelled" },
+  { value: "pending",                     label: "Pending" },
+  { value: "in-progress",                 label: "In Progress" },
+  { value: "awaiting-partner-approval",   label: "Awaiting Partner Approval" },
+  { value: "awaiting-stock",              label: "Awaiting Stock" },
+  { value: "awaiting-customer",           label: "Awaiting Customer" },
+  { value: "completed",                   label: "Completed" },
+  { value: "cancelled",                   label: "Cancelled" },
 ];
 
 function statusLabel(status: string): string {
@@ -31,25 +32,27 @@ function statusLabel(status: string): string {
 
 function statusColor(status: string): string {
   switch (status) {
-    case "in-progress":       return "bg-blue-100 text-blue-700 border-blue-200";
-    case "awaiting-stock":    return "bg-purple-100 text-purple-700 border-purple-200";
-    case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";
-    case "pending":           return "bg-yellow-100 text-yellow-700 border-yellow-200";
-    case "completed":         return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    case "cancelled":         return "bg-gray-100 text-gray-500 border-gray-200";
-    default:                  return "bg-muted text-muted-foreground border-border";
+    case "in-progress":                 return "bg-blue-100 text-blue-700 border-blue-200";
+    case "awaiting-partner-approval":   return "bg-indigo-100 text-indigo-700 border-indigo-200";
+    case "awaiting-stock":              return "bg-purple-100 text-purple-700 border-purple-200";
+    case "awaiting-customer":           return "bg-orange-100 text-orange-700 border-orange-200";
+    case "pending":                     return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    case "completed":                   return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "cancelled":                   return "bg-gray-100 text-gray-500 border-gray-200";
+    default:                            return "bg-muted text-muted-foreground border-border";
   }
 }
 
 function statusIconColor(status: string): string {
   switch (status) {
-    case "in-progress":       return "text-blue-500";
-    case "awaiting-stock":    return "text-purple-500";
-    case "awaiting-customer": return "text-orange-500";
-    case "pending":           return "text-yellow-500";
-    case "completed":         return "text-emerald-500";
-    case "cancelled":         return "text-gray-400";
-    default:                  return "text-muted-foreground";
+    case "in-progress":                 return "text-blue-500";
+    case "awaiting-partner-approval":   return "text-indigo-500";
+    case "awaiting-stock":              return "text-purple-500";
+    case "awaiting-customer":           return "text-orange-500";
+    case "pending":                     return "text-yellow-500";
+    case "completed":                   return "text-emerald-500";
+    case "cancelled":                   return "text-gray-400";
+    default:                            return "text-muted-foreground";
   }
 }
 

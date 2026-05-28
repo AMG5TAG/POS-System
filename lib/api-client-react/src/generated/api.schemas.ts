@@ -688,6 +688,7 @@ export type ServiceJobStatus = typeof ServiceJobStatus[keyof typeof ServiceJobSt
 export const ServiceJobStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
   'awaiting-stock': 'awaiting-stock',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
@@ -748,6 +749,7 @@ export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof Se
 export const ServiceJobInputStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
   'awaiting-stock': 'awaiting-stock',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
