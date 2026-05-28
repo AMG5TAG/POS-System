@@ -41,7 +41,7 @@ export const MAP_PROVIDERS: { id: MapProvider; label: string; description: strin
 ];
 
 export function buildMapUrl(address: string, provider?: MapProvider): string {
-  const p = provider ?? ((localStorage.getItem(MAP_PROVIDER_KEY) as MapProvider) ?? "google");
+  const p = provider ?? "google";
   const q = encodeURIComponent(address);
   switch (p) {
     case "apple":          return `https://maps.apple.com/?q=${q}`;
@@ -73,14 +73,11 @@ export const CODE_PREFIX_DEFAULTS: CodePrefixSettings = {
 };
 
 export function loadCodePrefixes(): CodePrefixSettings {
-  try {
-    const raw = localStorage.getItem(CODE_PREFIX_KEY);
-    return raw ? { ...CODE_PREFIX_DEFAULTS, ...JSON.parse(raw) } : CODE_PREFIX_DEFAULTS;
-  } catch { return CODE_PREFIX_DEFAULTS; }
+  return CODE_PREFIX_DEFAULTS;
 }
 
-export function saveCodePrefixes(s: CodePrefixSettings) {
-  localStorage.setItem(CODE_PREFIX_KEY, JSON.stringify(s));
+export function saveCodePrefixes(_s: CodePrefixSettings) {
+  /* no-op */
 }
 
 export function previewCode(prefix: string, digits: number) {
@@ -91,16 +88,10 @@ export default function ManagementMiscPage() {
   const [provider, setProvider] = useState<MapProvider>("google");
   const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(() => loadCodePrefixes());
 
-  useEffect(() => {
-    const stored = localStorage.getItem(MAP_PROVIDER_KEY) as MapProvider | null;
-    if (stored) setProvider(stored);
-  }, []);
-
   const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
     setCodePrefixes((prev) => ({ ...prev, [key]: value }));
 
   function saveMap() {
-    localStorage.setItem(MAP_PROVIDER_KEY, provider);
     toast.success("Map provider saved");
   }
 

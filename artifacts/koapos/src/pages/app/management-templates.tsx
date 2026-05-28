@@ -97,37 +97,16 @@ export const DEFAULT_OPTS: TplOpts = {
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
 };
 
-function useTplOpts(templateId: string) {
-  const key = `koapos_tpl_opts_${templateId}`;
-  const [opts, setOpts] = useState<TplOpts>(() => {
-    try {
-      const s = localStorage.getItem(key);
-      if (s) return { ...DEFAULT_OPTS, ...JSON.parse(s) as Partial<TplOpts> };
-    } catch {}
-    return { ...DEFAULT_OPTS };
-  });
-
-  useEffect(() => {
-    try {
-      const s = localStorage.getItem(key);
-      setOpts(s ? { ...DEFAULT_OPTS, ...JSON.parse(s) as Partial<TplOpts> } : { ...DEFAULT_OPTS });
-    } catch {
-      setOpts({ ...DEFAULT_OPTS });
-    }
-  }, [templateId, key]);
+function useTplOpts(_templateId: string) {
+  const [opts, setOpts] = useState<TplOpts>({ ...DEFAULT_OPTS });
 
   const update = useCallback(<K extends keyof TplOpts>(k: K, v: TplOpts[K]) => {
-    setOpts((prev) => {
-      const next = { ...prev, [k]: v };
-      try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, [key]);
+    setOpts((prev) => ({ ...prev, [k]: v }));
+  }, []);
 
   const reset = useCallback(() => {
-    try { localStorage.removeItem(key); } catch {}
     setOpts({ ...DEFAULT_OPTS });
-  }, [key]);
+  }, []);
 
   return { opts, update, reset };
 }
@@ -1238,23 +1217,11 @@ const EXT_KEY = "koapos_regional_ext";
 type PaperSize = "58mm" | "80mm" | "a4";
 
 function loadPaperSize(): PaperSize {
-  try {
-    const raw = localStorage.getItem(EXT_KEY);
-    if (!raw) return "80mm";
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (parsed.receiptPaperSize === "58mm" || parsed.receiptPaperSize === "80mm" || parsed.receiptPaperSize === "a4") {
-      return parsed.receiptPaperSize as PaperSize;
-    }
-  } catch {}
   return "80mm";
 }
 
-function savePaperSize(size: PaperSize) {
-  try {
-    const raw = localStorage.getItem(EXT_KEY);
-    const existing = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-    localStorage.setItem(EXT_KEY, JSON.stringify({ ...existing, receiptPaperSize: size }));
-  } catch {}
+function savePaperSize(_size: PaperSize) {
+  /* no-op */
 }
 
 function ReceiptPrintSettings() {
@@ -1315,9 +1282,7 @@ function ReceiptPrintSettings() {
 
 export default function ManagementTemplatesPage() {
   const [activeCategory, setActiveCategory] = useState<Category>("receipts");
-  const [activeTemplates, setActiveTemplates] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}"); } catch { return {}; }
-  });
+  const [activeTemplates, setActiveTemplates] = useState<Record<string, string>>({});
   const [previewId, setPreviewId] = useState<string>("r-pro");
 
   // Focused field tracking for QuickCodesBar insert
@@ -1364,7 +1329,6 @@ export default function ManagementTemplatesPage() {
   const setActive = (categoryId: Category, templateId: string) => {
     const next = { ...activeTemplates, [categoryId]: templateId };
     setActiveTemplates(next);
-    localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(next));
   };
 
   const currentTemplates = TEMPLATES[activeCategory];

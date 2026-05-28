@@ -748,7 +748,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
 
       /* Auto-generate SKU for products if not provided — matches Inventory SKU Generator format */
       if (entity.key === "products" && !payload.sku) {
-        const prefix = (() => { try { return localStorage.getItem("koapos_sku_prefix") || "KP"; } catch { return "KP"; } })();
+        const prefix = "KP";
         payload.sku = `${prefix}-${Math.floor(10000 + Math.random() * 90000)}`;
       }
 

@@ -56,6 +56,30 @@ tags:
     description: Pre-order management
   - name: product-return-auths
     description: Return authorisation management
+  - name: pos-register-sessions
+    description: POS register session tracking
+  - name: pos-favourites
+    description: POS favourite products per register
+  - name: pos-staff-sessions
+    description: POS staff login sessions
+  - name: pos-templates
+    description: POS receipt and template management
+  - name: pos-receipt-settings
+    description: POS receipt configuration
+  - name: pos-code-prefixes
+    description: POS code prefix settings
+  - name: inventory-settings
+    description: Inventory display settings
+  - name: regional-ext-settings
+    description: Regional extended settings
+  - name: staff-rostering-settings
+    description: Staff rostering configuration
+  - name: staff-links
+    description: Staff shared links
+  - name: service-job-templates
+    description: Service job templates
+  - name: marketing-generators
+    description: Marketing content generators
 
 paths:
   /healthz:
@@ -4096,6 +4120,526 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GiftCardSettings" }
 
+  /pos-register-sessions:
+    get:
+      operationId: listPosRegisterSessions
+      summary: List POS register sessions
+      tags: [pos-register-sessions]
+      parameters:
+        - in: query
+          name: registerId
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegisterSessionListResponse" }
+    post:
+      operationId: createPosRegisterSession
+      summary: Create POS register session
+      tags: [pos-register-sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRegisterSessionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegisterSession" }
+
+  /pos-register-sessions/{id}:
+    patch:
+      operationId: updatePosRegisterSession
+      summary: Update POS register session
+      tags: [pos-register-sessions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRegisterSessionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRegisterSession" }
+    delete:
+      operationId: deletePosRegisterSession
+      summary: Delete POS register session
+      tags: [pos-register-sessions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /pos-favourites:
+    get:
+      operationId: getPosFavourites
+      summary: Get POS favourites
+      tags: [pos-favourites]
+      parameters:
+        - in: query
+          name: registerId
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosFavourites" }
+    put:
+      operationId: updatePosFavourites
+      summary: Update POS favourites
+      tags: [pos-favourites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosFavouritesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosFavourites" }
+
+  /pos-staff-sessions:
+    get:
+      operationId: listPosStaffSessions
+      summary: List POS staff sessions
+      tags: [pos-staff-sessions]
+      parameters:
+        - in: query
+          name: registerId
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosStaffSessionListResponse" }
+    post:
+      operationId: createPosStaffSession
+      summary: Create POS staff session
+      tags: [pos-staff-sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosStaffSessionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosStaffSession" }
+
+  /pos-staff-sessions/{id}:
+    delete:
+      operationId: deletePosStaffSession
+      summary: Delete POS staff session
+      tags: [pos-staff-sessions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /pos-templates:
+    get:
+      operationId: listPosTemplates
+      summary: List POS templates
+      tags: [pos-templates]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosTemplateListResponse" }
+    post:
+      operationId: createPosTemplate
+      summary: Create POS template
+      tags: [pos-templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosTemplate" }
+
+  /pos-templates/{id}:
+    patch:
+      operationId: updatePosTemplate
+      summary: Update POS template
+      tags: [pos-templates]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosTemplateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosTemplate" }
+    delete:
+      operationId: deletePosTemplate
+      summary: Delete POS template
+      tags: [pos-templates]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /pos-receipt-settings:
+    get:
+      operationId: getPosReceiptSettings
+      summary: Get POS receipt settings
+      tags: [pos-receipt-settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosReceiptSettings" }
+    put:
+      operationId: updatePosReceiptSettings
+      summary: Update POS receipt settings
+      tags: [pos-receipt-settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosReceiptSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosReceiptSettings" }
+
+  /pos-code-prefixes:
+    get:
+      operationId: getPosCodePrefixes
+      summary: Get POS code prefixes
+      tags: [pos-code-prefixes]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosCodePrefixes" }
+    put:
+      operationId: updatePosCodePrefixes
+      summary: Update POS code prefixes
+      tags: [pos-code-prefixes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosCodePrefixesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosCodePrefixes" }
+
+  /inventory-settings:
+    get:
+      operationId: getInventorySettings
+      summary: Get inventory settings
+      tags: [inventory-settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySettings" }
+    put:
+      operationId: updateInventorySettings
+      summary: Update inventory settings
+      tags: [inventory-settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventorySettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySettings" }
+
+  /regional-ext-settings:
+    get:
+      operationId: getRegionalExtSettings
+      summary: Get regional ext settings
+      tags: [regional-ext-settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionalExtSettings" }
+    put:
+      operationId: updateRegionalExtSettings
+      summary: Update regional ext settings
+      tags: [regional-ext-settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegionalExtSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionalExtSettings" }
+
+  /staff-rostering-settings:
+    get:
+      operationId: getStaffRosteringSettings
+      summary: Get staff rostering settings
+      tags: [staff-rostering-settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffRosteringSettings" }
+    put:
+      operationId: updateStaffRosteringSettings
+      summary: Update staff rostering settings
+      tags: [staff-rostering-settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffRosteringSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffRosteringSettings" }
+
+  /staff-links:
+    get:
+      operationId: listStaffLinks
+      summary: List staff links
+      tags: [staff-links]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffLinkListResponse" }
+    post:
+      operationId: createStaffLink
+      summary: Create staff link
+      tags: [staff-links]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffLinkInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffLink" }
+
+  /staff-links/{id}:
+    patch:
+      operationId: updateStaffLink
+      summary: Update staff link
+      tags: [staff-links]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffLinkInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffLink" }
+    delete:
+      operationId: deleteStaffLink
+      summary: Delete staff link
+      tags: [staff-links]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /service-job-templates:
+    get:
+      operationId: listServiceJobTemplates
+      summary: List service job templates
+      tags: [service-job-templates]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceJobTemplateListResponse" }
+    post:
+      operationId: createServiceJobTemplate
+      summary: Create service job template
+      tags: [service-job-templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceJobTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceJobTemplate" }
+
+  /service-job-templates/{id}:
+    patch:
+      operationId: updateServiceJobTemplate
+      summary: Update service job template
+      tags: [service-job-templates]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceJobTemplateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceJobTemplate" }
+    delete:
+      operationId: deleteServiceJobTemplate
+      summary: Delete service job template
+      tags: [service-job-templates]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /marketing-generators:
+    get:
+      operationId: listMarketingGenerators
+      summary: List marketing generators
+      tags: [marketing-generators]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingGeneratorListResponse" }
+    post:
+      operationId: createMarketingGenerator
+      summary: Create marketing generator
+      tags: [marketing-generators]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarketingGeneratorInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingGenerator" }
+
+  /marketing-generators/{id}:
+    patch:
+      operationId: updateMarketingGenerator
+      summary: Update marketing generator
+      tags: [marketing-generators]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarketingGeneratorInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingGenerator" }
+    delete:
+      operationId: deleteMarketingGenerator
+      summary: Delete marketing generator
+      tags: [marketing-generators]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -7270,3 +7814,314 @@ components:
         expiryMonths:            { type: integer, nullable: true }
         allowPartialRedemptions: { type: string }
         prefix:                  { type: string }
+
+    PosRegisterSession:
+      type: object
+      required: [id, merchantId, registerId, openedAt, openedBy, openingFloat, openingNotes, sales, txCount]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        registerId: { type: string }
+        openedAt: { type: string }
+        openedBy: { type: string }
+        openingFloat: { type: string }
+        openingNotes: { type: string }
+        sales: { type: string }
+        txCount: { type: integer }
+        closedAt: { type: string, nullable: true }
+        cashCounted: { type: string, nullable: true }
+        eftposDeclared: { type: string, nullable: true }
+        closingNotes: { type: string, nullable: true }
+
+    PosRegisterSessionInput:
+      type: object
+      properties:
+        registerId: { type: string }
+        openedBy: { type: string }
+        openingFloat: { type: string }
+        openingNotes: { type: string }
+        sales: { type: string }
+        txCount: { type: integer }
+        closedAt: { type: string, nullable: true }
+        cashCounted: { type: string, nullable: true }
+        eftposDeclared: { type: string, nullable: true }
+        closingNotes: { type: string, nullable: true }
+
+    PosRegisterSessionListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PosRegisterSession" }
+        total: { type: integer }
+
+    PosFavourites:
+      type: object
+      required: [id, merchantId, registerId, productIds]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        registerId: { type: string }
+        productIds: { type: string }
+
+    PosFavouritesInput:
+      type: object
+      properties:
+        registerId: { type: string }
+        productIds: { type: string }
+
+    PosStaffSession:
+      type: object
+      required: [id, merchantId, registerId, staffId, staffName, staffPin, loggedInAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        registerId: { type: string }
+        staffId: { type: integer }
+        staffName: { type: string }
+        staffPin: { type: string }
+        loggedInAt: { type: string }
+
+    PosStaffSessionInput:
+      type: object
+      properties:
+        registerId: { type: string }
+        staffId: { type: integer }
+        staffName: { type: string }
+        staffPin: { type: string }
+
+    PosStaffSessionListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PosStaffSession" }
+        total: { type: integer }
+
+    PosTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, category, body, options, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        options: { type: string }
+        isActive: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    PosTemplateInput:
+      type: object
+      properties:
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        options: { type: string }
+        isActive: { type: string }
+
+    PosTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PosTemplate" }
+        total: { type: integer }
+
+    PosReceiptSettings:
+      type: object
+      required: [id, merchantId, paperSize, showLogo, showBarcode, footerText, headerText]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        paperSize: { type: string }
+        showLogo: { type: string }
+        showBarcode: { type: string }
+        footerText: { type: string }
+        headerText: { type: string }
+
+    PosReceiptSettingsInput:
+      type: object
+      properties:
+        paperSize: { type: string }
+        showLogo: { type: string }
+        showBarcode: { type: string }
+        footerText: { type: string }
+        headerText: { type: string }
+
+    PosCodePrefixes:
+      type: object
+      required: [id, merchantId, receiptPrefix, receiptDigits, invoicePrefix, invoiceDigits, servicePrefix, serviceDigits]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        receiptPrefix: { type: string }
+        receiptDigits: { type: integer }
+        invoicePrefix: { type: string }
+        invoiceDigits: { type: integer }
+        servicePrefix: { type: string }
+        serviceDigits: { type: integer }
+
+    PosCodePrefixesInput:
+      type: object
+      properties:
+        receiptPrefix: { type: string }
+        receiptDigits: { type: integer }
+        invoicePrefix: { type: string }
+        invoiceDigits: { type: integer }
+        servicePrefix: { type: string }
+        serviceDigits: { type: integer }
+
+    InventorySettings:
+      type: object
+      required: [id, merchantId, skuPrefix, showCosts, groupPricing]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        skuPrefix: { type: string }
+        showCosts: { type: string }
+        groupPricing: { type: string }
+
+    InventorySettingsInput:
+      type: object
+      properties:
+        skuPrefix: { type: string }
+        showCosts: { type: string }
+        groupPricing: { type: string }
+
+    RegionalExtSettings:
+      type: object
+      required: [id, merchantId, abn, taxRates, defaultTaxRate, receiptPaperSize]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        abn: { type: string }
+        taxRates: { type: string }
+        defaultTaxRate: { type: string }
+        receiptPaperSize: { type: string }
+
+    RegionalExtSettingsInput:
+      type: object
+      properties:
+        abn: { type: string }
+        taxRates: { type: string }
+        defaultTaxRate: { type: string }
+        receiptPaperSize: { type: string }
+
+    StaffRosteringSettings:
+      type: object
+      required: [id, merchantId, defaultWeekStart, defaultShiftLength, publishRosters]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        defaultWeekStart: { type: string }
+        defaultShiftLength: { type: string }
+        publishRosters: { type: string }
+
+    StaffRosteringSettingsInput:
+      type: object
+      properties:
+        defaultWeekStart: { type: string }
+        defaultShiftLength: { type: string }
+        publishRosters: { type: string }
+
+    StaffLink:
+      type: object
+      required: [id, merchantId, linkId, label, url, category, createdAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        linkId: { type: string }
+        label: { type: string }
+        url: { type: string }
+        category: { type: string }
+        createdAt: { type: string }
+
+    StaffLinkInput:
+      type: object
+      properties:
+        linkId: { type: string }
+        label: { type: string }
+        url: { type: string }
+        category: { type: string }
+
+    StaffLinkListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffLink" }
+        total: { type: integer }
+
+    ServiceJobTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, category, body, options, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        options: { type: string }
+        isActive: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    ServiceJobTemplateInput:
+      type: object
+      properties:
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        options: { type: string }
+        isActive: { type: string }
+
+    ServiceJobTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceJobTemplate" }
+        total: { type: integer }
+
+    MarketingGenerator:
+      type: object
+      required: [id, merchantId, generatorId, name, category, prompt, output, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        generatorId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        prompt: { type: string }
+        output: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    MarketingGeneratorInput:
+      type: object
+      properties:
+        generatorId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        prompt: { type: string }
+        output: { type: string }
+
+    MarketingGeneratorListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketingGenerator" }
+        total: { type: integer }

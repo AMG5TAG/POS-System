@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -14,41 +15,22 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Plus, Pencil, Trash2, Link2, ExternalLink, ShieldCheck,
-  UserSquare2, Clock, CalendarClock, ClipboardList, Coins, StickyNote, Target, Globe,
+  Globe,
 } from "lucide-react";
-
-/* ─── Tabs ───────────────────────────────────────────────────────────────── */
+import {
+  useListStaffLinks,
+  useCreateStaffLink,
+  useUpdateStaffLink,
+  useDeleteStaffLink,
+  type StaffLink as ApiStaffLink,
+} from "@workspace/api-client-react";
 
 /* ─── Role simulation ────────────────────────────────────────────────────── */
 
 type StaffRole = "owner" | "manager" | "cashier" | "staff";
 const SIM_ROLE_KEY = "koapos_sim_role";
 function getSimRole(): StaffRole {
-  return (localStorage.getItem(SIM_ROLE_KEY) as StaffRole) ?? "manager";
-}
-
-/* ─── Types ──────────────────────────────────────────────────────────────── */
-
-interface StaffLink {
-  id: string;
-  name: string;
-  url: string;
-  description: string;
-  createdBy: string;
-  createdAt: string;
-}
-
-const LINKS_KEY = "koapos_staff_links";
-
-function loadLinks(): StaffLink[] {
-  try {
-    const raw = localStorage.getItem(LINKS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveLinks(links: StaffLink[]) {
-  localStorage.setItem(LINKS_KEY, JSON.stringify(links));
+  return "manager";
 }
 
 function canManageLinks(role: StaffRole) {
@@ -62,21 +44,23 @@ function ensureHttp(url: string) {
 
 /* ─── Dialog ─────────────────────────────────────────────────────────────── */
 
-const BLANK = { name: "", url: "", description: "" };
+const BLANK = { label: "", url: "", category: "" };
 
 function LinkDialog({
   open, onOpenChange, initial, onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  initial: StaffLink | null;
+  initial: ApiStaffLink | null;
   onSave: (data: typeof BLANK) => void;
 }) {
-  const [form, setForm] = useState(initial ? { name: initial.name, url: initial.url, description: initial.description } : { ...BLANK });
+  const [form, setForm] = useState(
+    initial ? { label: initial.label, url: initial.url, category: initial.category || "" } : { ...BLANK }
+  );
   const setField = (k: keyof typeof BLANK, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSave = () => {
-    if (!form.name.trim()) { toast.error("Link name is required"); return; }
+    if (!form.label.trim()) { toast.error("Link name is required"); return; }
     if (!form.url.trim()) { toast.error("URL is required"); return; }
     onSave(form);
     onOpenChange(false);
@@ -92,7 +76,7 @@ function LinkDialog({
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
             <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Staff Portal, Training Videos…" autoFocus />
+            <Input value={form.label} onChange={(e) => setField("label", e.target.value)} placeholder="e.g. Staff Portal, Training Videos…" autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label>URL</Label>
@@ -101,8 +85,8 @@ function LinkDialog({
           <div className="space-y-1.5">
             <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
             <Textarea
-              value={form.description}
-              onChange={(e) => setField("description", e.target.value)}
+              value={form.category}
+              onChange={(e) => setField("category", e.target.value)}
               placeholder="Brief description of what this link is for…"
               className="h-20 resize-none"
             />
@@ -120,34 +104,39 @@ function LinkDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffLinksPage() {
-  const [links, setLinks] = useState<StaffLink[]>(loadLinks);
+  const { data: response, isLoading } = useListStaffLinks();
+  const links = response?.items ?? [];
+  const createLink = useCreateStaffLink();
+  const updateLink = useUpdateStaffLink();
+  const deleteLink = useDeleteStaffLink();
+
   const [role, setRole] = useState<StaffRole>(getSimRole);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<StaffLink | null>(null);
+  const [editing, setEditing] = useState<ApiStaffLink | null>(null);
 
   const canManage = canManageLinks(role);
-
-  const persist = (next: StaffLink[]) => { setLinks(next); saveLinks(next); };
 
   const handleSave = (data: typeof BLANK) => {
     const url = ensureHttp(data.url);
     if (editing) {
-      persist(links.map((l) => l.id === editing.id ? { ...editing, ...data, url } : l));
-      toast.success("Link updated");
+      updateLink.mutate(
+        { id: editing.id, data: { label: data.label, url, category: data.category || "general" } },
+        { onSuccess: () => toast.success("Link updated"), onError: () => toast.error("Failed to update link") }
+      );
     } else {
-      persist([...links, {
-        id: crypto.randomUUID(), ...data, url,
-        createdBy: role === "owner" ? "Owner" : "Manager",
-        createdAt: new Date().toISOString(),
-      }]);
-      toast.success("Link added");
+      createLink.mutate(
+        { data: { linkId: crypto.randomUUID(), label: data.label, url, category: data.category || "general" } },
+        { onSuccess: () => toast.success("Link added"), onError: () => toast.error("Failed to add link") }
+      );
     }
     setEditing(null);
   };
 
-  const handleDelete = (id: string) => {
-    persist(links.filter((l) => l.id !== id));
-    toast.success("Link removed");
+  const handleDelete = (id: number) => {
+    deleteLink.mutate(
+      { id },
+      { onSuccess: () => toast.success("Link removed"), onError: () => toast.error("Failed to remove link") }
+    );
   };
 
   return (
@@ -163,7 +152,7 @@ export default function StaffLinksPage() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Viewing as:</span>
-              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); localStorage.setItem(SIM_ROLE_KEY, r); }}>
+              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); }}>
                 <SelectTrigger className="h-6 text-xs border-0 p-0 shadow-none w-24 focus:ring-0">
                   <SelectValue />
                 </SelectTrigger>
@@ -191,7 +180,13 @@ export default function StaffLinksPage() {
           </div>
         )}
 
-        {links.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 rounded-xl" />
+            <Skeleton className="h-12 rounded-xl" />
+            <Skeleton className="h-12 rounded-xl" />
+          </div>
+        ) : links.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed py-16 text-center text-muted-foreground">
             <Link2 className="h-8 w-8 mx-auto mb-3 opacity-30" />
             <p className="font-medium text-sm">No links yet</p>
@@ -213,7 +208,7 @@ export default function StaffLinksPage() {
                     <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                       <Globe className="w-3.5 h-3.5" />
                     </div>
-                    <p className="text-sm font-medium truncate">{link.name}</p>
+                    <p className="text-sm font-medium truncate">{link.label}</p>
                   </div>
                   <a
                     href={link.url}
@@ -225,7 +220,7 @@ export default function StaffLinksPage() {
                     <ExternalLink className="w-3 h-3 shrink-0" />
                     <span className="truncate">{link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
                   </a>
-                  <p className="text-sm text-muted-foreground truncate">{link.description || <span className="italic opacity-50">—</span>}</p>
+                  <p className="text-sm text-muted-foreground truncate">{link.category || <span className="italic opacity-50">—</span>}</p>
                   <div className={cn("flex gap-1 justify-end", !canManage && "invisible")}>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setEditing(link); setDialogOpen(true); }}>
                       <Pencil className="w-3.5 h-3.5" />

@@ -28,7 +28,7 @@ import {
 type StaffRole = "owner" | "manager" | "cashier" | "staff";
 const SIM_ROLE_KEY = "koapos_sim_role";
 function getSimRole(): StaffRole {
-  return (localStorage.getItem(SIM_ROLE_KEY) as StaffRole) ?? "manager";
+  return "manager";
 }
 
 const ROLE_LABELS: Record<StaffRole, string> = {
@@ -56,14 +56,11 @@ interface StaffNote {
 const NOTES_KEY = "koapos_staff_notes";
 
 function loadNotes(): StaffNote[] {
-  try {
-    const raw = localStorage.getItem(NOTES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  return [];
 }
 
-function saveNotes(notes: StaffNote[]) {
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+function saveNotes(_notes: StaffNote[]) {
+  /* no-op */
 }
 
 /* ─── Permissions ────────────────────────────────────────────────────────── */
@@ -305,7 +302,7 @@ export default function StaffNotesPage() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Viewing as:</span>
-              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); localStorage.setItem(SIM_ROLE_KEY, r); }}>
+              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); }}>
                 <SelectTrigger className="h-6 text-xs border-0 p-0 shadow-none w-24 focus:ring-0">
                   <SelectValue />
                 </SelectTrigger>

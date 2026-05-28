@@ -127,13 +127,8 @@ function StepNav({ current }: { current: number }) {
 
 /* ─── POS Register selector ──────────────────────────────────────────────── */
 
-const POS_REGISTERS_KEY = "koapos_pos_registers";
-
 function PosRegisterSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const registers: { id: string; name: string; type: string }[] = (() => {
-    try { return JSON.parse(localStorage.getItem(POS_REGISTERS_KEY) ?? "[]"); }
-    catch { return []; }
-  })();
+  const registers: { id: string; name: string; type: string }[] = [];
 
   return (
     <div className="rounded-xl border p-4 bg-muted/10 space-y-3">

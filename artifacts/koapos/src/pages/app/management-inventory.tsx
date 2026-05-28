@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Boxes, Shuffle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useGetInventorySettings,
+  useUpdateInventorySettings,
+} from "@workspace/api-client-react";
 
 const INVENTORY_TABS = [
   { href: "#display",       label: "Display",        icon: Boxes },
@@ -13,56 +18,70 @@ const INVENTORY_TABS = [
   { href: "#sku-generator", label: "SKU Generator",  icon: Shuffle },
 ];
 
-export const DISPLAY_SHOW_HIDE_COSTS_KEY = "koapos_display_show_hide_costs_btn";
-export const GROUP_PRICING_KEY = "koapos_enable_group_pricing";
-
-const SKU_PREFIX_KEY = "koapos_sku_prefix";
-
-function getSavedSkuPrefix() {
-  try { return localStorage.getItem(SKU_PREFIX_KEY) || "KP"; } catch { return "KP"; }
-}
-function saveSkuPrefix(v: string) {
-  try { localStorage.setItem(SKU_PREFIX_KEY, v); } catch { /* ignore */ }
-}
 function previewSKU(prefix: string) {
   return `${prefix || "KP"}-${Math.floor(10000 + Math.random() * 90000)}`;
 }
-function getShowHideCosts() {
-  try { return localStorage.getItem(DISPLAY_SHOW_HIDE_COSTS_KEY) === "true"; } catch { return false; }
-}
-function setShowHideCostsPref(v: boolean) {
-  try { localStorage.setItem(DISPLAY_SHOW_HIDE_COSTS_KEY, v ? "true" : "false"); } catch { /* ignore */ }
-}
-function getGroupPricingEnabled() {
-  try { return localStorage.getItem(GROUP_PRICING_KEY) === "true"; } catch { return false; }
-}
-function setGroupPricingPref(v: boolean) {
-  try { localStorage.setItem(GROUP_PRICING_KEY, v ? "true" : "false"); } catch { /* ignore */ }
-}
 
 export default function ManagementInventoryPage() {
-  const [showHideCostsBtn, setShowHideCostsBtnState] = useState(getShowHideCosts);
-  const [enableGroupPricing, setEnableGroupPricingState] = useState(getGroupPricingEnabled);
-  const [skuPrefix, setSkuPrefix] = useState(getSavedSkuPrefix);
-  const [skuPreview, setSkuPreview] = useState(() => previewSKU(getSavedSkuPrefix()));
+  const { data: settings, isLoading } = useGetInventorySettings();
+  const update = useUpdateInventorySettings();
+
+  const [showHideCostsBtn, setShowHideCostsBtnState] = useState(false);
+  const [enableGroupPricing, setEnableGroupPricingState] = useState(false);
+  const [skuPrefix, setSkuPrefix] = useState("KP");
+  const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
+
+  useEffect(() => {
+    if (settings) {
+      setShowHideCostsBtnState(settings.showCosts === "true");
+      setEnableGroupPricingState(settings.groupPricing === "true");
+      setSkuPrefix(settings.skuPrefix || "KP");
+      setSkuPreview(previewSKU(settings.skuPrefix || "KP"));
+    }
+  }, [settings]);
+
+  function persist(patch: { showCosts?: string; groupPricing?: string; skuPrefix?: string }) {
+    update.mutate(
+      { data: patch },
+      {
+        onSuccess: () => toast.success("Settings saved"),
+        onError: () => toast.error("Failed to save settings"),
+      }
+    );
+  }
 
   function toggleShowHideCosts(v: boolean) {
     setShowHideCostsBtnState(v);
-    setShowHideCostsPref(v);
+    persist({ showCosts: v ? "true" : "false" });
     toast.success(v ? "Hide Costs button enabled in Products" : "Hide Costs button hidden");
   }
 
   function toggleGroupPricing(v: boolean) {
     setEnableGroupPricingState(v);
-    setGroupPricingPref(v);
+    persist({ groupPricing: v ? "true" : "false" });
     toast.success(v ? "Customer Group Pricing enabled" : "Customer Group Pricing disabled");
   }
 
   function handleSkuPrefixChange(v: string) {
     const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
     setSkuPrefix(clean);
-    saveSkuPrefix(clean);
     setSkuPreview(previewSKU(clean));
+    persist({ skuPrefix: clean });
+  }
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="p-6 md:p-8 space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl lg:col-span-2" />
+          </div>
+        </div>
+      </AppLayout>
+    );
   }
 
   return (

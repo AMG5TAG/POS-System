@@ -48,20 +48,13 @@ interface LeaveRequest {
   createdAt: string;
 }
 
-/* ─── localStorage ───────────────────────────────────────────────────────── */
+/* ─── Data storage ───────────────────────────────────────────────────────── */
 
-const ROSTER_KEY  = "koapos_roster_shifts";
-const LEAVE_KEY   = "koapos_leave_requests";
+function loadShifts(): RosterShift[] { return []; }
+function saveShifts(_s: RosterShift[]) { /* no-op */ }
 
-function loadShifts(): RosterShift[] {
-  try { const r = localStorage.getItem(ROSTER_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
-}
-function saveShifts(s: RosterShift[]) { localStorage.setItem(ROSTER_KEY, JSON.stringify(s)); }
-
-function loadLeave(): LeaveRequest[] {
-  try { const r = localStorage.getItem(LEAVE_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
-}
-function saveLeave(l: LeaveRequest[]) { localStorage.setItem(LEAVE_KEY, JSON.stringify(l)); }
+function loadLeave(): LeaveRequest[] { return []; }
+function saveLeave(_l: LeaveRequest[]) { /* no-op */ }
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 

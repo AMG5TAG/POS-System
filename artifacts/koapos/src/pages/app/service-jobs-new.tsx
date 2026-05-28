@@ -235,32 +235,9 @@ export default function ServiceJobNewPage() {
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
 
-  const svcOpts = useMemo((): TplOpts => {
-    try {
-      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
-      const tplId = active.service || "ss-standard";
-      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
-      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
-    } catch { return { ...DEFAULT_OPTS }; }
-  }, [successJob]); // refresh opts whenever the success dialog opens
-
-  const emailOpts = useMemo((): TplOpts => {
-    try {
-      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
-      const tplId = active.emails || "email-plain";
-      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
-      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
-    } catch { return { ...DEFAULT_OPTS }; }
-  }, [successJob]);
-
-  const smsOpts = useMemo((): TplOpts => {
-    try {
-      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) || "{}") as Record<string, string>;
-      const tplId = active.sms || "sms-standard";
-      const raw = localStorage.getItem(`koapos_tpl_opts_${tplId}`);
-      return raw ? { ...DEFAULT_OPTS, ...JSON.parse(raw) as Partial<TplOpts> } : { ...DEFAULT_OPTS };
-    } catch { return { ...DEFAULT_OPTS }; }
-  }, [successJob]);
+  const svcOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
+  const emailOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
+  const smsOpts = useMemo((): TplOpts => ({ ...DEFAULT_OPTS }), []);
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(todayISO());
@@ -427,15 +404,7 @@ export default function ServiceJobNewPage() {
 
   function handleSubmit() {
     if (!customerId) { toast.error("Please select a customer"); return; }
-    let jobNumberPrefix = "KS", jobNumberDigits = 4;
-    try {
-      const raw = localStorage.getItem("koapos_code_prefixes");
-      if (raw) {
-        const p = JSON.parse(raw) as Record<string, unknown>;
-        if (typeof p.servicePrefix === "string" && p.servicePrefix) jobNumberPrefix = p.servicePrefix;
-        if (typeof p.serviceDigits === "number" && p.serviceDigits > 0) jobNumberDigits = p.serviceDigits;
-      }
-    } catch { /* use defaults */ }
+    const jobNumberPrefix = "KS", jobNumberDigits = 4;
 
     createMutation.mutate(
       {

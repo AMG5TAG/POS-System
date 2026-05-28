@@ -5369,3 +5369,601 @@ export const UpdateGiftCardSettingsResponse = zod.object({
 })
 
 
+/**
+ * @summary List POS register sessions
+ */
+export const ListPosRegisterSessionsQueryParams = zod.object({
+  "registerId": zod.coerce.string().optional()
+})
+
+export const ListPosRegisterSessionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "openedAt": zod.string(),
+  "openedBy": zod.string(),
+  "openingFloat": zod.string(),
+  "openingNotes": zod.string(),
+  "sales": zod.string(),
+  "txCount": zod.number(),
+  "closedAt": zod.string().nullish(),
+  "cashCounted": zod.string().nullish(),
+  "eftposDeclared": zod.string().nullish(),
+  "closingNotes": zod.string().nullish()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create POS register session
+ */
+export const CreatePosRegisterSessionBody = zod.object({
+  "registerId": zod.string().optional(),
+  "openedBy": zod.string().optional(),
+  "openingFloat": zod.string().optional(),
+  "openingNotes": zod.string().optional(),
+  "sales": zod.string().optional(),
+  "txCount": zod.number().optional(),
+  "closedAt": zod.string().nullish(),
+  "cashCounted": zod.string().nullish(),
+  "eftposDeclared": zod.string().nullish(),
+  "closingNotes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update POS register session
+ */
+export const UpdatePosRegisterSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePosRegisterSessionBody = zod.object({
+  "registerId": zod.string().optional(),
+  "openedBy": zod.string().optional(),
+  "openingFloat": zod.string().optional(),
+  "openingNotes": zod.string().optional(),
+  "sales": zod.string().optional(),
+  "txCount": zod.number().optional(),
+  "closedAt": zod.string().nullish(),
+  "cashCounted": zod.string().nullish(),
+  "eftposDeclared": zod.string().nullish(),
+  "closingNotes": zod.string().nullish()
+})
+
+export const UpdatePosRegisterSessionResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "openedAt": zod.string(),
+  "openedBy": zod.string(),
+  "openingFloat": zod.string(),
+  "openingNotes": zod.string(),
+  "sales": zod.string(),
+  "txCount": zod.number(),
+  "closedAt": zod.string().nullish(),
+  "cashCounted": zod.string().nullish(),
+  "eftposDeclared": zod.string().nullish(),
+  "closingNotes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Delete POS register session
+ */
+export const DeletePosRegisterSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get POS favourites
+ */
+export const GetPosFavouritesQueryParams = zod.object({
+  "registerId": zod.coerce.string().optional()
+})
+
+export const GetPosFavouritesResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "productIds": zod.string()
+})
+
+
+/**
+ * @summary Update POS favourites
+ */
+export const UpdatePosFavouritesBody = zod.object({
+  "registerId": zod.string().optional(),
+  "productIds": zod.string().optional()
+})
+
+export const UpdatePosFavouritesResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "productIds": zod.string()
+})
+
+
+/**
+ * @summary List POS staff sessions
+ */
+export const ListPosStaffSessionsQueryParams = zod.object({
+  "registerId": zod.coerce.string().optional()
+})
+
+export const ListPosStaffSessionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "registerId": zod.string(),
+  "staffId": zod.number(),
+  "staffName": zod.string(),
+  "staffPin": zod.string(),
+  "loggedInAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create POS staff session
+ */
+export const CreatePosStaffSessionBody = zod.object({
+  "registerId": zod.string().optional(),
+  "staffId": zod.number().optional(),
+  "staffName": zod.string().optional(),
+  "staffPin": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete POS staff session
+ */
+export const DeletePosStaffSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List POS templates
+ */
+export const ListPosTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "options": zod.string(),
+  "isActive": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create POS template
+ */
+export const CreatePosTemplateBody = zod.object({
+  "templateId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional(),
+  "options": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+
+/**
+ * @summary Update POS template
+ */
+export const UpdatePosTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePosTemplateBody = zod.object({
+  "templateId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional(),
+  "options": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+export const UpdatePosTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "options": zod.string(),
+  "isActive": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete POS template
+ */
+export const DeletePosTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get POS receipt settings
+ */
+export const GetPosReceiptSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "paperSize": zod.string(),
+  "showLogo": zod.string(),
+  "showBarcode": zod.string(),
+  "footerText": zod.string(),
+  "headerText": zod.string()
+})
+
+
+/**
+ * @summary Update POS receipt settings
+ */
+export const UpdatePosReceiptSettingsBody = zod.object({
+  "paperSize": zod.string().optional(),
+  "showLogo": zod.string().optional(),
+  "showBarcode": zod.string().optional(),
+  "footerText": zod.string().optional(),
+  "headerText": zod.string().optional()
+})
+
+export const UpdatePosReceiptSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "paperSize": zod.string(),
+  "showLogo": zod.string(),
+  "showBarcode": zod.string(),
+  "footerText": zod.string(),
+  "headerText": zod.string()
+})
+
+
+/**
+ * @summary Get POS code prefixes
+ */
+export const GetPosCodePrefixesResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "receiptPrefix": zod.string(),
+  "receiptDigits": zod.number(),
+  "invoicePrefix": zod.string(),
+  "invoiceDigits": zod.number(),
+  "servicePrefix": zod.string(),
+  "serviceDigits": zod.number()
+})
+
+
+/**
+ * @summary Update POS code prefixes
+ */
+export const UpdatePosCodePrefixesBody = zod.object({
+  "receiptPrefix": zod.string().optional(),
+  "receiptDigits": zod.number().optional(),
+  "invoicePrefix": zod.string().optional(),
+  "invoiceDigits": zod.number().optional(),
+  "servicePrefix": zod.string().optional(),
+  "serviceDigits": zod.number().optional()
+})
+
+export const UpdatePosCodePrefixesResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "receiptPrefix": zod.string(),
+  "receiptDigits": zod.number(),
+  "invoicePrefix": zod.string(),
+  "invoiceDigits": zod.number(),
+  "servicePrefix": zod.string(),
+  "serviceDigits": zod.number()
+})
+
+
+/**
+ * @summary Get inventory settings
+ */
+export const GetInventorySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "skuPrefix": zod.string(),
+  "showCosts": zod.string(),
+  "groupPricing": zod.string()
+})
+
+
+/**
+ * @summary Update inventory settings
+ */
+export const UpdateInventorySettingsBody = zod.object({
+  "skuPrefix": zod.string().optional(),
+  "showCosts": zod.string().optional(),
+  "groupPricing": zod.string().optional()
+})
+
+export const UpdateInventorySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "skuPrefix": zod.string(),
+  "showCosts": zod.string(),
+  "groupPricing": zod.string()
+})
+
+
+/**
+ * @summary Get regional ext settings
+ */
+export const GetRegionalExtSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "abn": zod.string(),
+  "taxRates": zod.string(),
+  "defaultTaxRate": zod.string(),
+  "receiptPaperSize": zod.string()
+})
+
+
+/**
+ * @summary Update regional ext settings
+ */
+export const UpdateRegionalExtSettingsBody = zod.object({
+  "abn": zod.string().optional(),
+  "taxRates": zod.string().optional(),
+  "defaultTaxRate": zod.string().optional(),
+  "receiptPaperSize": zod.string().optional()
+})
+
+export const UpdateRegionalExtSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "abn": zod.string(),
+  "taxRates": zod.string(),
+  "defaultTaxRate": zod.string(),
+  "receiptPaperSize": zod.string()
+})
+
+
+/**
+ * @summary Get staff rostering settings
+ */
+export const GetStaffRosteringSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "defaultWeekStart": zod.string(),
+  "defaultShiftLength": zod.string(),
+  "publishRosters": zod.string()
+})
+
+
+/**
+ * @summary Update staff rostering settings
+ */
+export const UpdateStaffRosteringSettingsBody = zod.object({
+  "defaultWeekStart": zod.string().optional(),
+  "defaultShiftLength": zod.string().optional(),
+  "publishRosters": zod.string().optional()
+})
+
+export const UpdateStaffRosteringSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "defaultWeekStart": zod.string(),
+  "defaultShiftLength": zod.string(),
+  "publishRosters": zod.string()
+})
+
+
+/**
+ * @summary List staff links
+ */
+export const ListStaffLinksResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "category": zod.string(),
+  "createdAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create staff link
+ */
+export const CreateStaffLinkBody = zod.object({
+  "linkId": zod.string().optional(),
+  "label": zod.string().optional(),
+  "url": zod.string().optional(),
+  "category": zod.string().optional()
+})
+
+
+/**
+ * @summary Update staff link
+ */
+export const UpdateStaffLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateStaffLinkBody = zod.object({
+  "linkId": zod.string().optional(),
+  "label": zod.string().optional(),
+  "url": zod.string().optional(),
+  "category": zod.string().optional()
+})
+
+export const UpdateStaffLinkResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "linkId": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "category": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete staff link
+ */
+export const DeleteStaffLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List service job templates
+ */
+export const ListServiceJobTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "options": zod.string(),
+  "isActive": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create service job template
+ */
+export const CreateServiceJobTemplateBody = zod.object({
+  "templateId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional(),
+  "options": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+
+/**
+ * @summary Update service job template
+ */
+export const UpdateServiceJobTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateServiceJobTemplateBody = zod.object({
+  "templateId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional(),
+  "options": zod.string().optional(),
+  "isActive": zod.string().optional()
+})
+
+export const UpdateServiceJobTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "options": zod.string(),
+  "isActive": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete service job template
+ */
+export const DeleteServiceJobTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List marketing generators
+ */
+export const ListMarketingGeneratorsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "generatorId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create marketing generator
+ */
+export const CreateMarketingGeneratorBody = zod.object({
+  "generatorId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "prompt": zod.string().optional(),
+  "output": zod.string().optional()
+})
+
+
+/**
+ * @summary Update marketing generator
+ */
+export const UpdateMarketingGeneratorParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateMarketingGeneratorBody = zod.object({
+  "generatorId": zod.string().optional(),
+  "name": zod.string().optional(),
+  "category": zod.string().optional(),
+  "prompt": zod.string().optional(),
+  "output": zod.string().optional()
+})
+
+export const UpdateMarketingGeneratorResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "generatorId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete marketing generator
+ */
+export const DeleteMarketingGeneratorParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+

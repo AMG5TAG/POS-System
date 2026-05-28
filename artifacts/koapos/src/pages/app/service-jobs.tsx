@@ -260,21 +260,14 @@ export default function ServiceJobsPage() {
   }, [printState]);
 
   /* Read active service-sheet template + opts from Management > Sale Templates */
-  const serviceOpts = (() => {
-    const defaults = {
-      showLogo: true, showAbn: true, headerText: "SERVICE JOB SHEET",
-      jobNoFontSize: "normal" as "normal" | "large" | "xlarge",
-      showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
-      showPhotos: true, showSignature: true, showCallHistory: true,
-      callHistoryRows: "6", warrantyText: "", footerText: "",
-    };
-    try {
-      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
-      const tplId  = active.service ?? "ss-standard";
-      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<typeof defaults>;
-      return { ...defaults, ...stored, templateId: tplId };
-    } catch { return { ...defaults, templateId: "ss-standard" }; }
-  })();
+  const serviceOpts = {
+    showLogo: true, showAbn: true, headerText: "SERVICE JOB SHEET",
+    jobNoFontSize: "normal" as "normal" | "large" | "xlarge",
+    showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
+    showPhotos: true, showSignature: true, showCallHistory: true,
+    callHistoryRows: "6", warrantyText: "", footerText: "",
+    templateId: "ss-standard",
+  };
   const isCompact = serviceOpts.templateId === "ss-compact";
   const callRows  = Math.max(1, Math.min(20, parseInt(serviceOpts.callHistoryRows || "5", 10) || 5));
   const jobNoSize = serviceOpts.jobNoFontSize === "xlarge" ? 26 : serviceOpts.jobNoFontSize === "large" ? 22 : 18;

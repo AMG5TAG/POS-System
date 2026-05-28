@@ -118,19 +118,9 @@ const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", year
 
 const API = "/api/invoices";
 
-/* ── Prefix settings from localStorage ──────────────────────────────────── */
+/* ── Prefix settings ──────────────────────────────────────────────────── */
 
 function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
-  try {
-    const raw = localStorage.getItem("koapos_code_prefixes");
-    if (raw) {
-      const parsed = JSON.parse(raw) as { invoicePrefix?: string; invoiceDigits?: number };
-      return {
-        invoicePrefix: parsed.invoicePrefix ?? "KI",
-        invoiceDigits: parsed.invoiceDigits ?? 5,
-      };
-    }
-  } catch { /* ignore */ }
   return { invoicePrefix: "KI", invoiceDigits: 5 };
 }
 
@@ -445,31 +435,26 @@ export default function POSInvoicesPage() {
 
   /* ── Send email ── */
   const getEmailTemplatePayload = () => {
-    try {
-      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) ?? "{}") as Record<string, string>;
-      const tplId  = active.emails ?? "e-pro";
-      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<TplOpts>;
-      const merged = { ...TPL_DEFAULT_OPTS, ...stored };
-      return {
-        templateId: tplId,
-        subjectLine:        merged.subjectLine,
-        customGreeting:     merged.customGreeting,
-        customMessage:      merged.customMessage,
-        customSignOff:      merged.customSignOff,
-        footerText:         merged.footerText,
-        thankYouMsg:        merged.thankYouMsg,
-        showGstBreakdown:   merged.showGstBreakdown,
-        showWebsite:        merged.showWebsite,
-        showSocialLinks:    merged.showSocialLinks,
-        showLogo:           merged.showLogo,
-        brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
-        logo:               profile.logo ?? "",
-        website:            profile.website ?? "",
-        contactEmail:       profile.contactEmail ?? "",
-        tagline:            profile.tagline ?? "",
-        socialLinks:        profile.socialLinks ?? {},
-      };
-    } catch { return null; }
+    const merged = { ...TPL_DEFAULT_OPTS };
+    return {
+      templateId: "e-pro",
+      subjectLine:        merged.subjectLine,
+      customGreeting:     merged.customGreeting,
+      customMessage:      merged.customMessage,
+      customSignOff:      merged.customSignOff,
+      footerText:         merged.footerText,
+      thankYouMsg:        merged.thankYouMsg,
+      showGstBreakdown:   merged.showGstBreakdown,
+      showWebsite:        merged.showWebsite,
+      showSocialLinks:    merged.showSocialLinks,
+      showLogo:           merged.showLogo,
+      brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
+      logo:               profile.logo ?? "",
+      website:            profile.website ?? "",
+      contactEmail:       profile.contactEmail ?? "",
+      tagline:            profile.tagline ?? "",
+      socialLinks:        profile.socialLinks ?? {},
+    };
   };
 
   const handleSendEmail = async () => {
@@ -503,14 +488,7 @@ export default function POSInvoicesPage() {
 
   /* ── Helpers ── */
   function getInvoiceTemplateOpts(): TplOpts {
-    try {
-      const active = JSON.parse(localStorage.getItem(ACTIVE_STORAGE_KEY) ?? "{}") as Record<string, string>;
-      const tplId  = active.invoices ?? "i-pro";
-      const stored = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Partial<TplOpts>;
-      return { ...TPL_DEFAULT_OPTS, ...stored };
-    } catch {
-      return { ...TPL_DEFAULT_OPTS };
-    }
+    return { ...TPL_DEFAULT_OPTS };
   }
 
   const resolveStr = (text: string, biz: string, abn: string, web: string, em: string) =>

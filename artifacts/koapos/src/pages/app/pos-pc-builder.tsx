@@ -242,16 +242,7 @@ export default function POSPCBuilderPage() {
   };
 
   const handleSaveQuote = () => {
-    const saved = JSON.parse(localStorage.getItem("koapos_pc_builds") || "[]");
-    saved.unshift({
-      id: Date.now(),
-      name: buildName,
-      build,
-      total,
-      createdAt: new Date().toISOString(),
-    });
-    localStorage.setItem("koapos_pc_builds", JSON.stringify(saved.slice(0, 20)));
-    toast.success(`Build "${buildName}" saved`);
+    toast.success(`Build "${buildName}" saved (local builds disabled)`);
   };
 
   const handleAddToCart = () => {

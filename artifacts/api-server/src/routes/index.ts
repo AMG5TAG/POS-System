@@ -55,6 +55,18 @@ import shippingCarriersRouter from "./shipping-carriers";
 import marketplaceConnectionsRouter from "./marketplace-connections";
 import deliveryOrdersRouter from "./delivery-orders";
 import giftCardsRouter from "./gift-cards";
+import posRegisterSessionsRouter from "./pos-register-sessions";
+import posFavouritesRouter from "./pos-favourites";
+import posStaffSessionsRouter from "./pos-staff-sessions";
+import posTemplatesRouter from "./pos-templates";
+import posReceiptSettingsRouter from "./pos-receipt-settings";
+import posCodePrefixesRouter from "./pos-code-prefixes";
+import inventorySettingsRouter from "./inventory-settings";
+import regionalExtSettingsRouter from "./regional-ext-settings";
+import staffRosteringSettingsRouter from "./staff-rostering-settings";
+import staffLinksRouter from "./staff-links";
+import serviceJobTemplatesRouter from "./service-job-templates";
+import marketingGeneratorsRouter from "./marketing-generators";
 
 const router: IRouter = Router();
 
@@ -114,5 +126,17 @@ router.use(shippingCarriersRouter);
 router.use(marketplaceConnectionsRouter);
 router.use(deliveryOrdersRouter);
 router.use(giftCardsRouter);
+router.use(posRegisterSessionsRouter);
+router.use(posFavouritesRouter);
+router.use(posStaffSessionsRouter);
+router.use(posTemplatesRouter);
+router.use(posReceiptSettingsRouter);
+router.use(posCodePrefixesRouter);
+router.use(inventorySettingsRouter);
+router.use(regionalExtSettingsRouter);
+router.use(staffRosteringSettingsRouter);
+router.use(staffLinksRouter);
+router.use(serviceJobTemplatesRouter);
+router.use(marketingGeneratorsRouter);
 
 export default router;

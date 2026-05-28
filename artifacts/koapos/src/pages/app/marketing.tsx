@@ -11,12 +11,6 @@ import {
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 
-/* ── localStorage helpers ──────────────────────────────────────────────── */
-
-function readJson<T>(key: string, fallback: T): T {
-  try { return JSON.parse(localStorage.getItem(key) ?? "null") ?? fallback; } catch { return fallback; }
-}
-
 interface Campaign { status: string; opens?: number; bounces?: number; sentAt?: string; subject?: string; audience?: string; }
 interface ShortLink { clicks: number; label?: string; }
 interface LandingPage { links: { clicks?: number }[]; title?: string; }
@@ -24,11 +18,11 @@ interface EmailTemplate { name: string; category?: string; }
 
 function useMarketingStats() {
   return useMemo(() => {
-    const campaigns = readJson<Campaign[]>("koapos_email_campaigns", []);
-    const qrHistory  = readJson<object[]>("koapos_qr_history", []);
-    const shortlinks = readJson<ShortLink[]>("koapos_shortlinks", []);
-    const landingPages = readJson<LandingPage[]>("koapos_landing_pages", []);
-    const templates  = readJson<EmailTemplate[]>("koapos_email_templates", []);
+    const campaigns: Campaign[] = [];
+    const qrHistory: object[] = [];
+    const shortlinks: ShortLink[] = [];
+    const landingPages: LandingPage[] = [];
+    const templates: EmailTemplate[] = [];
 
     const sent = campaigns.filter((c) => c.status === "sent");
     const scheduled = campaigns.filter((c) => c.status === "scheduled");

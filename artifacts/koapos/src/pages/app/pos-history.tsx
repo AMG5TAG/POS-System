@@ -67,34 +67,15 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
   function handleReprint() {
     if (!tx) return;
 
-    let tpl = {
+    const tpl = {
       showAbn: true, showGstBreakdown: true, showWebsite: true,
       thankYouMsg: "Thank you for your purchase!",
       footerText: "", headerText: "",
     };
-    try {
-      const active = JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>;
-      const tplId  = active.receipts ?? "r-pro";
-      const opts   = JSON.parse(localStorage.getItem(`koapos_tpl_opts_${tplId}`) ?? "{}") as Record<string, unknown>;
-      tpl = {
-        showAbn:          opts.showAbn          !== false,
-        showGstBreakdown: opts.showGstBreakdown !== false,
-        showWebsite:      opts.showWebsite      !== false,
-        thankYouMsg:      (opts.thankYouMsg  as string) || "Thank you for your purchase!",
-        footerText:       (opts.footerText   as string) || "",
-        headerText:       (opts.headerText   as string) || "",
-      };
-    } catch { /* use defaults */ }
 
     let bizName = "Your Business";
     let abn = "";
     let website = "";
-    try {
-      const bp = JSON.parse(localStorage.getItem("koapos_business_profile") ?? "{}") as Record<string, unknown>;
-      bizName = (bp.businessName as string) || bizName;
-      abn     = (bp.abn         as string) || "";
-      website = (bp.website     as string) || "";
-    } catch { /* use defaults */ }
 
     const win = window.open("", "_blank", "width=400,height=600");
     if (!win) { toast.error("Popup blocked — please allow popups"); return; }

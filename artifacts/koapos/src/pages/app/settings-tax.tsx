@@ -3,6 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetTaxSettings,
   useUpdateTaxSettings,
+  useGetRegionalExtSettings,
+  useUpdateRegionalExtSettings,
+  useGetMerchant,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,21 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Percent, Info, Calendar, DollarSign, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-
-/* ─── Business ABN helper (shared localStorage key with Business Info page) ── */
-
-function getBusinessAbn(): string {
-  try {
-    const raw = localStorage.getItem("koapos_regional_ext");
-    if (!raw) return "";
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return typeof parsed.abn === "string" ? parsed.abn : "";
-  } catch { return ""; }
-}
-
-/* ─── Regional ext settings (shared localStorage key with Regional page) ─── */
-
-const LS_KEY = "koapos_regional_ext";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -82,34 +71,52 @@ const EXT_DEFAULTS: ExtSettings = {
   receiptPaperSize: "80mm",
 };
 
-function loadExt(): ExtSettings {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? { ...EXT_DEFAULTS, ...(JSON.parse(raw) as Partial<ExtSettings>) } : { ...EXT_DEFAULTS };
-  } catch { return { ...EXT_DEFAULTS }; }
-}
-
-function saveExt(s: ExtSettings) {
-  const existing = (() => {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "{}") as Record<string, unknown>; }
-    catch { return {}; }
-  })();
-  localStorage.setItem(LS_KEY, JSON.stringify({ ...existing, ...s }));
-}
-
 
 export default function SettingsTaxPage() {
+  const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetTaxSettings();
   const updateSettings = useUpdateTaxSettings();
+  const { data: dbExt } = useGetRegionalExtSettings();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const updateExt = useUpdateRegionalExtSettings();
 
-  const [ext, setExt] = useState<ExtSettings>(() => loadExt());
+  const [ext, setExt] = useState<ExtSettings>({ ...EXT_DEFAULTS });
   const patchExt = (patch: Partial<ExtSettings>) => setExt(prev => ({ ...prev, ...patch }));
   const activeTaxLabel = ext.taxLabel === "Custom" ? ext.customTaxLabel || "Tax" : ext.taxLabel;
   const fiscalEnd = MONTHS[((ext.fiscalYearStart - 1 + 11) % 12)];
 
+  useEffect(() => {
+    if (dbExt) {
+      const anyExt = dbExt as any;
+      setExt({
+        fiscalYearStart: Number(anyExt.fiscalYearStart) || EXT_DEFAULTS.fiscalYearStart,
+        taxLabel: anyExt.taxLabel || EXT_DEFAULTS.taxLabel,
+        customTaxLabel: anyExt.customTaxLabel || EXT_DEFAULTS.customTaxLabel,
+        taxNumberLabel: anyExt.taxNumberLabel || EXT_DEFAULTS.taxNumberLabel,
+        receiptPaperSize: (anyExt.receiptPaperSize as "a4" | "80mm" | "58mm") || EXT_DEFAULTS.receiptPaperSize,
+      });
+    }
+  }, [dbExt]);
+
   const handleSaveExt = () => {
-    saveExt(ext);
-    toast.success("Settings saved");
+    updateExt.mutate(
+      {
+        data: {
+          fiscalYearStart: String(ext.fiscalYearStart),
+          taxLabel: ext.taxLabel,
+          customTaxLabel: ext.customTaxLabel,
+          taxNumberLabel: ext.taxNumberLabel,
+          receiptPaperSize: ext.receiptPaperSize,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Tax settings saved");
+          queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
+        },
+        onError: () => toast.error("Failed to save tax settings"),
+      }
+    );
   };
 
   const [form, setForm] = useState({
@@ -129,7 +136,7 @@ export default function SettingsTaxPage() {
       setForm({
         gstEnabled: settings.gstEnabled ?? "true",
         gstRate: String(settings.gstRate ?? 10),
-        gstNumber: savedNumber || getBusinessAbn(),
+        gstNumber: savedNumber || (merchant as any)?.abn || "",
         taxInclusive: settings.taxInclusive ?? "true",
         showTaxOnReceipt: settings.showTaxOnReceipt ?? "true",
         taxName: settings.taxName ?? "GST",
@@ -218,7 +225,7 @@ export default function SettingsTaxPage() {
                   <div className="flex items-center justify-between">
                     <Label>GST Registration Number (ABN)</Label>
                     {(() => {
-                      const bizAbn = getBusinessAbn();
+                      const bizAbn = (merchant as any)?.abn || "";
                       return bizAbn ? (
                         <button
                           type="button"

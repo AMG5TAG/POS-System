@@ -1175,8 +1175,8 @@ interface _QREntry   { id: string; label: string; url: string; createdAt: string
 interface _LinkEntry { id: string; label: string; longUrl: string; slug: string; createdAt: string; clicks: number; tags?: string }
 interface _PageEntry { id: string; slug: string; title: string; links?: { enabled: boolean }[]; createdAt: string }
 
-function _loadLS<T>(key: string): T[] {
-  try { return JSON.parse(localStorage.getItem(key) ?? "[]") as T[]; } catch { return []; }
+function _loadLS<T>(_key: string): T[] {
+  return [];
 }
 
 function _groupByDay(items: { createdAt: string }[], days = 30): Record<string, number> {

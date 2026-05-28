@@ -58,17 +58,11 @@ const DEFAULTS: Settings3D = {
 };
 
 export function load3DSettings(): Settings3D {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULTS;
-  }
+  return DEFAULTS;
 }
 
-function save3DSettings(s: Settings3D) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+function save3DSettings(_s: Settings3D) {
+  /* no-op */
 }
 
 /* ─── Printer data ───────────────────────────────────────────────────────── */

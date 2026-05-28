@@ -50,14 +50,11 @@ export const PC_COMPAT_STORAGE_KEY = "koapos_pc_compat";
 export type PCCompatMap = Record<string, PCPartCompat>;
 
 export function loadPCCompat(): PCCompatMap {
-  try {
-    const raw = localStorage.getItem(PC_COMPAT_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PCCompatMap) : {};
-  } catch { return {}; }
+  return {};
 }
 
-export function savePCCompat(map: PCCompatMap) {
-  localStorage.setItem(PC_COMPAT_STORAGE_KEY, JSON.stringify(map));
+export function savePCCompat(_map: PCCompatMap) {
+  /* no-op */
 }
 
 /* ─── Builder settings ───────────────────────────────────────────────────── */
@@ -89,15 +86,11 @@ const DEFAULTS: PCBuilderSettings = {
 };
 
 export function loadPCBuilderSettings(): PCBuilderSettings {
-  try {
-    const raw = localStorage.getItem(PC_BUILDER_SETTINGS_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch { return DEFAULTS; }
+  return DEFAULTS;
 }
 
-function savePCBuilderSettings(s: PCBuilderSettings) {
-  localStorage.setItem(PC_BUILDER_SETTINGS_KEY, JSON.stringify(s));
+function savePCBuilderSettings(_s: PCBuilderSettings) {
+  /* no-op */
 }
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */

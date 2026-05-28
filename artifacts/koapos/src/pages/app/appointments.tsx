@@ -171,22 +171,8 @@ interface DetailDialogProps {
   deleteIsPending: boolean;
 }
 
-function loadApptPrefix(): { prefix: string; digits: number } {
-  try {
-    const raw = localStorage.getItem("koapos_code_prefixes");
-    if (raw) {
-      const p = JSON.parse(raw) as Record<string, unknown>;
-      const prefix = typeof p.appointmentPrefix === "string" && p.appointmentPrefix ? p.appointmentPrefix : "KA";
-      const digits = typeof p.appointmentDigits === "number" && p.appointmentDigits > 0 ? p.appointmentDigits : 5;
-      return { prefix, digits };
-    }
-  } catch { /* use defaults */ }
-  return { prefix: "KA", digits: 5 };
-}
-
 function apptRefCode(id: number): string {
-  const { prefix, digits } = loadApptPrefix();
-  return `${prefix}${String(id).padStart(digits, "0")}`;
+  return `KA${String(id).padStart(5, "0")}`;
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {

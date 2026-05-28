@@ -29,27 +29,15 @@ interface DisplayPayload {
 }
 
 function readPayload(): DisplayPayload | null {
-  try {
-    const raw = localStorage.getItem(DISPLAY_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as DisplayPayload;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export default function CustomerDisplayPage() {
-  const [payload, setPayload] = useState<DisplayPayload | null>(readPayload);
+  const [payload, setPayload] = useState<DisplayPayload | null>(null);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === DISPLAY_KEY) {
-        try { setPayload(e.newValue ? JSON.parse(e.newValue) : null); } catch { /* ignore */ }
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => setPayload(readPayload()), 1500);
-    return () => { window.removeEventListener("storage", onStorage); clearInterval(interval); };
+    const interval = setInterval(() => setPayload(null), 1500);
+    return () => { clearInterval(interval); };
   }, []);
 
   const isEmpty = !payload || payload.items.length === 0;

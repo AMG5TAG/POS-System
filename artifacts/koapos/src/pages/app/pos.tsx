@@ -98,25 +98,15 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
-  const [activeRegisterId] = useState<string>(() => {
-    try { return localStorage.getItem(ACTIVE_REGISTER_KEY) ?? "default"; } catch { return "default"; }
-  });
-  const favouritesKey = `koapos_pos_favourites_${activeRegisterId}`;
+  const [activeRegisterId] = useState<string>("default");
 
-  const [favouriteIds, setFavouriteIds] = useState<Set<number>>(() => {
-    try {
-      const key = `koapos_pos_favourites_${localStorage.getItem(ACTIVE_REGISTER_KEY) ?? "default"}`;
-      return new Set(JSON.parse(localStorage.getItem(key) ?? "[]") as number[]);
-    }
-    catch { return new Set(); }
-  });
+  const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
 
   const toggleFavourite = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setFavouriteIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try { localStorage.setItem(favouritesKey, JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
   };
@@ -184,7 +174,7 @@ export default function POSPage() {
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [notesOpen, setNotesOpen] = useState(false);
   const [pendingPaymentAfterPin, setPendingPaymentAfterPin] = useState(false);
-  const forceStaffLogin = localStorage.getItem("koapos_force_staff_login") === "true";
+  const forceStaffLogin = false;
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
   /* kode */
@@ -200,12 +190,10 @@ export default function POSPage() {
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
 
   /* staff PIN */
-  const [currentStaff, setCurrentStaff] = useState<Staff | null>(() => {
-    try { return JSON.parse(localStorage.getItem("koapos_pos_staff") || "null"); } catch { return null; }
-  });
+  const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [registerOpen, setRegisterOpen] = useState(() => localStorage.getItem("koapos_register_open") === "true");
+  const [registerOpen, setRegisterOpen] = useState(false);
   const [openRegisterDialogOpen, setOpenRegisterDialogOpen] = useState(false);
   const [closeRegisterDialogOpen, setCloseRegisterDialogOpen] = useState(false);
   const [cashMovementPrintOpen, setCashMovementPrintOpen] = useState(false);
@@ -216,9 +204,7 @@ export default function POSPage() {
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
   const [sessionSnap, setSessionSnap] = useState<RegisterSession | null>(null);
 
-  const getSession = (): RegisterSession | null => {
-    try { return JSON.parse(localStorage.getItem("koapos_register_session") ?? "null"); } catch { return null; }
-  };
+  const getSession = (): RegisterSession | null => sessionSnap;
 
   const handleOpenRegister = () => {
     const float = parseFloat(openFloat) || 0;
@@ -230,8 +216,7 @@ export default function POSPage() {
       sales: {},
       txCount: 0,
     };
-    localStorage.setItem("koapos_register_session", JSON.stringify(session));
-    localStorage.setItem("koapos_register_open", "true");
+    setSessionSnap(session);
     setRegisterOpen(true);
     setOpenRegisterDialogOpen(false);
     setCashMovementPrintOpen(true);
@@ -293,13 +278,6 @@ export default function POSPage() {
       eftposDeclared: parseFloat(closeFormData.eftposDeclared) || 0,
       closingNotes: closeFormData.notes,
     };
-    try {
-      const reports = JSON.parse(localStorage.getItem("koapos_z_reports") ?? "[]") as unknown[];
-      reports.push(zReport);
-      localStorage.setItem("koapos_z_reports", JSON.stringify(reports));
-    } catch { /* ignore */ }
-    localStorage.removeItem("koapos_register_session");
-    localStorage.setItem("koapos_register_open", "false");
     setRegisterOpen(false);
     setCloseRegisterDialogOpen(false);
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
@@ -628,53 +606,8 @@ export default function POSPage() {
   const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - total) : 0;
   const amountRemaining = payMethod === "cash" ? Math.max(0, total - enteredAmount) : 0;
 
-  /* One-time migration: move any old localStorage parked sales into the API */
-  useEffect(() => {
-    const OLD_KEY = "koapos_parked_sales";
-    const raw = localStorage.getItem(OLD_KEY);
-    if (!raw) return;
-    let oldSales: Array<{
-      id: string; parkedAt: string; total: number; label?: string;
-      overallDiscount?: string; saleNotes?: string;
-      selectedCustomer?: { id?: number; firstName?: string; lastName?: string } | null;
-      cart: Array<{ product: { id: number; name?: string | null; price?: number | null }; quantity: number; itemDiscount?: number; customPrice?: number; itemNote?: string }>;
-    }>;
-    try { oldSales = JSON.parse(raw); } catch { localStorage.removeItem(OLD_KEY); return; }
-    if (!Array.isArray(oldSales) || oldSales.length === 0) { localStorage.removeItem(OLD_KEY); return; }
-    const migrate = async () => {
-      for (const sale of oldSales) {
-        const items = (sale.cart ?? []).map(i => ({
-          productId: i.product.id,
-          name: i.product.name ?? "",
-          quantity: i.quantity,
-          price: i.customPrice ?? (i.product.price ?? 0),
-          itemDiscount: i.itemDiscount ?? 0,
-          customPrice: i.customPrice ?? null,
-          itemNote: i.itemNote ?? null,
-        }));
-        const noteParts = [
-          sale.label,
-          sale.saleNotes,
-          sale.overallDiscount ? `Discount:${sale.overallDiscount}` : "",
-        ].filter(Boolean);
-        await fetch("/api/parked-sales", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            customerId: sale.selectedCustomer?.id ?? undefined,
-            items,
-            total: sale.total ?? 0,
-            note: noteParts.join(" | ") || undefined,
-          }),
-        });
-      }
-      localStorage.removeItem(OLD_KEY);
-      queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
-    };
-    void migrate();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* Old localStorage parked sales migration removed — data now lives in API */
+  useEffect(() => { /* no-op */ }, []);
 
   /* Reset payment modal when it opens */
   useEffect(() => {
@@ -739,7 +672,6 @@ export default function POSPage() {
       updatedAt: Date.now(),
     };
     try {
-      localStorage.setItem(DISPLAY_KEY, JSON.stringify(payload));
       window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: JSON.stringify(payload) }));
     } catch { /* ignore */ }
   }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier]);
@@ -1024,13 +956,8 @@ export default function POSPage() {
     /* Restrict brandColor to a safe hex literal to prevent CSS injection via the inline style attribute */
     const brandColor   = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
 
-    const activeTemplates = (() => {
-      try { return JSON.parse(localStorage.getItem("koapos_active_templates") ?? "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
-    })();
-    const templateId = activeTemplates.receipts ?? "r-pro";
-    const opts = (() => {
-      try { return { ...DEFAULT_RECEIPT_OPTS, ...JSON.parse(localStorage.getItem(`koapos_tpl_opts_${templateId}`) ?? "{}") as Partial<typeof DEFAULT_RECEIPT_OPTS> }; } catch { return { ...DEFAULT_RECEIPT_OPTS }; }
-    })();
+    const templateId = "r-pro";
+    const opts = { ...DEFAULT_RECEIPT_OPTS };
 
     const receiptNum = completedTx?.receiptNumber ? `#${completedTx.receiptNumber}` : (completedTx ? `#${completedTx.id}` : "");
     const now = new Date();
@@ -1068,86 +995,35 @@ export default function POSPage() {
 
     let body = "";
 
-    if (templateId === "r-minimal") {
-      body = `
-        <div class="receipt mono">
-          <p class="center bold upper">${businessName}</p>
-          ${opts.showAbn && abn ? `<p class="center">ABN: ${abn}</p>` : ""}
-          <p class="center">${date}</p>
-          ${receiptNum ? `<p class="center">Receipt: ${escReceiptNum}</p>` : ""}
-          <p class="center divider">─────────────────────────</p>
-          ${header ? `<p class="center">${header}</p>` : ""}
-          ${itemRows.map((i) => `<div class="row"><span>${i.name} ×${i.qty}</span><span>$${i.lineTotal.toFixed(2)}</span></div>`).join("")}
-          <p class="center divider">─────────────────────────</p>
-          <div class="row"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
-          ${opts.showGstBreakdown ? `<div class="row"><span>GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
-          <div class="row bold"><span>TOTAL</span><span>$${total.toFixed(2)}</span></div>
-          ${opts.showPaymentMethods ? `<div class="row"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
-          <p class="center divider">─────────────────────────</p>
-          ${thankYou ? `<p class="center">${thankYou}</p>` : ""}
-          ${footer ? `<p class="center gray">${footer}</p>` : ""}
-          ${opts.showWebsite && website ? `<p class="center gray">${website}</p>` : ""}
-          <!--EXTRAS-->
-        </div>`;
-    } else if (templateId === "r-casual") {
-      body = `
-        <div class="receipt">
-          <div class="center mb">
-            ${opts.showLogo ? `<div class="logo-circle" style="background:${brandColor}">${esc(rawBusinessName.charAt(0))}</div>` : ""}
-            <p class="bold big">${businessName}</p>
-            ${opts.showTagline ? `<p class="gray small">Quality you can trust</p>` : ""}
-            ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
-            <p class="gray small">${date}</p>
-            ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
-          </div>
-          ${header ? `<p class="center small">${header}</p>` : ""}
-          <div class="items-box">
-            ${itemRows.map((i) => `<div class="row small"><span>${i.name} ×${i.qty}</span><span>$${i.lineTotal.toFixed(2)}</span></div>`).join("")}
-          </div>
-          <div class="mt small">
-            <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
-            ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST incl.</span><span>$${gst.toFixed(2)}</span></div>` : ""}
-            <div class="row bold bdr-t" style="color:${brandColor}"><span>Total</span><span>$${total.toFixed(2)}</span></div>
-            ${opts.showPaymentMethods ? `<div class="row small gray"><span>${completedPaymentMethod}</span><span>Approved</span></div>` : ""}
-          </div>
-          <div class="center gray small mt">
-            ${thankYou ? `<p>${thankYou}</p>` : ""}
-            ${footer ? `<p>${footer}</p>` : ""}
-            ${opts.showWebsite && email ? `<p class="blue">${email}</p>` : ""}
-          </div>
-          <!--EXTRAS-->
-        </div>`;
-    } else {
-      body = `
-        <div class="receipt">
-          <div class="center bdr-b pb mb">
-            ${opts.showLogo ? `<div class="logo-square" style="background:${brandColor}"></div>` : ""}
-            <p class="bold upper tracking">${businessName}</p>
-            ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
-            ${opts.showWebsite && website ? `<p class="gray small">${website}</p>` : ""}
-            <p class="gray small">${date}</p>
-            ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
-          </div>
-          ${header ? `<p class="center small mb">${header}</p>` : ""}
-          <table>
-            <thead><tr><th class="left">Item</th><th class="tcenter">Qty</th><th class="right">Amt</th></tr></thead>
-            <tbody>
-              ${itemRows.map((i) => `<tr><td>${i.name}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
-            </tbody>
-          </table>
-          <div class="bdr-t pt small">
-            <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
-            ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
-            <div class="row bold"><span>TOTAL AUD</span><span>$${total.toFixed(2)}</span></div>
-            ${opts.showPaymentMethods ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
-          </div>
-          <div class="center gray small bdr-t pt mt">
-            ${thankYou ? `<p>${thankYou}</p>` : ""}
-            ${footer ? `<p>${footer}</p>` : ""}
-          </div>
-          <!--EXTRAS-->
-        </div>`;
-    }
+    body = `
+      <div class="receipt">
+        <div class="center bdr-b pb mb">
+          ${opts.showLogo ? `<div class="logo-square" style="background:${brandColor}"></div>` : ""}
+          <p class="bold upper tracking">${businessName}</p>
+          ${opts.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
+          ${opts.showWebsite && website ? `<p class="gray small">${website}</p>` : ""}
+          <p class="gray small">${date}</p>
+          ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
+        </div>
+        ${header ? `<p class="center small mb">${header}</p>` : ""}
+        <table>
+          <thead><tr><th class="left">Item</th><th class="tcenter">Qty</th><th class="right">Amt</th></tr></thead>
+          <tbody>
+            ${itemRows.map((i) => `<tr><td>${i.name}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
+          </tbody>
+        </table>
+        <div class="bdr-t pt small">
+          <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+          ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
+          <div class="row bold"><span>TOTAL AUD</span><span>$${total.toFixed(2)}</span></div>
+          ${opts.showPaymentMethods ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
+        </div>
+        <div class="center gray small bdr-t pt mt">
+          ${thankYou ? `<p>${thankYou}</p>` : ""}
+          ${footer ? `<p>${footer}</p>` : ""}
+        </div>
+        <!--EXTRAS-->
+      </div>`;
 
     const css = `
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1264,7 +1140,7 @@ export default function POSPage() {
     const staff = (staffList as Staff[] ?? []).find(s => s.pin && s.pin === pinInput && s.isActive);
     if (!staff) { setPinError("Incorrect PIN. Try again."); setPinInput(""); return; }
     setCurrentStaff(staff);
-    try { localStorage.setItem("koapos_pos_staff", JSON.stringify(staff)); } catch { /* ignore */ }
+    /* staff no longer persisted to localStorage */
     setPinDialogOpen(false); setPinInput(""); setPinError("");
     toast.success(`Signed in as ${staff.name}`);
 
@@ -1327,15 +1203,7 @@ export default function POSPage() {
       saleNotes || null,
     ].filter(Boolean);
 
-    let receiptPrefix = "KR", receiptDigits = 5;
-    try {
-      const raw = localStorage.getItem("koapos_code_prefixes");
-      if (raw) {
-        const p = JSON.parse(raw) as Record<string, unknown>;
-        if (typeof p.receiptPrefix === "string" && p.receiptPrefix) receiptPrefix = p.receiptPrefix;
-        if (typeof p.receiptDigits === "number" && p.receiptDigits > 0) receiptDigits = p.receiptDigits;
-      }
-    } catch { /* use defaults */ }
+    const receiptPrefix = "KR", receiptDigits = 5;
     const n = Math.floor(Math.random() * Math.pow(10, receiptDigits));
     const receiptNumber = `${receiptPrefix}${String(n).padStart(receiptDigits, "0")}`;
 
@@ -1361,16 +1229,15 @@ export default function POSPage() {
       }
     }, {
       onSuccess: (data) => {
-        // Track session sales by payment method
+        // Track session sales by payment method (in-memory only)
         try {
-          const raw = localStorage.getItem("koapos_register_session");
-          if (raw) {
-            const s = JSON.parse(raw) as RegisterSession;
+          if (sessionSnap) {
+            const s = { ...sessionSnap };
             const pm = paymentMethod as string;
             s.sales = s.sales ?? {};
             s.sales[pm] = (s.sales[pm] ?? 0) + total;
             s.txCount = (s.txCount ?? 0) + 1;
-            localStorage.setItem("koapos_register_session", JSON.stringify(s));
+            setSessionSnap(s);
           }
         } catch { /* ignore */ }
         // Capture total + cart before clearing

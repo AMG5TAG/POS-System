@@ -14,7 +14,7 @@ import {
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
 
-/* ─── KPI data from localStorage ─────────────────────────────────────────── */
+/* ─── KPI data ─────────────────────────────────────────────────────────── */
 
 type KpiMetric =
   | "revenue" | "transactions" | "avg_transaction" | "items_per_transaction"
@@ -32,11 +32,7 @@ interface KpiTarget {
 }
 
 function loadKpiTargets(): KpiTarget[] {
-  try {
-    const raw = localStorage.getItem("koapos_kpis");
-    const store = raw ? JSON.parse(raw) : {};
-    return Array.isArray(store.targets) ? store.targets : [];
-  } catch { return []; }
+  return [];
 }
 
 /* ─── Metric metadata ────────────────────────────────────────────────────── */

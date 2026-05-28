@@ -2422,6 +2422,257 @@ export interface GiftCardSettingsInput {
   prefix?: string;
 }
 
+export interface PosRegisterSession {
+  id: number;
+  merchantId: number;
+  registerId: string;
+  openedAt: string;
+  openedBy: string;
+  openingFloat: string;
+  openingNotes: string;
+  sales: string;
+  txCount: number;
+  closedAt?: string | null;
+  cashCounted?: string | null;
+  eftposDeclared?: string | null;
+  closingNotes?: string | null;
+}
+
+export interface PosRegisterSessionInput {
+  registerId?: string;
+  openedBy?: string;
+  openingFloat?: string;
+  openingNotes?: string;
+  sales?: string;
+  txCount?: number;
+  closedAt?: string | null;
+  cashCounted?: string | null;
+  eftposDeclared?: string | null;
+  closingNotes?: string | null;
+}
+
+export interface PosRegisterSessionListResponse {
+  items: PosRegisterSession[];
+  total: number;
+}
+
+export interface PosFavourites {
+  id: number;
+  merchantId: number;
+  registerId: string;
+  productIds: string;
+}
+
+export interface PosFavouritesInput {
+  registerId?: string;
+  productIds?: string;
+}
+
+export interface PosStaffSession {
+  id: number;
+  merchantId: number;
+  registerId: string;
+  staffId: number;
+  staffName: string;
+  staffPin: string;
+  loggedInAt: string;
+}
+
+export interface PosStaffSessionInput {
+  registerId?: string;
+  staffId?: number;
+  staffName?: string;
+  staffPin?: string;
+}
+
+export interface PosStaffSessionListResponse {
+  items: PosStaffSession[];
+  total: number;
+}
+
+export interface PosTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  body: string;
+  options: string;
+  isActive: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosTemplateInput {
+  templateId?: string;
+  name?: string;
+  category?: string;
+  body?: string;
+  options?: string;
+  isActive?: string;
+}
+
+export interface PosTemplateListResponse {
+  items: PosTemplate[];
+  total: number;
+}
+
+export interface PosReceiptSettings {
+  id: number;
+  merchantId: number;
+  paperSize: string;
+  showLogo: string;
+  showBarcode: string;
+  footerText: string;
+  headerText: string;
+}
+
+export interface PosReceiptSettingsInput {
+  paperSize?: string;
+  showLogo?: string;
+  showBarcode?: string;
+  footerText?: string;
+  headerText?: string;
+}
+
+export interface PosCodePrefixes {
+  id: number;
+  merchantId: number;
+  receiptPrefix: string;
+  receiptDigits: number;
+  invoicePrefix: string;
+  invoiceDigits: number;
+  servicePrefix: string;
+  serviceDigits: number;
+}
+
+export interface PosCodePrefixesInput {
+  receiptPrefix?: string;
+  receiptDigits?: number;
+  invoicePrefix?: string;
+  invoiceDigits?: number;
+  servicePrefix?: string;
+  serviceDigits?: number;
+}
+
+export interface InventorySettings {
+  id: number;
+  merchantId: number;
+  skuPrefix: string;
+  showCosts: string;
+  groupPricing: string;
+}
+
+export interface InventorySettingsInput {
+  skuPrefix?: string;
+  showCosts?: string;
+  groupPricing?: string;
+}
+
+export interface RegionalExtSettings {
+  id: number;
+  merchantId: number;
+  abn: string;
+  taxRates: string;
+  defaultTaxRate: string;
+  receiptPaperSize: string;
+}
+
+export interface RegionalExtSettingsInput {
+  abn?: string;
+  taxRates?: string;
+  defaultTaxRate?: string;
+  receiptPaperSize?: string;
+}
+
+export interface StaffRosteringSettings {
+  id: number;
+  merchantId: number;
+  defaultWeekStart: string;
+  defaultShiftLength: string;
+  publishRosters: string;
+}
+
+export interface StaffRosteringSettingsInput {
+  defaultWeekStart?: string;
+  defaultShiftLength?: string;
+  publishRosters?: string;
+}
+
+export interface StaffLink {
+  id: number;
+  merchantId: number;
+  linkId: string;
+  label: string;
+  url: string;
+  category: string;
+  createdAt: string;
+}
+
+export interface StaffLinkInput {
+  linkId?: string;
+  label?: string;
+  url?: string;
+  category?: string;
+}
+
+export interface StaffLinkListResponse {
+  items: StaffLink[];
+  total: number;
+}
+
+export interface ServiceJobTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  body: string;
+  options: string;
+  isActive: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceJobTemplateInput {
+  templateId?: string;
+  name?: string;
+  category?: string;
+  body?: string;
+  options?: string;
+  isActive?: string;
+}
+
+export interface ServiceJobTemplateListResponse {
+  items: ServiceJobTemplate[];
+  total: number;
+}
+
+export interface MarketingGenerator {
+  id: number;
+  merchantId: number;
+  generatorId: string;
+  name: string;
+  category: string;
+  prompt: string;
+  output: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketingGeneratorInput {
+  generatorId?: string;
+  name?: string;
+  category?: string;
+  prompt?: string;
+  output?: string;
+}
+
+export interface MarketingGeneratorListResponse {
+  items: MarketingGenerator[];
+  total: number;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -2655,5 +2906,17 @@ search?: string;
 status?: string;
 limit?: number;
 offset?: number;
+};
+
+export type ListPosRegisterSessionsParams = {
+registerId?: string;
+};
+
+export type GetPosFavouritesParams = {
+registerId?: string;
+};
+
+export type ListPosStaffSessionsParams = {
+registerId?: string;
 };
 

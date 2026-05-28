@@ -128,10 +128,10 @@ const NO_STOCK_TYPES = new Set(["service", "digital", "digital_code"]);
 const SKU_PREFIX_KEY = "koapos_sku_prefix";
 
 function getSavedPrefix() {
-  try { return localStorage.getItem(SKU_PREFIX_KEY) || "KP"; } catch { return "KP"; }
+  return "KP";
 }
-function savePrefix(v: string) {
-  try { localStorage.setItem(SKU_PREFIX_KEY, v); } catch { /* ignore */ }
+function savePrefix(_v: string) {
+  /* no-op */
 }
 function generateSKU(prefix: string) {
   const n = Math.floor(Math.random() * 90000) + 10000;
@@ -763,8 +763,8 @@ export default function ProductsPage() {
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [hideCosts, setHideCosts]       = useState(true);
-  const [showHideCostsBtn]              = useState(() => { try { return localStorage.getItem("koapos_display_show_hide_costs_btn") === "true"; } catch { return false; } });
-  const [enableGroupPricing]            = useState(() => { try { return localStorage.getItem("koapos_enable_group_pricing") === "true"; } catch { return false; } });
+  const [showHideCostsBtn]              = useState(false);
+  const [enableGroupPricing]            = useState(false);
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
@@ -860,13 +860,7 @@ export default function ProductsPage() {
   };
 
   /* Only owners and managers can see digital code values; cashiers see XXXX */
-  const canViewCodes = (() => {
-    try {
-      const staff = JSON.parse(localStorage.getItem("koapos_pos_staff") || "null") as { role?: string } | null;
-      if (!staff) return true; // no staff signed into POS → merchant owner access
-      return staff.role === "owner" || staff.role === "manager";
-    } catch { return true; }
-  })();
+  const canViewCodes = true;
 
   const loadDigitalCodes = useCallback(async (productId: number) => {
     setCodesLoading(true);

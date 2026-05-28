@@ -56,16 +56,12 @@ const ECC_LEVELS = [
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
-function load<T>(key: string, defaults: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return defaults;
-    return { ...defaults, ...(JSON.parse(raw) as Partial<T>) };
-  } catch { return defaults; }
+function load<T>(_key: string, defaults: T): T {
+  return defaults;
 }
 
-function save(key: string, data: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* ignore */ }
+function save(_key: string, _data: unknown) {
+  /* no-op */
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */

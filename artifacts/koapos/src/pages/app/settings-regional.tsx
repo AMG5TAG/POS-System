@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant } from "@workspace/api-client-react";
+import {
+  useGetMerchant,
+  useUpdateMerchant,
+  useGetRegionalExtSettings,
+  useUpdateRegionalExtSettings,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Globe, Hash, Clock4 } from "lucide-react";
@@ -208,8 +213,6 @@ const TIMEZONES: { group: string; zones: { value: string; label: string }[] }[] 
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const LS_KEY = "koapos_regional_ext";
-
 interface ExtSettings {
   language: string;
   dateFormat: string;
@@ -231,18 +234,6 @@ const DEFAULT_EXT: ExtSettings = {
   paperSize: "A4",
   firstDayOfWeek: "monday",
 };
-
-function loadExt(): ExtSettings {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return { ...DEFAULT_EXT, ...(JSON.parse(raw) as Partial<ExtSettings>) };
-  } catch { /* ignore */ }
-  return { ...DEFAULT_EXT };
-}
-
-function saveExt(s: ExtSettings) {
-  localStorage.setItem(LS_KEY, JSON.stringify(s));
-}
 
 function formatPreview(currency: string, tz: string, ext: ExtSettings): string {
   const sym    = CURRENCY_SYMBOLS[currency] ?? currency;
@@ -314,10 +305,12 @@ export default function SettingsRegionalPage() {
   const { login }    = useAuth();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const updateMutation     = useUpdateMerchant();
+  const { data: dbExt, isLoading: extLoading } = useGetRegionalExtSettings();
+  const updateExtMutation = useUpdateRegionalExtSettings();
 
   const [currency, setCurrency] = useState("AUD");
   const [timezone, setTimezone] = useState("Australia/Sydney");
-  const [ext,      setExt]      = useState<ExtSettings>(loadExt);
+  const [ext,      setExt]      = useState<ExtSettings>({ ...DEFAULT_EXT });
 
   useEffect(() => {
     if (merchant) {
@@ -326,6 +319,22 @@ export default function SettingsRegionalPage() {
     }
   }, [merchant]);
 
+  useEffect(() => {
+    if (dbExt) {
+      const anyExt = dbExt as any;
+      setExt({
+        language:            anyExt.language            || DEFAULT_EXT.language,
+        dateFormat:          anyExt.dateFormat          || DEFAULT_EXT.dateFormat,
+        timeFormat:            (anyExt.timeFormat as "12" | "24")            || DEFAULT_EXT.timeFormat,
+        decimalSeparator:      (anyExt.decimalSeparator as "." | ",")        || DEFAULT_EXT.decimalSeparator,
+        thousandsSeparator:    (anyExt.thousandsSeparator as "," | "." | " " | "'") || DEFAULT_EXT.thousandsSeparator,
+        measurementSystem:     (anyExt.measurementSystem as "metric" | "imperial") || DEFAULT_EXT.measurementSystem,
+        paperSize:             (anyExt.paperSize as "A4" | "letter")             || DEFAULT_EXT.paperSize,
+        firstDayOfWeek:        (anyExt.firstDayOfWeek as "monday" | "sunday" | "saturday") || DEFAULT_EXT.firstDayOfWeek,
+      });
+    }
+  }, [dbExt]);
+
   const patchExt = (patch: Partial<ExtSettings>) => setExt(prev => ({ ...prev, ...patch }));
 
   const handleSave = () => {
@@ -333,8 +342,27 @@ export default function SettingsRegionalPage() {
       { data: { currency: currency || undefined, timezone: timezone || undefined } },
       {
         onSuccess: (updated) => {
-          saveExt(ext);
-          toast.success("Regional settings saved");
+          updateExtMutation.mutate(
+            {
+              data: {
+                language: ext.language,
+                dateFormat: ext.dateFormat,
+                timeFormat: ext.timeFormat,
+                decimalSeparator: ext.decimalSeparator,
+                thousandsSeparator: ext.thousandsSeparator,
+                measurementSystem: ext.measurementSystem,
+                paperSize: ext.paperSize,
+                firstDayOfWeek: ext.firstDayOfWeek,
+              } as any,
+            },
+            {
+              onSuccess: () => {
+                toast.success("Regional settings saved");
+                queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
+              },
+              onError: () => toast.error("Failed to save regional settings"),
+            }
+          );
           login(updated);
           queryClient.invalidateQueries({ queryKey: ["merchant"] });
         },

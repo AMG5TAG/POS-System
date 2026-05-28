@@ -160,14 +160,10 @@ const REG_DEFAULT: RegExtSettings = {
 };
 
 function loadRegExt(): RegExtSettings {
-  try {
-    const raw = localStorage.getItem(REG_LS_KEY);
-    if (raw) return { ...REG_DEFAULT, ...(JSON.parse(raw) as Partial<RegExtSettings>) };
-  } catch { /* ignore */ }
   return { ...REG_DEFAULT };
 }
 
-function saveRegExt(s: RegExtSettings) { localStorage.setItem(REG_LS_KEY, JSON.stringify(s)); }
+function saveRegExt(_s: RegExtSettings) { /* no-op */ }
 
 function RegSegmentToggle<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string }[]; value: T; onChange: (v: T) => void;
@@ -294,7 +290,7 @@ export default function SettingsBusinessPage() {
     country: "AU",
   });
 
-  /* Extended localStorage-backed fields */
+  /* Extended fields */
   const [ext, setExt] = useState<BusinessProfile>(profile);
 
   /* Regional settings */
