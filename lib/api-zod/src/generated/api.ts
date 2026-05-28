@@ -3735,6 +3735,11 @@ export const GetSocialFeedSettingsResponse = zod.object({
   "showInstagram": zod.boolean(),
   "showTwitter": zod.boolean(),
   "showLinkedin": zod.boolean(),
+  "facebookEnabled": zod.boolean(),
+  "instagramEnabled": zod.boolean(),
+  "twitterEnabled": zod.boolean(),
+  "tiktokEnabled": zod.boolean(),
+  "linkedinEnabled": zod.boolean(),
   "refreshIntervalMinutes": zod.number()
 })
 
@@ -3747,6 +3752,11 @@ export const UpdateSocialFeedSettingsBody = zod.object({
   "showInstagram": zod.boolean().optional(),
   "showTwitter": zod.boolean().optional(),
   "showLinkedin": zod.boolean().optional(),
+  "facebookEnabled": zod.boolean().optional(),
+  "instagramEnabled": zod.boolean().optional(),
+  "twitterEnabled": zod.boolean().optional(),
+  "tiktokEnabled": zod.boolean().optional(),
+  "linkedinEnabled": zod.boolean().optional(),
   "refreshIntervalMinutes": zod.number().optional()
 })
 
@@ -3756,6 +3766,11 @@ export const UpdateSocialFeedSettingsResponse = zod.object({
   "showInstagram": zod.boolean(),
   "showTwitter": zod.boolean(),
   "showLinkedin": zod.boolean(),
+  "facebookEnabled": zod.boolean(),
+  "instagramEnabled": zod.boolean(),
+  "twitterEnabled": zod.boolean(),
+  "tiktokEnabled": zod.boolean(),
+  "linkedinEnabled": zod.boolean(),
   "refreshIntervalMinutes": zod.number()
 })
 

@@ -1558,6 +1558,11 @@ export interface SocialFeedSettings {
   showInstagram: boolean;
   showTwitter: boolean;
   showLinkedin: boolean;
+  facebookEnabled: boolean;
+  instagramEnabled: boolean;
+  twitterEnabled: boolean;
+  tiktokEnabled: boolean;
+  linkedinEnabled: boolean;
   refreshIntervalMinutes: number;
 }
 
@@ -1566,6 +1571,11 @@ export interface SocialFeedSettingsInput {
   showInstagram?: boolean;
   showTwitter?: boolean;
   showLinkedin?: boolean;
+  facebookEnabled?: boolean;
+  instagramEnabled?: boolean;
+  twitterEnabled?: boolean;
+  tiktokEnabled?: boolean;
+  linkedinEnabled?: boolean;
   refreshIntervalMinutes?: number;
 }
 

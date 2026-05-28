@@ -13,6 +13,11 @@ const DEFAULT_SETTINGS = {
   showInstagram: true,
   showTwitter: true,
   showLinkedin: true,
+  facebookEnabled: false,
+  instagramEnabled: false,
+  twitterEnabled: false,
+  tiktokEnabled: false,
+  linkedinEnabled: false,
   refreshIntervalMinutes: 60,
 };
 
@@ -27,9 +32,11 @@ router.get("/social-feed/settings", async (req, res) => {
 /* ── Update settings ────────────────────────────────────────────────────── */
 router.put("/social-feed/settings", async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const { showFacebook, showInstagram, showTwitter, showLinkedin, refreshIntervalMinutes } = req.body as {
+  const { showFacebook, showInstagram, showTwitter, showLinkedin, refreshIntervalMinutes, facebookEnabled, instagramEnabled, twitterEnabled, tiktokEnabled, linkedinEnabled } = req.body as {
     showFacebook?: boolean; showInstagram?: boolean; showTwitter?: boolean;
     showLinkedin?: boolean; refreshIntervalMinutes?: number;
+    facebookEnabled?: boolean; instagramEnabled?: boolean; twitterEnabled?: boolean;
+    tiktokEnabled?: boolean; linkedinEnabled?: boolean;
   };
 
   const existing = await db.select().from(socialFeedSettingsTable)
@@ -42,6 +49,11 @@ router.put("/social-feed/settings", async (req, res) => {
       showInstagram: showInstagram ?? true,
       showTwitter: showTwitter ?? true,
       showLinkedin: showLinkedin ?? true,
+      facebookEnabled: facebookEnabled ?? false,
+      instagramEnabled: instagramEnabled ?? false,
+      twitterEnabled: twitterEnabled ?? false,
+      tiktokEnabled: tiktokEnabled ?? false,
+      linkedinEnabled: linkedinEnabled ?? false,
       refreshIntervalMinutes: refreshIntervalMinutes ?? 60,
     }).returning();
     return res.json(row);
@@ -52,6 +64,11 @@ router.put("/social-feed/settings", async (req, res) => {
   if (showInstagram !== undefined) patch.showInstagram = showInstagram;
   if (showTwitter !== undefined) patch.showTwitter = showTwitter;
   if (showLinkedin !== undefined) patch.showLinkedin = showLinkedin;
+  if (facebookEnabled !== undefined) patch.facebookEnabled = facebookEnabled;
+  if (instagramEnabled !== undefined) patch.instagramEnabled = instagramEnabled;
+  if (twitterEnabled !== undefined) patch.twitterEnabled = twitterEnabled;
+  if (tiktokEnabled !== undefined) patch.tiktokEnabled = tiktokEnabled;
+  if (linkedinEnabled !== undefined) patch.linkedinEnabled = linkedinEnabled;
   if (refreshIntervalMinutes !== undefined) patch.refreshIntervalMinutes = refreshIntervalMinutes;
 
   const [row] = await db.update(socialFeedSettingsTable).set(patch)

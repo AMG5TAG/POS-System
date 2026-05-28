@@ -7511,13 +7511,18 @@ components:
 
     SocialFeedSettings:
       type: object
-      required: [showFacebook, showInstagram, showTwitter, showLinkedin, refreshIntervalMinutes]
+      required: [showFacebook, showInstagram, showTwitter, showLinkedin, facebookEnabled, instagramEnabled, twitterEnabled, tiktokEnabled, linkedinEnabled, refreshIntervalMinutes]
       properties:
         id:                     { type: integer, nullable: true }
         showFacebook:           { type: boolean }
         showInstagram:          { type: boolean }
         showTwitter:            { type: boolean }
         showLinkedin:           { type: boolean }
+        facebookEnabled:        { type: boolean }
+        instagramEnabled:       { type: boolean }
+        twitterEnabled:         { type: boolean }
+        tiktokEnabled:          { type: boolean }
+        linkedinEnabled:        { type: boolean }
         refreshIntervalMinutes: { type: integer }
 
     SocialFeedSettingsInput:
@@ -7527,6 +7532,11 @@ components:
         showInstagram:          { type: boolean }
         showTwitter:            { type: boolean }
         showLinkedin:           { type: boolean }
+        facebookEnabled:        { type: boolean }
+        instagramEnabled:       { type: boolean }
+        twitterEnabled:         { type: boolean }
+        tiktokEnabled:          { type: boolean }
+        linkedinEnabled:        { type: boolean }
         refreshIntervalMinutes: { type: integer }
 
     SocialPost:
