@@ -663,13 +663,13 @@ function ShortcutsSection() {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementRegistersPage() {
-  const { data: rawRegisters = [], refetch } = useListPosRegisters({ query: { queryKey: ["pos-registers"] } });
+  const { data: rawRegisters, refetch } = useListPosRegisters({ query: { queryKey: ["pos-registers"] } });
   const createRegister = useCreatePosRegister();
   const updateRegister = useUpdatePosRegister();
   const deleteRegister = useDeletePosRegister();
   const { settings, upsert: upsertSettings } = usePosSettings();
 
-  const registers: PosRegister[] = (rawRegisters as Record<string, unknown>[]).map(apiToRegister);
+  const registers: PosRegister[] = (rawRegisters?.items ?? []).map(apiToRegister);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PosRegister | null>(null);
