@@ -20,7 +20,7 @@ const authLimiter = rateLimit({
   },
 });
 
-function formatMerchant(m: typeof merchantsTable.$inferSelect) {
+function formatMerchant(m: typeof merchantsTable.$inferSelect, staffRole: "owner" | "manager" | "cashier" = "owner") {
   return {
     id: m.id,
     email: m.email,
@@ -34,6 +34,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
     createdAt: m.createdAt.toISOString(),
+    staffRole,
   };
 }
 
@@ -53,7 +54,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(formatMerchant(merchant));
+  res.json(formatMerchant(merchant, req.session.staffRole ?? "owner"));
 });
 
 router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
@@ -92,7 +93,8 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   }
 
   req.session.merchantId = merchant.id;
-  res.status(201).json(formatMerchant(merchant));
+  req.session.staffRole = "owner";
+  res.status(201).json(formatMerchant(merchant, "owner"));
 });
 
 router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
@@ -111,7 +113,8 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   }
 
   req.session.merchantId = merchant.id;
-  res.json(formatMerchant(merchant));
+  req.session.staffRole = "owner";
+  res.json(formatMerchant(merchant, "owner"));
 });
 
 router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {

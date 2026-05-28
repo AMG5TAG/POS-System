@@ -32,7 +32,8 @@ export const GetMeResponse = zod.object({
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
 
 
@@ -75,7 +76,8 @@ export const LoginResponse = zod.object({
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
 
 
@@ -95,7 +97,8 @@ export const GetMerchantResponse = zod.object({
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
 
 
@@ -135,7 +138,8 @@ export const UpdateMerchantResponse = zod.object({
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
 
 

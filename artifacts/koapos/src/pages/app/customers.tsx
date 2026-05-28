@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -1898,6 +1899,8 @@ function CustomerDetailDialog({
 
 export default function CustomersPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canMerge = user?.staffRole !== "cashier";
   const { settings: customerSettings } = useCustomerSettings();
   const customerGroups = customerSettings.groups.map(g => g.name);
   const [search, setSearch]             = useState("");
@@ -2067,7 +2070,7 @@ export default function CustomersPage() {
         </div>
 
         {/* ── Duplicate detection banner ── */}
-        {duplicatePairs.length > 0 && (
+        {canMerge && duplicatePairs.length > 0 && (
           <button
             type="button"
             onClick={() => setDuplicateModalOpen(true)}
@@ -2306,11 +2309,11 @@ export default function CustomersPage() {
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
         merchantUsername={merchantUsername}
-        onMerge={(a, b) => {
+        onMerge={canMerge ? (a, b) => {
           setSelectedCustomer(null);
           setMergePair({ key: `${a.id}:${b.id}`, a, b, reason: "manual" });
           setMergeWizardOpen(true);
-        }}
+        } : undefined}
       />
 
       {/* Bulk delete confirmation */}
@@ -2343,10 +2346,10 @@ export default function CustomersPage() {
         open={duplicateModalOpen}
         onOpenChange={setDuplicateModalOpen}
         onDismissPair={dismissPair}
-        onMergePair={(pair) => {
+        onMergePair={canMerge ? (pair) => {
           setMergePair(pair);
           setMergeWizardOpen(true);
-        }}
+        } : () => {}}
       />
 
       {/* ── Merge wizard ── */}

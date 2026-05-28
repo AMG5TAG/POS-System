@@ -10,6 +10,7 @@ import {
 import { eq, and, ilike, or, sql, desc, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -360,7 +361,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
 
 /* ─── Merge profiles ──────────────────────────────────────────────────────── */
 
-router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, async (req, res): Promise<void> => {
+router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const primaryId   = parseInt(String(req.params.primaryId),   10);
   const secondaryId = parseInt(String(req.params.secondaryId), 10);

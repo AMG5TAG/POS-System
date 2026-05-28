@@ -5026,6 +5026,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        staffRole:
+          type: string
+          enum: [owner, manager, cashier]
 
     MerchantUpdate:
       type: object

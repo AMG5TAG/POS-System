@@ -25,6 +25,15 @@ export interface LoginInput {
   password: string;
 }
 
+export type MerchantStaffRole = typeof MerchantStaffRole[keyof typeof MerchantStaffRole];
+
+
+export const MerchantStaffRole = {
+  owner: 'owner',
+  manager: 'manager',
+  cashier: 'cashier',
+} as const;
+
 export interface Merchant {
   id: number;
   email: string;
@@ -47,6 +56,7 @@ export interface Merchant {
   /** @nullable */
   username?: string | null;
   createdAt: string;
+  staffRole?: MerchantStaffRole;
 }
 
 export interface MerchantUpdate {
