@@ -13,14 +13,16 @@ A subscription-based Point of Sale system for Australian retail merchants. Clean
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL`, `SESSION_SECRET`, `VAULT_ENCRYPTION_KEY` (required in production)
 
-### OAuth token encryption (`VAULT_ENCRYPTION_KEY`)
+## Required Production Environment Variables
 
-Encrypts OAuth access/refresh tokens stored in `oauth_token_vault` (AES-256-CBC, PBKDF2-derived).
-**Required in production** — the API server refuses to start if it is missing when `NODE_ENV=production`.
-In development a fixed dev-only key is used so local setups work without configuration.
-On startup the server invalidates any vault rows that cannot be decrypted with the current key
-(e.g. tokens encrypted under an older `SESSION_SECRET`-based key); affected merchants must reconnect.
-Generate a strong value, e.g. `openssl rand -hex 32`.
+These variables MUST be set when the API server is started with `NODE_ENV=production`.
+Missing any of them causes the process to fail fast on boot.
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (Drizzle ORM). |
+| `SESSION_SECRET` | `express-session` cookie signing secret. |
+| `VAULT_ENCRYPTION_KEY` | AES-256-CBC key used to encrypt OAuth access/refresh tokens stored in `oauth_token_vault`. **The server throws `"Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode."` on startup if this is missing under `NODE_ENV=production`.** The insecure hardcoded dev fallback is only honoured when `NODE_ENV` is `development` or blank — never in production, staging, test, or any other value. Generate a strong value, e.g. `openssl rand -hex 32`. On startup the server invalidates any vault rows that cannot be decrypted with the current key (e.g. tokens encrypted under an older key); affected merchants must reconnect their integrations.
 
 ### Integration env vars
 

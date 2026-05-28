@@ -21,6 +21,16 @@ const SALT = "koapos-vault-v1";
 const DEV_FALLBACK_KEY = "dev-only-insecure-vault-key-do-not-use-in-prod";
 
 /**
+ * The hardcoded dev fallback is only honoured when NODE_ENV is explicitly
+ * "development" or blank/undefined. Any other value (including "production",
+ * "staging", "test", etc.) requires `VAULT_ENCRYPTION_KEY` to be set.
+ */
+function isDevFallbackAllowed(): boolean {
+  const env = process.env.NODE_ENV;
+  return env === "development" || env === undefined || env === "";
+}
+
+/**
  * Throws if `VAULT_ENCRYPTION_KEY` is missing in production. Call this at server
  * startup so the process fails fast rather than silently encrypting tokens with
  * an insecure dev key.
@@ -28,17 +38,18 @@ const DEV_FALLBACK_KEY = "dev-only-insecure-vault-key-do-not-use-in-prod";
 export function assertVaultKeyConfigured(): void {
   if (process.env.NODE_ENV === "production" && !process.env.VAULT_ENCRYPTION_KEY) {
     throw new Error(
-      "VAULT_ENCRYPTION_KEY is required in production. Refusing to start: " +
-      "OAuth tokens would otherwise be encrypted with an insecure fallback key.",
+      "Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode.",
     );
   }
 }
 
 function deriveKey(): Buffer {
   const secret = process.env.VAULT_ENCRYPTION_KEY
-    ?? (process.env.NODE_ENV !== "production" ? DEV_FALLBACK_KEY : undefined);
+    ?? (isDevFallbackAllowed() ? DEV_FALLBACK_KEY : undefined);
   if (!secret) {
-    throw new Error("VAULT_ENCRYPTION_KEY is not configured");
+    throw new Error(
+      "Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode.",
+    );
   }
   return crypto.pbkdf2Sync(secret, SALT, 100_000, 32, "sha256");
 }
