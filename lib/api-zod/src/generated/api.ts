@@ -4214,7 +4214,8 @@ export const GetPosSettingsResponse = zod.object({
   "staffLoginMessage": zod.string(),
   "activeRegisterId": zod.string(),
   "hardwareConfig": zod.string(),
-  "enabledShortcuts": zod.string()
+  "enabledShortcuts": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4250,7 +4251,8 @@ export const UpsertPosSettingsResponse = zod.object({
   "staffLoginMessage": zod.string(),
   "activeRegisterId": zod.string(),
   "hardwareConfig": zod.string(),
-  "enabledShortcuts": zod.string()
+  "enabledShortcuts": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4268,7 +4270,8 @@ export const GetLaybySettingsResponse = zod.object({
   "allowPartialPayments": zod.string(),
   "autoEmailOnCreation": zod.string(),
   "printTermsOnReceipt": zod.string(),
-  "termsAndConditions": zod.string()
+  "termsAndConditions": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4298,7 +4301,8 @@ export const UpsertLaybySettingsResponse = zod.object({
   "allowPartialPayments": zod.string(),
   "autoEmailOnCreation": zod.string(),
   "printTermsOnReceipt": zod.string(),
-  "termsAndConditions": zod.string()
+  "termsAndConditions": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4310,7 +4314,10 @@ export const GetKpiSettingsResponse = zod.object({
   "merchantId": zod.number(),
   "trackCategories": zod.string(),
   "trackAppointments": zod.string(),
-  "trackServices": zod.string()
+  "trackServices": zod.string(),
+  "trackSuppliers": zod.string(),
+  "trackWastage": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4320,7 +4327,9 @@ export const GetKpiSettingsResponse = zod.object({
 export const UpsertKpiSettingsBody = zod.object({
   "trackCategories": zod.string().optional(),
   "trackAppointments": zod.string().optional(),
-  "trackServices": zod.string().optional()
+  "trackServices": zod.string().optional(),
+  "trackSuppliers": zod.string().optional(),
+  "trackWastage": zod.string().optional()
 })
 
 export const UpsertKpiSettingsResponse = zod.object({
@@ -4328,7 +4337,10 @@ export const UpsertKpiSettingsResponse = zod.object({
   "merchantId": zod.number(),
   "trackCategories": zod.string(),
   "trackAppointments": zod.string(),
-  "trackServices": zod.string()
+  "trackServices": zod.string(),
+  "trackSuppliers": zod.string(),
+  "trackWastage": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4348,7 +4360,9 @@ export const ListKpiTargetsResponse = zod.object({
   "staffIds": zod.string(),
   "reward": zod.string().optional(),
   "notes": zod.string(),
-  "isActive": zod.string()
+  "isActive": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })),
   "total": zod.number()
 })
@@ -4403,7 +4417,9 @@ export const UpdateKpiTargetResponse = zod.object({
   "staffIds": zod.string(),
   "reward": zod.string().optional(),
   "notes": zod.string(),
-  "isActive": zod.string()
+  "isActive": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4471,7 +4487,8 @@ export const GetQrSettingsResponse = zod.object({
   "template": zod.string(),
   "size": zod.number(),
   "level": zod.string(),
-  "logoUrl": zod.string()
+  "logoUrl": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4505,7 +4522,8 @@ export const UpsertQrSettingsResponse = zod.object({
   "template": zod.string(),
   "size": zod.number(),
   "level": zod.string(),
-  "logoUrl": zod.string()
+  "logoUrl": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4898,7 +4916,8 @@ export const GetShortlinkSettingsResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "baseDomain": zod.string(),
-  "prefix": zod.string()
+  "prefix": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4914,7 +4933,8 @@ export const UpsertShortlinkSettingsResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "baseDomain": zod.string(),
-  "prefix": zod.string()
+  "prefix": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4935,7 +4955,8 @@ export const GetOnlineStoreSettingsResponse = zod.object({
   "payments": zod.string(),
   "features": zod.string(),
   "pages": zod.string(),
-  "quickCodes": zod.string()
+  "quickCodes": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4971,7 +4992,8 @@ export const UpsertOnlineStoreSettingsResponse = zod.object({
   "payments": zod.string(),
   "features": zod.string(),
   "pages": zod.string(),
-  "quickCodes": zod.string()
+  "quickCodes": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -4985,7 +5007,8 @@ export const GetOnlineStoreThirdpartyResponse = zod.object({
   "storeUrl": zod.string(),
   "apiKey": zod.string(),
   "connected": zod.string(),
-  "connectedAt": zod.string()
+  "connectedAt": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -5007,7 +5030,8 @@ export const UpsertOnlineStoreThirdpartyResponse = zod.object({
   "storeUrl": zod.string(),
   "apiKey": zod.string(),
   "connected": zod.string(),
-  "connectedAt": zod.string()
+  "connectedAt": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -5019,7 +5043,12 @@ export const ListShippingCarriersResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "carrierId": zod.string(),
-  "connected": zod.string()
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "apiKey": zod.string(),
+  "webhookSecret": zod.string(),
+  "config": zod.string(),
+  "updatedAt": zod.coerce.date()
 })),
   "total": zod.number()
 })
@@ -5040,7 +5069,12 @@ export const UpdateShippingCarrierResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "carrierId": zod.string(),
-  "connected": zod.string()
+  "connected": zod.string(),
+  "connectedAt": zod.string(),
+  "apiKey": zod.string(),
+  "webhookSecret": zod.string(),
+  "config": zod.string(),
+  "updatedAt": zod.coerce.date()
 })
 
 

@@ -1879,6 +1879,7 @@ export interface PosSettings {
   activeRegisterId: string;
   hardwareConfig: string;
   enabledShortcuts: string;
+  updatedAt: string;
 }
 
 export interface PosSettingsInput {
@@ -1908,6 +1909,7 @@ export interface LaybySettings {
   autoEmailOnCreation: string;
   printTermsOnReceipt: string;
   termsAndConditions: string;
+  updatedAt: string;
 }
 
 export interface LaybySettingsInput {
@@ -1928,12 +1930,17 @@ export interface KpiSettings {
   trackCategories: string;
   trackAppointments: string;
   trackServices: string;
+  trackSuppliers: string;
+  trackWastage: string;
+  updatedAt: string;
 }
 
 export interface KpiSettingsInput {
   trackCategories?: string;
   trackAppointments?: string;
   trackServices?: string;
+  trackSuppliers?: string;
+  trackWastage?: string;
 }
 
 export interface KpiTarget {
@@ -1949,6 +1956,8 @@ export interface KpiTarget {
   reward?: string;
   notes: string;
   isActive: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface KpiTargetInput {
@@ -2009,6 +2018,7 @@ export interface QrSettings {
   size: number;
   level: string;
   logoUrl: string;
+  updatedAt: string;
 }
 
 export interface QrSettingsInput {
@@ -2205,6 +2215,7 @@ export interface ShortlinkSettings {
   merchantId: number;
   baseDomain: string;
   prefix: string;
+  updatedAt: string;
 }
 
 export interface ShortlinkSettingsInput {
@@ -2227,6 +2238,7 @@ export interface OnlineStoreSettings {
   features: string;
   pages: string;
   quickCodes: string;
+  updatedAt: string;
 }
 
 export interface OnlineStoreSettingsInput {
@@ -2252,6 +2264,7 @@ export interface OnlineStoreThirdparty {
   apiKey: string;
   connected: string;
   connectedAt: string;
+  updatedAt: string;
 }
 
 export interface OnlineStoreThirdpartyInput {
@@ -2267,6 +2280,11 @@ export interface ShippingCarrier {
   merchantId: number;
   carrierId: string;
   connected: string;
+  connectedAt: string;
+  apiKey: string;
+  webhookSecret: string;
+  config: string;
+  updatedAt: string;
 }
 
 export interface ShippingCarrierListResponse {

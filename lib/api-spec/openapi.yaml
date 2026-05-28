@@ -80,6 +80,16 @@ tags:
     description: Service job templates
   - name: marketing-generators
     description: Marketing content generators
+  - name: POS
+    description: Point of sale registers and settings
+  - name: Settings
+    description: Merchant-level feature settings
+  - name: KPIs
+    description: KPI targets and performance settings
+  - name: Marketing
+    description: QR codes, email templates, campaigns, landing pages, and shortlinks
+  - name: OnlineStore
+    description: Online store, shipping carriers, marketplace connections, and delivery orders
 
 paths:
   /healthz:
@@ -7143,7 +7153,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -7159,6 +7169,7 @@ components:
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
         enabledShortcuts:            { type: string }
+        updatedAt:                   { type: string, format: date-time }
 
     PosSettingsInput:
       type: object
@@ -7178,7 +7189,7 @@ components:
 
     LaybySettings:
       type: object
-      required: [id, merchantId, durationValue, durationUnit, paymentFrequency, minimumDepositType, minimumDepositValue, allowPartialPayments, autoEmailOnCreation, printTermsOnReceipt, termsAndConditions]
+      required: [id, merchantId, durationValue, durationUnit, paymentFrequency, minimumDepositType, minimumDepositValue, allowPartialPayments, autoEmailOnCreation, printTermsOnReceipt, termsAndConditions, updatedAt]
       properties:
         id:                   { type: integer }
         merchantId:           { type: integer }
@@ -7191,6 +7202,7 @@ components:
         autoEmailOnCreation:  { type: string }
         printTermsOnReceipt:  { type: string }
         termsAndConditions:   { type: string }
+        updatedAt:            { type: string, format: date-time }
 
     LaybySettingsInput:
       type: object
@@ -7207,13 +7219,16 @@ components:
 
     KpiSettings:
       type: object
-      required: [id, merchantId, trackCategories, trackAppointments, trackServices]
+      required: [id, merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage, updatedAt]
       properties:
         id:                 { type: integer }
         merchantId:         { type: integer }
         trackCategories:    { type: string }
         trackAppointments:  { type: string }
         trackServices:      { type: string }
+        trackSuppliers:     { type: string }
+        trackWastage:       { type: string }
+        updatedAt:          { type: string, format: date-time }
 
     KpiSettingsInput:
       type: object
@@ -7221,10 +7236,12 @@ components:
         trackCategories:    { type: string }
         trackAppointments:  { type: string }
         trackServices:      { type: string }
+        trackSuppliers:     { type: string }
+        trackWastage:       { type: string }
 
     KpiTarget:
       type: object
-      required: [id, merchantId, targetId, name, metric, period, target, staffIds, notes, isActive]
+      required: [id, merchantId, targetId, name, metric, period, target, staffIds, notes, isActive, createdAt, updatedAt]
       properties:
         id:          { type: integer }
         merchantId:  { type: integer }
@@ -7238,6 +7255,8 @@ components:
         reward:      { type: string }
         notes:       { type: string }
         isActive:    { type: string }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
 
     KpiTargetInput:
       type: object
@@ -7299,7 +7318,7 @@ components:
 
     QrSettings:
       type: object
-      required: [id, merchantId, patternColor, eyeColor, eyeDotColor, bgColor, dotStyle, cornerSquareStyle, cornerDotStyle, template, size, level, logoUrl]
+      required: [id, merchantId, patternColor, eyeColor, eyeDotColor, bgColor, dotStyle, cornerSquareStyle, cornerDotStyle, template, size, level, logoUrl, updatedAt]
       properties:
         id:                  { type: integer }
         merchantId:          { type: integer }
@@ -7314,6 +7333,7 @@ components:
         size:                { type: integer }
         level:               { type: string }
         logoUrl:             { type: string }
+        updatedAt:           { type: string, format: date-time }
 
     QrSettingsInput:
       type: object
@@ -7547,12 +7567,13 @@ components:
 
     ShortlinkSettings:
       type: object
-      required: [id, merchantId, baseDomain, prefix]
+      required: [id, merchantId, baseDomain, prefix, updatedAt]
       properties:
         id:          { type: integer }
         merchantId:  { type: integer }
         baseDomain:  { type: string }
         prefix:      { type: string }
+        updatedAt:   { type: string, format: date-time }
 
     ShortlinkSettingsInput:
       type: object
@@ -7562,7 +7583,7 @@ components:
 
     OnlineStoreSettings:
       type: object
-      required: [id, merchantId, mode, storeName, tagline, logoUrl, faviconUrl, domain, published, theme, payments, features, pages, quickCodes]
+      required: [id, merchantId, mode, storeName, tagline, logoUrl, faviconUrl, domain, published, theme, payments, features, pages, quickCodes, updatedAt]
       properties:
         id:          { type: integer }
         merchantId:  { type: integer }
@@ -7578,6 +7599,7 @@ components:
         features:    { type: string }
         pages:       { type: string }
         quickCodes:  { type: string }
+        updatedAt:   { type: string, format: date-time }
 
     OnlineStoreSettingsInput:
       type: object
@@ -7597,7 +7619,7 @@ components:
 
     OnlineStoreThirdparty:
       type: object
-      required: [id, merchantId, providerId, storeUrl, apiKey, connected, connectedAt]
+      required: [id, merchantId, providerId, storeUrl, apiKey, connected, connectedAt, updatedAt]
       properties:
         id:           { type: integer }
         merchantId:   { type: integer }
@@ -7606,6 +7628,7 @@ components:
         apiKey:       { type: string }
         connected:    { type: string }
         connectedAt:  { type: string }
+        updatedAt:    { type: string, format: date-time }
 
     OnlineStoreThirdpartyInput:
       type: object
@@ -7618,12 +7641,17 @@ components:
 
     ShippingCarrier:
       type: object
-      required: [id, merchantId, carrierId, connected]
+      required: [id, merchantId, carrierId, connected, connectedAt, apiKey, webhookSecret, config, updatedAt]
       properties:
-        id:          { type: integer }
-        merchantId:  { type: integer }
-        carrierId:   { type: string }
-        connected:   { type: string }
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        carrierId:     { type: string }
+        connected:     { type: string }
+        connectedAt:   { type: string }
+        apiKey:        { type: string }
+        webhookSecret: { type: string }
+        config:        { type: string }
+        updatedAt:     { type: string, format: date-time }
 
     ShippingCarrierListResponse:
       type: object
