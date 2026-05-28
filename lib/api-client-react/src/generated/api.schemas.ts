@@ -3081,6 +3081,52 @@ export interface StickerTemplateUpdateInput {
   isDefault?: boolean;
 }
 
+export type DuplicateBucketMatchType = typeof DuplicateBucketMatchType[keyof typeof DuplicateBucketMatchType];
+
+
+export const DuplicateBucketMatchType = {
+  phone: 'phone',
+  name: 'name',
+  both: 'both',
+} as const;
+
+export interface DuplicateBucket {
+  bucketKey: string;
+  matchType: DuplicateBucketMatchType;
+  customers: Customer[];
+  totalTransactions: number;
+  totalSpent: number;
+  suggestedPrimaryId: number;
+}
+
+export interface BulkMergePreviewResponse {
+  buckets: DuplicateBucket[];
+  scannedTotal: number;
+}
+
+export interface BulkExecuteCluster {
+  primaryId: number;
+  secondaryIds: number[];
+}
+
+export interface BulkExecuteMergeBody {
+  clusters: BulkExecuteCluster[];
+}
+
+export interface BulkMergeClusterResult {
+  primaryId: number;
+  success: boolean;
+  merged: number;
+  error?: string;
+}
+
+export interface BulkMergeResult {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  results: BulkMergeClusterResult[];
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

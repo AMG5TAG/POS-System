@@ -28,6 +28,9 @@ import type {
   Brand,
   BrandInput,
   BrandListResponse,
+  BulkExecuteMergeBody,
+  BulkMergePreviewResponse,
+  BulkMergeResult,
   BusinessProfile,
   BusinessProfileInput,
   CalendarMonth,
@@ -3412,6 +3415,151 @@ export const useMergeCustomerProfiles = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getMergeCustomerProfilesMutationOptions(options));
+    }
+
+export const getBulkMergePreviewUrl = () => {
+
+
+
+
+  return `/api/customers/bulk-merge-preview`
+}
+
+/**
+ * Finds duplicates by exact phone number or identical first+last name, groups matches into buckets with transaction aggregates, and returns a suggested primary record per bucket.
+
+ * @summary Scan all customers and return grouped duplicate buckets
+ */
+export const bulkMergePreview = async ( options?: RequestInit): Promise<BulkMergePreviewResponse> => {
+
+  return customFetch<BulkMergePreviewResponse>(getBulkMergePreviewUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getBulkMergePreviewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkMergePreview>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkMergePreview>>, TError,void, TContext> => {
+
+const mutationKey = ['bulkMergePreview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkMergePreview>>, void> = () => {
+
+
+          return  bulkMergePreview(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkMergePreviewMutationResult = NonNullable<Awaited<ReturnType<typeof bulkMergePreview>>>
+
+    export type BulkMergePreviewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Scan all customers and return grouped duplicate buckets
+ */
+export const useBulkMergePreview = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkMergePreview>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkMergePreview>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getBulkMergePreviewMutationOptions(options));
+    }
+
+export const getBulkExecuteMergeUrl = () => {
+
+
+
+
+  return `/api/customers/bulk-execute-merge`
+}
+
+/**
+ * For each cluster, performs the ACID transaction cascade that re-points all child records to the primary ID and permanently deletes secondaries.
+
+ * @summary Execute the full merge cascade for an array of duplicate clusters
+ */
+export const bulkExecuteMerge = async (bulkExecuteMergeBody: BulkExecuteMergeBody, options?: RequestInit): Promise<BulkMergeResult> => {
+
+  return customFetch<BulkMergeResult>(getBulkExecuteMergeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkExecuteMergeBody,)
+  }
+);}
+
+
+
+
+export const getBulkExecuteMergeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkExecuteMerge>>, TError,{data: BodyType<BulkExecuteMergeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkExecuteMerge>>, TError,{data: BodyType<BulkExecuteMergeBody>}, TContext> => {
+
+const mutationKey = ['bulkExecuteMerge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkExecuteMerge>>, {data: BodyType<BulkExecuteMergeBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkExecuteMerge(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkExecuteMergeMutationResult = NonNullable<Awaited<ReturnType<typeof bulkExecuteMerge>>>
+    export type BulkExecuteMergeMutationBody = BodyType<BulkExecuteMergeBody>
+    export type BulkExecuteMergeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Execute the full merge cascade for an array of duplicate clusters
+ */
+export const useBulkExecuteMerge = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkExecuteMerge>>, TError,{data: BodyType<BulkExecuteMergeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkExecuteMerge>>,
+        TError,
+        {data: BodyType<BulkExecuteMergeBody>},
+        TContext
+      > => {
+      return useMutation(getBulkExecuteMergeMutationOptions(options));
     }
 
 export const getRequestUploadUrlUrl = () => {

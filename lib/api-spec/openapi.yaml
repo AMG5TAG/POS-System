@@ -901,6 +901,45 @@ paths:
         "404":
           description: One or both customer profiles not found
 
+  /customers/bulk-merge-preview:
+    post:
+      operationId: bulkMergePreview
+      tags: [customers]
+      summary: Scan all customers and return grouped duplicate buckets
+      description: >
+        Finds duplicates by exact phone number or identical first+last name,
+        groups matches into buckets with transaction aggregates, and returns
+        a suggested primary record per bucket.
+      responses:
+        "200":
+          description: Duplicate buckets with aggregate stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkMergePreviewResponse"
+
+  /customers/bulk-execute-merge:
+    post:
+      operationId: bulkExecuteMerge
+      tags: [customers]
+      summary: Execute the full merge cascade for an array of duplicate clusters
+      description: >
+        For each cluster, performs the ACID transaction cascade that re-points
+        all child records to the primary ID and permanently deletes secondaries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteMergeBody"
+      responses:
+        "200":
+          description: Per-cluster results summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkMergeResult"
+
   # ── Storage ───────────────────────────────────────────────────────────────
 
   /storage/uploads/request-url:
@@ -9274,3 +9313,62 @@ components:
         sizeId:      { type: string }
         fields:      { type: object }
         isDefault:   { type: boolean }
+
+    DuplicateBucket:
+      type: object
+      required: [bucketKey, matchType, customers, totalTransactions, totalSpent, suggestedPrimaryId]
+      properties:
+        bucketKey:          { type: string }
+        matchType:          { type: string, enum: [phone, name, both] }
+        customers:
+          type: array
+          items: { $ref: "#/components/schemas/Customer" }
+        totalTransactions:  { type: integer }
+        totalSpent:         { type: number }
+        suggestedPrimaryId: { type: integer }
+
+    BulkMergePreviewResponse:
+      type: object
+      required: [buckets, scannedTotal]
+      properties:
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/DuplicateBucket" }
+        scannedTotal: { type: integer }
+
+    BulkExecuteCluster:
+      type: object
+      required: [primaryId, secondaryIds]
+      properties:
+        primaryId: { type: integer }
+        secondaryIds:
+          type: array
+          items: { type: integer }
+
+    BulkExecuteMergeBody:
+      type: object
+      required: [clusters]
+      properties:
+        clusters:
+          type: array
+          items: { $ref: "#/components/schemas/BulkExecuteCluster" }
+
+    BulkMergeClusterResult:
+      type: object
+      required: [primaryId, success, merged]
+      properties:
+        primaryId: { type: integer }
+        success:   { type: boolean }
+        merged:    { type: integer }
+        error:     { type: string }
+
+    BulkMergeResult:
+      type: object
+      required: [processed, succeeded, failed, results]
+      properties:
+        processed: { type: integer }
+        succeeded: { type: integer }
+        failed:    { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/BulkMergeClusterResult" }

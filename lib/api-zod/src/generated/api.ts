@@ -1135,6 +1135,82 @@ export const MergeCustomerProfilesResponse = zod.object({
 
 
 /**
+ * Finds duplicates by exact phone number or identical first+last name, groups matches into buckets with transaction aggregates, and returns a suggested primary record per bucket.
+
+ * @summary Scan all customers and return grouped duplicate buckets
+ */
+export const BulkMergePreviewResponse = zod.object({
+  "buckets": zod.array(zod.object({
+  "bucketKey": zod.string(),
+  "matchType": zod.enum(['phone', 'name', 'both']),
+  "customers": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish()
+})),
+  "totalTransactions": zod.number(),
+  "totalSpent": zod.number(),
+  "suggestedPrimaryId": zod.number()
+})),
+  "scannedTotal": zod.number()
+})
+
+
+/**
+ * For each cluster, performs the ACID transaction cascade that re-points all child records to the primary ID and permanently deletes secondaries.
+
+ * @summary Execute the full merge cascade for an array of duplicate clusters
+ */
+export const BulkExecuteMergeBody = zod.object({
+  "clusters": zod.array(zod.object({
+  "primaryId": zod.number(),
+  "secondaryIds": zod.array(zod.number())
+}))
+})
+
+export const BulkExecuteMergeResponse = zod.object({
+  "processed": zod.number(),
+  "succeeded": zod.number(),
+  "failed": zod.number(),
+  "results": zod.array(zod.object({
+  "primaryId": zod.number(),
+  "success": zod.boolean(),
+  "merged": zod.number(),
+  "error": zod.string().optional()
+}))
+})
+
+
+/**
  * @summary Request a presigned URL for file upload
  */
 
