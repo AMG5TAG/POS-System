@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
+import { BrandColorProvider } from "@/lib/brand-color-context";
 import { NavLayoutProvider } from "@/lib/nav-layout";
 import { AccessibilityProvider } from "@/lib/accessibility";
 import { Toaster } from "@/components/ui/sonner";
@@ -481,11 +482,13 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <TooltipProvider>
               <AuthProvider>
-                <AIProvider>
-                  <a href="#main-content" className="skip-link">Skip to main content</a>
-                  <Router />
-                  <Toaster />
-                </AIProvider>
+                <BrandColorProvider>
+                  <AIProvider>
+                    <a href="#main-content" className="skip-link">Skip to main content</a>
+                    <Router />
+                    <Toaster />
+                  </AIProvider>
+                </BrandColorProvider>
               </AuthProvider>
             </TooltipProvider>
           </QueryClientProvider>

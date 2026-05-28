@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,19 +116,6 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
   btnBg: "#ffffff", btnText: "#111827", btnBorder: "#ffffff",
   textColor: "#ffffff", font: "Inter", links: [],
 };
-
-/* ── Colour picker ─────────────────────────────────────────────────────── */
-
-function ColourPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-8 h-8 rounded border cursor-pointer p-0.5 shrink-0" />
-      <Input value={value} onChange={(e) => onChange(e.target.value)}
-        className="h-8 font-mono text-xs" placeholder="#000000" />
-    </div>
-  );
-}
 
 /* ── Font picker ───────────────────────────────────────────────────────── */
 
