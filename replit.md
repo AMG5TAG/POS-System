@@ -41,6 +41,10 @@ Each integration is "feature disabled if missing" — the API hides the connect 
 - `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` — TikTok Business; feature disabled if missing.
 - `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_TEAM_ID` / `APPLE_WALLET_PASS_TYPE_ID` — Apple Wallet loyalty passes; feature disabled if missing.
 - `GOOGLE_WALLET_ISSUER_ID` / `GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_WALLET_PRIVATE_KEY` — Google Wallet loyalty passes; feature disabled if missing.
+- `APPLE_CLIENT_ID` — Apple Sign In Service ID (the Identifier you created in Certificates, Identifiers & Profiles, e.g. `com.yourapp.signin`); feature disabled if missing.
+- `APPLE_TEAM_ID` — Your 10-character Apple Developer Team ID (found in the Apple Developer portal under Membership); feature disabled if missing.
+- `APPLE_KEY_ID` — The 10-character Key ID for the Sign In with Apple private key generated in the Apple Developer portal; feature disabled if missing.
+- `APPLE_PRIVATE_KEY` — The full contents of the downloaded `.p8` private key file (including `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` headers); feature disabled if missing. This value is a server-side configuration secret and is **not** stored in the `oauth_token_vault` DB table — per-merchant Apple OAuth access/refresh tokens (issued after a user completes the Sign In with Apple flow) are stored in the vault and encrypted via `VAULT_ENCRYPTION_KEY` using `tokenVault.ts`.
 
 ## Stack
 
