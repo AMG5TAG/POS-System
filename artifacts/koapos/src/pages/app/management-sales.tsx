@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
+import {
+  useListQrCodes,
+  useListShortlinks,
+  useListLandingPages,
+} from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetDashboardSummary,
@@ -1363,12 +1368,22 @@ function StoreCreditTab() {
 
 /* ─── Tab: Analytics (Marketing) ────────────────────────────────────────── */
 
-interface _QREntry   { id: string; label: string; url: string; createdAt: string; settings?: { template?: string; dotStyle?: string } }
-interface _LinkEntry { id: string; label: string; longUrl: string; slug: string; createdAt: string; clicks: number; tags?: string }
-interface _PageEntry { id: string; slug: string; title: string; links?: { enabled: boolean }[]; createdAt: string }
+function _parseQrSettings(raw: string): { template?: string; dotStyle?: string } {
+  try {
+    const parsed = JSON.parse(raw ?? "{}") as { template?: string; dotStyle?: string };
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+}
 
-function _loadLS<T>(_key: string): T[] {
-  return [];
+function _parseLandingLinks(raw: string | undefined | null): { enabled: boolean }[] {
+  try {
+    const parsed = JSON.parse(raw ?? "[]") as { enabled?: boolean }[];
+    return Array.isArray(parsed) ? parsed.map((l) => ({ enabled: !!l?.enabled })) : [];
+  } catch {
+    return [];
+  }
 }
 
 function _groupByDay(items: { createdAt: string }[], days = 30): Record<string, number> {
@@ -1396,15 +1411,19 @@ function _countBy<T>(items: T[], key: (x: T) => string): { name: string; value: 
 const _CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f97316", "#14b8a6"];
 
 function AnalyticsTab() {
-  const qr    = useMemo(() => _loadLS<_QREntry>("koapos_qr_history"), []);
-  const links = useMemo(() => _loadLS<_LinkEntry>("koapos_shortlinks"), []);
-  const pages = useMemo(() => _loadLS<_PageEntry>("koapos_landing_pages"), []);
+  const { data: qrResp }    = useListQrCodes();
+  const { data: linksResp } = useListShortlinks();
+  const { data: pagesResp } = useListLandingPages();
 
-  const totalClicks   = useMemo(() => links.reduce((s, l) => s + (l.clicks || 0), 0), [links]);
-  const avgClicks     = links.length > 0 ? (totalClicks / links.length) : 0;
-  const topLinks      = useMemo(() => [...links].sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).slice(0, 8), [links]);
-  const templates     = useMemo(() => _countBy(qr, (e) => e.settings?.template ?? "standard"), [qr]);
-  const dotStyles     = useMemo(() => _countBy(qr, (e) => e.settings?.dotStyle ?? "square"), [qr]);
+  const qr    = useMemo(() => qrResp?.items    ?? [], [qrResp]);
+  const links = useMemo(() => linksResp?.items ?? [], [linksResp]);
+  const pages = useMemo(() => pagesResp?.items ?? [], [pagesResp]);
+
+  const totalClicks = useMemo(() => links.reduce((s, l) => s + (l.clicks || 0), 0), [links]);
+  const avgClicks   = links.length > 0 ? (totalClicks / links.length) : 0;
+  const topLinks    = useMemo(() => [...links].sort((a, b) => (b.clicks || 0) - (a.clicks || 0)).slice(0, 8), [links]);
+  const templates   = useMemo(() => _countBy(qr, (e) => _parseQrSettings(e.settings).template ?? "standard"), [qr]);
+  const dotStyles   = useMemo(() => _countBy(qr, (e) => _parseQrSettings(e.settings).dotStyle ?? "square"), [qr]);
 
   const activityData = useMemo(() => {
     const qrByDay  = _groupByDay(qr, 30);
@@ -1595,12 +1614,12 @@ function AnalyticsTab() {
                     <td className="px-5 py-3 font-mono text-xs text-muted-foreground max-w-[180px] truncate">{e.url}</td>
                     <td className="px-5 py-3">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-secondary font-medium capitalize">
-                        {(e.settings?.template ?? "standard").replace(/-/g, " ")}
+                        {(_parseQrSettings(e.settings).template ?? "standard").replace(/-/g, " ")}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-xs px-2 py-0.5 rounded-full border font-medium capitalize">
-                        {(e.settings?.dotStyle ?? "square").replace(/-/g, " ")}
+                        {(_parseQrSettings(e.settings).dotStyle ?? "square").replace(/-/g, " ")}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground whitespace-nowrap text-xs">
@@ -1638,7 +1657,7 @@ function AnalyticsTab() {
                     <td className="px-5 py-3 font-mono text-xs text-primary">/p/{p.slug}</td>
                     <td className="px-5 py-3">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-secondary font-medium">
-                        {(p.links ?? []).filter((l) => l.enabled).length} links
+                        {_parseLandingLinks(p.links).filter((l) => l.enabled).length} links
                       </span>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground whitespace-nowrap text-xs">

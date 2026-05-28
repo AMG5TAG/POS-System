@@ -1,50 +1,50 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { QrCode, Link2, Save, RotateCcw } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
+import {
+  useGetQrSettings,
+  useUpsertQrSettings,
+  useGetShortlinkSettings,
+  useUpsertShortlinkSettings,
+  type QrSettingsInput,
+  type ShortlinkSettingsInput,
+} from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
 interface QRDefaults {
-  fgColor: string;
+  patternColor: string;
   bgColor: string;
   size: number;
   level: "L" | "M" | "Q" | "H";
   logoUrl: string;
-  includeMargin: boolean;
 }
 
 interface ShortlinkDefaults {
   baseDomain: string;
   prefix: string;
-  enableRedirects: boolean;
 }
 
-/* ── Constants ─────────────────────────────────────────────────────────── */
-
-const QR_SETTINGS_KEY = "koapos_qr_settings";
-const SL_SETTINGS_KEY = "koapos_shortlink_settings";
+/* ── Defaults ──────────────────────────────────────────────────────────── */
 
 const DEFAULT_QR: QRDefaults = {
-  fgColor: "#000000",
+  patternColor: "#000000",
   bgColor: "#ffffff",
   size: 256,
   level: "M",
   logoUrl: "",
-  includeMargin: true,
 };
 
 const DEFAULT_SL: ShortlinkDefaults = {
   baseDomain: typeof window !== "undefined" ? window.location.hostname : "koapos.com",
   prefix: "s",
-  enableRedirects: false,
 };
 
 const ECC_LEVELS = [
@@ -54,44 +54,68 @@ const ECC_LEVELS = [
   { value: "H", label: "High (30%)" },
 ];
 
-/* ── Helpers ───────────────────────────────────────────────────────────── */
-
-function load<T>(_key: string, defaults: T): T {
-  return defaults;
-}
-
-function save(_key: string, _data: unknown) {
-  /* no-op */
-}
-
 /* ── Component ─────────────────────────────────────────────────────────── */
 
 export default function ManagementMarketingGeneratorsPage() {
-  const [qr, setQR]   = useState<QRDefaults>(() => load(QR_SETTINGS_KEY, DEFAULT_QR));
-  const [sl, setSL]   = useState<ShortlinkDefaults>(() => load(SL_SETTINGS_KEY, DEFAULT_SL));
+  const { data: qrServer } = useGetQrSettings();
+  const { data: slServer } = useGetShortlinkSettings();
+  const upsertQr = useUpsertQrSettings();
+  const upsertSl = useUpsertShortlinkSettings();
+
+  const [qr, setQR] = useState<QRDefaults>(DEFAULT_QR);
+  const [sl, setSL] = useState<ShortlinkDefaults>(DEFAULT_SL);
+
+  /* Hydrate from server once each settings record loads. */
+  useEffect(() => {
+    if (!qrServer) return;
+    setQR({
+      patternColor: qrServer.patternColor || DEFAULT_QR.patternColor,
+      bgColor:      qrServer.bgColor      || DEFAULT_QR.bgColor,
+      size:         qrServer.size         || DEFAULT_QR.size,
+      level:        (qrServer.level as QRDefaults["level"]) || DEFAULT_QR.level,
+      logoUrl:      qrServer.logoUrl      ?? "",
+    });
+  }, [qrServer]);
+
+  useEffect(() => {
+    if (!slServer) return;
+    setSL({
+      baseDomain: slServer.baseDomain || DEFAULT_SL.baseDomain,
+      prefix:     slServer.prefix     || DEFAULT_SL.prefix,
+    });
+  }, [slServer]);
 
   const setQRField = <K extends keyof QRDefaults>(k: K, v: QRDefaults[K]) =>
     setQR((p) => ({ ...p, [k]: v }));
   const setSLField = <K extends keyof ShortlinkDefaults>(k: K, v: ShortlinkDefaults[K]) =>
     setSL((p) => ({ ...p, [k]: v }));
 
-  const saveAll = () => {
-    save(QR_SETTINGS_KEY, qr);
-    save(SL_SETTINGS_KEY, sl);
-    toast.success("Generator settings saved");
+  const saveAll = async () => {
+    const qrBody: QrSettingsInput = {
+      patternColor: qr.patternColor,
+      bgColor:      qr.bgColor,
+      size:         qr.size,
+      level:        qr.level,
+      logoUrl:      qr.logoUrl,
+    };
+    const slBody: ShortlinkSettingsInput = {
+      baseDomain: sl.baseDomain,
+      prefix:     sl.prefix,
+    };
+    try {
+      await Promise.all([
+        upsertQr.mutateAsync({ data: qrBody }),
+        upsertSl.mutateAsync({ data: slBody }),
+      ]);
+      toast.success("Generator settings saved");
+    } catch (err) {
+      toast.error("Could not save settings");
+      console.error(err);
+    }
   };
 
-  const resetQR = () => {
-    setQR(DEFAULT_QR);
-    save(QR_SETTINGS_KEY, DEFAULT_QR);
-    toast.success("QR defaults reset");
-  };
-
-  const resetSL = () => {
-    setSL(DEFAULT_SL);
-    save(SL_SETTINGS_KEY, DEFAULT_SL);
-    toast.success("Shortlink defaults reset");
-  };
+  const resetQR = () => setQR(DEFAULT_QR);
+  const resetSL = () => setSL(DEFAULT_SL);
 
   return (
     <AppLayout>
@@ -124,11 +148,11 @@ export default function ManagementMarketingGeneratorsPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Foreground colour</Label>
+                  <Label className="text-xs">Pattern colour</Label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={qr.fgColor} onChange={(e) => setQRField("fgColor", e.target.value)}
+                    <input type="color" value={qr.patternColor} onChange={(e) => setQRField("patternColor", e.target.value)}
                       className="w-8 h-8 rounded border cursor-pointer shrink-0 p-0.5" />
-                    <Input value={qr.fgColor} onChange={(e) => setQRField("fgColor", e.target.value)}
+                    <Input value={qr.patternColor} onChange={(e) => setQRField("patternColor", e.target.value)}
                       className="font-mono text-sm h-8" />
                   </div>
                 </div>
@@ -185,27 +209,16 @@ export default function ManagementMarketingGeneratorsPage() {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">Include margin</p>
-                  <p className="text-xs text-muted-foreground">Adds quiet zone around the code for better scanning.</p>
-                </div>
-                <Switch
-                  checked={qr.includeMargin}
-                  onCheckedChange={(v) => setQRField("includeMargin", v)}
-                />
-              </div>
-
               {/* Live preview */}
               <div className="flex justify-center pt-2">
                 <div className="rounded-xl border p-3 shadow-sm" style={{ background: qr.bgColor }}>
                   <QRCodeCanvas
                     value="https://koapos.com"
                     size={120}
-                    fgColor={qr.fgColor}
+                    fgColor={qr.patternColor}
                     bgColor={qr.bgColor}
                     level={qr.level}
-                    marginSize={qr.includeMargin ? 4 : 0}
+                    marginSize={4}
                     {...(qr.logoUrl ? {
                       imageSettings: { src: qr.logoUrl, height: 22, width: 22, excavate: true }
                     } : {})}
@@ -264,25 +277,6 @@ export default function ManagementMarketingGeneratorsPage() {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">Enable redirect routing</p>
-                  <p className="text-xs text-muted-foreground">Allow KoaPOS to serve redirects from <span className="font-mono">/{sl.prefix}/…</span> paths.</p>
-                </div>
-                <Switch
-                  checked={sl.enableRedirects}
-                  onCheckedChange={(v) => setSLField("enableRedirects", v)}
-                />
-              </div>
-
-              {sl.enableRedirects && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-700/30 p-3 text-xs text-blue-800 dark:text-blue-300 space-y-1">
-                  <p className="font-semibold">Redirect routing active</p>
-                  <p>KoaPOS will intercept requests to <span className="font-mono">/{sl.prefix}/[code]</span> and redirect visitors to the saved destination URL.</p>
-                  <p>Make sure your domain's DNS is pointed to KoaPOS for this to work on your custom domain.</p>
-                </div>
-              )}
-
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground">Example shortlink preview</p>
                 <p className="font-mono text-sm text-primary break-all">
@@ -294,8 +288,13 @@ export default function ManagementMarketingGeneratorsPage() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={saveAll} className="gap-1.5">
-            <Save className="w-4 h-4" /> Save Settings
+          <Button
+            onClick={saveAll}
+            disabled={upsertQr.isPending || upsertSl.isPending}
+            className="gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            {upsertQr.isPending || upsertSl.isPending ? "Saving…" : "Save Settings"}
           </Button>
         </div>
       </div>
