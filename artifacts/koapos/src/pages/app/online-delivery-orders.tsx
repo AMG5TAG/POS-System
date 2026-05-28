@@ -195,11 +195,12 @@ function OrderCard({ order, onAdvance, onCancel, onView }: {
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function OnlineDeliveryOrdersPage() {
-  const { data: rawOrders = [], refetch, isFetching } = useListDeliveryOrders({ query: { queryKey: ["delivery-orders"] } });
+  const { data: response, refetch, isFetching } = useListDeliveryOrders({ query: { queryKey: ["delivery-orders"] } });
   const createOrder = useCreateDeliveryOrder();
   const updateOrder = useUpdateDeliveryOrder();
 
-  const orders: DeliveryOrder[] = (rawOrders as ApiOrder[]).map(apiToLocal);
+  const rawOrders = (response?.items ?? []) as unknown as ApiOrder[];
+  const orders: DeliveryOrder[] = rawOrders.map(apiToLocal);
   const activeOrders = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
   const completedOrders = orders.filter((o) => o.status === "delivered" || o.status === "cancelled");
 
