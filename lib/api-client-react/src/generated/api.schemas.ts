@@ -2741,6 +2741,89 @@ export interface SalesTemplateListResponse {
   total: number;
 }
 
+export interface DailySalesSummary {
+  date: string;
+  grossRevenue: number;
+  exGstRevenue: number;
+  taxCollected: number;
+  discountTotal: number;
+  totalCogs: number;
+  netProfit: number;
+  refundTotal: number;
+  transactionCount: number;
+}
+
+export interface ProfitLossReport {
+  startDate: string;
+  endDate: string;
+  grossRevenue: number;
+  exGstRevenue: number;
+  taxCollected: number;
+  discountTotal: number;
+  totalCogs: number;
+  netProfit: number;
+  grossMarginPct: number;
+  refundTotal: number;
+  transactionCount: number;
+  dailyBreakdown: DailySalesSummary[];
+}
+
+export interface PaymentMethodSummary {
+  paymentMethod: string;
+  transactionCount: number;
+  totalAmount: number;
+  avgTransactionValue: number;
+}
+
+export interface SalesSummaryReport {
+  startDate: string;
+  endDate: string;
+  registerId?: string | null;
+  totalRevenue: number;
+  transactionCount: number;
+  avgOrderValue: number;
+  paymentBreakdown: PaymentMethodSummary[];
+  dailyBreakdown: DailySalesSummary[];
+}
+
+export interface InventoryValuationItem {
+  productId: number;
+  name: string;
+  sku?: string | null;
+  stockQuantity: number;
+  costPrice: number;
+  retailPrice: number;
+  costValue: number;
+  retailValue: number;
+  marginPct: number;
+}
+
+export interface InventoryValuationReport {
+  totalSkus: number;
+  totalUnits: number;
+  totalCostValue: number;
+  totalRetailValue: number;
+  potentialProfit: number;
+  items: InventoryValuationItem[];
+}
+
+export interface ProductPerformanceItem {
+  productId: number;
+  name: string;
+  sku?: string | null;
+  quantitySold: number;
+  totalRevenue: number;
+  totalCogs: number;
+  grossProfit: number;
+  marginPct: number;
+}
+
+export interface ProductPerformanceReport {
+  startDate: string;
+  endDate: string;
+  items: ProductPerformanceItem[];
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -2986,5 +3069,30 @@ registerId?: string;
 
 export type ListPosStaffSessionsParams = {
 registerId?: string;
+};
+
+export type GetProfitLossParams = {
+/**
+ * Start date (YYYY-MM-DD, inclusive)
+ */
+startDate: string;
+/**
+ * End date (YYYY-MM-DD, inclusive)
+ */
+endDate: string;
+};
+
+export type GetSalesSummaryParams = {
+startDate: string;
+endDate: string;
+/**
+ * Filter by POS register ID (optional)
+ */
+registerId?: string;
+};
+
+export type GetProductPerformanceParams = {
+startDate: string;
+endDate: string;
 };
 

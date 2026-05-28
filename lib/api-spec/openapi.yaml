@@ -4954,6 +4954,107 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SalesTemplate" }
 
+  # ── Reports ───────────────────────────────────────────────────────────────
+  /reports/profit-loss:
+    get:
+      operationId: getProfitLoss
+      tags: [reports]
+      summary: Profit and loss report for a date range
+      security: [{ session: [] }]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: Start date (YYYY-MM-DD, inclusive)
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: End date (YYYY-MM-DD, inclusive)
+      responses:
+        "200":
+          description: Profit and loss summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfitLossReport" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /reports/sales-summary:
+    get:
+      operationId: getSalesSummary
+      tags: [reports]
+      summary: Sales summary with payment-method breakdown for a date range
+      security: [{ session: [] }]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: registerId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by POS register ID (optional)
+      responses:
+        "200":
+          description: Sales summary report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesSummaryReport" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /reports/inventory-valuation:
+    get:
+      operationId: getInventoryValuation
+      tags: [reports]
+      summary: Current inventory asset valuation (cost vs retail)
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Inventory valuation report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryValuationReport" }
+        "401":
+          description: Unauthorized
+
+  /reports/product-performance:
+    get:
+      operationId: getProductPerformance
+      tags: [reports]
+      summary: Product performance ledger (quantities, revenue, margin) for a date range
+      security: [{ session: [] }]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Product performance report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductPerformanceReport" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
 components:
   schemas:
     HealthStatus:
@@ -8502,3 +8603,113 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SalesTemplate" }
         total: { type: integer }
+
+    # ── Reports ─────────────────────────────────────────────────────────────
+    DailySalesSummary:
+      type: object
+      required: [date, grossRevenue, exGstRevenue, taxCollected, discountTotal, totalCogs, netProfit, refundTotal, transactionCount]
+      properties:
+        date:             { type: string, format: date }
+        grossRevenue:     { type: number }
+        exGstRevenue:     { type: number }
+        taxCollected:     { type: number }
+        discountTotal:    { type: number }
+        totalCogs:        { type: number }
+        netProfit:        { type: number }
+        refundTotal:      { type: number }
+        transactionCount: { type: integer }
+
+    ProfitLossReport:
+      type: object
+      required: [startDate, endDate, grossRevenue, exGstRevenue, taxCollected, discountTotal, totalCogs, netProfit, grossMarginPct, refundTotal, transactionCount, dailyBreakdown]
+      properties:
+        startDate:        { type: string, format: date }
+        endDate:          { type: string, format: date }
+        grossRevenue:     { type: number }
+        exGstRevenue:     { type: number }
+        taxCollected:     { type: number }
+        discountTotal:    { type: number }
+        totalCogs:        { type: number }
+        netProfit:        { type: number }
+        grossMarginPct:   { type: number }
+        refundTotal:      { type: number }
+        transactionCount: { type: integer }
+        dailyBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/DailySalesSummary" }
+
+    PaymentMethodSummary:
+      type: object
+      required: [paymentMethod, transactionCount, totalAmount, avgTransactionValue]
+      properties:
+        paymentMethod:       { type: string }
+        transactionCount:    { type: integer }
+        totalAmount:         { type: number }
+        avgTransactionValue: { type: number }
+
+    SalesSummaryReport:
+      type: object
+      required: [startDate, endDate, totalRevenue, transactionCount, avgOrderValue, paymentBreakdown, dailyBreakdown]
+      properties:
+        startDate:        { type: string, format: date }
+        endDate:          { type: string, format: date }
+        registerId:       { type: string, nullable: true }
+        totalRevenue:     { type: number }
+        transactionCount: { type: integer }
+        avgOrderValue:    { type: number }
+        paymentBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentMethodSummary" }
+        dailyBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/DailySalesSummary" }
+
+    InventoryValuationItem:
+      type: object
+      required: [productId, name, stockQuantity, costPrice, retailPrice, costValue, retailValue, marginPct]
+      properties:
+        productId:     { type: integer }
+        name:          { type: string }
+        sku:           { type: string, nullable: true }
+        stockQuantity: { type: integer }
+        costPrice:     { type: number }
+        retailPrice:   { type: number }
+        costValue:     { type: number }
+        retailValue:   { type: number }
+        marginPct:     { type: number }
+
+    InventoryValuationReport:
+      type: object
+      required: [totalSkus, totalUnits, totalCostValue, totalRetailValue, potentialProfit, items]
+      properties:
+        totalSkus:        { type: integer }
+        totalUnits:       { type: integer }
+        totalCostValue:   { type: number }
+        totalRetailValue: { type: number }
+        potentialProfit:  { type: number }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InventoryValuationItem" }
+
+    ProductPerformanceItem:
+      type: object
+      required: [productId, name, quantitySold, totalRevenue, totalCogs, grossProfit, marginPct]
+      properties:
+        productId:    { type: integer }
+        name:         { type: string }
+        sku:          { type: string, nullable: true }
+        quantitySold: { type: number }
+        totalRevenue: { type: number }
+        totalCogs:    { type: number }
+        grossProfit:  { type: number }
+        marginPct:    { type: number }
+
+    ProductPerformanceReport:
+      type: object
+      required: [startDate, endDate, items]
+      properties:
+        startDate: { type: string, format: date }
+        endDate:   { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProductPerformanceItem" }

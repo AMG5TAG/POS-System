@@ -6369,3 +6369,120 @@ export const UpsertSalesTemplateResponse = zod.object({
 })
 
 
+/**
+ * @summary Profit and loss report for a date range
+ */
+export const GetProfitLossQueryParams = zod.object({
+  "startDate": zod.date().describe('Start date (YYYY-MM-DD, inclusive)'),
+  "endDate": zod.date().describe('End date (YYYY-MM-DD, inclusive)')
+})
+
+export const GetProfitLossResponse = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "grossRevenue": zod.number(),
+  "exGstRevenue": zod.number(),
+  "taxCollected": zod.number(),
+  "discountTotal": zod.number(),
+  "totalCogs": zod.number(),
+  "netProfit": zod.number(),
+  "grossMarginPct": zod.number(),
+  "refundTotal": zod.number(),
+  "transactionCount": zod.number(),
+  "dailyBreakdown": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "grossRevenue": zod.number(),
+  "exGstRevenue": zod.number(),
+  "taxCollected": zod.number(),
+  "discountTotal": zod.number(),
+  "totalCogs": zod.number(),
+  "netProfit": zod.number(),
+  "refundTotal": zod.number(),
+  "transactionCount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Sales summary with payment-method breakdown for a date range
+ */
+export const GetSalesSummaryQueryParams = zod.object({
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "registerId": zod.coerce.string().optional().describe('Filter by POS register ID (optional)')
+})
+
+export const GetSalesSummaryResponse = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "registerId": zod.string().nullish(),
+  "totalRevenue": zod.number(),
+  "transactionCount": zod.number(),
+  "avgOrderValue": zod.number(),
+  "paymentBreakdown": zod.array(zod.object({
+  "paymentMethod": zod.string(),
+  "transactionCount": zod.number(),
+  "totalAmount": zod.number(),
+  "avgTransactionValue": zod.number()
+})),
+  "dailyBreakdown": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "grossRevenue": zod.number(),
+  "exGstRevenue": zod.number(),
+  "taxCollected": zod.number(),
+  "discountTotal": zod.number(),
+  "totalCogs": zod.number(),
+  "netProfit": zod.number(),
+  "refundTotal": zod.number(),
+  "transactionCount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Current inventory asset valuation (cost vs retail)
+ */
+export const GetInventoryValuationResponse = zod.object({
+  "totalSkus": zod.number(),
+  "totalUnits": zod.number(),
+  "totalCostValue": zod.number(),
+  "totalRetailValue": zod.number(),
+  "potentialProfit": zod.number(),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "stockQuantity": zod.number(),
+  "costPrice": zod.number(),
+  "retailPrice": zod.number(),
+  "costValue": zod.number(),
+  "retailValue": zod.number(),
+  "marginPct": zod.number()
+}))
+})
+
+
+/**
+ * @summary Product performance ledger (quantities, revenue, margin) for a date range
+ */
+export const GetProductPerformanceQueryParams = zod.object({
+  "startDate": zod.date(),
+  "endDate": zod.date()
+})
+
+export const GetProductPerformanceResponse = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "quantitySold": zod.number(),
+  "totalRevenue": zod.number(),
+  "totalCogs": zod.number(),
+  "grossProfit": zod.number(),
+  "marginPct": zod.number()
+}))
+})
+
+
