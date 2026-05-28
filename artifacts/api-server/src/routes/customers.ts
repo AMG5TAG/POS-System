@@ -5,6 +5,7 @@ import {
   transactionsTable, appointmentsTable, serviceJobsTable,
   laybysTable, invoicesTable, parkedSalesTable,
   formSubmissionsTable, marketingAutomationLogTable,
+  emailCampaignsTable, productPreOrdersTable, productReturnAuthsTable,
   merchantsTable, staffTable,
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull } from "drizzle-orm";
@@ -362,7 +363,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
 /* ─── Merge profiles ──────────────────────────────────────────────────────── */
 
 router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
-  const merchantId = req.session.merchantId!;
+  const merchantId  = req.session.merchantId!;
   const primaryId   = parseInt(String(req.params.primaryId),   10);
   const secondaryId = parseInt(String(req.params.secondaryId), 10);
 
@@ -373,113 +374,133 @@ router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireMana
     res.status(400).json({ error: "Cannot merge a profile with itself" }); return;
   }
 
-  // Verify both records belong to this merchant
+  // Verify both records belong to this merchant (outside tx — guard only)
   const [primary] = await db.select().from(customersTable)
     .where(and(eq(customersTable.id, primaryId),   eq(customersTable.merchantId, merchantId))).limit(1);
   const [secondary] = await db.select().from(customersTable)
     .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId))).limit(1);
-  const [merchant] = await db.select({ ownerName: merchantsTable.ownerName })
-    .from(merchantsTable).where(eq(merchantsTable.id, merchantId)).limit(1);
 
   if (!primary || !secondary) {
     res.status(404).json({ error: "One or both customer profiles not found" }); return;
   }
 
-  await db.transaction(async (tx) => {
-    // ── 1. Cascade all customer_id FKs to the primary record ──────────────
-    await tx.update(transactionsTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(transactionsTable.customerId, secondaryId), eq(transactionsTable.merchantId, merchantId)));
+  try {
+    await db.transaction(async (tx) => {
 
-    await tx.update(invoicesTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(invoicesTable.customerId, secondaryId), eq(invoicesTable.merchantId, merchantId)));
+      // ── Step A: Ledger entries (invoices, transactions, payment-adjacent records) ──
+      await tx.update(transactionsTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(transactionsTable.customerId, secondaryId), eq(transactionsTable.merchantId, merchantId)));
 
-    await tx.update(serviceJobsTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(serviceJobsTable.customerId, secondaryId), eq(serviceJobsTable.merchantId, merchantId)));
+      await tx.update(invoicesTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(invoicesTable.customerId, secondaryId), eq(invoicesTable.merchantId, merchantId)));
 
-    await tx.update(appointmentsTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(appointmentsTable.customerId, secondaryId), eq(appointmentsTable.merchantId, merchantId)));
+      await tx.update(laybysTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(laybysTable.customerId, secondaryId), eq(laybysTable.merchantId, merchantId)));
 
-    await tx.update(laybysTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(laybysTable.customerId, secondaryId), eq(laybysTable.merchantId, merchantId)));
+      await tx.update(parkedSalesTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(parkedSalesTable.customerId, secondaryId), eq(parkedSalesTable.merchantId, merchantId)));
 
-    await tx.update(parkedSalesTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(parkedSalesTable.customerId, secondaryId), eq(parkedSalesTable.merchantId, merchantId)));
+      await tx.update(productPreOrdersTable)
+        .set({ customerId: primaryId })
+        .where(eq(productPreOrdersTable.customerId, secondaryId));
 
-    await tx.update(customerNotesTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(customerNotesTable.customerId, secondaryId), eq(customerNotesTable.merchantId, merchantId)));
+      await tx.update(productReturnAuthsTable)
+        .set({ customerId: primaryId })
+        .where(eq(productReturnAuthsTable.customerId, secondaryId));
 
-    await tx.update(customerFilesTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(customerFilesTable.customerId, secondaryId), eq(customerFilesTable.merchantId, merchantId)));
+      // ── Step B: Service/intake logs, repair tickets, attachments, forms ──
+      await tx.update(serviceJobsTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(serviceJobsTable.customerId, secondaryId), eq(serviceJobsTable.merchantId, merchantId)));
 
-    await tx.update(formSubmissionsTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(formSubmissionsTable.customerId, secondaryId), eq(formSubmissionsTable.merchantId, merchantId)));
+      await tx.update(customerFilesTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(customerFilesTable.customerId, secondaryId), eq(customerFilesTable.merchantId, merchantId)));
 
-    await tx.update(marketingAutomationLogTable)
-      .set({ customerId: primaryId })
-      .where(and(eq(marketingAutomationLogTable.customerId, secondaryId), eq(marketingAutomationLogTable.merchantId, merchantId)));
+      await tx.update(formSubmissionsTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(formSubmissionsTable.customerId, secondaryId), eq(formSubmissionsTable.merchantId, merchantId)));
 
-    // ── 2. Aggregate loyalty balances and stats ────────────────────────────
-    const combinedPoints = (primary.loyaltyPoints ?? 0) + (secondary.loyaltyPoints ?? 0);
-    const combinedSpent  = parseFloat(primary.totalSpent)  + parseFloat(secondary.totalSpent);
-    const combinedVisits = (primary.visitCount ?? 0)       + (secondary.visitCount ?? 0);
+      await tx.update(marketingAutomationLogTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(marketingAutomationLogTable.customerId, secondaryId), eq(marketingAutomationLogTable.merchantId, merchantId)));
 
-    await tx.update(customersTable)
-      .set({
-        loyaltyPoints: combinedPoints,
-        totalSpent:    combinedSpent.toFixed(2),
-        visitCount:    combinedVisits,
-        updatedAt:     new Date(),
-      })
-      .where(eq(customersTable.id, primaryId));
+      await tx.update(emailCampaignsTable)
+        .set({ customerId: primaryId })
+        .where(eq(emailCampaignsTable.customerId, secondaryId));
 
-    // ── 3. Append permanent merge audit note ──────────────────────────────
-    const mergeDate = new Date().toLocaleDateString("en-AU", {
-      day: "2-digit", month: "2-digit", year: "numeric",
+      // ── Step C: Calendar bookings / appointments ──────────────────────────
+      await tx.update(appointmentsTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(appointmentsTable.customerId, secondaryId), eq(appointmentsTable.merchantId, merchantId)));
+
+      // ── Step D: Aggregate loyalty metrics + commit audit log ──────────────
+      const combinedPoints = (primary.loyaltyPoints ?? 0) + (secondary.loyaltyPoints ?? 0);
+      const combinedSpent  = parseFloat(primary.totalSpent)  + parseFloat(secondary.totalSpent);
+      const combinedVisits = (primary.visitCount  ?? 0)      + (secondary.visitCount  ?? 0);
+
+      await tx.update(customersTable)
+        .set({
+          loyaltyPoints: combinedPoints,
+          totalSpent:    combinedSpent.toFixed(2),
+          visitCount:    combinedVisits,
+          updatedAt:     new Date(),
+        })
+        .where(eq(customersTable.id, primaryId));
+
+      // Resolve who performed the merge (within the same tx connection)
+      const [merchant] = await tx.select({ ownerName: merchantsTable.ownerName })
+        .from(merchantsTable).where(eq(merchantsTable.id, merchantId)).limit(1);
+      let mergedBy = merchant?.ownerName?.trim() || "Unknown";
+      if (req.session.staffId) {
+        const [staffMember] = await tx.select({ name: staffTable.name })
+          .from(staffTable)
+          .where(and(eq(staffTable.id, req.session.staffId), eq(staffTable.merchantId, merchantId)))
+          .limit(1);
+        if (staffMember?.name) mergedBy = staffMember.name;
+      }
+
+      const mergeDate = new Date().toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const secName   = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || `ID ${secondaryId}`;
+      const reason    = typeof req.body?.reason === "string" && req.body.reason.trim() ? req.body.reason.trim() : undefined;
+
+      const auditParts = [
+        `[System] Profile merged on ${mergeDate}.`,
+        `Absorbed: ${secName} (ID ${secondaryId}).`,
+        `Loyalty consolidated: +${secondary.loyaltyPoints ?? 0} pts, +$${parseFloat(secondary.totalSpent).toFixed(2)} spent, +${secondary.visitCount ?? 0} visits.`,
+        `New totals: ${combinedPoints} pts, $${combinedSpent.toFixed(2)} spent, ${combinedVisits} visits.`,
+        `Merged by: ${mergedBy}.`,
+      ];
+      if (reason) auditParts.push(`Reason: ${reason}`);
+
+      await tx.insert(customerNotesTable).values({
+        merchantId,
+        customerId:     primaryId,
+        note:           auditParts.join(" "),
+        popupOnBooking: false,
+        popupOnSale:    false,
+      });
+
+      // Also migrate any existing notes from secondary to primary
+      await tx.update(customerNotesTable)
+        .set({ customerId: primaryId })
+        .where(and(eq(customerNotesTable.customerId, secondaryId), eq(customerNotesTable.merchantId, merchantId)));
+
+      // ── Safe delete: only runs if all steps above committed successfully ──
+      await tx.delete(customersTable)
+        .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId)));
     });
-    const secName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || `ID ${secondaryId}`;
-    const reason: string | undefined = typeof req.body?.reason === "string" && req.body.reason.trim()
-      ? req.body.reason.trim()
-      : undefined;
-    let mergedBy = merchant?.ownerName?.trim() || "Unknown";
-    if (req.session.staffId) {
-      const [staffMember] = await db.select({ name: staffTable.name })
-        .from(staffTable)
-        .where(and(eq(staffTable.id, req.session.staffId), eq(staffTable.merchantId, merchantId)))
-        .limit(1);
-      if (staffMember?.name) mergedBy = staffMember.name;
-    }
-    const auditNoteParts = [
-      `[System] Profile merged on ${mergeDate}.`,
-      `Absorbed Profile ID: ${secondaryId} (${secName}).`,
-      `Loyalty consolidated: +${secondary.loyaltyPoints ?? 0} pts, +$${parseFloat(secondary.totalSpent).toFixed(2)} total spent, +${secondary.visitCount ?? 0} visits.`,
-      `Merged by: ${mergedBy}.`,
-    ];
-    if (reason) auditNoteParts.push(`Reason: ${reason}`);
-    const auditNote = auditNoteParts.join(" ");
+  } catch (err) {
+    req.log.error({ err, primaryId, secondaryId, merchantId }, "Customer merge failed — transaction rolled back");
+    res.status(500).json({ error: "Merge failed: the transaction was rolled back. No data was modified.", detail: err instanceof Error ? err.message : String(err) });
+    return;
+  }
 
-    await tx.insert(customerNotesTable).values({
-      merchantId,
-      customerId:     primaryId,
-      note:           auditNote,
-      popupOnBooking: false,
-      popupOnSale:    false,
-    });
-
-    // ── 4. Permanently delete the secondary record ─────────────────────────
-    await tx.delete(customersTable)
-      .where(and(eq(customersTable.id, secondaryId), eq(customersTable.merchantId, merchantId)));
-  });
-
-  // Return the updated primary
+  // Return the updated primary profile
   const [updated] = await db.select().from(customersTable)
     .where(eq(customersTable.id, primaryId)).limit(1);
 
