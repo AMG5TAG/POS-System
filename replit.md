@@ -11,7 +11,34 @@ A subscription-based Point of Sale system for Australian retail merchants. Clean
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL`, `SESSION_SECRET`
+- Required env: `DATABASE_URL`, `SESSION_SECRET`, `VAULT_ENCRYPTION_KEY` (required in production)
+
+### OAuth token encryption (`VAULT_ENCRYPTION_KEY`)
+
+Encrypts OAuth access/refresh tokens stored in `oauth_token_vault` (AES-256-CBC, PBKDF2-derived).
+**Required in production** — the API server refuses to start if it is missing when `NODE_ENV=production`.
+In development a fixed dev-only key is used so local setups work without configuration.
+On startup the server invalidates any vault rows that cannot be decrypted with the current key
+(e.g. tokens encrypted under an older `SESSION_SECRET`-based key); affected merchants must reconnect.
+Generate a strong value, e.g. `openssl rand -hex 32`.
+
+### Integration env vars
+
+Each integration is "feature disabled if missing" — the API hides the connect button and the OAuth callback returns an error. Set the client id and secret together.
+
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google (Ads, Calendar, etc.); feature disabled if missing.
+- `GOOGLE_ADS_DEVELOPER_TOKEN` — Google Ads customer listing; account discovery disabled if missing.
+- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` — Microsoft 365 / Outlook; feature disabled if missing.
+- `DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET` — Dropbox file sync; feature disabled if missing.
+- `STRIPE_CONNECT_CLIENT_ID` / `STRIPE_SECRET_KEY` — Stripe Connect onboarding & charges; feature disabled if missing.
+- `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` — Xero accounting sync; feature disabled if missing.
+- `QUICKBOOKS_CLIENT_ID` / `QUICKBOOKS_CLIENT_SECRET` — QuickBooks Online sync; feature disabled if missing.
+- `META_APP_ID` / `META_APP_SECRET` — Meta (Facebook/Instagram) marketing; feature disabled if missing.
+- `TWITTER_CLIENT_ID` / `TWITTER_CLIENT_SECRET` — Twitter/X posting; feature disabled if missing.
+- `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` — LinkedIn posting; feature disabled if missing.
+- `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` — TikTok Business; feature disabled if missing.
+- `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_TEAM_ID` / `APPLE_WALLET_PASS_TYPE_ID` — Apple Wallet loyalty passes; feature disabled if missing.
+- `GOOGLE_WALLET_ISSUER_ID` / `GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_WALLET_PRIVATE_KEY` — Google Wallet loyalty passes; feature disabled if missing.
 
 ## Stack
 

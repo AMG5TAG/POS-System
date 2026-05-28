@@ -1,22 +1,45 @@
 /**
  * tokenVault — AES-256-CBC encrypt/decrypt for OAuth access & refresh tokens.
  *
- * Key source (in priority order):
- *   1. VAULT_ENCRYPTION_KEY env var  (any string; PBKDF2-derived to 32 bytes)
- *   2. SESSION_SECRET env var        (fallback for dev environments)
+ * Key source:
+ *   - `VAULT_ENCRYPTION_KEY` env var (required in production, PBKDF2-derived to 32 bytes).
+ *   - In non-production environments only, falls back to a development-only key so local
+ *     setups work without configuration. The fallback is NEVER used when
+ *     `NODE_ENV === "production"` — the server refuses to start in that case
+ *     (see `assertVaultKeyConfigured`).
  *
  * Ciphertext format stored in DB:  "<iv-hex>:<ciphertext-hex>"
  */
 
 import crypto from "crypto";
 import { db, oauthTokenVaultTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull, or } from "drizzle-orm";
+import { logger } from "../lib/logger";
 
 const ALGORITHM = "aes-256-cbc";
 const SALT = "koapos-vault-v1";
+const DEV_FALLBACK_KEY = "dev-only-insecure-vault-key-do-not-use-in-prod";
+
+/**
+ * Throws if `VAULT_ENCRYPTION_KEY` is missing in production. Call this at server
+ * startup so the process fails fast rather than silently encrypting tokens with
+ * an insecure dev key.
+ */
+export function assertVaultKeyConfigured(): void {
+  if (process.env.NODE_ENV === "production" && !process.env.VAULT_ENCRYPTION_KEY) {
+    throw new Error(
+      "VAULT_ENCRYPTION_KEY is required in production. Refusing to start: " +
+      "OAuth tokens would otherwise be encrypted with an insecure fallback key.",
+    );
+  }
+}
 
 function deriveKey(): Buffer {
-  const secret = process.env.VAULT_ENCRYPTION_KEY ?? process.env.SESSION_SECRET ?? "dev-insecure-fallback-please-set-env";
+  const secret = process.env.VAULT_ENCRYPTION_KEY
+    ?? (process.env.NODE_ENV !== "production" ? DEV_FALLBACK_KEY : undefined);
+  if (!secret) {
+    throw new Error("VAULT_ENCRYPTION_KEY is not configured");
+  }
   return crypto.pbkdf2Sync(secret, SALT, 100_000, 32, "sha256");
 }
 
@@ -37,6 +60,58 @@ export function decryptToken(ciphertext: string): string {
   const enc = Buffer.from(encHex, "hex");
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
+}
+
+function tryDecrypt(ciphertext: string | null): boolean {
+  if (!ciphertext) return true;
+  try {
+    decryptToken(ciphertext);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One-shot startup migration: deletes vault rows whose tokens cannot be decrypted
+ * with the currently-configured `VAULT_ENCRYPTION_KEY`. Such rows were encrypted
+ * under an older key (e.g. the legacy `SESSION_SECRET`/hardcoded fallback) and
+ * are unrecoverable; merchants will need to reconnect the affected integrations.
+ */
+export async function invalidateUnreadableVaultEntries(): Promise<number> {
+  const rows = await db
+    .select({
+      id: oauthTokenVaultTable.id,
+      merchantId: oauthTokenVaultTable.merchantId,
+      provider: oauthTokenVaultTable.provider,
+      encryptedAccessToken: oauthTokenVaultTable.encryptedAccessToken,
+      encryptedRefreshToken: oauthTokenVaultTable.encryptedRefreshToken,
+    })
+    .from(oauthTokenVaultTable)
+    .where(or(
+      isNotNull(oauthTokenVaultTable.encryptedAccessToken),
+      isNotNull(oauthTokenVaultTable.encryptedRefreshToken),
+    ));
+
+  const unreadable = rows.filter((r) =>
+    !tryDecrypt(r.encryptedAccessToken) || !tryDecrypt(r.encryptedRefreshToken)
+  );
+
+  for (const row of unreadable) {
+    await db.delete(oauthTokenVaultTable).where(eq(oauthTokenVaultTable.id, row.id));
+    logger.warn(
+      { merchantId: row.merchantId, provider: row.provider },
+      "Deleted OAuth vault entry encrypted with old key; merchant must reconnect",
+    );
+  }
+
+  if (unreadable.length > 0) {
+    logger.warn(
+      { count: unreadable.length },
+      "Invalidated unreadable OAuth vault entries on startup",
+    );
+  }
+  return unreadable.length;
 }
 
 /* ── Vault CRUD helpers ────────────────────────────────────────────────────── */
