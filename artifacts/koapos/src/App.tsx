@@ -143,6 +143,7 @@ setOnUnauthorized(() => {
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
+  const [path] = useLocation();
 
   if (isLoading) {
     return (
@@ -156,7 +157,11 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     return <Redirect to="/login" />;
   }
 
-  return <Component />;
+  return (
+    <ManagementErrorBoundary key={path}>
+      <Component />
+    </ManagementErrorBoundary>
+  );
 }
 
 function ManagementProtectedRoute({ component: Component }: { component: React.ComponentType }) {
