@@ -27,7 +27,7 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
 
 function customerName(first: string | null, last: string | null): string | null {
   const n = [first, last].filter(Boolean).join(" ");
@@ -423,7 +423,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { amount } = req.body as { amount?: number };
+  const { amount, method } = req.body as { amount?: number; method?: string };
   const payInput = Number(amount);
   if (!Number.isFinite(payInput) || payInput <= 0) {
     res.status(400).json({ error: "A positive payment amount is required" });
@@ -458,6 +458,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       detail: fullyPaid
         ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
         : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
+      ...(method ? { method } : {}),
     },
   ];
 

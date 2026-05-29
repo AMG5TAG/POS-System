@@ -29,7 +29,7 @@ import { useSalesTemplate } from "@/lib/use-sales-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Tag, CalendarClock, AlertCircle, ListChecks,
+  Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ async function compressForPdf(
 
 type InvStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
-type InvoiceEvent = { type: string; timestamp: string; detail?: string };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
 type DiscountType = "fixed" | "percent";
 type Invoice = {
   id: number;
@@ -247,7 +247,9 @@ export default function POSInvoicesPage() {
     enabled: false, type: "percent", value: "",
   });
 
-  const [activeTab, setActiveTab] = useState<"standard" | "recurring">("standard");
+  const [activeTab, setActiveTab] = useState<"standard" | "recurring" | "history">("standard");
+  const [historyInvoices, setHistoryInvoices] = useState<Invoice[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [, navigate] = useLocation();
   const { data: productsData } = useListProducts({ limit: 500 });
@@ -268,6 +270,23 @@ export default function POSInvoicesPage() {
   };
 
   useEffect(() => { load(); }, [statusFilter]);
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    const res = await fetch(`${API}?status=paid&limit=500`, { credentials: "include" });
+    if (res.ok) {
+      const data = await res.json();
+      const sorted = (data.items as Invoice[]).sort((a, b) => {
+        const ta = a.paidAt ? new Date(a.paidAt).getTime() : 0;
+        const tb = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+        return tb - ta;
+      });
+      setHistoryInvoices(sorted);
+    }
+    setHistoryLoading(false);
+  };
+
+  useEffect(() => { if (activeTab === "history") loadHistory(); }, [activeTab]);
 
   /* ── Close product dropdowns on outside click ── */
   useEffect(() => {
@@ -1285,7 +1304,7 @@ export default function POSInvoicesPage() {
         </div>
 
         {/* ── Tabbed workspace ── */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "recurring")} className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "recurring" | "history")} className="space-y-4">
 
           {/* Tab bar + search/filter on same row */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1299,6 +1318,11 @@ export default function POSInvoicesPage() {
                 <CalendarClock className="w-3.5 h-3.5" />
                 Recurring Invoices
                 <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{recurringInstances.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1.5">
+                <History className="w-3.5 h-3.5" />
+                Invoice History
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{historyInvoices.length}</Badge>
               </TabsTrigger>
             </TabsList>
 
@@ -1510,6 +1534,114 @@ export default function POSInvoicesPage() {
                       {Math.min(inv.recurringOccurrences ?? 6, 24)} instances
                     </span>
                   ))}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Tab 3: Invoice History (fully paid, newest first) ── */}
+          <TabsContent value="history" className="mt-0">
+            {historyLoading ? (
+              <div className="text-center py-16 text-muted-foreground">Loading history…</div>
+            ) : historyInvoices.length === 0 ? (
+              <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                <History className="w-16 h-16 text-muted-foreground/30" />
+                <div>
+                  <p className="font-medium text-lg">No paid invoices yet</p>
+                  <p className="text-muted-foreground text-sm">Fully settled invoices will appear here ordered by completion date.</p>
+                </div>
+              </CardContent></Card>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="text-left p-3 font-medium">Invoice #</th>
+                      <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Completed Date</th>
+                      <th className="text-left p-3 font-medium hidden lg:table-cell">Payment Method</th>
+                      <th className="text-right p-3 font-medium">Total Paid</th>
+                      <th className="p-3 w-40 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {historyInvoices.map((inv) => {
+                      const lastPaymentEvent = [...(inv.events ?? [])]
+                        .reverse()
+                        .find((e) => e.type === "payment");
+                      const rawMethod = lastPaymentEvent?.method ?? "";
+                      const METHOD_LABELS: Record<string, string> = {
+                        cash: "Cash", eftpos: "EFTPOS", card: "Card",
+                        split: "Split", gift_card: "Gift Card", loyalty: "Loyalty",
+                        account: "Account", bank_transfer: "Bank Transfer",
+                      };
+                      const methodLabel = rawMethod
+                        ? (METHOD_LABELS[rawMethod] ?? rawMethod.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+                        : "—";
+                      return (
+                        <tr key={inv.id} className="bg-background hover:bg-muted/30 transition-colors">
+                          <td className="p-3">
+                            <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
+                          </td>
+                          <td className="p-3 hidden sm:table-cell">
+                            {inv.customerName ?? <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
+                            {inv.paidAt
+                              ? new Date(inv.paidAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                              : <span>—</span>}
+                          </td>
+                          <td className="p-3 hidden lg:table-cell">
+                            {rawMethod ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                                <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />
+                                {methodLabel}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-semibold tabular-nums">
+                            {formatCurrency(inv.total)}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-[11px] font-medium gap-1"
+                                title="Download PDF"
+                                onClick={() => downloadInvoicePDF(inv)}
+                              >
+                                <Download className="w-3 h-3" />
+                                <span className="hidden sm:inline">PDF</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[11px] font-medium gap-1"
+                                title="View audit log"
+                                onClick={() => openDetail(inv)}
+                              >
+                                <ClipboardList className="w-3 h-3" />
+                                <span className="hidden sm:inline">Audit Log</span>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="border-t bg-muted/30 px-4 py-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <History className="w-3 h-3" />
+                    {historyInvoices.length} fully paid invoice{historyInvoices.length !== 1 ? "s" : ""} · sorted by completion date, newest first
+                  </span>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={loadHistory}>
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    Refresh
+                  </Button>
                 </div>
               </div>
             )}

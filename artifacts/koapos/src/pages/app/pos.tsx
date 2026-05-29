@@ -1292,7 +1292,7 @@ export default function POSPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ amount }),
+            body: JSON.stringify({ amount, method: paymentMethod }),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
