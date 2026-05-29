@@ -260,6 +260,17 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your supplier contact list and account details.",
     exportUrl: "/api/suppliers?limit=10000",
     createUrl: "/api/suppliers",
+    updateUrl: "/api/suppliers",
+    fetchAllUrl: "/api/suppliers?limit=10000",
+    dedupeBy: (p, e) => {
+      const pName = String(p.name ?? "").trim().toLowerCase();
+      const eName = String(e.name ?? "").trim().toLowerCase();
+      return {
+        match: pName.length > 0 && pName === eName,
+        id: e.id as number,
+        label: String(e.name ?? ""),
+      };
+    },
     fields: [
       { key: "name",           label: "Supplier Name",   required: true },
       { key: "contactName",    label: "Contact Name"     },
