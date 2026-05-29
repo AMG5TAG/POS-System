@@ -97,6 +97,9 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     agreedToMarketing: c.agreedToMarketing ?? null,
     portalToken: c.portalToken ?? null,
     referralCode: c.referralCode ?? null,
+    heardFrom: c.heardFrom ?? null,
+    heardFromDetails: c.heardFromDetails ?? null,
+    referredByCustomerId: c.referredByCustomerId ?? null,
   };
 }
 
@@ -132,6 +135,9 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
     merchantId,
     portalToken: crypto.randomUUID(),
     referralCode: code,
+    heardFrom: parsed.data.heardFrom ?? null,
+    heardFromDetails: parsed.data.heardFromDetails ?? null,
+    referredByCustomerId: parsed.data.referredByCustomerId ?? null,
   }).returning();
   res.status(201).json(formatCustomer(customer));
 });

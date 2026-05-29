@@ -36,6 +36,9 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     photos: job.photos ? (() => { try { return JSON.parse(job.photos!); } catch { return []; } })() : [],
     estimatedCost: job.estimatedCost ? parseFloat(job.estimatedCost) : null,
     notes: job.notes ?? null,
+    heardFrom: job.heardFrom ?? null,
+    heardFromDetails: job.heardFromDetails ?? null,
+    referredByCustomerId: job.referredByCustomerId ?? null,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
   };
@@ -114,6 +117,9 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       photos: Array.isArray(body.photos) ? JSON.stringify(body.photos) : null,
       estimatedCost: body.estimatedCost != null ? String(body.estimatedCost) : null,
       notes: typeof body.notes === "string" ? body.notes : null,
+      heardFrom: typeof body.heardFrom === "string" ? body.heardFrom : null,
+      heardFromDetails: typeof body.heardFromDetails === "string" ? body.heardFromDetails : null,
+      referredByCustomerId: body.referredByCustomerId != null ? Number(body.referredByCustomerId) : null,
     })
     .returning();
 
@@ -158,6 +164,9 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   if (Array.isArray(body.photos)) updates.photos = JSON.stringify(body.photos);
   if (body.estimatedCost !== undefined) updates.estimatedCost = body.estimatedCost != null ? String(body.estimatedCost) : null;
   if (typeof body.notes === "string") updates.notes = body.notes;
+  if (typeof body.heardFrom === "string") updates.heardFrom = body.heardFrom;
+  if (typeof body.heardFromDetails === "string") updates.heardFromDetails = body.heardFromDetails;
+  if (body.referredByCustomerId !== undefined) updates.referredByCustomerId = body.referredByCustomerId != null ? Number(body.referredByCustomerId) : null;
 
   const [job] = await db
     .update(serviceJobsTable)

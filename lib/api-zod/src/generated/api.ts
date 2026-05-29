@@ -664,7 +664,10 @@ export const ListCustomersResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })),
   "total": zod.number()
 })
@@ -698,7 +701,10 @@ export const CreateCustomerBody = zod.object({
   "customerGroup": zod.string().optional(),
   "warningNote": zod.string().optional(),
   "agreedToMarketing": zod.string().optional(),
-  "referralCode": zod.string().optional()
+  "referralCode": zod.string().optional(),
+  "heardFrom": zod.string().optional(),
+  "heardFromDetails": zod.string().optional(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -741,7 +747,10 @@ export const GetCustomerResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -778,6 +787,9 @@ export const UpdateCustomerBody = zod.object({
   "warningNote": zod.string().optional(),
   "agreedToMarketing": zod.string().optional(),
   "referralCode": zod.string().optional(),
+  "heardFrom": zod.string().optional(),
+  "heardFromDetails": zod.string().optional(),
+  "referredByCustomerId": zod.number().nullish(),
   "loyaltyPoints": zod.number().optional()
 })
 
@@ -813,7 +825,10 @@ export const UpdateCustomerResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -872,7 +887,10 @@ export const GenerateCustomerReferralCodeResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -920,7 +938,10 @@ export const GetCustomerHistoryResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1130,7 +1151,10 @@ export const MergeCustomerProfilesResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -1175,7 +1199,10 @@ export const BulkMergePreviewResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })),
   "totalTransactions": zod.number(),
   "totalSpent": zod.number(),
@@ -1302,7 +1329,10 @@ export const ListTransactionsResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1402,7 +1432,10 @@ export const GetTransactionResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1485,7 +1518,10 @@ export const RefundTransactionResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -1841,7 +1877,10 @@ export const GetLoyaltyLeaderboardResponse = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }),
   "currentTier": zod.string().nullish(),
   "pointsUntilNextTier": zod.number().nullish()
@@ -1980,7 +2019,10 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "warningNote": zod.string().nullish(),
   "agreedToMarketing": zod.string().nullish(),
   "portalToken": zod.string().nullish(),
-  "referralCode": zod.string().nullish()
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 }).optional(),
   "staffId": zod.number().nullish(),
   "receiptNumber": zod.string().optional(),
@@ -2189,7 +2231,10 @@ export const CreateServiceJobBody = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 
@@ -2220,7 +2265,10 @@ export const UpdateServiceJobBody = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish()
 })
 
 export const UpdateServiceJobResponse = zod.object({

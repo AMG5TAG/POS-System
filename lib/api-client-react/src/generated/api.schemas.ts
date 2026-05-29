@@ -353,6 +353,12 @@ export interface Customer {
   portalToken?: string | null;
   /** @nullable */
   referralCode?: string | null;
+  /** @nullable */
+  heardFrom?: string | null;
+  /** @nullable */
+  heardFromDetails?: string | null;
+  /** @nullable */
+  referredByCustomerId?: number | null;
 }
 
 export interface CustomerInput {
@@ -381,6 +387,10 @@ export interface CustomerInput {
   warningNote?: string;
   agreedToMarketing?: string;
   referralCode?: string;
+  heardFrom?: string;
+  heardFromDetails?: string;
+  /** @nullable */
+  referredByCustomerId?: number | null;
 }
 
 export interface CustomerUpdate {
@@ -409,6 +419,10 @@ export interface CustomerUpdate {
   warningNote?: string;
   agreedToMarketing?: string;
   referralCode?: string;
+  heardFrom?: string;
+  heardFromDetails?: string;
+  /** @nullable */
+  referredByCustomerId?: number | null;
   loyaltyPoints?: number;
 }
 
@@ -791,6 +805,12 @@ export interface ServiceJobInput {
   estimatedCost?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  heardFrom?: string | null;
+  /** @nullable */
+  heardFromDetails?: string | null;
+  /** @nullable */
+  referredByCustomerId?: number | null;
 }
 
 export type AppointmentStatus = typeof AppointmentStatus[keyof typeof AppointmentStatus];

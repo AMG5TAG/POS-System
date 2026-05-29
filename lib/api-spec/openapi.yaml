@@ -5942,6 +5942,12 @@ components:
           type: ["string", "null"]
         referralCode:
           type: ["string", "null"]
+        heardFrom:
+          type: ["string", "null"]
+        heardFromDetails:
+          type: ["string", "null"]
+        referredByCustomerId:
+          type: ["integer", "null"]
 
     CustomerInput:
       type: object
@@ -5997,6 +6003,12 @@ components:
           type: string
         referralCode:
           type: string
+        heardFrom:
+          type: string
+        heardFromDetails:
+          type: string
+        referredByCustomerId:
+          type: ["integer", "null"]
 
     CustomerUpdate:
       type: object
@@ -6051,6 +6063,12 @@ components:
           type: string
         referralCode:
           type: string
+        heardFrom:
+          type: string
+        heardFromDetails:
+          type: string
+        referredByCustomerId:
+          type: ["integer", "null"]
         loyaltyPoints:
           type: integer
 
@@ -6522,6 +6540,12 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        heardFrom:
+          type: ["string", "null"]
+        heardFromDetails:
+          type: ["string", "null"]
+        referredByCustomerId:
+          type: ["integer", "null"]
 
     # ── Appointments ────────────────────────────────────────────────────────
     Appointment:

@@ -38,6 +38,9 @@ export const customersTable = pgTable("customers", {
   agreedToMarketing: text("agreed_to_marketing"),
   portalToken: text("portal_token"),
   referralCode: text("referral_code"),
+  heardFrom: text("heard_from"),
+  heardFromDetails: text("heard_from_details"),
+  referredByCustomerId: integer("referred_by_customer_id"),
 });
 
 export function generateReferralCode(firstName?: string | null, lastName?: string | null): string {

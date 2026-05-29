@@ -248,6 +248,9 @@ export default function ServiceJobNewPage() {
   const [serialNumber, setSerialNumber] = useState("");
   const [condition, setCondition] = useState("");
   const [partnerRepairCode, setPartnerRepairCode] = useState("");
+  const [heardFrom, setHeardFrom] = useState("");
+  const [heardFromDetails, setHeardFromDetails] = useState("");
+  const [referredByCustomerId, setReferredByCustomerId] = useState("");
 
   const [photos, setPhotos] = useState<string[]>(Array(9).fill(""));
   const [photoSizes, setPhotoSizes] = useState<number[]>(Array(9).fill(0));
@@ -424,6 +427,9 @@ export default function ServiceJobNewPage() {
           passwordOrPin: credentials.filter(c => c.passwordOrPin.trim()).map(c => c.passwordOrPin.trim()).join("\n") || null,
           accounts: credentials.filter(c => c.accounts.trim()).map(c => c.accounts.trim()).join("\n") || null,
           signature: signature || null,
+          heardFrom: heardFrom || null,
+          heardFromDetails: heardFromDetails || null,
+          referredByCustomerId: referredByCustomerId ? Number(referredByCustomerId) : null,
           jobNumberPrefix,
           jobNumberDigits,
         } as Parameters<typeof createMutation.mutate>[0]["data"],
@@ -511,6 +517,41 @@ export default function ServiceJobNewPage() {
             checked={isUnderWarranty}
             onChange={setIsUnderWarranty}
           />
+        </div>
+
+        {/* Heard From */}
+        <div className="border rounded-xl p-5 space-y-5">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold text-sm">Lead Source</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Heard From</Label>
+              <Select value={heardFrom} onValueChange={(v) => { setHeardFrom(v); setHeardFromDetails(""); }}>
+                <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Google">Google</SelectItem>
+                  <SelectItem value="Social Media">Social Media</SelectItem>
+                  <SelectItem value="Friend">Friend</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {heardFrom === "Friend" && (
+              <div className="space-y-1.5">
+                <Label>Friend's Name</Label>
+                <Input value={heardFromDetails} onChange={(e) => setHeardFromDetails(e.target.value)} placeholder="Who referred them?" />
+              </div>
+            )}
+            {heardFrom === "Other" && (
+              <div className="space-y-1.5">
+                <Label>Other Details</Label>
+                <Input value={heardFromDetails} onChange={(e) => setHeardFromDetails(e.target.value)} placeholder="e.g. Billboard, Flyer..." />
+              </div>
+            )}
+            {heardFrom !== "Friend" && heardFrom !== "Other" && <div />}
+          </div>
         </div>
 
         {/* Device Section */}
