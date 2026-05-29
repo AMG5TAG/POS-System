@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Printer, Tag, Info, Barcode, Search, X, ChevronRight, LayoutTemplate, Check,
 } from "lucide-react";
@@ -152,6 +153,144 @@ export default function ManagementStickersPage() {
     return acc;
   }, {});
 
+  /* ── Print handler ───────────────────────────────────────────────────────
+     Opens a dedicated popup (same pattern as Z-report / cash movement) so
+     the full app UI is never sent to the printer.  @page sets the exact
+     label dimensions and writing-mode + transform guard against browser
+     auto-rotation on narrow labels.                                        */
+  const handlePrint = () => {
+    const isHoriz = orientation === "horizontal";
+    const pageW = isHoriz
+      ? Math.max(selectedSize.widthMm, selectedSize.heightMm)
+      : Math.min(selectedSize.widthMm, selectedSize.heightMm);
+    const pageH = isHoriz
+      ? Math.min(selectedSize.widthMm, selectedSize.heightMm)
+      : Math.max(selectedSize.widthMm, selectedSize.heightMm);
+
+    const f = (k: string) => currentFields[k] ?? "";
+    const showBarcode = f("showBarcode") === "true";
+    const showWas     = f("showWas") === "true";
+    const biz         = businessName;
+
+    // Base font size proportional to the shorter label dimension
+    const shorter = Math.min(pageW, pageH);
+    const bp      = Math.max(4.5, shorter * 0.36); // pt
+
+    // Simulated barcode bars (cosmetic)
+    const barsBars = Array.from({ length: 20 }).map((_, i) =>
+      `<div style="background:#000;width:${i % 3 === 0 ? "0.8" : "0.5"}mm;height:3mm;display:inline-block;"></div>`
+    ).join("");
+
+    const inner = (() => {
+      switch (selectedTypeId) {
+        case "product": return `
+          <div>
+            <div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>
+            ${f("category")?`<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")}</div>`:""}
+            ${f("sku")?`<div style="color:#888">SKU: ${f("sku")}</div>`:""}
+          </div>
+          <div>
+            ${showBarcode&&f("barcode")?`<div style="display:flex;gap:.3mm;margin-bottom:.5mm;opacity:.6">${barsBars}</div><div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt">${f("barcode")}</div>`:""}
+            <div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${brandColor}">${f("price")||"$0.00"}</div>
+            ${biz?`<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>`:""}
+          </div>`;
+        case "customer": return `
+          <div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Customer"}</div>
+          ${f("group")?`<div style="background:${brandColor};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")}</div>`:""}
+          ${f("customerId")?`<div style="color:#888">${f("customerId")}</div>`:""}
+          ${f("loyaltyNo")?`<div style="color:#888">${f("loyaltyNo")}</div>`:""}
+          ${f("phone")?`<div style="color:#888">${f("phone")}</div>`:""}
+          ${biz?`<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>`:""}`;
+        case "return": return `
+          <div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")}</div>
+          ${f("item")?`<div style="font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")}</div>`:""}
+          ${f("reason")?`<div style="color:#888;white-space:nowrap;overflow:hidden">${f("reason")}</div>`:""}
+          ${f("status")?`<div style="background:#ef4444;color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")}</div>`:""}
+          ${f("date")?`<div style="color:#888">${f("date")}</div>`:""}
+          ${biz?`<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>`:""}`;
+        case "repair": return `
+          <div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">SERVICE ${f("jobNo")}</div>
+          ${f("customer")?`<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")}</div>`:""}
+          ${f("device")?`<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")}</div>`:""}
+          ${f("fault")?`<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")}</div>`:""}
+          ${f("dueDate")?`<div style="font-weight:600">Due: ${f("dueDate")}</div>`:""}
+          ${f("tech")?`<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")}</div>`:""}`;
+        case "address": return `
+          ${f("name")?`<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")}</div>`:""}
+          ${f("company")?`<div style="white-space:nowrap;overflow:hidden">${f("company")}</div>`:""}
+          ${f("street")?`<div style="white-space:nowrap;overflow:hidden">${f("street")}</div>`:""}
+          <div style="white-space:nowrap;overflow:hidden">${[f("suburb"),f("state"),f("postcode")].filter(Boolean).join(" ")}</div>
+          ${biz?`<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>`:""}`;
+        case "pricetag": return `
+          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Product"}</div>
+          ${f("sku")?`<div style="color:#888">#${f("sku")}</div>`:""}
+          <div>
+            ${showWas&&f("wasPrice")?`<div style="text-decoration:line-through;color:#aaa">${f("wasPrice")}</div>`:""}
+            <div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$0.00"}</div>
+          </div>`;
+        case "shelf": return `
+          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Product"}</div>
+          ${f("unitPrice")?`<div style="color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")}</div>`:""}
+          ${f("sku")?`<div style="color:#888">SKU ${f("sku")}</div>`:""}
+          <div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$0.00"}</div>`;
+        default: return "";
+      }
+    })();
+
+    // One label HTML block — repeated quantity times, each on its own @page
+    const labelBlock = `
+      <div style="
+        width:${pageW}mm;height:${pageH}mm;
+        box-sizing:border-box;overflow:hidden;
+        position:relative;
+        font-family:Arial,Helvetica,sans-serif;
+        font-size:${bp.toFixed(1)}pt;line-height:1.25;
+        padding:1.5mm 1.5mm 1.5mm 1.5mm;padding-top:2mm;
+        display:flex;flex-direction:column;justify-content:space-between;
+        background:#fff;
+        writing-mode:horizontal-tb;
+        page-break-after:always;break-after:page;
+        page-break-inside:avoid;break-inside:avoid;
+      ">
+        <div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>
+        ${inner}
+      </div>`;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Label Print</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  @page{size:${pageW}mm ${pageH}mm;margin:0}
+  html,body{
+    margin:0;padding:0;
+    width:${pageW}mm;
+    background:#fff;
+    writing-mode:horizontal-tb;
+  }
+</style>
+</head>
+<body>
+${Array.from({ length: quantity }).map(() => labelBlock).join("\n")}
+</body>
+</html>`;
+
+    const pxW = Math.round(pageW * 3.78);
+    const pxH = Math.round(pageH * 3.78);
+    const w = window.open("", "_blank", `width=${pxW},height=${Math.min(pxH * quantity, 900)}`);
+    if (!w) {
+      toast.error("Pop-up blocked — please allow pop-ups for this site and try again");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 400);
+  };
+
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
@@ -225,7 +364,7 @@ export default function ManagementStickersPage() {
                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                 className="w-16 h-8 text-center text-sm" />
             </div>
-            <Button onClick={() => window.print()} className="gap-2">
+            <Button onClick={handlePrint} className="gap-2">
               <Printer className="w-4 h-4" /> Print {quantity > 1 ? `${quantity} Labels` : "Label"}
             </Button>
           </div>
