@@ -1,7 +1,7 @@
 import { useListServiceJobs, useListCustomers, useListAppointments, ServiceJob } from "@workspace/api-client-react";
 import { useGetDashboardSummary } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, TrendingUp, FileText, Truck, Users2, Receipt } from "lucide-react";
+import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Truck, Users2, Receipt, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -12,13 +12,6 @@ function daysAgo(dateStr: string): number {
   const d = new Date(dateStr);
   const now = new Date();
   return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function getCurrentFYLabel(): string {
-  const now = new Date();
-  const yr = now.getFullYear();
-  const fyStart = now.getMonth() >= 6 ? yr : yr - 1; // July = month 6
-  return `FY ${fyStart}/${String(fyStart + 1).slice(-2)}`;
 }
 
 function statusLabel(status: string): string {
@@ -156,11 +149,11 @@ export function ServiceJobsTiles({
   const { data: jobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-dash"] } });
   const { data: customersData } = useListCustomers({ limit: 1 }, { query: { queryKey: ["customers-dash"] } });
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
-  const { data: summary } = useGetDashboardSummary({ period: "year" }, { query: { queryKey: ["dashboard-summary-year"] } });
+  const { data: todaySummary } = useGetDashboardSummary({ period: "today" }, { query: { queryKey: ["dashboard-summary-today"] } });
 
   const jobs = jobsData ?? [];
 
-  const inProgress = jobs.filter((j) => (j.status as string) === "in-progress").length;
+  const inProgress = jobs.filter((j) => !["completed", "partner-replacement", "cancelled"].includes(j.status as string)).length;
   const awaitingCustomer = jobs.filter((j) => (j.status as string) === "awaiting-customer").length;
   const pending = jobs.filter((j) => (j.status as string) === "pending").length;
   const critical = jobs.filter((j) => j.isCritical).length;
@@ -171,8 +164,7 @@ export function ServiceJobsTiles({
     (a) => new Date(a.scheduledAt) > now && a.status !== "cancelled" && a.status !== "completed"
   ).length;
 
-  const fyLabel = getCurrentFYLabel();
-  const fySales = summary?.totalSales ?? 0;
+  const todaySales = todaySummary?.totalSales ?? 0;
 
   return (
     <div className="space-y-4">
@@ -228,18 +220,18 @@ export function ServiceJobsTiles({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <MetricTile
             icon={<FileText className="w-5 h-5" />}
-            value={jobs.length}
+            value={jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length}
             label="Total Jobs"
             iconColor="text-blue-500"
             valueColor="text-foreground"
           />
           <MetricTile
             icon={<Receipt className="w-5 h-5" />}
-            value={summary?.pendingInvoiceCount ?? 0}
+            value={todaySummary?.pendingInvoiceCount ?? 0}
             label="Invoices"
             iconColor="text-amber-500"
             valueColor="text-amber-700"
-            href="/invoices"
+            href="/pos/invoices"
           />
           <MetricTile
             icon={<Truck className="w-5 h-5" />}
@@ -257,9 +249,9 @@ export function ServiceJobsTiles({
             valueColor="text-foreground"
           />
           <MetricTile
-            icon={<TrendingUp className="w-5 h-5" />}
-            value={formatCurrency(fySales)}
-            label={`${fyLabel} Sales`}
+            icon={<Clock className="w-5 h-5" />}
+            value={formatCurrency(todaySales)}
+            label="Today Sales"
             iconColor="text-emerald-500"
             valueColor="text-emerald-700"
           />

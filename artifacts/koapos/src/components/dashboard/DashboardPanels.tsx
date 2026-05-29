@@ -135,7 +135,7 @@ function AllServiceJobsPanel() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold text-primary">All Service Jobs</CardTitle>
-            <span className="text-xs text-muted-foreground font-medium">{jobs.length} total</span>
+            <span className="text-xs text-muted-foreground font-medium">{jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length} total</span>
           </div>
           <p className="text-[11px] text-muted-foreground">Completed shown for today only · Click any row to edit</p>
         </CardHeader>
