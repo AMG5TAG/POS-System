@@ -249,6 +249,9 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
   if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
   const merchantId = req.session.merchantId!;
 
+  // CASE-based guard: the ::jsonb cast is only evaluated in the THEN branch,
+  // guaranteeing it never runs on non-array or malformed values, matching the
+  // old try/catch per-row skip behaviour.
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = (
@@ -260,7 +263,12 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
     )
     WHERE merchant_id = ${merchantId}
       AND tags_json IS NOT NULL
-      AND tags_json::jsonb @> jsonb_build_array(${oldName}::text)
+      AND (
+        CASE WHEN tags_json ~ '^\\\['
+          THEN tags_json::jsonb @> jsonb_build_array(${oldName}::text)
+          ELSE FALSE
+        END
+      )
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
@@ -270,20 +278,32 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
   if (!sourceTags?.length || !targetName) { res.status(400).json({ error: "sourceTags and targetName are required" }); return; }
   const merchantId = req.session.merchantId!;
 
-  const filterParts = sourceTags.map(t => sql`tags_json::jsonb @> jsonb_build_array(${t}::text)`);
-  const filterOr = sql.join(filterParts, sql` OR `);
   const caseParts = sourceTags.map(t => sql`WHEN elem = ${t} THEN ${targetName}`);
   const caseExpr = sql.join(caseParts, sql` `);
+  const filterParts = sourceTags.map(t => sql`tags_json::jsonb @> jsonb_build_array(${t}::text)`);
+  const filterOr = sql.join(filterParts, sql` OR `);
 
+  // Inner GROUP BY deduplicates merged tags; MIN(ordinality) preserves
+  // first-occurrence order so output matches the old new Set(tags.map(...)) behaviour.
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = (
-      SELECT jsonb_agg(DISTINCT CASE ${caseExpr} ELSE elem END)::text
-      FROM jsonb_array_elements_text(tags_json::jsonb) AS t(elem)
+      SELECT jsonb_agg(mapped ORDER BY min_ord)::text
+      FROM (
+        SELECT CASE ${caseExpr} ELSE elem END AS mapped,
+               MIN(ordinality) AS min_ord
+        FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+        GROUP BY 1
+      ) deduped
     )
     WHERE merchant_id = ${merchantId}
       AND tags_json IS NOT NULL
-      AND (${filterOr})
+      AND (
+        CASE WHEN tags_json ~ '^\\\['
+          THEN (${filterOr})
+          ELSE FALSE
+        END
+      )
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
@@ -293,6 +313,7 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
   const merchantId = req.session.merchantId!;
 
+  // COALESCE to '[]' when removing the last tag (jsonb_agg on an empty set returns NULL).
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = COALESCE(
@@ -305,7 +326,12 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
     )
     WHERE merchant_id = ${merchantId}
       AND tags_json IS NOT NULL
-      AND tags_json::jsonb @> jsonb_build_array(${name}::text)
+      AND (
+        CASE WHEN tags_json ~ '^\\\['
+          THEN tags_json::jsonb @> jsonb_build_array(${name}::text)
+          ELSE FALSE
+        END
+      )
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
