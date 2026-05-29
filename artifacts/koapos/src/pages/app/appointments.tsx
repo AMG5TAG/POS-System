@@ -183,7 +183,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   return (
     <>
     <Dialog open={!!appt} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary shrink-0" />
@@ -195,7 +195,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+        <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-4 py-4">
           {/* Time */}
           <div className="rounded-xl border bg-muted/20 divide-y">
@@ -407,7 +407,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary" />
@@ -415,7 +415,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+        <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-5 py-4">
           {/* Customer */}
           <div className="space-y-1.5">

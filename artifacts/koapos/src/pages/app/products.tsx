@@ -500,7 +500,7 @@ function ProductDetailDialog({
   return (
     <>
     <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle>
             <div className="flex items-center gap-3">
@@ -533,7 +533,7 @@ function ProductDetailDialog({
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+        <div className="flex-1 overflow-y-auto px-6 min-h-0">
 
         {tab === "details" && (
           <div className="space-y-3 py-4">
@@ -1408,7 +1408,7 @@ export default function ProductsPage() {
 
       {/* ─── Add / Edit Product dialog ─────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle>
@@ -1442,7 +1442,7 @@ export default function ProductsPage() {
 
           {/* Tab content — tabIndex allows mouse-wheel scroll immediately on dialog open */}
           <div
-            className="flex-1 overflow-y-auto px-6 min-h-[520px]"
+            className="flex-1 overflow-y-auto px-6 min-h-0"
             tabIndex={-1}
             style={{ outline: "none" }}
             ref={scrollContainerRef}

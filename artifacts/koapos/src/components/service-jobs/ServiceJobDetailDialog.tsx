@@ -213,7 +213,7 @@ export function ServiceJobDetailDialog({
       )}
 
       <Dialog open={!!job} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold flex-wrap">
               <Wrench className="w-5 h-5 text-primary shrink-0" />
@@ -243,7 +243,7 @@ export function ServiceJobDetailDialog({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+          <div className="flex-1 overflow-y-auto px-6 min-h-0">
           <div className="space-y-4 py-4">
             {(job.isCritical || job.isUnderWarranty || job.isPartnerRepair) && (
               <div className="flex flex-wrap gap-2">

@@ -1132,7 +1132,7 @@ function CustomerDetailInner({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-[520px]">
+      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
       {/* ── Overview ── */}
       {tab === "overview" && (
         <div className="space-y-3">
@@ -1951,7 +1951,7 @@ function CustomerDetailDialog({
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
         {customer && (
           <CustomerDetailInner
             customer={customer}
