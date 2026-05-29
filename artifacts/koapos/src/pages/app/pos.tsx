@@ -13,7 +13,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters, useListProductTypes,
-  useCreateGiftCard, useValidateGiftCard, useUpdateGiftCard,
+  useCreateGiftCard, useValidateGiftCard,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, Transaction,
   GiftCardValidateResponse,
@@ -165,6 +165,11 @@ export default function POSPage() {
   const [invoicePay, setInvoicePay] = useState<PendingInvoicePayment | null>(null);
   const [invoicePayPending, setInvoicePayPending] = useState(false);
   const invoicePayActiveRef = useRef(false);
+  // Stable idempotency key for the current checkout attempt. Generated lazily on
+  // the first submit and reused across manual retries (e.g. after a network
+  // blip) so the server dedupes them; reset to null once a sale/payment
+  // succeeds or the cart is cleared, starting a fresh key for the next sale.
+  const idempotencyKeyRef = useRef<string | null>(null);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -410,7 +415,6 @@ export default function POSPage() {
   const createTransactionMutation  = useCreateTransaction();
   const createGiftCardMutation     = useCreateGiftCard();
   const validateGiftCardMutation   = useValidateGiftCard();
-  const updateGiftCardMutation     = useUpdateGiftCard();
 
   const allProducts = productsData?.items || [];
   const categories  = categoriesData || [];
@@ -1098,6 +1102,7 @@ export default function POSPage() {
   const clearCart = () => {
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
+    idempotencyKeyRef.current = null;
   };
 
   const printPosReceipt = () => {
@@ -1322,11 +1327,14 @@ export default function POSPage() {
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
     extraNote?: string,
-    // Compensation hook: invoked if recording the payment/sale fails AFTER an
-    // external balance (e.g. a gift card) was already debited, so the caller
-    // can restore it and keep the debit + payment atomic (both or neither).
-    onRecordFailed?: () => void,
+    // When the sale is settled (wholly or partly) with a gift card, the server
+    // debits the card atomically as part of recording the sale/payment — there
+    // is no client-side debit + compensation any more.
+    giftCardPayment?: { cardId: number; amount: number },
   ) => {
+    // One key per checkout attempt, reused across manual retries so the server
+    // can dedupe a retried submit instead of double-charging.
+    const idempotencyKey = (idempotencyKeyRef.current ??= crypto.randomUUID());
     // ── Invoice Payment Mode ──
     // Settle an existing invoice's remaining balance instead of ringing up a
     // cart sale. Reuses the purpose-built POST /invoices/:id/payment endpoint
@@ -1343,14 +1351,14 @@ export default function POSPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ amount, method: paymentMethod }),
+            body: JSON.stringify({ amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) }),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
             toast.error(err.error ?? "Failed to record payment");
-            onRecordFailed?.();
             return;
           }
+          idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
           // Synthesize a receipt for the invoice payment (no cart sale exists).
           const lineProduct = {
@@ -1380,7 +1388,6 @@ export default function POSPage() {
           setTimeout(() => setReceiptOpen(true), 250);
         } catch {
           toast.error("Failed to record payment");
-          onRecordFailed?.();
         } finally {
           setInvoicePayPending(false);
         }
@@ -1449,9 +1456,12 @@ export default function POSPage() {
         loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
         receiptNumber,
+        idempotencyKey,
+        ...(giftCardPayment ? { giftCardPayment } : {}),
       }
     }, {
       onSuccess: (data) => {
+        idempotencyKeyRef.current = null;
         // Track session sales by payment method (in-memory only)
         try {
           if (sessionSnap) {
@@ -1502,7 +1512,6 @@ export default function POSPage() {
               ? String((err as { error: unknown }).error)
               : "Failed to process transaction";
         toast.error(message);
-        onRecordFailed?.();
       },
     });
   };
@@ -2555,7 +2564,6 @@ export default function POSPage() {
                 disabled={
                   createTransactionMutation.isPending ||
                   invoicePayPending ||
-                  updateGiftCardMutation.isPending ||
                   (payMethod === "gift_card" && (!gcValidation?.valid)) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
@@ -2585,35 +2593,14 @@ export default function POSPage() {
                     const gc = gcValidation;
                     const applied = gc.applicableAmount;
                     const remaining = effectiveTotal - applied;
-                    const deductNewBalance = gc.currentBalance - applied;
-                    updateGiftCardMutation.mutate(
-                      { id: gc.cardId, data: { currentBalance: deductNewBalance } },
-                      {
-                        onSuccess: () => {
-                          // Compensation: if recording the payment fails after we
-                          // debited the card, restore the pre-debit balance so the
-                          // debit and the payment stay atomic (both or neither).
-                          const restoreGiftCard = () => {
-                            updateGiftCardMutation.mutate(
-                              {
-                                id: gc.cardId,
-                                data: {
-                                  currentBalance: gc.currentBalance,
-                                  adjustmentNote: `Restored ${formatCurrency(applied)} after failed payment on card ${gc.cardNumber}`,
-                                },
-                              },
-                              { onError: () => toast.error(`Could not restore gift card ${gc.cardNumber} balance — check Management > Gift Cards`) },
-                            );
-                          };
-                          if (remaining > 0.004) {
-                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`, restoreGiftCard);
-                          } else {
-                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber}]`, restoreGiftCard);
-                          }
-                        },
-                        onError: () => toast.error("Failed to deduct gift card balance — sale cancelled"),
-                      }
-                    );
+                    // The gift-card debit is handed to the server, which locks
+                    // the card and debits it in the SAME transaction that records
+                    // the sale — so the card can never be charged without the sale
+                    // landing (or vice-versa), and a retried submit won't double-charge.
+                    const note = remaining > 0.004
+                      ? `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`
+                      : `[Gift Card ${gc.cardNumber}]`;
+                    handleCheckout("other", effectiveTotal, note, { cardId: gc.cardId, amount: applied });
                     return;
                   }
                   if (payMethod === "laybuy") {
@@ -2659,7 +2646,7 @@ export default function POSPage() {
                   handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
-                {(createTransactionMutation.isPending || updateGiftCardMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
+                {(createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
               </Button>
             </div>
           </div>

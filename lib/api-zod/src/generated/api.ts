@@ -1482,7 +1482,12 @@ export const CreateTransactionBody = zod.object({
   "changeDue": zod.number().optional(),
   "notes": zod.string().optional(),
   "loyaltyEarned": zod.number().optional(),
-  "receiptNumber": zod.string().optional()
+  "receiptNumber": zod.string().optional(),
+  "idempotencyKey": zod.string().optional().describe('Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate.'),
+  "giftCardPayment": zod.object({
+  "cardId": zod.number(),
+  "amount": zod.number()
+}).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.')
 })
 
 

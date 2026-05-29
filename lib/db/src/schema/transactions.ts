@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -21,10 +21,17 @@ export const transactionsTable = pgTable("transactions", {
   notes: text("notes"),
   loyaltyEarned: numeric("loyalty_earned", { precision: 10, scale: 2 }),
   items: jsonb("items").notNull().default([]),
+  // Optional client-supplied key that makes POST /transactions idempotent: a
+  // retry (e.g. after a network drop following a successful commit) carrying the
+  // same key returns the original transaction instead of creating a duplicate.
+  idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("transactions_merchant_id_idx").on(t.merchantId),
   index("transactions_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+  // Postgres treats NULLs as distinct, so rows without an idempotency key never
+  // collide; only repeated keys for the same merchant are deduplicated.
+  uniqueIndex("transactions_merchant_idempotency_idx").on(t.merchantId, t.idempotencyKey),
 ]);
 
 export const insertTransactionSchema = createInsertSchema(transactionsTable).omit({ id: true, createdAt: true });

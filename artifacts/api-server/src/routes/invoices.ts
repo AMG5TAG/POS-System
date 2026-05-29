@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, loyaltySettingsTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
@@ -27,7 +27,7 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; idempotencyKey?: string };
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -434,7 +434,16 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { amount, method } = req.body as { amount?: number; method?: string };
+  const { amount, method, giftCardPayment, idempotencyKey: rawIdempotencyKey } = req.body as {
+    amount?: number;
+    method?: string;
+    giftCardPayment?: { cardId?: number; amount?: number };
+    idempotencyKey?: string;
+  };
+  const idempotencyKey =
+    typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
+      ? rawIdempotencyKey.trim()
+      : undefined;
   const payInput = Number(amount);
   if (!Number.isFinite(payInput) || payInput <= 0) {
     res.status(400).json({ error: "A positive payment amount is required" });
@@ -445,6 +454,8 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   // submissions (double-click, retry, two terminals) can't both read the
   // pre-paid state and both append a payment event / double-credit loyalty.
   let notFound = false;
+  let payErrorStatus = 0;
+  let payErrorMessage = "";
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -459,6 +470,16 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       .for("update");
     if (!cur) { notFound = true; return; }
 
+    // Idempotency: if a payment carrying this key was already recorded, do not
+    // re-apply it (which would double-charge a gift card / double-credit loyalty).
+    // Returning here leaves the invoice untouched; the response below reflects
+    // the already-recorded state.
+    if (idempotencyKey) {
+      const alreadyApplied = ((cur.events as InvoiceEvent[] | null) ?? [])
+        .some((e) => e.idempotencyKey === idempotencyKey);
+      if (alreadyApplied) return;
+    }
+
     const total = parseFloat(cur.total ?? "0");
     const prevPaid = parseFloat(cur.amountPaid ?? "0");
     const pay = round2(payInput);
@@ -466,6 +487,43 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     const fullyPaid = newPaid >= total - 0.005;
     const balance = round2(Math.max(0, total - newPaid));
     const newStatus = fullyPaid ? "paid" : newPaid > 0 ? "partial" : cur.status;
+
+    // Atomic gift-card debit: lock, validate, decrement the card and write a
+    // redemption ledger entry inside the SAME transaction as the invoice
+    // payment, so the card is never charged unless the payment is recorded.
+    if (giftCardPayment) {
+      const cardId = Number(giftCardPayment.cardId);
+      const applied = round2(Number(giftCardPayment.amount));
+      if (!Number.isFinite(cardId)) { payErrorStatus = 400; payErrorMessage = "Invalid gift card"; return; }
+      if (!(applied > 0)) { payErrorStatus = 400; payErrorMessage = "Gift card payment amount must be positive"; return; }
+      if (applied > pay + 0.005) { payErrorStatus = 400; payErrorMessage = "Gift card payment exceeds payment amount"; return; }
+      const [card] = await tx
+        .select()
+        .from(giftCardsTable)
+        .where(and(eq(giftCardsTable.id, cardId), eq(giftCardsTable.merchantId, merchantId)))
+        .for("update");
+      if (!card) { payErrorStatus = 404; payErrorMessage = "Gift card not found"; return; }
+      if (card.status !== "active") { payErrorStatus = 400; payErrorMessage = `Gift card is ${card.status}`; return; }
+      if (card.expiryDate && new Date() > card.expiryDate) { payErrorStatus = 400; payErrorMessage = "Gift card has expired"; return; }
+      const cardBalance = parseFloat(card.currentBalance);
+      if (applied > cardBalance + 0.005) { payErrorStatus = 400; payErrorMessage = "Insufficient gift card balance"; return; }
+      const newCardBalance = round2(Math.max(0, cardBalance - applied));
+      await tx
+        .update(giftCardsTable)
+        .set({
+          currentBalance: newCardBalance.toString(),
+          status: newCardBalance <= 0 ? "redeemed" : card.status,
+        })
+        .where(eq(giftCardsTable.id, card.id));
+      await tx.insert(giftCardLedgerTable).values({
+        merchantId,
+        giftCardId: card.id,
+        type: "redemption",
+        amount: (-applied).toString(),
+        balanceAfter: newCardBalance.toString(),
+        note: `Redeemed on invoice payment #${id}`,
+      });
+    }
 
     const events: InvoiceEvent[] = [
       ...((cur.events as InvoiceEvent[] | null) ?? []),
@@ -476,6 +534,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
           ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
           : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
         ...(method ? { method } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
       },
     ];
 
@@ -496,6 +555,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   });
 
   if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
+  // An already-applied idempotent payment falls through and returns the
+  // current (unchanged) invoice below.
 
   const [row] = await db
     .select({

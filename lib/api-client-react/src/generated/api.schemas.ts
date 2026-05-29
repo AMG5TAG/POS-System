@@ -552,6 +552,14 @@ export const TransactionInputPaymentMethod = {
   loyalty: 'loyalty',
 } as const;
 
+/**
+ * When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.
+ */
+export type TransactionInputGiftCardPayment = {
+  cardId: number;
+  amount: number;
+};
+
 export interface TransactionInput {
   customerId?: number;
   staffId?: number;
@@ -566,6 +574,10 @@ export interface TransactionInput {
   notes?: string;
   loyaltyEarned?: number;
   receiptNumber?: string;
+  /** Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate. */
+  idempotencyKey?: string;
+  /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
+  giftCardPayment?: TransactionInputGiftCardPayment;
 }
 
 export interface RefundInput {

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -14,6 +14,14 @@ import {
 import { sendEmail } from "../services/email";
 
 const router: IRouter = Router();
+
+/** Error carrying an HTTP status, thrown inside a db.transaction to roll it
+ *  back and map cleanly to a response after the transaction unwinds. */
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
 
 function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: typeof customersTable.$inferSelect | null) {
   return {
@@ -114,11 +122,34 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     amountTendered, changeDue, items: clientItems,
     customerId, staffId, paymentMethod, notes, loyaltyEarned,
     receiptNumber: providedReceiptNumber,
+    idempotencyKey: rawIdempotencyKey, giftCardPayment,
   } = parsed.data;
+
+  const idempotencyKey =
+    typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
+      ? rawIdempotencyKey.trim()
+      : null;
 
   if (clientItems.length === 0) {
     res.status(400).json({ error: "Transaction must include at least one item" });
     return;
+  }
+
+  // Idempotency: if this exact request was already recorded (e.g. the client
+  // retried after a network drop that happened *after* the commit), return the
+  // original transaction instead of creating a duplicate sale + gift-card debit.
+  if (idempotencyKey) {
+    const [existing] = await db
+      .select()
+      .from(transactionsTable)
+      .where(and(
+        eq(transactionsTable.merchantId, req.session.merchantId!),
+        eq(transactionsTable.idempotencyKey, idempotencyKey),
+      ));
+    if (existing) {
+      res.status(201).json(formatTransaction(existing));
+      return;
+    }
   }
 
   // Tenant isolation: any provided customerId must belong to this merchant.
@@ -425,7 +456,9 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // All side-effects (transaction row + inventory + customer stats + linked
   // entity completion) commit together or roll back together. Prevents
   // partial commits where a sale is recorded but stock/customer state drift.
-  const transaction = await db.transaction(async (tx) => {
+  let transaction: typeof transactionsTable.$inferSelect;
+  try {
+    transaction = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(transactionsTable)
       .values({
@@ -444,8 +477,49 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         notes: notes ?? null,
         loyaltyEarned: sanitizedEarned > 0 ? sanitizedEarned.toString() : null,
         items: computedItems,
+        idempotencyKey: idempotencyKey ?? null,
       })
       .returning();
+
+    // Atomic gift-card debit: the card is locked, validated, decremented and
+    // a redemption ledger entry written inside the SAME transaction as the
+    // sale, so the card can never be charged without the sale being recorded
+    // (or vice-versa). Any failure throws and rolls the whole thing back.
+    if (giftCardPayment) {
+      const [card] = await tx
+        .select()
+        .from(giftCardsTable)
+        .where(and(
+          eq(giftCardsTable.id, giftCardPayment.cardId),
+          eq(giftCardsTable.merchantId, req.session.merchantId!),
+        ))
+        .for("update");
+      if (!card) throw new HttpError(404, "Gift card not found");
+      const applied = round2(giftCardPayment.amount);
+      if (!(applied > 0)) throw new HttpError(400, "Gift card payment amount must be positive");
+      if (applied > total + 0.005) throw new HttpError(400, "Gift card payment exceeds sale total");
+      if (card.status !== "active") throw new HttpError(400, `Gift card is ${card.status}`);
+      if (card.expiryDate && new Date() > card.expiryDate) throw new HttpError(400, "Gift card has expired");
+      const balance = parseFloat(card.currentBalance);
+      if (applied > balance + 0.005) throw new HttpError(400, "Insufficient gift card balance");
+      const newBalance = round2(Math.max(0, balance - applied));
+      await tx
+        .update(giftCardsTable)
+        .set({
+          currentBalance: newBalance.toString(),
+          status: newBalance <= 0 ? "redeemed" : card.status,
+        })
+        .where(eq(giftCardsTable.id, card.id));
+      await tx.insert(giftCardLedgerTable).values({
+        merchantId: req.session.merchantId!,
+        giftCardId: card.id,
+        type: "redemption",
+        amount: (-applied).toString(),
+        balanceAfter: newBalance.toString(),
+        note: `Redeemed on sale ${receiptNumber}`,
+        transactionId: row.id,
+      });
+    }
 
     for (const [productId, qty] of qtyByProduct) {
       const product = productMap.get(productId);
@@ -498,7 +572,29 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     }
 
     return row;
-  });
+    });
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    // Idempotency race: a concurrent request with the same key won the unique
+    // index. Return the transaction it created instead of surfacing a 500.
+    if (idempotencyKey && (err as { code?: string })?.code === "23505") {
+      const [existing] = await db
+        .select()
+        .from(transactionsTable)
+        .where(and(
+          eq(transactionsTable.merchantId, req.session.merchantId!),
+          eq(transactionsTable.idempotencyKey, idempotencyKey),
+        ));
+      if (existing) {
+        res.status(201).json(formatTransaction(existing));
+        return;
+      }
+    }
+    throw err;
+  }
 
   res.status(201).json(formatTransaction(transaction));
 });

@@ -1,5 +1,12 @@
 /**
- * tokenVault — AES-256-CBC encrypt/decrypt for OAuth access & refresh tokens.
+ * tokenVault — authenticated encrypt/decrypt for OAuth access & refresh tokens.
+ *
+ * New tokens are encrypted with AES-256-GCM, which carries an authentication tag.
+ * Decryption verifies that tag, so a wrong key (or tampered ciphertext) fails
+ * loudly instead of silently returning garbage — this is what makes the
+ * key-rotation and invalidation logic trustworthy (no false-positive "decrypt
+ * succeeded"). Legacy AES-256-CBC ciphertext (written before this change) is
+ * still readable and is upgraded to GCM the next time it is re-encrypted.
  *
  * Key source:
  *   - `VAULT_ENCRYPTION_KEY` env var (required in production, PBKDF2-derived to 32 bytes).
@@ -8,7 +15,9 @@
  *     `NODE_ENV === "production"` — the server refuses to start in that case
  *     (see `assertVaultKeyConfigured`).
  *
- * Ciphertext format stored in DB:  "<iv-hex>:<ciphertext-hex>"
+ * Ciphertext format stored in DB:
+ *   - current (authenticated):  "v2:<iv-hex>:<tag-hex>:<ciphertext-hex>"  (AES-256-GCM)
+ *   - legacy (reads only):      "<iv-hex>:<ciphertext-hex>"               (AES-256-CBC)
  */
 
 import crypto from "crypto";
@@ -16,7 +25,9 @@ import { db, oauthTokenVaultTable } from "@workspace/db";
 import { eq, and, isNotNull, or } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
-const ALGORITHM = "aes-256-cbc";
+const ALGORITHM_CBC = "aes-256-cbc"; // legacy format — decrypt only
+const ALGORITHM_GCM = "aes-256-gcm"; // current format — authenticated
+const GCM_PREFIX = "v2";
 const SALT = "koapos-vault-v1";
 const DEV_FALLBACK_KEY = "dev-only-insecure-vault-key-do-not-use-in-prod";
 
@@ -69,19 +80,40 @@ function previousSecret(): string | null {
   return process.env.VAULT_ENCRYPTION_KEY_PREVIOUS || null;
 }
 
-function decryptWith(key: Buffer, ivHex: string, encHex: string): string {
-  const iv = Buffer.from(ivHex, "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
+function decryptCbc(key: Buffer, ivHex: string, encHex: string): string {
+  const decipher = crypto.createDecipheriv(ALGORITHM_CBC, key, Buffer.from(ivHex, "hex"));
+  return Buffer.concat([decipher.update(Buffer.from(encHex, "hex")), decipher.final()]).toString("utf8");
+}
+
+function decryptGcm(key: Buffer, ivHex: string, tagHex: string, encHex: string): string {
+  const decipher = crypto.createDecipheriv(ALGORITHM_GCM, key, Buffer.from(ivHex, "hex"));
+  decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+  return Buffer.concat([decipher.update(Buffer.from(encHex, "hex")), decipher.final()]).toString("utf8");
+}
+
+/**
+ * Decrypt one stored ciphertext with a single key, dispatching on format.
+ * GCM (`v2:`) verifies the auth tag and throws on a wrong key or tampering;
+ * legacy CBC is supported for reads of tokens written before the GCM upgrade.
+ */
+function decryptWithKey(key: Buffer, ciphertext: string): string {
+  if (ciphertext.startsWith(`${GCM_PREFIX}:`)) {
+    const [, ivHex, tagHex, encHex] = ciphertext.split(":");
+    if (!ivHex || !tagHex || !encHex) throw new Error("Malformed v2 ciphertext");
+    return decryptGcm(key, ivHex, tagHex, encHex);
+  }
+  const parts = ciphertext.split(":");
+  if (parts.length !== 2) throw new Error("Malformed ciphertext");
+  return decryptCbc(key, parts[0], parts[1]);
 }
 
 export function encryptToken(plaintext: string): string {
   const key = deriveKey(currentSecret());
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const iv = crypto.randomBytes(12); // 96-bit nonce, the standard size for GCM
+  const cipher = crypto.createCipheriv(ALGORITHM_GCM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  return `${iv.toString("hex")}:${encrypted.toString("hex")}`;
+  const tag = cipher.getAuthTag();
+  return `${GCM_PREFIX}:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
 }
 
 /**
@@ -90,15 +122,12 @@ export function encryptToken(plaintext: string): string {
  * key rotation until they are migrated by `reEncryptVaultEntries`.
  */
 export function decryptToken(ciphertext: string): string {
-  const parts = ciphertext.split(":");
-  if (parts.length !== 2) return "";
-  const [ivHex, encHex] = parts;
   try {
-    return decryptWith(deriveKey(currentSecret()), ivHex, encHex);
+    return decryptWithKey(deriveKey(currentSecret()), ciphertext);
   } catch (err) {
     const prev = previousSecret();
     if (prev) {
-      return decryptWith(deriveKey(prev), ivHex, encHex);
+      return decryptWithKey(deriveKey(prev), ciphertext);
     }
     throw err;
   }
@@ -176,17 +205,17 @@ function reEncryptField(
   prevKey: Buffer,
 ): { value: string | null; rotated: boolean } {
   if (!ciphertext) return { value: null, rotated: false };
-  const parts = ciphertext.split(":");
-  if (parts.length !== 2) return { value: ciphertext, rotated: false };
-  const [ivHex, encHex] = parts;
-  // Already encrypted under the current key — nothing to do.
+  const isV2 = ciphertext.startsWith(`${GCM_PREFIX}:`);
+  // Readable under the current key. If it's already authenticated (v2) there's
+  // nothing to do; if it's a legacy CBC token, upgrade it to authenticated GCM.
   try {
-    decryptWith(curKey, ivHex, encHex);
-    return { value: ciphertext, rotated: false };
+    const plain = decryptWithKey(curKey, ciphertext);
+    if (isV2) return { value: ciphertext, rotated: false };
+    return { value: encryptToken(plain), rotated: true };
   } catch { /* fall through to previous key */ }
-  // Encrypted under the previous key — migrate it to the current key.
+  // Encrypted under the previous key — migrate it to the current key (as v2).
   try {
-    const plain = decryptWith(prevKey, ivHex, encHex);
+    const plain = decryptWithKey(prevKey, ciphertext);
     return { value: encryptToken(plain), rotated: true };
   } catch {
     // Unreadable under either key; leave it for invalidateUnreadableVaultEntries.
