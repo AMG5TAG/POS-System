@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, loyaltySettingsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
@@ -61,6 +61,7 @@ function fmt(
     subtotal: parseFloat(inv.subtotal),
     taxTotal: parseFloat(inv.taxTotal),
     total: parseFloat(inv.total),
+    amountPaid: parseFloat(inv.amountPaid ?? "0"),
     discountType:  inv.discountType  ?? null,
     discountValue: inv.discountValue  ? parseFloat(inv.discountValue)  : null,
     discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
@@ -94,6 +95,56 @@ async function appendInvoiceEvent(id: number, merchantId: number, event: Invoice
   await db.update(invoicesTable).set({ events }).where(eq(invoicesTable.id, id));
 }
 
+/** Credit loyalty points/value to a customer when an invoice is fully settled. */
+async function creditLoyaltyForPaidInvoice(merchantId: number, customerId: number, invoiceTotal: number) {
+  if (invoiceTotal <= 0) return;
+  const [loyaltyRow] = await db
+    .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
+    .from(loyaltySettingsTable)
+    .where(eq(loyaltySettingsTable.merchantId, merchantId));
+  const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
+  if (!programOn) return;
+
+  const programType = loyaltyRow?.programType ?? "cashback";
+  const config = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
+  let earned = 0;
+  switch (programType) {
+    case "cashback": {
+      const rate = Math.max(0, (config.cashbackRate as number) ?? 0.01);
+      earned = round2(invoiceTotal * rate);
+      break;
+    }
+    case "tiered": {
+      const tiers = (config.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number }>;
+      const sorted = [...tiers].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
+      const tier = sorted.find(t => invoiceTotal >= (t.minSpend ?? 0));
+      const rate = Math.max(0, tier?.rate ?? 0.01);
+      const mult = tier?.bonusMultiplier ?? 1;
+      earned = round2(invoiceTotal * rate * mult);
+      break;
+    }
+    case "points": {
+      const ppd = Math.max(0, (config.pointsPerDollar as number) ?? 1);
+      earned = Math.floor(invoiceTotal * ppd);
+      break;
+    }
+    case "stamp":
+      earned = 1;
+      break;
+    case "custom": {
+      const rate = Math.max(0, (config.customValue as number) ?? 0.01);
+      earned = round2(invoiceTotal * rate);
+      break;
+    }
+  }
+  if (earned > 0) {
+    await db
+      .update(customersTable)
+      .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+  }
+}
+
 // GET /invoices
 router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
   const { status, limit = 50, offset = 0 } = req.query as Record<string, string>;
@@ -123,7 +174,7 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(...conditions))
-    .orderBy(desc(invoicesTable.createdAt))
+    .orderBy(asc(invoicesTable.dueDate), desc(invoicesTable.createdAt))
     .limit(parseInt(String(limit)))
     .offset(parseInt(String(offset)));
 
@@ -289,8 +340,13 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
-    if (status === "paid") updates.paidAt = new Date();
-    else updates.paidAt = null;
+    if (status === "paid") {
+      updates.paidAt = new Date();
+    } else {
+      updates.paidAt = null;
+      // Any explicit non-paid status (sent/draft/overdue/cancelled) clears recorded payments.
+      if (status !== "partial") updates.amountPaid = "0";
+    }
   }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
@@ -346,54 +402,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     preInv.status !== "paid" &&
     preInv.customerId
   ) {
-    const invoiceTotal = parseFloat(preInv.total ?? "0");
-    if (invoiceTotal > 0) {
-      const [loyaltyRow] = await db
-        .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
-        .from(loyaltySettingsTable)
-        .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
-      const programOn = loyaltyRow ? loyaltyRow.isEnabled === "true" : true;
-      if (programOn) {
-        const programType = loyaltyRow?.programType ?? "cashback";
-        const config = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
-        let earned = 0;
-        switch (programType) {
-          case "cashback": {
-            const rate = Math.max(0, (config.cashbackRate as number) ?? 0.01);
-            earned = round2(invoiceTotal * rate);
-            break;
-          }
-          case "tiered": {
-            const tiers = (config.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number }>;
-            const sorted = [...tiers].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
-            const tier = sorted.find(t => invoiceTotal >= (t.minSpend ?? 0));
-            const rate = Math.max(0, tier?.rate ?? 0.01);
-            const mult = tier?.bonusMultiplier ?? 1;
-            earned = round2(invoiceTotal * rate * mult);
-            break;
-          }
-          case "points": {
-            const ppd = Math.max(0, (config.pointsPerDollar as number) ?? 1);
-            earned = Math.floor(invoiceTotal * ppd);
-            break;
-          }
-          case "stamp":
-            earned = 1;
-            break;
-          case "custom": {
-            const rate = Math.max(0, (config.customValue as number) ?? 0.01);
-            earned = round2(invoiceTotal * rate);
-            break;
-          }
-        }
-        if (earned > 0) {
-          await db
-            .update(customersTable)
-            .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
-            .where(and(eq(customersTable.id, preInv.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
-        }
-      }
-    }
+    await creditLoyaltyForPaidInvoice(req.session.merchantId!, preInv.customerId, parseFloat(preInv.total ?? "0"));
   }
 
   const [row] = await db
@@ -408,6 +417,84 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     .where(eq(invoicesTable.id, id));
 
   res.json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail) : fmt(inv));
+});
+
+// POST /invoices/:id/payment — record a (partial or full) payment against an invoice
+router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id));
+  const merchantId = req.session.merchantId!;
+  const { amount } = req.body as { amount?: number };
+  const payInput = Number(amount);
+  if (!Number.isFinite(payInput) || payInput <= 0) {
+    res.status(400).json({ error: "A positive payment amount is required" });
+    return;
+  }
+
+  const [cur] = await db
+    .select({
+      total: invoicesTable.total,
+      amountPaid: invoicesTable.amountPaid,
+      status: invoicesTable.status,
+      customerId: invoicesTable.customerId,
+      events: invoicesTable.events,
+    })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!cur) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  const total = parseFloat(cur.total ?? "0");
+  const prevPaid = parseFloat(cur.amountPaid ?? "0");
+  const pay = round2(payInput);
+  const newPaid = Math.min(round2(prevPaid + pay), total);
+  const fullyPaid = newPaid >= total - 0.005;
+  const balance = round2(Math.max(0, total - newPaid));
+  const newStatus = fullyPaid ? "paid" : newPaid > 0 ? "partial" : cur.status;
+
+  const events: InvoiceEvent[] = [
+    ...((cur.events as InvoiceEvent[] | null) ?? []),
+    {
+      type: "payment",
+      timestamp: new Date().toISOString(),
+      detail: fullyPaid
+        ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
+        : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
+    },
+  ];
+
+  await db
+    .update(invoicesTable)
+    .set({
+      amountPaid: String(newPaid),
+      status: newStatus,
+      paidAt: fullyPaid ? new Date() : null,
+      events,
+    })
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+
+  // Credit loyalty only when this payment settles the invoice in full for the first time.
+  if (fullyPaid && cur.status !== "paid" && cur.customerId) {
+    await creditLoyaltyForPaidInvoice(merchantId, cur.customerId, total);
+  }
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
 });
 
 // DELETE /invoices/:id

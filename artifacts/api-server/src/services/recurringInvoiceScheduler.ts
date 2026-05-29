@@ -1,5 +1,5 @@
 import { db, invoicesTable, customersTable, merchantsTable } from "@workspace/db";
-import { eq, and, lte, isNotNull } from "drizzle-orm";
+import { eq, and, lte, gt, isNotNull } from "drizzle-orm";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -176,7 +176,45 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
   }
 }
 
+/**
+ * One-time data patch for the Koastal Komputers merchant: any recurring invoice
+ * whose due date is still in the future was incorrectly left in a "paid"/viewed
+ * state. Reset those rows back to unpaid (status "sent") and clear the viewed
+ * marker so the ledger reflects reality.
+ */
+export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise<void> {
+  const targetEmail = "admin@koastalkomputers.com.au";
+  const now = new Date();
+
+  const [merchant] = await db
+    .select({ id: merchantsTable.id })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.email, targetEmail));
+  if (!merchant) return;
+
+  const result = await db
+    .update(invoicesTable)
+    .set({ status: "sent", viewedAt: null, paidAt: null, amountPaid: "0", updatedAt: new Date() })
+    .where(
+      and(
+        eq(invoicesTable.merchantId, merchant.id),
+        eq(invoicesTable.isRecurring, "true"),
+        eq(invoicesTable.status, "paid"),
+        isNotNull(invoicesTable.dueDate),
+        gt(invoicesTable.dueDate, now),
+      ),
+    )
+    .returning({ id: invoicesTable.id });
+
+  if (result.length > 0) {
+    logger.info({ merchantId: merchant.id, count: result.length }, "Patched future-dated recurring invoices back to unpaid");
+  }
+}
+
 export function scheduleRecurringInvoices(logger: Logger): void {
+  patchFutureRecurringInvoiceStates(logger).catch((err) =>
+    logger.error({ err }, "Failed to patch future recurring invoice states"),
+  );
   processRecurringInvoices(logger).catch((err) =>
     logger.error({ err }, "Recurring invoice scheduler startup error"),
   );

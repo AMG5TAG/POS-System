@@ -13,6 +13,7 @@ export const invoicesTable = pgTable("invoices", {
   subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
   taxTotal: numeric("tax_total", { precision: 10, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  amountPaid: numeric("amount_paid", { precision: 10, scale: 2 }).notNull().default("0"),
   items: json("items"),
   dueDate: timestamp("due_date", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),

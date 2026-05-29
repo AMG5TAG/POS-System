@@ -67,7 +67,7 @@ async function compressForPdf(
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
-type InvStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
+type InvStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 type DiscountType = "fixed" | "percent";
@@ -84,6 +84,7 @@ type Invoice = {
   subtotal: number;
   taxTotal: number;
   total: number;
+  amountPaid: number;
   discountType:  DiscountType | null;
   discountValue: number | null;
   discountTotal: number | null;
@@ -104,11 +105,11 @@ type Invoice = {
 /* ── Constants ───────────────────────────────────────────────────────────── */
 
 const STATUS_COLORS: Record<InvStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  draft: "secondary", sent: "outline", paid: "default", overdue: "destructive", cancelled: "secondary",
+  draft: "secondary", sent: "outline", paid: "default", partial: "outline", overdue: "destructive", cancelled: "secondary",
 };
 
 const STATUS_LABELS: Record<InvStatus, string> = {
-  draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
+  draft: "Draft", sent: "Sent", paid: "Paid", partial: "Partially Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
 const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
@@ -117,7 +118,7 @@ const API = "/api/invoices";
 
 /* ── Recurring instance types & helpers ──────────────────────────────────── */
 
-type InstanceStatus = "paid" | "sent" | "scheduled" | "overdue";
+type InstanceStatus = "paid" | "partial" | "sent" | "scheduled" | "overdue";
 
 interface RecurringInstance {
   instanceId:     string;
@@ -129,6 +130,7 @@ interface RecurringInstance {
 
 const INSTANCE_STATUS_COLORS: Record<InstanceStatus, string> = {
   paid:      "text-green-700 bg-green-50 border-green-200",
+  partial:   "text-amber-700 bg-amber-50 border-amber-200",
   sent:      "text-blue-700 bg-blue-50 border-blue-200",
   scheduled: "text-gray-500 bg-gray-50 border-gray-200",
   overdue:   "text-red-700 bg-red-50 border-red-200",
@@ -136,6 +138,7 @@ const INSTANCE_STATUS_COLORS: Record<InstanceStatus, string> = {
 
 const INSTANCE_STATUS_LABELS: Record<InstanceStatus, string> = {
   paid:      "Paid",
+  partial:   "Partially Paid",
   sent:      "Sent",
   scheduled: "Scheduled",
   overdue:   "Overdue",
@@ -175,6 +178,7 @@ function explodeRecurringInstances(invoices: Invoice[]): RecurringInstance[] {
 
       let instanceStatus: InstanceStatus;
       if (inv.status === "paid")           instanceStatus = "paid";
+      else if (inv.status === "partial")   instanceStatus = "partial";
       else if (sendDate > today)           instanceStatus = "scheduled";
       else if (inv.status === "overdue")   instanceStatus = "overdue";
       else                                 instanceStatus = "sent";
@@ -183,7 +187,8 @@ function explodeRecurringInstances(invoices: Invoice[]): RecurringInstance[] {
     }
   }
 
-  return rows.sort((a, b) => b.sendDate.getTime() - a.sendDate.getTime());
+  // Sort chronologically (dueDate ASC) so the next invoice due sits at the top of the ledger.
+  return rows.sort((a, b) => a.sendDate.getTime() - b.sendDate.getTime());
 }
 
 /* ── Prefix settings ──────────────────────────────────────────────────── */
@@ -199,6 +204,9 @@ export default function POSInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
+  const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [recordingPayment, setRecordingPayment] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -497,6 +505,46 @@ export default function POSInvoicesPage() {
     }
   };
 
+  /* ── Record a (partial or full) payment ── */
+  const openPaymentDialog = (inv: Invoice) => {
+    const balance = Math.max(0, inv.total - (inv.amountPaid ?? 0));
+    setPaymentAmount(balance.toFixed(2));
+    setPaymentDialog({ open: true, invoice: inv });
+  };
+
+  const recordPayment = async () => {
+    const inv = paymentDialog.invoice;
+    if (!inv) return;
+    const amount = parseFloat(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid payment amount");
+      return;
+    }
+    setRecordingPayment(true);
+    try {
+      const res = await fetch(`${API}/${inv.id}/payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ amount }),
+      });
+      if (res.ok) {
+        const updated = await res.json() as Invoice;
+        setInvoices((prev) => prev.map((i) => i.id === inv.id ? updated : i));
+        if (detailInvoice?.id === inv.id) setDetailInvoice(updated);
+        const balance = Math.max(0, updated.total - (updated.amountPaid ?? 0));
+        toast.success(balance <= 0 ? "Invoice paid in full" : `Payment recorded — $${balance.toFixed(2)} remaining`);
+        setPaymentDialog({ open: false, invoice: null });
+        setPaymentAmount("");
+      } else {
+        const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
+        toast.error(err.error ?? "Failed to record payment");
+      }
+    } finally {
+      setRecordingPayment(false);
+    }
+  };
+
   /* ── Delete ── */
   const deleteInvoice = async (id: number) => {
     await fetch(`${API}/${id}`, { method: "DELETE", credentials: "include" });
@@ -730,6 +778,7 @@ export default function POSInvoicesPage() {
         ${opts.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
         ${inv.discountTotal ? `<div class="row" style="color:#b45309"><span>Discount</span><span>-$${inv.discountTotal.toFixed(2)}</span></div>` : ""}
         <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
+        ${(inv.amountPaid ?? 0) > 0 ? `<div class="row" style="color:#047857"><span>Amount Paid</span><span>-$${(inv.amountPaid ?? 0).toFixed(2)}</span></div><div class="grand"><span>Balance Due (AUD)</span><span>$${Math.max(0, inv.total - (inv.amountPaid ?? 0)).toFixed(2)}</span></div>` : ""}
       </div>
       ${opts.showLoyaltyEarned ? (() => {
         const lType = loyaltySettings?.programType ?? "points";
@@ -972,7 +1021,20 @@ export default function POSInvoicesPage() {
     doc.setFontSize(12);
     doc.setTextColor(30, 30, 30);
     doc.text("Total Due (AUD)", totX + 2, y); doc.text(`$${inv.total.toFixed(2)}`, W - MR, y, { align: "right" });
-    y += 10;
+    y += 8;
+    if ((inv.amountPaid ?? 0) > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(4, 120, 87);
+      doc.text("Amount Paid", totX + 2, y); doc.text(`-$${(inv.amountPaid ?? 0).toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(30, 30, 30);
+      doc.text("Balance Due (AUD)", totX + 2, y);
+      doc.text(`$${Math.max(0, inv.total - (inv.amountPaid ?? 0)).toFixed(2)}`, W - MR, y, { align: "right" });
+      y += 8;
+    }
+    y += 2;
 
     /* ── Loyalty Earned ── */
     if (opts.showLoyaltyEarned) {
@@ -1155,11 +1217,11 @@ export default function POSInvoicesPage() {
     (inv.customerName ?? "").toLowerCase().includes(search.toLowerCase())
   ), [invoices, search]);
 
-  const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring),  [filtered]);
+  const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),  [filtered]);
   const recurringFiltered = useMemo(() => filtered.filter((inv) =>  inv.isRecurring),  [filtered]);
   const recurringInstances = useMemo(() => explodeRecurringInstances(recurringFiltered), [recurringFiltered]);
 
-  const kpiOutstanding = useMemo(() => invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.total, 0), [invoices]);
+  const kpiOutstanding = useMemo(() => invoices.filter((i) => !i.isRecurring && (i.status === "sent" || i.status === "overdue" || i.status === "partial")).reduce((s, i) => s + (i.total - (i.amountPaid ?? 0)), 0), [invoices]);
   const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
 
   /* ── Shared row actions ── */
@@ -1171,9 +1233,9 @@ export default function POSInvoicesPage() {
           <Send className="w-3.5 h-3.5" />
         </Button>
       )}
-      {inv.status === "sent" && (
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
-          onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
+      {(inv.status === "sent" || inv.status === "overdue" || inv.status === "partial") && (
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Record payment"
+          onClick={(e) => { e.stopPropagation(); openPaymentDialog(inv); }}>
           <Banknote className="w-4 h-4" />
         </Button>
       )}
@@ -1235,7 +1297,7 @@ export default function POSInvoicesPage() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Outstanding</p>
                   <p className="text-2xl font-bold mt-1 text-amber-600">{formatCurrency(kpiOutstanding)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => i.status === "sent" || i.status === "overdue").length} awaiting payment</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => !i.isRecurring && (i.status === "sent" || i.status === "overdue" || i.status === "partial")).length} awaiting payment</p>
                 </div>
                 <Clock className="w-8 h-8 text-amber-500/20 shrink-0" />
               </div>
@@ -1428,16 +1490,16 @@ export default function POSInvoicesPage() {
                           {/* Col 6 — Mark Paid + View actions */}
                           <td className="p-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {inst.instanceStatus !== "paid" && (
+                              {inst.instanceStatus !== "paid" && inst.instanceStatus !== "scheduled" && (
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="h-7 px-2 text-[11px] font-medium text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
-                                  title="Mark this instance as paid"
-                                  onClick={() => updateStatus(inst.parent.id, "paid")}
+                                  title="Record a payment"
+                                  onClick={() => openPaymentDialog(inst.parent)}
                                 >
                                   <Banknote className="w-3 h-3 mr-1" />
-                                  Mark Paid
+                                  Record Payment
                                 </Button>
                               )}
                               <Button
@@ -1609,6 +1671,16 @@ export default function POSInvoicesPage() {
                     <div className="flex justify-between font-semibold border-t pt-1.5 text-base">
                       <span>Total</span><span>{formatCurrency(detailInvoice.total)}</span>
                     </div>
+                    {(detailInvoice.amountPaid ?? 0) > 0 && (
+                      <>
+                        <div className="flex justify-between text-green-700">
+                          <span>Amount Paid</span><span>−{formatCurrency(detailInvoice.amountPaid)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold border-t pt-1.5 text-base text-amber-700">
+                          <span>Balance Due</span><span>{formatCurrency(Math.max(0, detailInvoice.total - (detailInvoice.amountPaid ?? 0)))}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1659,10 +1731,10 @@ export default function POSInvoicesPage() {
                       <Send className="w-3.5 h-3.5" /> Mark as Sent
                     </Button>
                   )}
-                  {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue") && (
+                  {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue" || detailInvoice.status === "partial") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
-                      onClick={() => updateStatus(detailInvoice.id, "paid")}>
-                      <Banknote className="w-4 h-4" /> Mark as Paid
+                      onClick={() => openPaymentDialog(detailInvoice)}>
+                      <Banknote className="w-4 h-4" /> Record Payment
                     </Button>
                   )}
                   {detailInvoice.status === "paid" && (
@@ -1716,6 +1788,68 @@ export default function POSInvoicesPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Record Payment Dialog ─── */}
+      <Dialog open={paymentDialog.open} onOpenChange={(o) => { if (!o) { setPaymentDialog({ open: false, invoice: null }); setPaymentAmount(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          {paymentDialog.invoice && (() => {
+            const inv = paymentDialog.invoice;
+            const alreadyPaid = inv.amountPaid ?? 0;
+            const balance = Math.max(0, inv.total - alreadyPaid);
+            const entered = parseFloat(paymentAmount);
+            const remaining = Number.isFinite(entered) ? Math.max(0, balance - entered) : balance;
+            return (
+              <div className="space-y-4 py-2">
+                <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><span className="font-medium">{inv.invoiceNumber}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice Total</span><span>{formatCurrency(inv.total)}</span></div>
+                  {alreadyPaid > 0 && (
+                    <div className="flex justify-between text-green-700"><span>Already Paid</span><span>−{formatCurrency(alreadyPaid)}</span></div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t pt-1"><span>Balance Due</span><span>{formatCurrency(balance)}</span></div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Payment Amount (AUD)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    max={balance}
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void recordPayment(); }}
+                    autoFocus
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => setPaymentAmount(balance.toFixed(2))}>
+                      Pay in full
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => setPaymentAmount((balance / 2).toFixed(2))}>
+                      Half
+                    </Button>
+                  </div>
+                  {Number.isFinite(entered) && entered > 0 && (
+                    <p className="text-xs text-muted-foreground pt-1">
+                      {remaining <= 0 ? "This will mark the invoice as paid in full." : `Remaining balance after this payment: ${formatCurrency(remaining)}`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { setPaymentDialog({ open: false, invoice: null }); setPaymentAmount(""); }}>Cancel</Button>
+                  <Button onClick={() => void recordPayment()} disabled={recordingPayment || !(Number.isFinite(entered) && entered > 0)}>
+                    {recordingPayment ? "Recording…" : <><Banknote className="w-3.5 h-3.5 mr-1.5" /> Record Payment</>}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
