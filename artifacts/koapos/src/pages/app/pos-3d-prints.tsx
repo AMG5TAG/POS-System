@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useCreateProduct } from "@workspace/api-client-react";
+import { useCreateProduct, useListProductTypes, useCreateProductType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -199,6 +199,8 @@ export default function POS3DPrintsPage() {
   const [customPricePerKg, setCustomPricePerKg] = useState(26.99);
 
   const createProductMutation = useCreateProduct();
+  const { data: productTypesData } = useListProductTypes();
+  const createProductTypeMutation = useCreateProductType();
 
   useEffect(() => {
     setSettings(load3DSettings());
@@ -233,10 +235,27 @@ export default function POS3DPrintsPage() {
     toast.success("Calculator reset");
   }
 
-  function handleAddToSale() {
+  async function handleAddToSale() {
     if (!result) return;
     const filament = ELEGOO_FILAMENTS.find((f) => f.id === filamentId) ?? ELEGOO_FILAMENTS[0];
     const name = `3D Print — ${filament.type} ${printWeightGrams}g`;
+
+    let productTypeId: number | undefined;
+    const existing = productTypesData?.items?.find((t) => t.slug === "3d_print");
+    if (existing) {
+      productTypeId = existing.id;
+    } else {
+      try {
+        const created = await createProductTypeMutation.mutateAsync({
+          data: { name: "3D Print", slug: "3d_print" },
+        });
+        productTypeId = created.id;
+      } catch {
+        toast.error("Failed to resolve product type");
+        return;
+      }
+    }
+
     createProductMutation.mutate(
       {
         data: {
@@ -246,6 +265,7 @@ export default function POS3DPrintsPage() {
           trackInventory: false,
           stockQuantity: 1,
           isActive: true,
+          productTypeId,
         },
       },
       {

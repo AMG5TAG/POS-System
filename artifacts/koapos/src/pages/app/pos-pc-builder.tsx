@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useCreateProduct, type Product } from "@workspace/api-client-react";
+import { useListProducts, useCreateProduct, useListProductTypes, useCreateProductType, type Product } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -248,6 +248,8 @@ export default function POSPCBuilderPage() {
   }, [buildName, build, assemblyHours]);
 
   const createProductMutation = useCreateProduct();
+  const { data: productTypesData } = useListProductTypes();
+  const createProductTypeMutation = useCreateProductType();
 
   const markupNum = settings.applyDefaultMarkup ? settings.defaultMarkup : 0;
 
@@ -337,7 +339,7 @@ export default function POSPCBuilderPage() {
     setBundleDialogOpen(true);
   };
 
-  const handleSaveBundle = () => {
+  const handleSaveBundle = async () => {
     if (!bundleName.trim()) { toast.error("Bundle name is required"); return; }
     const componentList = selectedProducts
       .map(({ slotId, product }) => {
@@ -345,6 +347,23 @@ export default function POSPCBuilderPage() {
         return `${slot?.label ?? slotId}: ${product.name}`;
       })
       .join("\n");
+
+    let productTypeId: number | undefined;
+    const existing = productTypesData?.items?.find((t) => t.slug === "bundle");
+    if (existing) {
+      productTypeId = existing.id;
+    } else {
+      try {
+        const created = await createProductTypeMutation.mutateAsync({
+          data: { name: "Bundle", slug: "bundle" },
+        });
+        productTypeId = created.id;
+      } catch {
+        toast.error("Failed to resolve product type");
+        return;
+      }
+    }
+
     createProductMutation.mutate(
       {
         data: {
@@ -355,6 +374,7 @@ export default function POSPCBuilderPage() {
           trackInventory: false,
           stockQuantity: 1,
           isActive: true,
+          productTypeId,
         },
       },
       {
