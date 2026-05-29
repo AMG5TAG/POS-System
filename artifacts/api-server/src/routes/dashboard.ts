@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, productTypesTable } from "@workspace/db";
-import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull, ne } from "drizzle-orm";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable } from "@workspace/db";
+import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams, UpsertDashboardConfigBody } from "@workspace/api-zod";
 
@@ -122,126 +122,112 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const periodEnd = getPeriodEnd(period);
   const merchantId = req.session.merchantId!;
 
-  const [transactions, paidInvoices] = await Promise.all([
-    db
-      .select()
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.merchantId, merchantId),
-          gte(transactionsTable.createdAt, periodStart),
-          period === "yesterday" ? lt(transactionsTable.createdAt, periodEnd) : undefined,
-        )
-      ),
-    db
-      .select()
-      .from(invoicesTable)
-      .where(
-        and(
-          eq(invoicesTable.merchantId, merchantId),
-          eq(invoicesTable.status, "paid"),
-          gte(invoicesTable.paidAt, periodStart),
-          period === "yesterday" ? lt(invoicesTable.paidAt, periodEnd) : undefined,
-        )
-      ),
+  const periodCondTxn = period === "yesterday"
+    ? and(gte(transactionsTable.createdAt, periodStart), lt(transactionsTable.createdAt, periodEnd))
+    : gte(transactionsTable.createdAt, periodStart);
+
+  const periodCondInv = period === "yesterday"
+    ? and(gte(invoicesTable.paidAt, periodStart), lt(invoicesTable.paidAt, periodEnd))
+    : gte(invoicesTable.paidAt, periodStart);
+
+  const [txnAgg, invoiceAgg, cogsResult, topPaymentRows, newCustomersResult, lowStockResult, pendingInvoiceResult] = await Promise.all([
+    // Transaction aggregations: completed revenue, refund total, discount total, completed count
+    db.select({
+      posSales:      sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+      refundTotal:   sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'refunded'  THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+      discountTotal: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.discountTotal}::numeric ELSE 0 END), 0)`,
+      posCount:      sql<string>`COUNT(CASE WHEN ${transactionsTable.status} = 'completed' THEN 1 END)`,
+    }).from(transactionsTable).where(and(eq(transactionsTable.merchantId, merchantId), periodCondTxn)),
+
+    // Invoice aggregations: paid revenue + count
+    db.select({
+      invoiceSales:  sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+      invoiceCount:  sql<string>`COUNT(*)`,
+    }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), periodCondInv)),
+
+    // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan)
+    db.execute(sql`
+      SELECT
+        COALESCE(SUM((item->>'quantity')::int), 0)::float                                       AS items_sold,
+        COALESCE(SUM((item->>'quantity')::int * COALESCE(p.cost_price::numeric, 0)), 0)::float  AS cost_total
+      FROM transactions t
+      CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
+      LEFT JOIN products p
+        ON p.id = (item->>'productId')::int
+       AND p.merchant_id = t.merchant_id
+      WHERE t.merchant_id = ${merchantId}
+        AND t.status = 'completed'
+        AND t.created_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND t.created_at < ${periodEnd}` : sql``}
+        AND jsonb_typeof(t.items) = 'array'
+        AND (item->>'productId') IS NOT NULL
+        AND (item->>'productId') <> '0'
+    `),
+
+    // Top payment method by count
+    db.select({
+      paymentMethod: transactionsTable.paymentMethod,
+    }).from(transactionsTable)
+      .where(and(eq(transactionsTable.merchantId, merchantId), eq(transactionsTable.status, "completed"), periodCondTxn))
+      .groupBy(transactionsTable.paymentMethod)
+      .orderBy(sql`COUNT(*) DESC`)
+      .limit(1),
+
+    // New customers in period
+    db.select({ count: sql<string>`COUNT(*)` }).from(customersTable)
+      .where(period === "yesterday"
+        ? and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart), lt(customersTable.createdAt, periodEnd))
+        : and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart))),
+
+    // Low-stock count: exclude service-type products via inline subquery
+    db.select({ count: sql<string>`COUNT(*)` }).from(productsTable)
+      .where(and(
+        eq(productsTable.merchantId, merchantId),
+        eq(productsTable.trackInventory, "true"),
+        sql`(${productsTable.productTypeId} IS NULL OR ${productsTable.productTypeId} NOT IN (
+          SELECT id FROM product_types WHERE merchant_id = ${merchantId} AND slug = 'service'
+        ))`,
+        sql`${productsTable.stockQuantity} <= COALESCE(${productsTable.lowStockThreshold}, 5)`,
+      )),
+
+    // Invoices awaiting payment (sent or overdue)
+    db.select({ count: sql<string>`COUNT(*)` }).from(invoicesTable)
+      .where(and(eq(invoicesTable.merchantId, merchantId), inArray(invoicesTable.status, ["sent", "overdue"]))),
   ]);
 
-  const completedTxns = transactions.filter((t) => t.status === "completed");
-  const refundedTxns = transactions.filter((t) => t.status === "refunded");
-
-  const posSales = completedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
-  const invoiceSales = paidInvoices.reduce((sum, i) => sum + parseFloat(String(i.total)), 0);
-  const totalSales = posSales + invoiceSales;
-  const refundTotal = refundedTxns.reduce((sum, t) => sum + parseFloat(t.total), 0);
-  const discountTotal = completedTxns.reduce((sum, t) => sum + parseFloat(t.discountTotal), 0);
-  const transactionCount = completedTxns.length + paidInvoices.length;
+  const posSales        = parseFloat(txnAgg[0]?.posSales ?? "0");
+  const refundTotal     = parseFloat(txnAgg[0]?.refundTotal ?? "0");
+  const discountTotal   = parseFloat(txnAgg[0]?.discountTotal ?? "0");
+  const posCount        = Number(txnAgg[0]?.posCount ?? 0);
+  const invoiceSales    = parseFloat(invoiceAgg[0]?.invoiceSales ?? "0");
+  const invoiceCount    = Number(invoiceAgg[0]?.invoiceCount ?? 0);
+  const totalSales      = posSales + invoiceSales;
+  const transactionCount = posCount + invoiceCount;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
-
-  // Items sold + collect unique productIds for COGS lookup
-  let itemsSold = 0;
-  const soldItems: { productId: number; quantity: number }[] = [];
-  for (const t of completedTxns) {
-    const items = Array.isArray(t.items) ? t.items : [];
-    for (const item of items as { productId?: number; quantity?: number }[]) {
-      const qty = item.quantity ?? 0;
-      itemsSold += qty;
-      if (item.productId && item.productId > 0 && qty > 0) {
-        soldItems.push({ productId: item.productId, quantity: qty });
-      }
-    }
-  }
-
-  // COGS: look up costPrice for each unique product sold, then multiply by quantity
-  let costTotal = 0;
-  if (soldItems.length > 0) {
-    const uniqueIds = [...new Set(soldItems.map((i) => i.productId))];
-    const costRows = await db
-      .select({ id: productsTable.id, costPrice: productsTable.costPrice })
-      .from(productsTable)
-      .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, uniqueIds)));
-    const costMap = new Map(costRows.map((r) => [r.id, r.costPrice ? parseFloat(r.costPrice) : 0]));
-    for (const { productId, quantity } of soldItems) {
-      costTotal += (costMap.get(productId) ?? 0) * quantity;
-    }
-  }
-
-  // New customers in period
-  const newCustomersWhere = period === "yesterday"
-    ? and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart), lt(customersTable.createdAt, periodEnd))
-    : and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart));
-  const [newCustomersResult] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(customersTable)
-    .where(newCustomersWhere);
-
-  // Low stock count (exclude service-type products — they have no stock)
-  const [serviceType] = await db.select({ id: productTypesTable.id })
-    .from(productTypesTable)
-    .where(and(eq(productTypesTable.merchantId, merchantId), eq(productTypesTable.slug, "service")));
-  const products = await db
-    .select()
-    .from(productsTable)
-    .where(and(
-      eq(productsTable.merchantId, merchantId),
-      eq(productsTable.trackInventory, "true"),
-      serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
-    ));
-
-  const lowStockCount = products.filter((p) => p.stockQuantity <= (p.lowStockThreshold ?? 5)).length;
-
-  // Top payment method
-  const paymentCounts: Record<string, number> = {};
-  for (const t of completedTxns) {
-    paymentCounts[t.paymentMethod] = (paymentCounts[t.paymentMethod] ?? 0) + 1;
-  }
-  const topPaymentMethod = Object.entries(paymentCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
-
-  // Invoices awaiting payment (status sent or overdue — not draft, not paid)
-  const [pendingInvoiceResult] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(invoicesTable)
-    .where(and(
-      eq(invoicesTable.merchantId, merchantId),
-      inArray(invoicesTable.status, ["sent", "overdue"]),
-    ));
-  const pendingInvoiceCount = Number(pendingInvoiceResult?.count ?? 0);
+  const cogsRow         = cogsResult.rows[0] as { items_sold: number; cost_total: number } | undefined;
+  const itemsSold       = Number(cogsRow?.items_sold ?? 0);
+  const costTotal       = Number(cogsRow?.cost_total ?? 0);
+  const topPaymentMethod = topPaymentRows[0]?.paymentMethod ?? null;
+  const newCustomers    = Number(newCustomersResult[0]?.count ?? 0);
+  const lowStockCount   = Number(lowStockResult[0]?.count ?? 0);
+  const pendingInvoiceCount = Number(pendingInvoiceResult[0]?.count ?? 0);
 
   res.json({
-    totalSales: Math.round(totalSales * 100) / 100,
-    posSales: Math.round(posSales * 100) / 100,
-    invoiceSales: Math.round(invoiceSales * 100) / 100,
-    posCount: completedTxns.length,
-    invoiceCount: paidInvoices.length,
+    totalSales:         Math.round(totalSales * 100) / 100,
+    posSales:           Math.round(posSales * 100) / 100,
+    invoiceSales:       Math.round(invoiceSales * 100) / 100,
+    posCount,
+    invoiceCount,
     pendingInvoiceCount,
     transactionCount,
-    averageOrderValue: Math.round(averageOrderValue * 100) / 100,
-    newCustomers: Number(newCustomersResult.count),
+    averageOrderValue:  Math.round(averageOrderValue * 100) / 100,
+    newCustomers,
     lowStockCount,
     period,
-    refundTotal: Math.round(refundTotal * 100) / 100,
-    discountTotal: Math.round(discountTotal * 100) / 100,
+    refundTotal:        Math.round(refundTotal * 100) / 100,
+    discountTotal:      Math.round(discountTotal * 100) / 100,
     itemsSold,
-    costTotal: Math.round(costTotal * 100) / 100,
+    costTotal:          Math.round(costTotal * 100) / 100,
     topPaymentMethod,
   });
 });
@@ -251,43 +237,42 @@ router.get("/dashboard/activity", requireAuth, async (req, res): Promise<void> =
   const merchantId = req.session.merchantId!;
   const [curStart, curEnd, prevStart, prevEnd] = getActivityWindows(period);
 
-  const [curJobs, curAppts, prevJobs, prevAppts, curCustomers, prevCustomers] = await Promise.all([
-    db.select().from(serviceJobsTable).where(
-      and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, curStart), lt(serviceJobsTable.createdAt, curEnd))
-    ),
-    db.select().from(appointmentsTable).where(
-      and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, curStart), lt(appointmentsTable.scheduledAt, curEnd))
-    ),
-    db.select().from(serviceJobsTable).where(
-      and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, prevStart), lt(serviceJobsTable.createdAt, prevEnd))
-    ),
-    db.select().from(appointmentsTable).where(
-      and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, prevStart), lt(appointmentsTable.scheduledAt, prevEnd))
-    ),
-    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(
-      and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, curStart), lt(customersTable.createdAt, curEnd))
-    ),
-    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(
-      and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, prevStart), lt(customersTable.createdAt, prevEnd))
-    ),
+  const [curJobByDevice, curApptCount, prevJobCount, prevApptCount, curCustomers, prevCustomers] = await Promise.all([
+    // Current-period service jobs grouped by device type (gives count + breakdown in one query)
+    db.select({
+      deviceType: serviceJobsTable.deviceType,
+      count: sql<string>`COUNT(*)`,
+    }).from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, curStart), lt(serviceJobsTable.createdAt, curEnd)))
+      .groupBy(serviceJobsTable.deviceType),
+
+    db.select({ count: sql<string>`COUNT(*)` }).from(appointmentsTable)
+      .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, curStart), lt(appointmentsTable.scheduledAt, curEnd))),
+
+    db.select({ count: sql<string>`COUNT(*)` }).from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, prevStart), lt(serviceJobsTable.createdAt, prevEnd))),
+
+    db.select({ count: sql<string>`COUNT(*)` }).from(appointmentsTable)
+      .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, prevStart), lt(appointmentsTable.scheduledAt, prevEnd))),
+
+    db.select({ count: sql<string>`COUNT(*)` }).from(customersTable)
+      .where(and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, curStart), lt(customersTable.createdAt, curEnd))),
+
+    db.select({ count: sql<string>`COUNT(*)` }).from(customersTable)
+      .where(and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, prevStart), lt(customersTable.createdAt, prevEnd))),
   ]);
 
-  // Aggregate device types from current-period service jobs
-  const deviceTypeCounts: Record<string, number> = {};
-  for (const j of curJobs) {
-    const dtype = (j.deviceType as string | null) ?? "Unknown";
-    deviceTypeCounts[dtype] = (deviceTypeCounts[dtype] ?? 0) + 1;
-  }
-  const deviceTypes = Object.entries(deviceTypeCounts)
-    .sort(([, a], [, b]) => b - a)
-    .map(([type, count]) => ({ type, count }));
+  const curJobCount = curJobByDevice.reduce((sum, r) => sum + Number(r.count), 0);
+  const deviceTypes = curJobByDevice
+    .map((r) => ({ type: (r.deviceType as string | null) ?? "Unknown", count: Number(r.count) }))
+    .sort((a, b) => b.count - a.count);
 
   res.json({
-    services: curJobs.length,
-    appointments: curAppts.length,
-    newCustomers: Number(curCustomers[0]?.count ?? 0),
-    prevServices: prevJobs.length,
-    prevAppointments: prevAppts.length,
+    services:         curJobCount,
+    appointments:     Number(curApptCount[0]?.count ?? 0),
+    newCustomers:     Number(curCustomers[0]?.count ?? 0),
+    prevServices:     Number(prevJobCount[0]?.count ?? 0),
+    prevAppointments: Number(prevApptCount[0]?.count ?? 0),
     prevNewCustomers: Number(prevCustomers[0]?.count ?? 0),
     deviceTypes,
   });
@@ -342,60 +327,74 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
   const periodStart = getPeriodStart(period);
   const merchantId = req.session.merchantId!;
 
-  const [transactions, paidInvoices] = await Promise.all([
-    db
-      .select()
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.merchantId, merchantId),
-          gte(transactionsTable.createdAt, periodStart),
-          eq(transactionsTable.status, "completed")
-        )
-      ),
-    db
-      .select()
-      .from(invoicesTable)
-      .where(
-        and(
-          eq(invoicesTable.merchantId, merchantId),
-          eq(invoicesTable.status, "paid"),
-          gte(invoicesTable.paidAt, periodStart)
-        )
-      ),
-  ]);
+  type AggRow = { bucket: string; sales: string; transactions: string };
 
-  // Group by day
+  let txnGroups: AggRow[];
+  let invGroups: AggRow[];
+
+  if (period === "year") {
+    // Group by calendar month: bucket is "YYYY-MM"
+    [txnGroups, invGroups] = await Promise.all([
+      db.select({
+        bucket: sql<string>`to_char(date_trunc('month', ${transactionsTable.createdAt}), 'YYYY-MM')`,
+        sales: sql<string>`COALESCE(SUM(${transactionsTable.total}::numeric), 0)`,
+        transactions: sql<string>`COUNT(*)`,
+      }).from(transactionsTable)
+        .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart), eq(transactionsTable.status, "completed")))
+        .groupBy(sql`date_trunc('month', ${transactionsTable.createdAt})`),
+
+      db.select({
+        bucket: sql<string>`to_char(date_trunc('month', ${invoicesTable.paidAt}), 'YYYY-MM')`,
+        sales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+        transactions: sql<string>`COUNT(*)`,
+      }).from(invoicesTable)
+        .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)))
+        .groupBy(sql`date_trunc('month', ${invoicesTable.paidAt})`),
+    ]);
+  } else {
+    // Group by calendar day: bucket is "YYYY-MM-DD"
+    [txnGroups, invGroups] = await Promise.all([
+      db.select({
+        bucket: sql<string>`(${transactionsTable.createdAt}::date)::text`,
+        sales: sql<string>`COALESCE(SUM(${transactionsTable.total}::numeric), 0)`,
+        transactions: sql<string>`COUNT(*)`,
+      }).from(transactionsTable)
+        .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart), eq(transactionsTable.status, "completed")))
+        .groupBy(sql`${transactionsTable.createdAt}::date`),
+
+      db.select({
+        bucket: sql<string>`(${invoicesTable.paidAt}::date)::text`,
+        sales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+        transactions: sql<string>`COUNT(*)`,
+      }).from(invoicesTable)
+        .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)))
+        .groupBy(sql`${invoicesTable.paidAt}::date`),
+    ]);
+  }
+
+  // Merge the two pre-aggregated result sets (at most ~365 rows total, not raw transactions)
   const groups: Record<string, { sales: number; transactions: number }> = {};
-
-  for (const t of transactions) {
-    const day = t.createdAt.toISOString().split("T")[0];
-    if (!groups[day]) groups[day] = { sales: 0, transactions: 0 };
-    groups[day].sales += parseFloat(t.total);
-    groups[day].transactions += 1;
+  for (const r of [...txnGroups, ...invGroups]) {
+    if (!r.bucket) continue;
+    if (!groups[r.bucket]) groups[r.bucket] = { sales: 0, transactions: 0 };
+    groups[r.bucket].sales += parseFloat(r.sales);
+    groups[r.bucket].transactions += Number(r.transactions);
   }
 
-  for (const inv of paidInvoices) {
-    if (!inv.paidAt) continue;
-    const day = inv.paidAt.toISOString().split("T")[0];
-    if (!groups[day]) groups[day] = { sales: 0, transactions: 0 };
-    groups[day].sales += parseFloat(String(inv.total));
-    groups[day].transactions += 1;
-  }
-
-  // Fill in missing days
+  // Fill in all periods and apply labels
   const result = [];
-  const days = period === "week" ? 7 : period === "month" ? 30 : 12;
-  for (let i = days - 1; i >= 0; i--) {
+  const slots = period === "week" ? 7 : period === "month" ? 30 : 12;
+  for (let i = slots - 1; i >= 0; i--) {
     const d = new Date();
     if (period === "year") {
       d.setMonth(d.getMonth() - i);
       const label = d.toLocaleString("default", { month: "short" });
-      const key = d.toISOString().substring(0, 7);
-      const dayKeys = Object.keys(groups).filter((k) => k.startsWith(key));
-      const sales = dayKeys.reduce((sum, k) => sum + groups[k].sales, 0);
-      const txns = dayKeys.reduce((sum, k) => sum + groups[k].transactions, 0);
-      result.push({ label, sales: Math.round(sales * 100) / 100, transactions: txns });
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      result.push({
+        label,
+        sales: Math.round((groups[key]?.sales ?? 0) * 100) / 100,
+        transactions: groups[key]?.transactions ?? 0,
+      });
     } else {
       d.setDate(d.getDate() - i);
       const key = d.toISOString().split("T")[0];
