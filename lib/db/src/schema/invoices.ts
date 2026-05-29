@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, json, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -27,6 +27,7 @@ export const invoicesTable = pgTable("invoices", {
   recurringFrequency: text("recurring_frequency"),
   recurringOccurrences: integer("recurring_occurrences"),
   recurringStartDate: timestamp("recurring_start_date", { withTimezone: true }),
+  parentInvoiceId: integer("parent_invoice_id").references((): AnyPgColumn => invoicesTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
