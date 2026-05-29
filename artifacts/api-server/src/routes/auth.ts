@@ -1,10 +1,27 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
-import { db, merchantsTable, plansTable, subscriptionsTable } from "@workspace/db";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const DEFAULT_PRODUCT_TYPES: Array<{ name: string; slug: string; sortOrder: number }> = [
+  { name: "Standard", slug: "standard", sortOrder: 0 },
+  { name: "3D Print",  slug: "3d_print", sortOrder: 1 },
+  { name: "Bundle",    slug: "bundle",   sortOrder: 2 },
+];
+
+async function seedProductTypes(merchantId: number): Promise<void> {
+  await db.insert(productTypesTable).values(
+    DEFAULT_PRODUCT_TYPES.map((t) => ({
+      merchantId,
+      name: t.name,
+      slug: t.slug,
+      sortOrder: t.sortOrder,
+    }))
+  );
+}
 
 const router: IRouter = Router();
 
@@ -91,6 +108,8 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
       currentPeriodEnd: periodEnd,
     });
   }
+
+  await seedProductTypes(merchant.id);
 
   req.session.merchantId = merchant.id;
   req.session.staffRole = "owner";
