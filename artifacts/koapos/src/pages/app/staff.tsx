@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate, useListPosRegisters } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
   Clock, CalendarClock, ClipboardList, Coins, StickyNote, Target, Link2,
+  ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -459,8 +460,42 @@ export default function StaffPage() {
   const createMutation = useCreateStaff();
   const updateMutation = useUpdateStaff();
   const deleteMutation = useDeleteStaff();
+  const { data: registersData } = useListPosRegisters({ query: { queryKey: ["pos-registers"] } });
 
   const members = staffList || [];
+  const registerMap = Object.fromEntries(
+    (registersData?.items ?? []).map((r) => [String(r.id), r.name])
+  );
+
+  type SortKey = "name" | "email" | "role" | "status" | "register";
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = useMemo(() => {
+    const sortedMembers = [...members];
+    const dir = sortDir === "asc" ? 1 : -1;
+    sortedMembers.sort((a, b) => {
+      const aReg = registerMap[String(a.defaultRegisterType ?? "")] ?? "—";
+      const bReg = registerMap[String(b.defaultRegisterType ?? "")] ?? "—";
+      switch (sortKey) {
+        case "name":    return (a.name ?? "").localeCompare(b.name ?? "") * dir;
+        case "email":   return (a.email ?? "").localeCompare(b.email ?? "") * dir;
+        case "role":    return (a.role ?? "").localeCompare(b.role ?? "") * dir;
+        case "status":  return (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0) * dir;
+        case "register": return aReg.localeCompare(bReg) * dir;
+      }
+    });
+    return sortedMembers;
+  }, [members, sortKey, sortDir, registerMap]);
 
   const openCreate = () => { setEditingStaff(null); setDialogOpen(true); };
   const openEdit   = (s: Staff) => { setEditingStaff(s); setDialogOpen(true); };
@@ -555,15 +590,41 @@ export default function StaffPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 font-medium">Name</th>
-                  <th className="text-left p-4 font-medium hidden md:table-cell">Email</th>
-                  <th className="text-left p-4 font-medium hidden sm:table-cell">Role</th>
-                  <th className="text-center p-4 font-medium hidden lg:table-cell">Status</th>
+                  <th className="text-left p-4 font-medium">
+                    <button onClick={() => toggleSort("name")} className="flex items-center gap-1 hover:text-primary">
+                      Name
+                      {sortKey === "name" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 font-medium hidden md:table-cell">
+                    <button onClick={() => toggleSort("email")} className="flex items-center gap-1 hover:text-primary">
+                      Email
+                      {sortKey === "email" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 font-medium hidden sm:table-cell">
+                    <button onClick={() => toggleSort("role")} className="flex items-center gap-1 hover:text-primary">
+                      Role
+                      {sortKey === "role" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  </th>
+                  <th className="text-center p-4 font-medium hidden lg:table-cell">
+                    <button onClick={() => toggleSort("status")} className="flex items-center gap-1 hover:text-primary mx-auto">
+                      Status
+                      {sortKey === "status" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 font-medium hidden lg:table-cell">
+                    <button onClick={() => toggleSort("register")} className="flex items-center gap-1 hover:text-primary">
+                      Register
+                      {sortKey === "register" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  </th>
                   <th className="p-4" />
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {members.map((member) => (
+                {sorted.map((member) => (
                   <tr key={member.id} className="bg-background hover:bg-muted/30 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -584,6 +645,9 @@ export default function StaffPage() {
                       <Badge variant={member.isActive ? "default" : "secondary"}>
                         {member.isActive ? "Active" : "Inactive"}
                       </Badge>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell text-muted-foreground">
+                      {registerMap[String(member.defaultRegisterType ?? "")] || "—"}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-2">
