@@ -209,22 +209,26 @@ export function AddCustomerWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            {editingCustomer ? "Edit Customer" : "Add New Customer"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <StepPill label="Personal Info" icon={<User className="w-4 h-4" />} active={step === "personal"} done={currentIndex > 0} />
-          <span className="text-muted-foreground text-xs">›</span>
-          <StepPill label="Address" icon={<MapPin className="w-4 h-4" />} active={step === "address"} done={currentIndex > 1} />
-          <span className="text-muted-foreground text-xs">›</span>
-          <StepPill label="Account Settings" icon={<Settings2 className="w-4 h-4" />} active={step === "account"} done={false} />
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        {/* Header — locked, never scrolls */}
+        <div className="px-6 pt-5 pb-4 shrink-0 border-b">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              {editingCustomer ? "Edit Customer" : "Add New Customer"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap mt-3">
+            <StepPill label="Personal Info" icon={<User className="w-4 h-4" />} active={step === "personal"} done={currentIndex > 0} />
+            <span className="text-muted-foreground text-xs">›</span>
+            <StepPill label="Address" icon={<MapPin className="w-4 h-4" />} active={step === "address"} done={currentIndex > 1} />
+            <span className="text-muted-foreground text-xs">›</span>
+            <StepPill label="Account Settings" icon={<Settings2 className="w-4 h-4" />} active={step === "account"} done={false} />
+          </div>
         </div>
 
-        <div className="space-y-4 pt-2 min-h-[400px]">
+        {/* Scrollable step content — min-h keeps the window rigid across all steps */}
+        <div className="flex-1 overflow-y-auto px-6 pt-4 min-h-[520px]">
+        <div className="space-y-4 pb-2">
           {step === "personal" && (
             <>
               <FieldRow>
@@ -546,20 +550,24 @@ export function AddCustomerWizard({
             </>
           )}
         </div>
+        </div>{/* end scrollable content */}
 
-        <DialogFooter className="flex-row justify-between sm:justify-between gap-2 pt-2">
-          <Button variant="outline" onClick={goBack} disabled={currentIndex === 0}>Back</Button>
-          <Button
-            onClick={goNext}
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {isLast
-              ? (createMutation.isPending || updateMutation.isPending
-                  ? "Saving..."
-                  : editingCustomer ? "Update Customer" : "Add Customer")
-              : "Next →"}
-          </Button>
-        </DialogFooter>
+        {/* Footer — pinned below scroll area, never moves */}
+        <div className="px-6 py-4 border-t shrink-0">
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+            <Button variant="outline" onClick={goBack} disabled={currentIndex === 0}>Back</Button>
+            <Button
+              onClick={goNext}
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {isLast
+                ? (createMutation.isPending || updateMutation.isPending
+                    ? "Saving..."
+                    : editingCustomer ? "Update Customer" : "Add Customer")
+                : "Next →"}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

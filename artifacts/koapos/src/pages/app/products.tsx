@@ -1438,7 +1438,7 @@ export default function ProductsPage() {
 
           {/* Tab content — tabIndex allows mouse-wheel scroll immediately on dialog open */}
           <div
-            className="flex-1 overflow-y-auto px-6"
+            className="flex-1 overflow-y-auto px-6 min-h-[520px]"
             tabIndex={-1}
             style={{ outline: "none" }}
             ref={scrollContainerRef}
