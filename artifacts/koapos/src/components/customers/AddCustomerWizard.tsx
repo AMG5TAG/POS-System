@@ -289,7 +289,7 @@ export function AddCustomerWizard({
               </FieldRow>
               <FieldRow>
                 <Field label="Referral" full>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {/* Referral Picker */}
                     <div className="relative">
                       <Popover open={referralOpen} onOpenChange={setReferralOpen}>
@@ -297,8 +297,8 @@ export function AddCustomerWizard({
                           <button
                             type="button"
                             className={cn(
-                              "flex w-full items-center gap-2 rounded-lg border bg-background px-3 py-2.5 text-sm ring-offset-background transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                              !form.referredByCustomerId && !form.referralCode && "text-muted-foreground"
+                              "flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                              !form.referredByCustomerId && "text-muted-foreground"
                             )}
                           >
                             <UserSearch className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -386,13 +386,12 @@ export function AddCustomerWizard({
                           if (form.referredByCustomerId) setField("referredByCustomerId", "");
                         }}
                         placeholder="Or enter a manual promo code"
-                        className="font-mono text-sm h-9"
                       />
                       {editingCustomer && (
                         <Button
                           variant="outline"
                           size="sm"
-                          className="shrink-0 h-9 px-2.5 text-xs"
+                          className="shrink-0 h-10 px-3 text-sm"
                           onClick={() => {
                             const f = (form.firstName || "X")[0].toUpperCase();
                             const l = (form.lastName || "X")[0].toUpperCase();
