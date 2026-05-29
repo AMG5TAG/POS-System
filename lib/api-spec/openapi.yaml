@@ -419,6 +419,73 @@ paths:
         "204":
           description: Deleted
 
+  # ── Product Types ──────────────────────────────────────────────────────────
+  /product-types:
+    get:
+      operationId: listProductTypes
+      tags: [products]
+      summary: List product types
+      responses:
+        "200":
+          description: Product type list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTypeList"
+    post:
+      operationId: createProductType
+      tags: [products]
+      summary: Create product type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTypeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductType"
+
+  /product-types/{id}:
+    patch:
+      operationId: updateProductType
+      tags: [products]
+      summary: Update product type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTypeInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductType"
+    delete:
+      operationId: deleteProductType
+      tags: [products]
+      summary: Delete product type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   # ── Categories ────────────────────────────────────────────────────────────
   /categories:
     get:
@@ -5609,6 +5676,61 @@ components:
         poNumber: { type: string, nullable: true }
         poId: { type: integer, nullable: true }
         changedAt: { type: string }
+    # ── Product Types ─────────────────────────────────────────────────────────
+    ProductType:
+      type: object
+      required: [id, merchantId, name, slug, description, trackStock, printCode, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        trackStock:
+          type: boolean
+        printCode:
+          type: boolean
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ProductTypeInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+        description:
+          type: string
+        trackStock:
+          type: boolean
+        printCode:
+          type: boolean
+        isActive:
+          type: boolean
+
+    ProductTypeList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductType"
+        total:
+          type: integer
+
+    # ── Products ─────────────────────────────────────────────────────────────
     Product:
       type: object
       required: [id, merchantId, name, price, sku, trackInventory, productType, createdAt]
@@ -5651,6 +5773,10 @@ components:
           type: boolean
         productType:
           type: string
+        productTypeId:
+          type: ["integer", "null"]
+        productTypeName:
+          type: ["string", "null"]
         groupPrices:
           type: object
           additionalProperties:
@@ -5712,6 +5838,8 @@ components:
           type: boolean
         productType:
           type: string
+        productTypeId:
+          type: integer
         groupPrices:
           type: object
           additionalProperties:
@@ -5763,6 +5891,8 @@ components:
           type: boolean
         productType:
           type: string
+        productTypeId:
+          type: ["integer", "null"]
         groupPrices:
           type: object
           additionalProperties:

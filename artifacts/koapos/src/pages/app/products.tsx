@@ -14,7 +14,9 @@ import {
   useGetFloorPlan,
   useGetPosSettings,
   useUpsertPosSettings,
+  useListProductTypes,
   Product,
+  ProductType,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
@@ -72,6 +74,7 @@ type ProductForm = {
   lengthCm: string; widthCm: string; heightCm: string;
   /* stock */
   productType: string;
+  productTypeId: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
   tags: string[];
@@ -94,6 +97,7 @@ const defaultForm: ProductForm = {
   weight: "", weightUnit: "kg",
   lengthCm: "", widthCm: "", heightCm: "",
   productType: "standard",
+  productTypeId: "",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   tags: [],
@@ -756,6 +760,8 @@ export default function ProductsPage() {
   const [pcCompatNotes, setPcCompatNotes] = useState("");
   const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const upsertPosSettings = useUpsertPosSettings();
+  const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types"] } });
+  const productTypesList: ProductType[] = productTypesData?.items ?? [];
   const [skuPrefix, setSkuPrefix]       = useState("KP");
   useEffect(() => {
     if (posSettings?.defaultSkuPrefix) setSkuPrefix(posSettings.defaultSkuPrefix);
@@ -941,6 +947,14 @@ export default function ProductsPage() {
     if (statusFilter === "active")   return p.isActive !== false;
     if (statusFilter === "inactive") return p.isActive === false;
     return true;
+  }).filter((p) => {
+    if (typeFilter === "all") return true;
+    const ep = p as Product & { productType?: string; productTypeId?: number | null };
+    if (ep.productTypeId) {
+      const pt = productTypesList.find((t) => t.id === ep.productTypeId);
+      if (pt) return pt.slug === typeFilter;
+    }
+    return (ep.productType ?? "standard") === typeFilter;
   });
 
   const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
@@ -953,7 +967,7 @@ export default function ProductsPage() {
 
   const openEdit = (p: Product) => {
     setEditingProduct(p);
-    const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
+    const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; productTypeId?: number | null; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
     setForm({
       name: p.name, description: p.description || "",
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
@@ -966,6 +980,7 @@ export default function ProductsPage() {
       weight: "", weightUnit: "kg",
       lengthCm: "", widthCm: "", heightCm: "",
       productType: ep.productType ?? "standard",
+      productTypeId: ep.productTypeId?.toString() || "",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
       lowStockThreshold: p.lowStockThreshold?.toString() || "5",
       taxRate: p.taxRate?.toString() || "10",
@@ -1005,6 +1020,7 @@ export default function ProductsPage() {
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
       brandId: form.brandId ? parseInt(form.brandId) : undefined,
       productType: form.productType,
+      productTypeId: form.productTypeId ? parseInt(form.productTypeId) : undefined,
       stockQuantity: parseInt(form.stockQuantity) || 0,
       lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
       taxRate: parseFloat(form.taxRate) || 10,
@@ -1113,6 +1129,33 @@ export default function ProductsPage() {
     ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
     : null;
 
+  const exportProductsCsv = () => {
+    const headers = ["Name", "SKU", "Barcode", "Type", "Category", "Price", "Cost Price", "Stock", "Active", "Tags"];
+    const rows = filtered.map((p) => {
+      const ep = p as Product & { productType?: string; productTypeName?: string | null; tags?: string[] };
+      const typeName = ep.productTypeName
+        ?? PRODUCT_TYPES.find((t) => t.value === (ep.productType ?? "standard"))?.label
+        ?? ep.productType ?? "";
+      return [
+        p.name,
+        p.sku ?? "",
+        (p as Product & { barcode?: string }).barcode ?? "",
+        typeName,
+        p.category?.name ?? "",
+        p.price.toFixed(2),
+        p.costPrice?.toFixed(2) ?? "",
+        (p.stockQuantity ?? 0).toString(),
+        p.isActive !== false ? "Yes" : "No",
+        (ep.tags ?? []).join("; "),
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "products.csv";
+    a.click();
+  };
+
   const exportGroupPriceSheet = (groupId: string, groupName: string) => {
     setGroupExportOpen(false);
 
@@ -1200,15 +1243,14 @@ export default function ProductsPage() {
 
           {/* All Types */}
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="standard">Standard</SelectItem>
-              <SelectItem value="service">Service</SelectItem>
-              <SelectItem value="voucher">Voucher</SelectItem>
-              <SelectItem value="combo">Combo</SelectItem>
+              {productTypesList.filter((t) => t.isActive).map((t) => (
+                <SelectItem key={t.id} value={t.slug}>{t.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -1231,6 +1273,12 @@ export default function ProductsPage() {
               {hideCosts ? "Show Costs" : "Hide Costs"}
             </Button>
           )}
+
+          {/* CSV Export */}
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={exportProductsCsv} title="Export current product list to CSV">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
 
           {/* Group Export */}
           <Popover open={groupExportOpen} onOpenChange={setGroupExportOpen}>
@@ -1345,7 +1393,9 @@ export default function ProductsPage() {
                           {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
                         </td>
                         <td className="p-3 text-muted-foreground text-sm">
-                          {PRODUCT_TYPES.find((t) => t.value === ((product as Product & { productType?: string }).productType ?? "standard"))?.label ?? "Standard"}
+                          {(product as Product & { productTypeName?: string | null }).productTypeName
+                            ?? PRODUCT_TYPES.find((t) => t.value === ((product as Product & { productType?: string }).productType ?? "standard"))?.label
+                            ?? "Standard"}
                         </td>
                         <td className="p-3">
                           {product.category
@@ -1494,24 +1544,48 @@ export default function ProductsPage() {
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Product Type</Label>
-                    <div className="grid grid-cols-3 gap-2 mt-1.5">
-                      {PRODUCT_TYPES.map(({ value, label, icon: Icon }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setField("productType", value)}
-                          className={cn(
-                            "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
-                            form.productType === value
-                              ? "border-primary bg-primary/5 text-primary"
-                              : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          <Icon className="w-4 h-4" />
-                          <span className="text-[11px] font-medium leading-tight">{label}</span>
-                        </button>
-                      ))}
-                    </div>
+                    {productTypesList.length > 0 ? (
+                      <Select
+                        value={form.productTypeId || ""}
+                        onValueChange={(v) => {
+                          const pt = productTypesList.find((t) => t.id.toString() === v);
+                          if (pt) { setField("productTypeId", v); setField("productType", pt.slug); }
+                        }}
+                      >
+                        <SelectTrigger className="mt-1.5">
+                          <SelectValue placeholder="Select type…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {productTypesList.filter((t) => t.isActive).map((t) => (
+                            <SelectItem key={t.id} value={t.id.toString()}>
+                              <div className="flex flex-col">
+                                <span>{t.name}</span>
+                                {t.description && <span className="text-xs text-muted-foreground">{t.description}</span>}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 mt-1.5">
+                        {PRODUCT_TYPES.map(({ value, label, icon: Icon }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setField("productType", value)}
+                            className={cn(
+                              "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
+                              form.productType === value
+                                ? "border-primary bg-primary/5 text-primary"
+                                : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            <Icon className="w-4 h-4" />
+                            <span className="text-[11px] font-medium leading-tight">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">SKU Code</Label>
@@ -1881,7 +1955,11 @@ export default function ProductsPage() {
                 {/* Inventory */}
                 <div>
                   <SectionHeader label="Inventory" />
-                  {form.productType === "digital_code" ? null : NO_STOCK_TYPES.has(form.productType) ? (
+                  {form.productType === "digital_code" ? null : (() => {
+                  const selType = productTypesList.find((t) => t.id.toString() === form.productTypeId);
+                  const noStock = selType ? !selType.trackStock : NO_STOCK_TYPES.has(form.productType);
+                  return noStock;
+                })() ? (
                     <div className="mt-3 flex items-center gap-3 p-3.5 border rounded-xl bg-muted/20 text-muted-foreground">
                       <Briefcase className="w-4 h-4 shrink-0" />
                       <div className="text-sm">

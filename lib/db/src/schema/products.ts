@@ -4,6 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
 import { brandsTable } from "./brands";
+import { productTypesTable } from "./product-types";
 
 export const categoriesTable = pgTable("categories", {
   id:         serial("id").primaryKey(),
@@ -31,6 +32,7 @@ export const productsTable = pgTable("products", {
   brandId:           integer("brand_id").references(() => brandsTable.id),
   imageUrl:          text("image_url"),
   productType:       text("product_type").notNull().default("standard"),
+  productTypeId:     integer("product_type_id").references(() => productTypesTable.id),
   trackInventory:    text("track_inventory").notNull().default("true"),
   stockQuantity:     integer("stock_quantity").notNull().default(0),
   lowStockThreshold: integer("low_stock_threshold").default(5),

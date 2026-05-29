@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -21,7 +21,11 @@ import {
 
 const router: IRouter = Router();
 
-function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof categoriesTable.$inferSelect | null) {
+function formatProduct(
+  p: typeof productsTable.$inferSelect,
+  category?: typeof categoriesTable.$inferSelect | null,
+  productType?: typeof productTypesTable.$inferSelect | null,
+) {
   return {
     id: p.id,
     merchantId: p.merchantId,
@@ -42,7 +46,9 @@ function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof c
       : undefined,
     brandId: p.brandId ?? null,
     imageUrl: p.imageUrl ?? null,
-    productType: p.productType,
+    productType: productType?.slug ?? p.productType,
+    productTypeId: p.productTypeId ?? null,
+    productTypeName: productType?.name ?? null,
     trackInventory: p.trackInventory === "true",
     stockQuantity: p.stockQuantity,
     lowStockThreshold: p.lowStockThreshold ?? null,
@@ -160,14 +166,15 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
     .offset(offset)
     .orderBy(productsTable.name);
 
-  const categories = await db
-    .select()
-    .from(categoriesTable)
-    .where(eq(categoriesTable.merchantId, req.session.merchantId!));
+  const [categories, productTypes] = await Promise.all([
+    db.select().from(categoriesTable).where(eq(categoriesTable.merchantId, req.session.merchantId!)),
+    db.select().from(productTypesTable).where(eq(productTypesTable.merchantId, req.session.merchantId!)),
+  ]);
   const catMap = new Map(categories.map((c) => [c.id, c]));
+  const ptMap = new Map(productTypes.map((t) => [t.id, t]));
 
   res.json({
-    items: products.map((p) => formatProduct(p, p.categoryId ? catMap.get(p.categoryId) : null)),
+    items: products.map((p) => formatProduct(p, p.categoryId ? catMap.get(p.categoryId) : null, p.productTypeId ? ptMap.get(p.productTypeId) : null)),
     total: Number(countResult.count),
   });
 });
@@ -175,12 +182,38 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
+
+  let ptRecord: typeof productTypesTable.$inferSelect | null = null;
+
+  if (productTypeId != null) {
+    const [pt] = await db.select().from(productTypesTable)
+      .where(and(eq(productTypesTable.id, productTypeId), eq(productTypesTable.merchantId, req.session.merchantId!)));
+    if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
+    ptRecord = pt;
+  } else {
+    const slug = rest.productType ?? "standard";
+    const [pt] = await db.select().from(productTypesTable)
+      .where(and(eq(productTypesTable.slug, slug), eq(productTypesTable.merchantId, req.session.merchantId!)));
+    if (pt) {
+      ptRecord = pt;
+    } else {
+      const [fallback] = await db.select().from(productTypesTable)
+        .where(and(eq(productTypesTable.slug, "standard"), eq(productTypesTable.merchantId, req.session.merchantId!)));
+      ptRecord = fallback ?? null;
+    }
+  }
+
+  const resolvedProductTypeId = ptRecord?.id ?? null;
+  const resolvedProductType = ptRecord?.slug ?? rest.productType ?? "standard";
+
   const [product] = await db
     .insert(productsTable)
     .values({
       ...rest,
       merchantId: req.session.merchantId!,
+      productType: resolvedProductType,
+      productTypeId: resolvedProductTypeId,
       price: price.toString(),
       costPrice: costPrice?.toString(),
       taxRate: taxRate?.toString(),
@@ -192,7 +225,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       tagsJson: tags ? JSON.stringify(tags) : null,
     })
     .returning();
-  res.status(201).json(formatProduct(product));
+  res.status(201).json(formatProduct(product, null, ptRecord));
 });
 
 // ── Product Tag Management (operates on tagsJson strings across all products) ──
@@ -296,12 +329,11 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
     .from(productsTable)
     .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
-  let category = null;
-  if (product.categoryId) {
-    const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, product.categoryId));
-    category = cat ?? null;
-  }
-  res.json(formatProduct(product, category));
+  const [category, ptRecord] = await Promise.all([
+    product.categoryId ? db.select().from(categoriesTable).where(eq(categoriesTable.id, product.categoryId)).then(([c]) => c ?? null) : Promise.resolve(null),
+    product.productTypeId ? db.select().from(productTypesTable).where(eq(productTypesTable.id, product.productTypeId)).then(([t]) => t ?? null) : Promise.resolve(null),
+  ]);
+  res.json(formatProduct(product, category, ptRecord));
 });
 
 router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
@@ -309,7 +341,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
@@ -320,13 +352,38 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = JSON.stringify(groupPrices);
   if (tags !== undefined) updates.tagsJson = JSON.stringify(tags);
-  const [product] = await db
-    .update(productsTable)
-    .set(updates)
-    .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)))
-    .returning();
+
+  let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
+  if (productTypeId != null) {
+    const [pt] = await db.select().from(productTypesTable)
+      .where(and(eq(productTypesTable.id, productTypeId), eq(productTypesTable.merchantId, req.session.merchantId!)));
+    if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
+    updates.productTypeId = pt.id;
+    updates.productType = pt.slug;
+    patchPtRecord = pt;
+  }
+
+  let product: typeof productsTable.$inferSelect | undefined;
+  if (Object.keys(updates).length > 0) {
+    [product] = await db
+      .update(productsTable)
+      .set(updates)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)))
+      .returning();
+  } else {
+    [product] = await db
+      .select()
+      .from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+  }
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
-  res.json(formatProduct(product));
+
+  if (patchPtRecord === null && product.productTypeId) {
+    const [pt] = await db.select().from(productTypesTable)
+      .where(and(eq(productTypesTable.id, product.productTypeId), eq(productTypesTable.merchantId, req.session.merchantId!)));
+    patchPtRecord = pt ?? null;
+  }
+  res.json(formatProduct(product, null, patchPtRecord));
 });
 
 router.delete("/products/:id", requireAuth, async (req, res): Promise<void> => {

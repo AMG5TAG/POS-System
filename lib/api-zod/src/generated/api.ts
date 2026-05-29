@@ -314,6 +314,8 @@ export const ListProductsResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "productTypeId": zod.number().nullish(),
+  "productTypeName": zod.string().nullish(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
@@ -354,6 +356,7 @@ export const CreateProductBody = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string().optional(),
+  "productTypeId": zod.number().optional(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().optional(),
   "supplierCode": zod.string().optional(),
@@ -402,6 +405,8 @@ export const GetProductResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "productTypeId": zod.number().nullish(),
+  "productTypeName": zod.string().nullish(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
@@ -441,6 +446,7 @@ export const UpdateProductBody = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string().optional(),
+  "productTypeId": zod.number().nullish(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
@@ -483,6 +489,8 @@ export const UpdateProductResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
   "productType": zod.string(),
+  "productTypeId": zod.number().nullish(),
+  "productTypeName": zod.string().nullish(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
@@ -498,6 +506,81 @@ export const UpdateProductResponse = zod.object({
  * @summary Delete a product
  */
 export const DeleteProductParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List product types
+ */
+export const ListProductTypesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "description": zod.string(),
+  "trackStock": zod.boolean(),
+  "printCode": zod.boolean(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create product type
+ */
+
+
+
+export const CreateProductTypeBody = zod.object({
+  "name": zod.string().min(1),
+  "slug": zod.string().optional(),
+  "description": zod.string().optional(),
+  "trackStock": zod.boolean().optional(),
+  "printCode": zod.boolean().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update product type
+ */
+export const UpdateProductTypeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateProductTypeBody = zod.object({
+  "name": zod.string().min(1),
+  "slug": zod.string().optional(),
+  "description": zod.string().optional(),
+  "trackStock": zod.boolean().optional(),
+  "printCode": zod.boolean().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateProductTypeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "description": zod.string(),
+  "trackStock": zod.boolean(),
+  "printCode": zod.boolean(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete product type
+ */
+export const DeleteProductTypeParams = zod.object({
   "id": zod.coerce.number()
 })
 

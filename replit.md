@@ -10,7 +10,7 @@ A subscription-based Point of Sale system for Australian retail merchants. Clean
 - `pnpm run typecheck:libs` — build composite libs (run after changing lib/* code)
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm run db:push` — push DB schema changes AND seed product types (use this instead of `pnpm --filter @workspace/db run push` directly)
 - Required env: `DATABASE_URL`, `SESSION_SECRET`, `VAULT_ENCRYPTION_KEY` (required in production)
 
 ## Required Production Environment Variables

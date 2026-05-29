@@ -136,6 +136,33 @@ export interface ProductPriceHistoryEntry {
   changedAt: string;
 }
 
+export interface ProductType {
+  id: number;
+  merchantId: number;
+  name: string;
+  slug: string;
+  description: string;
+  trackStock: boolean;
+  printCode: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ProductTypeInput {
+  /** @minLength 1 */
+  name: string;
+  slug?: string;
+  description?: string;
+  trackStock?: boolean;
+  printCode?: boolean;
+  isActive?: boolean;
+}
+
+export interface ProductTypeList {
+  items: ProductType[];
+  total: number;
+}
+
 export type ProductGroupPrices = {[key: string]: number};
 
 export interface Category {
@@ -182,6 +209,10 @@ export interface Product {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType: string;
+  /** @nullable */
+  productTypeId?: number | null;
+  /** @nullable */
+  productTypeName?: string | null;
   groupPrices?: ProductGroupPrices;
   /** @nullable */
   supplier?: string | null;
@@ -218,6 +249,7 @@ export interface ProductInput {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  productTypeId?: number;
   groupPrices?: ProductInputGroupPrices;
   supplier?: string;
   supplierCode?: string;
@@ -247,6 +279,8 @@ export interface ProductUpdate {
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
   productType?: string;
+  /** @nullable */
+  productTypeId?: number | null;
   groupPrices?: ProductUpdateGroupPrices;
   /** @nullable */
   supplier?: string | null;
