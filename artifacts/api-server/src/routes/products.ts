@@ -247,68 +247,67 @@ router.get("/products/tags", requireAuth, async (req, res): Promise<void> => {
 router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void> => {
   const { oldName, newName } = req.body as { oldName?: string; newName?: string };
   if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
-  const products = await db
-    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
-    .from(productsTable)
-    .where(eq(productsTable.merchantId, req.session.merchantId!));
+  const merchantId = req.session.merchantId!;
 
-  let updated = 0;
-  for (const p of products) {
-    if (!p.tagsJson) continue;
-    try {
-      const tags = JSON.parse(p.tagsJson) as string[];
-      if (!tags.includes(oldName)) continue;
-      const newTags = tags.map(t => (t === oldName ? newName : t));
-      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
-      updated++;
-    } catch { /* skip */ }
-  }
-  res.json({ updated });
+  const result = await db.execute(sql`
+    UPDATE products
+    SET tags_json = (
+      SELECT jsonb_agg(
+        CASE WHEN elem = ${oldName} THEN ${newName} ELSE elem END
+        ORDER BY ordinality
+      )::text
+      FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+    )
+    WHERE merchant_id = ${merchantId}
+      AND tags_json IS NOT NULL
+      AND tags_json::jsonb @> jsonb_build_array(${oldName}::text)
+  `);
+  res.json({ updated: result.rowCount ?? 0 });
 });
 
 router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void> => {
   const { sourceTags, targetName } = req.body as { sourceTags?: string[]; targetName?: string };
   if (!sourceTags?.length || !targetName) { res.status(400).json({ error: "sourceTags and targetName are required" }); return; }
-  const sourceSet = new Set(sourceTags);
-  const products = await db
-    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
-    .from(productsTable)
-    .where(eq(productsTable.merchantId, req.session.merchantId!));
+  const merchantId = req.session.merchantId!;
 
-  let updated = 0;
-  for (const p of products) {
-    if (!p.tagsJson) continue;
-    try {
-      const tags = JSON.parse(p.tagsJson) as string[];
-      if (!tags.some(t => sourceSet.has(t))) continue;
-      const newTags = [...new Set(tags.map(t => (sourceSet.has(t) ? targetName : t)))];
-      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
-      updated++;
-    } catch { /* skip */ }
-  }
-  res.json({ updated });
+  const filterParts = sourceTags.map(t => sql`tags_json::jsonb @> jsonb_build_array(${t}::text)`);
+  const filterOr = sql.join(filterParts, sql` OR `);
+  const caseParts = sourceTags.map(t => sql`WHEN elem = ${t} THEN ${targetName}`);
+  const caseExpr = sql.join(caseParts, sql` `);
+
+  const result = await db.execute(sql`
+    UPDATE products
+    SET tags_json = (
+      SELECT jsonb_agg(DISTINCT CASE ${caseExpr} ELSE elem END)::text
+      FROM jsonb_array_elements_text(tags_json::jsonb) AS t(elem)
+    )
+    WHERE merchant_id = ${merchantId}
+      AND tags_json IS NOT NULL
+      AND (${filterOr})
+  `);
+  res.json({ updated: result.rowCount ?? 0 });
 });
 
 router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void> => {
   const { name } = req.body as { name?: string };
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
-  const products = await db
-    .select({ id: productsTable.id, tagsJson: productsTable.tagsJson })
-    .from(productsTable)
-    .where(eq(productsTable.merchantId, req.session.merchantId!));
+  const merchantId = req.session.merchantId!;
 
-  let updated = 0;
-  for (const p of products) {
-    if (!p.tagsJson) continue;
-    try {
-      const tags = JSON.parse(p.tagsJson) as string[];
-      if (!tags.includes(name)) continue;
-      const newTags = tags.filter(t => t !== name);
-      await db.update(productsTable).set({ tagsJson: JSON.stringify(newTags) }).where(eq(productsTable.id, p.id));
-      updated++;
-    } catch { /* skip */ }
-  }
-  res.json({ updated });
+  const result = await db.execute(sql`
+    UPDATE products
+    SET tags_json = COALESCE(
+      (
+        SELECT jsonb_agg(elem ORDER BY ordinality)::text
+        FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+        WHERE elem <> ${name}
+      ),
+      '[]'
+    )
+    WHERE merchant_id = ${merchantId}
+      AND tags_json IS NOT NULL
+      AND tags_json::jsonb @> jsonb_build_array(${name}::text)
+  `);
+  res.json({ updated: result.rowCount ?? 0 });
 });
 
 router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
