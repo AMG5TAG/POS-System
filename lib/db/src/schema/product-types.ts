@@ -10,6 +10,7 @@ export const productTypesTable = pgTable("product_types", {
   trackStock: boolean("track_stock").notNull().default(true),
   printCode: boolean("print_code").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

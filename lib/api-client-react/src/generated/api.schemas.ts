@@ -145,6 +145,7 @@ export interface ProductType {
   trackStock: boolean;
   printCode: boolean;
   isActive: boolean;
+  sortOrder: number;
   createdAt: string;
 }
 
@@ -156,6 +157,12 @@ export interface ProductTypeInput {
   trackStock?: boolean;
   printCode?: boolean;
   isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface ProductTypeReorderInput {
+  /** Product type IDs in desired display order */
+  ids: number[];
 }
 
 export interface ProductTypeList {

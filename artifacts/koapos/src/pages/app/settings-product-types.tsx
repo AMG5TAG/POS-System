@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProductTypes,
   useCreateProductType,
   useUpdateProductType,
   useDeleteProductType,
+  useReorderProductTypes,
   type ProductType,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Layers, Search, Barcode, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Layers, Search, Barcode, Package, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -63,17 +64,50 @@ function toSlug(name: string): string {
 
 function ProductTypeRow({
   type,
+  index,
+  total,
   onEdit,
   onDelete,
   onToggleActive,
+  onMoveUp,
+  onMoveDown,
+  isReordering,
 }: {
   type: ProductType;
+  index: number;
+  total: number;
   onEdit: (t: ProductType) => void;
   onDelete: (t: ProductType) => void;
   onToggleActive: (t: ProductType) => void;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
+  isReordering: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 border-b last:border-b-0 transition-colors group">
+      <div className="flex flex-col gap-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+          disabled={index === 0 || isReordering}
+          onClick={() => onMoveUp(index)}
+          title="Move up"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+          disabled={index === total - 1 || isReordering}
+          onClick={() => onMoveDown(index)}
+          title="Move down"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-primary/10">
         <Package className="w-4 h-4 text-primary" />
       </div>
@@ -153,24 +187,60 @@ export default function SettingsProductTypesPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductType | null>(null);
+  const [localOrder, setLocalOrder] = useState<ProductType[]>([]);
 
   const { data } = useListProductTypes();
   const createProductType = useCreateProductType();
   const updateProductType = useUpdateProductType();
   const deleteProductType = useDeleteProductType();
+  const reorderProductTypes = useReorderProductTypes();
 
   const types: ProductType[] = data?.items ?? [];
 
-  const filtered = search.trim()
-    ? types.filter(
+  useEffect(() => {
+    setLocalOrder(types);
+  }, [data]);
+
+  const isSearching = search.trim().length > 0;
+
+  const filtered = isSearching
+    ? localOrder.filter(
         (t) =>
           t.name.toLowerCase().includes(search.toLowerCase()) ||
           t.slug.toLowerCase().includes(search.toLowerCase()) ||
           (t.description ?? "").toLowerCase().includes(search.toLowerCase())
       )
-    : types;
+    : localOrder;
 
   const inv = () => queryClient.invalidateQueries({ queryKey: ["/api/product-types"] });
+
+  const persistOrder = (ordered: ProductType[]) => {
+    reorderProductTypes.mutate(
+      { data: { ids: ordered.map((t) => t.id) } },
+      {
+        onError: () => {
+          toast.error("Failed to save order");
+          setLocalOrder(types);
+        },
+      }
+    );
+  };
+
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const next = [...localOrder];
+    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+    setLocalOrder(next);
+    persistOrder(next);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === localOrder.length - 1) return;
+    const next = [...localOrder];
+    [next[index], next[index + 1]] = [next[index + 1], next[index]];
+    setLocalOrder(next);
+    persistOrder(next);
+  };
 
   const openCreate = () => {
     setEditingType(null);
@@ -319,23 +389,35 @@ export default function SettingsProductTypesPage() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            {filtered.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                No product types match &ldquo;{search}&rdquo;
-              </div>
-            ) : (
-              filtered.map((type) => (
-                <ProductTypeRow
-                  key={type.id}
-                  type={type}
-                  onEdit={openEdit}
-                  onDelete={(t) => setDeleteTarget(t)}
-                  onToggleActive={handleToggleActive}
-                />
-              ))
+          <>
+            {!isSearching && localOrder.length > 1 && (
+              <p className="text-xs text-muted-foreground -mt-2">
+                Use the arrows to reorder how types appear in the product form.
+              </p>
             )}
-          </div>
+            <div className="rounded-lg border overflow-hidden">
+              {filtered.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  No product types match &ldquo;{search}&rdquo;
+                </div>
+              ) : (
+                filtered.map((type, index) => (
+                  <ProductTypeRow
+                    key={type.id}
+                    type={type}
+                    index={isSearching ? index : localOrder.indexOf(type)}
+                    total={localOrder.length}
+                    onEdit={openEdit}
+                    onDelete={(t) => setDeleteTarget(t)}
+                    onToggleActive={handleToggleActive}
+                    onMoveUp={handleMoveUp}
+                    onMoveDown={handleMoveDown}
+                    isReordering={reorderProductTypes.isPending}
+                  />
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
 

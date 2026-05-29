@@ -450,6 +450,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductType"
 
+  /product-types/reorder:
+    post:
+      operationId: reorderProductTypes
+      tags: [products]
+      summary: Reorder product types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTypeReorderInput"
+      responses:
+        "204":
+          description: Reordered
+
   /product-types/{id}:
     patch:
       operationId: updateProductType
@@ -5679,7 +5694,7 @@ components:
     # ── Product Types ─────────────────────────────────────────────────────────
     ProductType:
       type: object
-      required: [id, merchantId, name, slug, description, trackStock, printCode, isActive, createdAt]
+      required: [id, merchantId, name, slug, description, trackStock, printCode, isActive, sortOrder, createdAt]
       properties:
         id:
           type: integer
@@ -5697,6 +5712,8 @@ components:
           type: boolean
         isActive:
           type: boolean
+        sortOrder:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -5718,6 +5735,18 @@ components:
           type: boolean
         isActive:
           type: boolean
+        sortOrder:
+          type: integer
+
+    ProductTypeReorderInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+          description: Product type IDs in desired display order
 
     ProductTypeList:
       type: object

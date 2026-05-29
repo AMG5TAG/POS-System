@@ -523,6 +523,7 @@ export const ListProductTypesResponse = zod.object({
   "trackStock": zod.boolean(),
   "printCode": zod.boolean(),
   "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -541,7 +542,16 @@ export const CreateProductTypeBody = zod.object({
   "description": zod.string().optional(),
   "trackStock": zod.boolean().optional(),
   "printCode": zod.boolean().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Reorder product types
+ */
+export const ReorderProductTypesBody = zod.object({
+  "ids": zod.array(zod.number()).describe('Product type IDs in desired display order')
 })
 
 
@@ -561,7 +571,8 @@ export const UpdateProductTypeBody = zod.object({
   "description": zod.string().optional(),
   "trackStock": zod.boolean().optional(),
   "printCode": zod.boolean().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
 })
 
 export const UpdateProductTypeResponse = zod.object({
@@ -573,6 +584,7 @@ export const UpdateProductTypeResponse = zod.object({
   "trackStock": zod.boolean(),
   "printCode": zod.boolean(),
   "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
   "createdAt": zod.coerce.date()
 })
 

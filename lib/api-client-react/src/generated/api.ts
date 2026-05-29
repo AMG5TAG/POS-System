@@ -220,6 +220,7 @@ import type {
   ProductType,
   ProductTypeInput,
   ProductTypeList,
+  ProductTypeReorderInput,
   ProductUpdate,
   ProfitLossReport,
   PurchaseOrder,
@@ -1872,6 +1873,77 @@ export const useCreateProductType = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateProductTypeMutationOptions(options));
+    }
+
+export const getReorderProductTypesUrl = () => {
+
+
+
+
+  return `/api/product-types/reorder`
+}
+
+/**
+ * @summary Reorder product types
+ */
+export const reorderProductTypes = async (productTypeReorderInput: ProductTypeReorderInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getReorderProductTypesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      productTypeReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderProductTypesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderProductTypes>>, TError,{data: BodyType<ProductTypeReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderProductTypes>>, TError,{data: BodyType<ProductTypeReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderProductTypes'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderProductTypes>>, {data: BodyType<ProductTypeReorderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderProductTypes(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderProductTypesMutationResult = NonNullable<Awaited<ReturnType<typeof reorderProductTypes>>>
+    export type ReorderProductTypesMutationBody = BodyType<ProductTypeReorderInput>
+    export type ReorderProductTypesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder product types
+ */
+export const useReorderProductTypes = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderProductTypes>>, TError,{data: BodyType<ProductTypeReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderProductTypes>>,
+        TError,
+        {data: BodyType<ProductTypeReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderProductTypesMutationOptions(options));
     }
 
 export const getUpdateProductTypeUrl = (id: number,) => {
