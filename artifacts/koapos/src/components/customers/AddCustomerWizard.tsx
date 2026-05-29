@@ -44,7 +44,7 @@ const defaultForm: CustomerForm = {
   addShipping: true, shippingSameAsBilling: true,
   shippingStreet: "", shippingCity: "", shippingState: "",
   shippingPostcode: "", shippingCountry: "Australia",
-  customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
+  customerGroup: "Standard", warningNote: "", agreedToMarketing: true, notes: "",
 };
 
 function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
