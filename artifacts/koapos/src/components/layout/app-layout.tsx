@@ -136,6 +136,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   {
     name: "Business Info",
     icon: Building2,
+    defaultHref: "/management/business",
     children: [
       { name: "Details",  href: "/management/business",  icon: Building2 },
       { name: "Regional", href: "/management/regional",  icon: Globe     },
