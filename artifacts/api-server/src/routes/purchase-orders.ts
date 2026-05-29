@@ -289,89 +289,95 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
     items: receiveItems,
   }: {
     processedBy?: string;
-    items: Array<{ poItemId: number; quantityReceiving: number }>;
-  } = req.body;
+    items?: Array<{ poItemId: number; quantityReceiving: number }>;
+  } = req.body ?? {};
 
-  if (!receiveItems?.length) {
+  const safeItems = receiveItems ?? [];
+  if (!safeItems.length) {
     res.status(400).json({ error: "At least one item is required" });
     return;
   }
 
   const actor = processedBy?.trim() || userEmail;
-
-  // Build a map of current PO items for validation
   const poItemMap = new Map(po.items.map((i) => [i.id, i]));
   const receiptLines: string[] = [];
 
-  for (const { poItemId, quantityReceiving } of receiveItems) {
-    if (quantityReceiving <= 0) continue;
-    const poItem = poItemMap.get(poItemId);
-    if (!poItem) continue;
+  try {
+    await db.transaction(async (tx) => {
+      for (const { poItemId, quantityReceiving } of safeItems) {
+        if (quantityReceiving <= 0) continue;
+        const poItem = poItemMap.get(poItemId);
+        if (!poItem) continue;
 
-    const maxReceivable = poItem.quantity - poItem.received;
-    const qty = Math.min(quantityReceiving, maxReceivable);
-    if (qty <= 0) continue;
+        const maxReceivable = poItem.quantity - poItem.received;
+        const qty = Math.min(quantityReceiving, maxReceivable);
+        if (qty <= 0) continue;
 
-    // Update PO item received count
-    await db.update(purchaseOrderItemsTable)
-      .set({ received: sql`${purchaseOrderItemsTable.received} + ${qty}` })
-      .where(eq(purchaseOrderItemsTable.id, poItemId));
+        await tx.update(purchaseOrderItemsTable)
+          .set({ received: sql`${purchaseOrderItemsTable.received} + ${qty}` })
+          .where(eq(purchaseOrderItemsTable.id, poItemId));
 
-    // Update inventory stock if product is tracked
-    if (poItem.productId) {
-      const [product] = await db.select({ trackInventory: productsTable.trackInventory })
-        .from(productsTable)
-        .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
-      if (product?.trackInventory === "true") {
-        await db.update(productsTable)
-          .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
-          .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
-        // Lock in the PO unit cost
-        await db.update(productsTable)
-          .set({ costPrice: String(poItem.unitCost) })
-          .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
-        // Log price history
-        await db.insert(productPriceHistoryTable).values({
-          merchantId,
-          productId: poItem.productId,
-          costPrice: String(poItem.unitCost),
-          supplierName: po.supplierName ?? null,
-          poNumber: po.poNumber,
-          poId: id,
-        });
+        if (poItem.productId) {
+          const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+            .from(productsTable)
+            .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+          if (product?.trackInventory === "true") {
+            await tx.update(productsTable)
+              .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
+              .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+            await tx.update(productsTable)
+              .set({ costPrice: String(poItem.unitCost) })
+              .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+            await tx.insert(productPriceHistoryTable).values({
+              merchantId,
+              productId: poItem.productId,
+              costPrice: String(poItem.unitCost),
+              supplierName: po.supplierName ?? null,
+              poNumber: po.poNumber,
+              poId: id,
+            });
+          }
+        }
+
+        receiptLines.push(`${qty}x ${poItem.productName}`);
       }
+
+      if (receiptLines.length === 0) {
+        throw Object.assign(new Error("No receivable quantities — all items may already be fully received"), { status: 400 });
+      }
+
+      const updatedItems = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+      const totalOrdered  = updatedItems.reduce((s, i) => s + i.quantity, 0);
+      const totalReceived = updatedItems.reduce((s, i) => s + i.received, 0);
+      const newStatus = totalReceived >= totalOrdered ? "Fully Received" : "Partially Received";
+      const nowDate   = new Date().toISOString().slice(0, 10);
+
+      await tx.update(purchaseOrdersTable)
+        .set({
+          status: newStatus,
+          ...(newStatus === "Fully Received" ? { receivedDate: nowDate } : {}),
+        })
+        .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+
+      const receiptNote = `Received ${receiptLines.join(", ")} — processed by ${actor}`;
+      await tx.insert(purchaseOrderReceiptsTable).values({
+        poId: id,
+        merchantId,
+        processedBy: actor,
+        notes: receiptNote ?? null,
+      });
+    });
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status ?? 500;
+    const message = err instanceof Error ? err.message : "Failed to process goods receipt";
+    if (status !== 500) {
+      res.status(status).json({ error: message });
+    } else {
+      req.log.error({ err }, "receive PO transaction failed");
+      res.status(500).json({ error: "Failed to process goods receipt. No changes were saved — please try again." });
     }
-
-    receiptLines.push(`${qty}x ${poItem.productName}`);
-  }
-
-  if (receiptLines.length === 0) {
-    res.status(400).json({ error: "No receivable quantities — all items may already be fully received" });
     return;
   }
-
-  // Re-fetch updated items to compute new status
-  const updatedItems = await db.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-  const totalOrdered  = updatedItems.reduce((s, i) => s + i.quantity, 0);
-  const totalReceived = updatedItems.reduce((s, i) => s + i.received, 0);
-  const newStatus = totalReceived >= totalOrdered ? "Fully Received" : "Partially Received";
-  const nowDate   = new Date().toISOString().slice(0, 10);
-
-  await db.update(purchaseOrdersTable)
-    .set({
-      status: newStatus,
-      ...(newStatus === "Fully Received" ? { receivedDate: nowDate } : {}),
-    })
-    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
-
-  // Write receipt log
-  const receiptNote = `Received ${receiptLines.join(", ")} — processed by ${actor}`;
-  await db.insert(purchaseOrderReceiptsTable).values({
-    poId: id,
-    merchantId,
-    processedBy: actor,
-    notes: receiptNote,
-  });
 
   const result = await getPOWithItems(id, merchantId);
   res.json(result);

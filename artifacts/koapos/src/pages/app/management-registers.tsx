@@ -669,7 +669,7 @@ export default function ManagementRegistersPage() {
   const deleteRegister = useDeletePosRegister();
   const { settings, upsert: upsertSettings } = usePosSettings();
 
-  const registers: PosRegister[] = (rawRegisters?.items ?? []).map(apiToRegister);
+  const registers: PosRegister[] = ((rawRegisters?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToRegister);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PosRegister | null>(null);

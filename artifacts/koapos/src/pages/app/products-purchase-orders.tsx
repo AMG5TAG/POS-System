@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
@@ -902,18 +902,20 @@ function ReceiveGoodsDialog({
     }
     return init;
   });
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const receivePO = useReceivePurchaseOrderItems();
 
   const totalReceiving = Object.values(qtys).reduce((s, v) => s + (v || 0), 0);
 
   const handleConfirm = () => {
+    setSubmitError(null);
     const receiveItems: ReceiptItem[] = items
       .filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0)
       .map((i) => ({ poItemId: i.id!, quantityReceiving: qtys[i.id!] }));
 
     if (!receiveItems.length) {
-      toast.error("Enter at least one quantity to receive.");
+      setSubmitError("Enter at least one quantity to receive.");
       return;
     }
 
@@ -926,8 +928,8 @@ function ReceiveGoodsDialog({
           onOpenChange(false);
         },
         onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : "Failed to confirm receipt";
-          toast.error(msg);
+          const msg = err instanceof Error ? err.message : "Failed to confirm receipt — no changes were saved.";
+          setSubmitError(msg);
         },
       }
     );
@@ -1021,6 +1023,13 @@ function ReceiveGoodsDialog({
           </span>
         </div>
 
+        {submitError && (
+          <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2.5 text-sm text-destructive">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{submitError}</span>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
@@ -1044,18 +1053,29 @@ type POData = NonNullable<PrintPO>;
 
 function POPrintArea({ po, onDone }: { po: POData; onDone: () => void }) {
   useEffect(() => {
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    let afterprintHandler: (() => void) | undefined;
+
     const t = setTimeout(() => {
       document.body.setAttribute("data-print", "po");
-      const cleanup = () => {
+
+      afterprintHandler = () => {
         document.body.removeAttribute("data-print");
+        if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
         onDone();
       };
-      window.addEventListener("afterprint", cleanup, { once: true });
+
+      window.addEventListener("afterprint", afterprintHandler, { once: true });
       window.print();
-      const fallback = window.setTimeout(cleanup, 30_000);
-      window.addEventListener("afterprint", () => window.clearTimeout(fallback), { once: true });
+      fallbackTimer = setTimeout(afterprintHandler, 30_000);
     }, 150);
-    return () => clearTimeout(t);
+
+    return () => {
+      clearTimeout(t);
+      document.body.removeAttribute("data-print");
+      if (afterprintHandler) window.removeEventListener("afterprint", afterprintHandler);
+      if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+    };
   }, [onDone]);
 
   const deliveryCharge = (po as { deliveryCharge?: number }).deliveryCharge ?? 0;
