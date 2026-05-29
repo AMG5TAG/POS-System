@@ -1115,16 +1115,16 @@ function CustomerDetailInner({
       </DialogHeader>
 
       {/* Tabs */}
-      <div className="flex flex-wrap border-b px-6 gap-0 shrink-0 mt-3">
+      <div className="flex flex-wrap gap-1.5 px-6 py-2 shrink-0 mt-3">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
             className={cn(
-              "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0",
+              "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
               tab === key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {label}
@@ -1676,36 +1676,16 @@ function CustomerDetailInner({
       )}
 
       </div>
-      <DialogFooter className="flex-row justify-between sm:justify-between gap-2 flex-wrap px-6 pb-5 pt-4 border-t shrink-0">
+      <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
         <Button
-          variant="destructive" size="sm" className="gap-1.5"
+          variant="destructive" size="sm" className="w-8 h-8 p-0"
           onClick={() => { onDelete(customer.id); onClose(); }}
           disabled={deleteIsPending}
+          title="Delete customer"
         >
-          <Trash2 className="w-3.5 h-3.5" /> Delete
+          <Trash2 className="w-4 h-4" />
         </Button>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost" size="sm" className="gap-1 px-2"
-            disabled={tabIndex === 0}
-            onClick={() => setTab(TABS[tabIndex - 1].key)}
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs">Back</span>
-          </Button>
-          <span className="text-xs text-muted-foreground tabular-nums select-none px-1">
-            {tabIndex + 1}/{TABS.length}
-          </span>
-          <Button
-            variant="ghost" size="sm" className="gap-1 px-2"
-            disabled={tabIndex === TABS.length - 1}
-            onClick={() => setTab(TABS[tabIndex + 1].key)}
-          >
-            <span className="hidden sm:inline text-xs">Next</span>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {onMerge && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergePickerOpen(true)}>
               <Users className="w-3.5 h-3.5" /> Merge with...
@@ -1728,9 +1708,11 @@ function CustomerDetailInner({
               });
             }}
           >
-            <FileDown className="w-3.5 h-3.5" /> Export PDF
+            <FileDown className="w-3.5 h-3.5" /> PDF
           </Button>
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={onClose}>
+            <X className="w-3.5 h-3.5" /> Close
+          </Button>
           <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
             <Pencil className="w-3.5 h-3.5" /> Edit
           </Button>
