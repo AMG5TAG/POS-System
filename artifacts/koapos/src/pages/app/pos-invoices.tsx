@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -26,7 +27,7 @@ import { useSalesTemplate } from "@/lib/use-sales-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Tag,
+  Banknote, Tag, CalendarClock, TrendingUp, AlertCircle, ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -167,6 +168,8 @@ export default function POSInvoicesPage() {
   const [editDiscount, setEditDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
     enabled: false, type: "percent", value: "",
   });
+
+  const [activeTab, setActiveTab] = useState<"standard" | "recurring">("standard");
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
@@ -1074,10 +1077,40 @@ export default function POSInvoicesPage() {
     doc.save(`${inv.invoiceNumber}.pdf`);
   };
 
-  const filtered = invoices.filter((inv) =>
+  /* ── Derived lists & KPIs ── */
+  const filtered = useMemo(() => invoices.filter((inv) =>
     !search ||
     inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
     (inv.customerName ?? "").toLowerCase().includes(search.toLowerCase())
+  ), [invoices, search]);
+
+  const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring),  [filtered]);
+  const recurringFiltered = useMemo(() => filtered.filter((inv) =>  inv.isRecurring),  [filtered]);
+
+  const kpiRevenue     = useMemo(() => invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.total, 0),                         [invoices]);
+  const kpiOutstanding = useMemo(() => invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.total, 0), [invoices]);
+  const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
+
+  /* ── Shared row actions ── */
+  const InvoiceRowActions = ({ inv }: { inv: Invoice }) => (
+    <div className="flex items-center justify-end gap-1">
+      {inv.status === "draft" && (
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark as sent"
+          onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "sent"); }}>
+          <Send className="w-3.5 h-3.5" />
+        </Button>
+      )}
+      {inv.status === "sent" && (
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
+          onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
+          <Banknote className="w-4 h-4" />
+        </Button>
+      )}
+      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
+        <Trash2 className="w-3.5 h-3.5" />
+      </Button>
+    </div>
   );
 
   /* ── Render ── */
@@ -1085,7 +1118,7 @@ export default function POSInvoicesPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6 text-primary" />
@@ -1097,109 +1130,227 @@ export default function POSInvoicesPage() {
           <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search by number or customer..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="All statuses" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {(["draft","sent","paid","overdue","cancelled"] as InvStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* ── KPI Summary Cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Invoices</p>
+                  <p className="text-2xl font-bold mt-1">{invoices.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{standardFiltered.length} standard · {recurringFiltered.length} recurring</p>
+                </div>
+                <ListChecks className="w-8 h-8 text-primary/20 shrink-0" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Revenue Collected</p>
+                  <p className="text-2xl font-bold mt-1 text-green-600">{formatCurrency(kpiRevenue)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => i.status === "paid").length} paid invoices</p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-green-500/20 shrink-0" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Outstanding</p>
+                  <p className="text-2xl font-bold mt-1 text-amber-600">{formatCurrency(kpiOutstanding)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => i.status === "sent" || i.status === "overdue").length} awaiting payment</p>
+                </div>
+                <Clock className="w-8 h-8 text-amber-500/20 shrink-0" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overdue</p>
+                  <p className={`text-2xl font-bold mt-1 ${kpiOverdue.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>{kpiOverdue.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(kpiOverdue.reduce((s, i) => s + i.total, 0))} total value</p>
+                </div>
+                <AlertCircle className={`w-8 h-8 shrink-0 ${kpiOverdue.length > 0 ? "text-destructive/20" : "text-muted-foreground/10"}`} />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Table */}
-        {loading ? (
-          <div className="text-center py-16 text-muted-foreground">Loading invoices…</div>
-        ) : filtered.length === 0 ? (
-          <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
-            <FileText className="w-16 h-16 text-muted-foreground/30" />
-            <div><p className="font-medium text-lg">No invoices yet</p><p className="text-muted-foreground text-sm">Create invoices to send to customers.</p></div>
-            <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
-          </CardContent></Card>
-        ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="text-left p-3 font-medium">Invoice</th>
-                  <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
-                  <th className="text-left p-3 font-medium hidden md:table-cell">Due Date</th>
-                  <th className="text-left p-3 font-medium">Status</th>
-                  <th className="text-left p-3 font-medium hidden lg:table-cell">Viewed</th>
-                  <th className="text-right p-3 font-medium">Total</th>
-                  <th className="p-3 w-24" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    className="bg-background hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => openDetail(inv)}
-                  >
-                    <td className="p-3">
-                      <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
-                      {inv.isRecurring && inv.nextSendDate && (
-                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-blue-600 font-medium">
-                          <RefreshCw className="w-2.5 h-2.5" />
-                          Next {formatDateOnly(inv.nextSendDate)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
-                    <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
-                      {inv.dueDate ? formatDateOnly(inv.dueDate) : <span>—</span>}
-                    </td>
-                    <td className="p-3">
-                      <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
-                    </td>
-                    <td className="p-3 hidden lg:table-cell">
-                      {inv.viewedAt ? (
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Eye className="w-3.5 h-3.5 text-green-500" />
-                          {formatDate(inv.viewedAt)}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <EyeOff className="w-3.5 h-3.5" />
-                          Not viewed
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
-                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        {inv.status === "draft" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark as sent"
-                            onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "sent"); }}>
-                            <Send className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                        {inv.status === "sent" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Mark as paid"
-                            onClick={(e) => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}>
-                            <Banknote className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* ── Tabbed workspace ── */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "recurring")} className="space-y-4">
+
+          {/* Tab bar + search/filter on same row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="standard" className="gap-1.5">
+                <ListChecks className="w-3.5 h-3.5" />
+                Standard Invoices
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{standardFiltered.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="recurring" className="gap-1.5">
+                <CalendarClock className="w-3.5 h-3.5" />
+                Recurring Invoices
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{recurringFiltered.length}</Badge>
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search by number or customer…" className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {(["draft","sent","paid","overdue","cancelled"] as InvStatus[]).map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        )}
+
+          {/* ── Tab 1: Standard Invoices ── */}
+          <TabsContent value="standard" className="mt-0">
+            {loading ? (
+              <div className="text-center py-16 text-muted-foreground">Loading invoices…</div>
+            ) : standardFiltered.length === 0 ? (
+              <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                <FileText className="w-16 h-16 text-muted-foreground/30" />
+                <div><p className="font-medium text-lg">No standard invoices</p><p className="text-muted-foreground text-sm">Create a one-off invoice to send to a customer.</p></div>
+                <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
+              </CardContent></Card>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="text-left p-3 font-medium">Invoice</th>
+                      <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Due Date</th>
+                      <th className="text-left p-3 font-medium">Status</th>
+                      <th className="text-left p-3 font-medium hidden lg:table-cell">Viewed</th>
+                      <th className="text-right p-3 font-medium">Total</th>
+                      <th className="p-3 w-24" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {standardFiltered.map((inv) => (
+                      <tr key={inv.id} className="bg-background hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => openDetail(inv)}>
+                        <td className="p-3">
+                          <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
+                        </td>
+                        <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
+                        <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
+                          {inv.dueDate ? formatDateOnly(inv.dueDate) : <span>—</span>}
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
+                        </td>
+                        <td className="p-3 hidden lg:table-cell">
+                          {inv.viewedAt ? (
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Eye className="w-3.5 h-3.5 text-green-500" />{formatDate(inv.viewedAt)}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <EyeOff className="w-3.5 h-3.5" />Not viewed
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <InvoiceRowActions inv={inv} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Tab 2: Recurring Invoices ── */}
+          <TabsContent value="recurring" className="mt-0">
+            {loading ? (
+              <div className="text-center py-16 text-muted-foreground">Loading invoices…</div>
+            ) : recurringFiltered.length === 0 ? (
+              <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                <CalendarClock className="w-16 h-16 text-muted-foreground/30" />
+                <div>
+                  <p className="font-medium text-lg">No recurring invoices</p>
+                  <p className="text-muted-foreground text-sm">Enable the recurring option when creating an invoice to auto-send on a schedule.</p>
+                </div>
+                <Button onClick={() => setCreateOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Invoice</Button>
+              </CardContent></Card>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="text-left p-3 font-medium">Invoice</th>
+                      <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Frequency</th>
+                      <th className="text-left p-3 font-medium hidden lg:table-cell">Next Send Date</th>
+                      <th className="text-left p-3 font-medium hidden xl:table-cell">Occurrences</th>
+                      <th className="text-left p-3 font-medium">Status</th>
+                      <th className="text-right p-3 font-medium">Total</th>
+                      <th className="p-3 w-24" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {recurringFiltered.map((inv) => (
+                      <tr key={inv.id} className="bg-background hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => openDetail(inv)}>
+                        <td className="p-3">
+                          <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <RefreshCw className="w-2.5 h-2.5 text-blue-500" />
+                            <span className="text-[10px] text-blue-600 font-medium">Recurring</span>
+                          </div>
+                        </td>
+                        <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
+                        <td className="p-3 hidden md:table-cell">
+                          {inv.recurringFrequency ? (
+                            <Badge variant="outline" className="text-xs gap-1 font-normal">
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              {FREQ_LABELS[inv.recurringFrequency as keyof typeof FREQ_LABELS] ?? inv.recurringFrequency}
+                            </Badge>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </td>
+                        <td className="p-3 hidden lg:table-cell">
+                          {inv.nextSendDate ? (
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <CalendarClock className="w-3.5 h-3.5 text-blue-500" />
+                              {formatDateOnly(inv.nextSendDate)}
+                            </span>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </td>
+                        <td className="p-3 hidden xl:table-cell text-xs text-muted-foreground">
+                          {inv.recurringOccurrences != null ? `${inv.recurringOccurrences}×` : "—"}
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
+                        </td>
+                        <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <InvoiceRowActions inv={inv} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+
+        </Tabs>
       </div>
 
       {/* ─── Invoice Detail Dialog ─── */}
