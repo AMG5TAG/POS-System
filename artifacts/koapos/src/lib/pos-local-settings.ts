@@ -1,9 +1,13 @@
+/* ── localStorage key constants ──────────────────────────────────────────── */
+
 export const FORCE_STAFF_LOGIN_KEY = "koapos_force_staff_login";
 export const PAYMENT_METHODS_KEY = "koapos_enabled_payment_methods";
 export const STAFF_LOGIN_MSG_KEY = "koapos_staff_login_msg";
 export const INTEGRATION_PAYMENT_METHODS_KEY = "koapos_enabled_integration_payments";
 export const POS_GRID_SETTINGS_KEY = "koapos_pos_grid_settings";
 export const ACTIVE_REGISTER_KEY = "koapos_active_register";
+
+/* ── Types ───────────────────────────────────────────────────────────────── */
 
 export interface StaffLoginMessage {
   text: string;
@@ -23,6 +27,23 @@ export interface PosGridSettings {
   cartPosition: "right" | "left";
 }
 
+/** Shape of an active register (till) session persisted to localStorage.
+ *  Written on open, updated after every sale/refund, removed on close.
+ *  This allows the terminal to survive page navigation and browser restarts
+ *  without forcing the operator to re-open the till. */
+export interface RegisterSession {
+  openedAt: string;
+  openedBy: string | null;
+  openingFloat: number;
+  openingNotes: string;
+  sales: Record<string, number>;
+  txCount: number;
+  refunds?: Record<string, number>;
+  refundCount?: number;
+}
+
+/* ── Constants ───────────────────────────────────────────────────────────── */
+
 export const POS_GRID_DEFAULTS: PosGridSettings = {
   columns: 3,
   tileSize: "normal",
@@ -30,6 +51,48 @@ export const POS_GRID_DEFAULTS: PosGridSettings = {
   showStockBadges: false,
   cartPosition: "right",
 };
+
+export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
+  stripe_own:      "Stripe",
+  commbank_eftpos: "CommBank EFTPOS",
+  tyro_eftpos:     "Tyro",
+  square_terminal: "Square Terminal",
+  paypal:          "PayPal",
+  afterpay:        "Afterpay",
+  zip:             "Zip",
+  klarna:          "Klarna",
+  apple_wallet:    "Apple Wallet",
+  google_pay:      "Google Pay",
+  wechat_alipay:   "WeChat / Alipay",
+};
+
+export const PAYMENT_INTEGRATION_CATEGORIES = [
+  "Payments & EFTPOS",
+  "Buy Now, Pay Later",
+  "Digital Wallets",
+] as const;
+
+/* ── Register session persistence ────────────────────────────────────────── */
+
+/** Read back the active till session from localStorage, or null if the till is closed. */
+export function loadRegisterSession(): RegisterSession | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_REGISTER_KEY);
+    return raw ? (JSON.parse(raw) as RegisterSession) : null;
+  } catch { return null; }
+}
+
+/** Persist the current till session (called on open and after every sale/refund). */
+export function saveRegisterSession(session: RegisterSession): void {
+  try { localStorage.setItem(ACTIVE_REGISTER_KEY, JSON.stringify(session)); } catch { /* ignore */ }
+}
+
+/** Destroy the persisted till session (called only when the operator explicitly closes the till). */
+export function clearRegisterSession(): void {
+  try { localStorage.removeItem(ACTIVE_REGISTER_KEY); } catch { /* ignore */ }
+}
+
+/* ── Staff login message ─────────────────────────────────────────────────── */
 
 function getMsgStorageKey(): string {
   try {
@@ -79,6 +142,8 @@ export function setStaffAcknowledged(
   } catch { /* ignore */ }
 }
 
+/* ── Payment methods ─────────────────────────────────────────────────────── */
+
 export function getEnabledPaymentMethods(): PaymentMethodId[] {
   try {
     const stored = localStorage.getItem(PAYMENT_METHODS_KEY);
@@ -95,29 +160,11 @@ export function getEnabledIntegrationPayments(): string[] {
   return [];
 }
 
+/* ── POS grid settings ───────────────────────────────────────────────────── */
+
 export function loadPosGridSettings(): PosGridSettings {
   try {
     const raw = localStorage.getItem(POS_GRID_SETTINGS_KEY);
     return raw ? { ...POS_GRID_DEFAULTS, ...JSON.parse(raw) } : POS_GRID_DEFAULTS;
   } catch { return POS_GRID_DEFAULTS; }
 }
-
-export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
-  stripe_own:      "Stripe",
-  commbank_eftpos: "CommBank EFTPOS",
-  tyro_eftpos:     "Tyro",
-  square_terminal: "Square Terminal",
-  paypal:          "PayPal",
-  afterpay:        "Afterpay",
-  zip:             "Zip",
-  klarna:          "Klarna",
-  apple_wallet:    "Apple Wallet",
-  google_pay:      "Google Pay",
-  wechat_alipay:   "WeChat / Alipay",
-};
-
-export const PAYMENT_INTEGRATION_CATEGORIES = [
-  "Payments & EFTPOS",
-  "Buy Now, Pay Later",
-  "Digital Wallets",
-] as const;

@@ -32,6 +32,10 @@ import {
   getStaffLoginMessage, setStaffAcknowledged, hasStaffAcknowledged,
   type StaffLoginMessage,
 } from "@/pages/app/management-registers";
+import {
+  loadRegisterSession, saveRegisterSession, clearRegisterSession,
+  type RegisterSession,
+} from "@/lib/pos-local-settings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -65,16 +69,6 @@ type CartItem = {
 
 type WalkIn = { firstName: string; lastName: string };
 
-type RegisterSession = {
-  openedAt: string;
-  openedBy: string | null;
-  openingFloat: number;
-  openingNotes: string;
-  sales: Record<string, number>;
-  txCount: number;
-  refunds?: Record<string, number>;
-  refundCount?: number;
-};
 
 const DISPLAY_KEY = "koapos_pos_display";
 
@@ -221,6 +215,7 @@ export default function POSPage() {
       txCount: 0,
     };
     setSessionSnap(session);
+    saveRegisterSession(session);
     setRegisterOpen(true);
     setOpenRegisterDialogOpen(false);
     setCashMovementPrintOpen(true);
@@ -283,6 +278,7 @@ export default function POSPage() {
       closingNotes: closeFormData.notes,
     };
     setRegisterOpen(false);
+    clearRegisterSession();
     setCloseRegisterDialogOpen(false);
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
     setLastZReport(zReport as RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string });
@@ -617,6 +613,18 @@ export default function POSPage() {
   /* Restore a parked sale that was triggered from the /pos/parked page.
      pos-parked writes the full sale payload to a module store and then
      navigates here; we take it on mount and hydrate the cart. */
+  /* Restore till session from localStorage on mount so navigating away and
+     returning (or refreshing) keeps the register open without requiring the
+     operator to re-open the till.  Only "Close Shift" clears the key. */
+  useEffect(() => {
+    const saved = loadRegisterSession();
+    if (saved) {
+      setSessionSnap(saved);
+      setRegisterOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Invoice Payment Mode — the invoices page parks the remaining balance +
      linked customer in a module store and navigates here. Take it on mount and
      lock the terminal to settling that invoice. Runs before the parked-cart
@@ -1408,6 +1416,7 @@ export default function POSPage() {
             s.sales[pm] = (s.sales[pm] ?? 0) + total;
             s.txCount = (s.txCount ?? 0) + 1;
             setSessionSnap(s);
+            saveRegisterSession(s);
           }
         } catch { /* ignore */ }
         // Capture total + cart before clearing
