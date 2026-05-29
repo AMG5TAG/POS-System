@@ -1994,18 +1994,23 @@ export const GetLoyaltyLeaderboardResponse = zod.object({
  * @summary List inventory levels
  */
 export const ListInventoryQueryParams = zod.object({
-  "lowStock": zod.coerce.boolean().optional()
+  "lowStock": zod.coerce.boolean().optional(),
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
 })
 
-export const ListInventoryResponseItem = zod.object({
+export const ListInventoryResponse = zod.object({
+  "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
   "sku": zod.string().nullable(),
+  "trackInventory": zod.boolean(),
   "stockQuantity": zod.number(),
   "lowStockThreshold": zod.number().nullable(),
   "isLowStock": zod.boolean().optional()
+})),
+  "total": zod.number()
 })
-export const ListInventoryResponse = zod.array(ListInventoryResponseItem)
 
 
 /**
@@ -2024,6 +2029,7 @@ export const UpdateInventoryResponse = zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
   "sku": zod.string().nullable(),
+  "trackInventory": zod.boolean(),
   "stockQuantity": zod.number(),
   "lowStockThreshold": zod.number().nullable(),
   "isLowStock": zod.boolean().optional()

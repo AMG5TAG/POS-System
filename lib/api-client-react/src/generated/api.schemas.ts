@@ -699,10 +699,16 @@ export interface InventoryItem {
   productName: string;
   /** @nullable */
   sku: string | null;
+  trackInventory: boolean;
   stockQuantity: number;
   /** @nullable */
   lowStockThreshold: number | null;
   isLowStock?: boolean;
+}
+
+export interface InventoryList {
+  items: InventoryItem[];
+  total: number;
 }
 
 export interface InventoryUpdate {
@@ -3256,6 +3262,8 @@ status?: string;
 
 export type ListInventoryParams = {
 lowStock?: boolean;
+limit?: number;
+offset?: number;
 };
 
 export type GetDashboardSummaryParams = {

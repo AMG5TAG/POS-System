@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, productsTable, productTypesTable } from "@workspace/db";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ListInventoryQueryParams, UpdateInventoryParams, UpdateInventoryBody } from "@workspace/api-zod";
 
@@ -13,42 +13,52 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { lowStock } = queryParams.data;
+  const { lowStock, limit = 50, offset = 0 } = queryParams.data;
+  const merchantId = req.session.merchantId!;
 
   const [serviceType] = await db.select({ id: productTypesTable.id })
     .from(productTypesTable)
-    .where(and(eq(productTypesTable.merchantId, req.session.merchantId!), eq(productTypesTable.slug, "service")));
-
-  let products = await db
-    .select()
-    .from(productsTable)
     .where(and(
-      eq(productsTable.merchantId, req.session.merchantId!),
-      serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
+      eq(productTypesTable.merchantId, merchantId),
+      eq(productTypesTable.slug, "service"),
     ));
 
-  if (lowStock) {
-    products = products.filter((p) => {
-      if (p.trackInventory !== "true") return false;
-      const threshold = p.lowStockThreshold ?? 5;
-      return p.stockQuantity <= threshold;
-    });
-  }
-
-  res.json(
-    products.map((p) => {
-      const tracked = p.trackInventory === "true";
-      return {
-        productId: p.id,
-        productName: p.name,
-        sku: p.sku ?? null,
-        trackInventory: tracked,
-        stockQuantity: p.stockQuantity,
-        lowStockThreshold: p.lowStockThreshold ?? null,
-        isLowStock: tracked && p.stockQuantity <= (p.lowStockThreshold ?? 5),
-      };
-    })
+  const baseWhere = and(
+    eq(productsTable.merchantId, merchantId),
+    serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
+    lowStock ? eq(productsTable.trackInventory, "true") : undefined,
+    lowStock ? sql`${productsTable.stockQuantity} <= COALESCE(${productsTable.lowStockThreshold}, 5)` : undefined,
   );
+
+  const [products, countResult] = await Promise.all([
+    db.select()
+      .from(productsTable)
+      .where(baseWhere)
+      .orderBy(productsTable.name)
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: sql<string>`count(*)` })
+      .from(productsTable)
+      .where(baseWhere),
+  ]);
+
+  const formatItem = (p: typeof products[0]) => {
+    const tracked = p.trackInventory === "true";
+    return {
+      productId: p.id,
+      productName: p.name,
+      sku: p.sku ?? null,
+      trackInventory: tracked,
+      stockQuantity: p.stockQuantity,
+      lowStockThreshold: p.lowStockThreshold ?? null,
+      isLowStock: tracked && p.stockQuantity <= (p.lowStockThreshold ?? 5),
+    };
+  };
+
+  res.json({
+    items: products.map(formatItem),
+    total: Number(countResult[0]?.count ?? 0),
+  });
 });
 
 router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<void> => {

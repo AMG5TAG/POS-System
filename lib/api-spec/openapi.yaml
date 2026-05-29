@@ -1352,15 +1352,21 @@ paths:
           in: query
           schema:
             type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Inventory list
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/InventoryItem"
+                $ref: "#/components/schemas/InventoryList"
 
   /inventory/{productId}:
     patch:
@@ -6507,7 +6513,7 @@ components:
     # ── Inventory ────────────────────────────────────────────────────────────
     InventoryItem:
       type: object
-      required: [productId, productName, sku, stockQuantity, lowStockThreshold]
+      required: [productId, productName, sku, trackInventory, stockQuantity, lowStockThreshold]
       properties:
         productId:
           type: integer
@@ -6515,12 +6521,25 @@ components:
           type: string
         sku:
           type: ["string", "null"]
+        trackInventory:
+          type: boolean
         stockQuantity:
           type: integer
         lowStockThreshold:
           type: ["integer", "null"]
         isLowStock:
           type: boolean
+
+    InventoryList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryItem"
+        total:
+          type: integer
 
     InventoryUpdate:
       type: object

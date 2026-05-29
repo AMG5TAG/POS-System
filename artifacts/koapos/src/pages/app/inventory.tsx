@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListInventory, useUpdateInventory, useListSuppliers,
@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Boxes, AlertTriangle, ShoppingCart,
   ChevronUp, ChevronDown, ChevronsUpDown, Plus, Minus,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,6 +38,8 @@ interface InventoryItem {
   lowStockThreshold: number | null;
   isLowStock: boolean;
 }
+
+const PAGE_SIZE = 50;
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
@@ -67,6 +70,7 @@ type ReorderLines = Record<number, { qty: number; unitCost: string; selected: bo
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [showLowStock, setShowLowStock] = useState(false);
+  const [page, setPage]                 = useState(1);
   const [editingItem, setEditingItem]   = useState<InventoryItem | null>(null);
   const [editForm, setEditForm]         = useState({ stockQuantity: "", lowStockThreshold: "" });
   const [sortKey, setSortKey]           = useState<SortKey>("name");
@@ -80,10 +84,21 @@ export default function InventoryPage() {
   const [reorderNotes, setReorderNotes] = useState("");
   const [poSaving, setPoSaving]         = useState(false);
 
-  const { data: inventory, isLoading } = useListInventory(
-    { lowStock: showLowStock || undefined },
-    { query: { queryKey: ["inventory", showLowStock] } }
+  /* Reset to page 1 when filter changes */
+  useEffect(() => { setPage(1); }, [showLowStock]);
+
+  /* ── Main paginated list for the table ── */
+  const { data: inventoryData, isLoading } = useListInventory(
+    { lowStock: showLowStock || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
+    { query: { queryKey: ["inventory", showLowStock, page] } }
   );
+
+  /* ── Always-fetched low-stock list for count badge + reorder dialog ── */
+  const { data: lowStockData } = useListInventory(
+    { lowStock: true, limit: 500 },
+    { query: { queryKey: ["inventory-low-stock"] } }
+  );
+
   const updateMutation = useUpdateInventory();
 
   const { data: suppliersData } = useListSuppliers(
@@ -91,6 +106,13 @@ export default function InventoryPage() {
     { query: { queryKey: ["suppliers-reorder"] } }
   );
   const suppliers = (suppliersData as { items?: { id: number; name: string }[] })?.items ?? [];
+
+  const items = ((inventoryData as { items?: InventoryItem[] })?.items ?? []) as InventoryItem[];
+  const total = (inventoryData as { total?: number })?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const lowStockItems = ((lowStockData as { items?: InventoryItem[] })?.items ?? []) as InventoryItem[];
+  const lowStockCount = (lowStockData as { total?: number })?.total ?? 0;
 
   const openEdit = (item: InventoryItem) => {
     setEditingItem(item);
@@ -115,17 +137,14 @@ export default function InventoryPage() {
           toast.success("Inventory updated");
           setEditingItem(null);
           queryClient.invalidateQueries({ queryKey: ["inventory"] });
+          queryClient.invalidateQueries({ queryKey: ["inventory-low-stock"] });
         },
         onError: () => toast.error("Failed to update inventory"),
       }
     );
   };
 
-  const items = (inventory || []) as InventoryItem[];
-  const lowStockItems = items.filter((i) => i.isLowStock);
-  const lowStockCount = lowStockItems.length;
-
-  /* Sort */
+  /* Sort within the current page */
   const sorted = [...items].sort((a, b) => {
     let av: string | number = "", bv: string | number = "";
     switch (sortKey) {
@@ -201,6 +220,9 @@ export default function InventoryPage() {
       setPoSaving(false);
     }
   }
+
+  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd   = Math.min(page * PAGE_SIZE, total);
 
   return (
     <AppLayout>
@@ -310,6 +332,44 @@ export default function InventoryPage() {
                 })}
               </tbody>
             </table>
+
+            {/* ── Pagination footer ── */}
+            {total > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20 text-sm">
+                <span className="text-muted-foreground">
+                  {pageStart}–{pageEnd} of {total} items
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                    const p = start + i;
+                    return p <= totalPages ? (
+                      <Button
+                        key={p} size="icon" className="h-8 w-8"
+                        variant={p === page ? "default" : "outline"}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    ) : null;
+                  })}
+                  <Button
+                    variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

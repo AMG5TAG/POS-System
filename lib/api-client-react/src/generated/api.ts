@@ -109,6 +109,7 @@ import type {
   GiftCardValidateResponse,
   HealthStatus,
   InventoryItem,
+  InventoryList,
   InventorySettings,
   InventorySettingsInput,
   InventoryUpdate,
@@ -5138,9 +5139,9 @@ export const getListInventoryUrl = (params?: ListInventoryParams,) => {
 /**
  * @summary List inventory levels
  */
-export const listInventory = async (params?: ListInventoryParams, options?: RequestInit): Promise<InventoryItem[]> => {
+export const listInventory = async (params?: ListInventoryParams, options?: RequestInit): Promise<InventoryList> => {
 
-  return customFetch<InventoryItem[]>(getListInventoryUrl(params),
+  return customFetch<InventoryList>(getListInventoryUrl(params),
   {
     ...options,
     method: 'GET'
