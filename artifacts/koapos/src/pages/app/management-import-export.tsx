@@ -349,6 +349,17 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your product tags used for filtering and categorisation.",
     exportUrl: "/api/tags",
     createUrl: "/api/tags",
+    updateUrl: "/api/tags",
+    fetchAllUrl: "/api/tags",
+    dedupeBy: (p, e) => {
+      const pName = String(p.name ?? "").trim().toLowerCase();
+      const eName = String(e.name ?? "").trim().toLowerCase();
+      return {
+        match: pName.length > 0 && pName === eName,
+        id: e.id as number,
+        label: String(e.name ?? ""),
+      };
+    },
     fields: [
       { key: "name",  label: "Tag Name", required: true },
       { key: "color", label: "Color",    hint: "Hex color e.g. #6366f1" },
