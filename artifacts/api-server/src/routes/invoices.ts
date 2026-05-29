@@ -29,6 +29,8 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 }
 type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
 
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 function customerName(first: string | null, last: string | null): string | null {
   const n = [first, last].filter(Boolean).join(" ");
   return n || null;
@@ -96,9 +98,9 @@ async function appendInvoiceEvent(id: number, merchantId: number, event: Invoice
 }
 
 /** Credit loyalty points/value to a customer when an invoice is fully settled. */
-async function creditLoyaltyForPaidInvoice(merchantId: number, customerId: number, invoiceTotal: number) {
+async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number) {
   if (invoiceTotal <= 0) return;
-  const [loyaltyRow] = await db
+  const [loyaltyRow] = await executor
     .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
     .from(loyaltySettingsTable)
     .where(eq(loyaltySettingsTable.merchantId, merchantId));
@@ -138,7 +140,7 @@ async function creditLoyaltyForPaidInvoice(merchantId: number, customerId: numbe
     }
   }
   if (earned > 0) {
-    await db
+    await executor
       .update(customersTable)
       .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
@@ -378,32 +380,41 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     updates.recurringOccurrences = recurring?.enabled ? (recurring.occurrences ?? null) : null;
     updates.recurringStartDate = recurring?.enabled && recurring.startDate ? new Date(recurring.startDate) : null;
   }
-  // ── Pre-fetch current invoice to detect paid transition (for loyalty) ──
-  let preInv: { status: string | null; customerId: number | null; total: string | null } | undefined;
-  if (status === "paid") {
-    const [cur] = await db
-      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total })
-      .from(invoicesTable)
-      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
-    preInv = cur ?? undefined;
-  }
+  // When marking an invoice paid we must detect the "first paid transition"
+  // and credit loyalty exactly once. Lock the row and do the read-update-credit
+  // in one transaction so two concurrent status="paid" updates can't both read
+  // a non-paid state and double-credit loyalty.
+  let inv: typeof invoicesTable.$inferSelect | undefined;
+  await db.transaction(async (tx) => {
+    let preInv: { status: string | null; customerId: number | null; total: string | null } | undefined;
+    if (status === "paid") {
+      const [cur] = await tx
+        .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total })
+        .from(invoicesTable)
+        .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
+        .for("update");
+      preInv = cur ?? undefined;
+    }
 
-  const [inv] = await db
-    .update(invoicesTable)
-    .set(updates)
-    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
-    .returning();
+    const [updated] = await tx
+      .update(invoicesTable)
+      .set(updates)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
+      .returning();
+    inv = updated;
+    if (!updated) return;
+
+    // ── Credit loyalty when an invoice transitions to paid for the first time ──
+    if (
+      status === "paid" &&
+      preInv &&
+      preInv.status !== "paid" &&
+      preInv.customerId
+    ) {
+      await creditLoyaltyForPaidInvoice(tx, req.session.merchantId!, preInv.customerId, parseFloat(preInv.total ?? "0"));
+    }
+  });
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
-
-  // ── Credit loyalty when an invoice transitions to paid for the first time ──
-  if (
-    status === "paid" &&
-    preInv &&
-    preInv.status !== "paid" &&
-    preInv.customerId
-  ) {
-    await creditLoyaltyForPaidInvoice(req.session.merchantId!, preInv.customerId, parseFloat(preInv.total ?? "0"));
-  }
 
   const [row] = await db
     .select({
@@ -430,52 +441,61 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const [cur] = await db
-    .select({
-      total: invoicesTable.total,
-      amountPaid: invoicesTable.amountPaid,
-      status: invoicesTable.status,
-      customerId: invoicesTable.customerId,
-      events: invoicesTable.events,
-    })
-    .from(invoicesTable)
-    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
-  if (!cur) { res.status(404).json({ error: "Invoice not found" }); return; }
+  // Read-modify-write inside a transaction with a row lock so two concurrent
+  // submissions (double-click, retry, two terminals) can't both read the
+  // pre-paid state and both append a payment event / double-credit loyalty.
+  let notFound = false;
+  await db.transaction(async (tx) => {
+    const [cur] = await tx
+      .select({
+        total: invoicesTable.total,
+        amountPaid: invoicesTable.amountPaid,
+        status: invoicesTable.status,
+        customerId: invoicesTable.customerId,
+        events: invoicesTable.events,
+      })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
+      .for("update");
+    if (!cur) { notFound = true; return; }
 
-  const total = parseFloat(cur.total ?? "0");
-  const prevPaid = parseFloat(cur.amountPaid ?? "0");
-  const pay = round2(payInput);
-  const newPaid = Math.min(round2(prevPaid + pay), total);
-  const fullyPaid = newPaid >= total - 0.005;
-  const balance = round2(Math.max(0, total - newPaid));
-  const newStatus = fullyPaid ? "paid" : newPaid > 0 ? "partial" : cur.status;
+    const total = parseFloat(cur.total ?? "0");
+    const prevPaid = parseFloat(cur.amountPaid ?? "0");
+    const pay = round2(payInput);
+    const newPaid = Math.min(round2(prevPaid + pay), total);
+    const fullyPaid = newPaid >= total - 0.005;
+    const balance = round2(Math.max(0, total - newPaid));
+    const newStatus = fullyPaid ? "paid" : newPaid > 0 ? "partial" : cur.status;
 
-  const events: InvoiceEvent[] = [
-    ...((cur.events as InvoiceEvent[] | null) ?? []),
-    {
-      type: "payment",
-      timestamp: new Date().toISOString(),
-      detail: fullyPaid
-        ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
-        : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
-      ...(method ? { method } : {}),
-    },
-  ];
+    const events: InvoiceEvent[] = [
+      ...((cur.events as InvoiceEvent[] | null) ?? []),
+      {
+        type: "payment",
+        timestamp: new Date().toISOString(),
+        detail: fullyPaid
+          ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
+          : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
+        ...(method ? { method } : {}),
+      },
+    ];
 
-  await db
-    .update(invoicesTable)
-    .set({
-      amountPaid: String(newPaid),
-      status: newStatus,
-      paidAt: fullyPaid ? new Date() : null,
-      events,
-    })
-    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+    await tx
+      .update(invoicesTable)
+      .set({
+        amountPaid: String(newPaid),
+        status: newStatus,
+        paidAt: fullyPaid ? new Date() : null,
+        events,
+      })
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
-  // Credit loyalty only when this payment settles the invoice in full for the first time.
-  if (fullyPaid && cur.status !== "paid" && cur.customerId) {
-    await creditLoyaltyForPaidInvoice(merchantId, cur.customerId, total);
-  }
+    // Credit loyalty only when this payment settles the invoice in full for the first time.
+    if (fullyPaid && cur.status !== "paid" && cur.customerId) {
+      await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total);
+    }
+  });
+
+  if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
 
   const [row] = await db
     .select({

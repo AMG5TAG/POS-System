@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleRecurringInvoices } from "./services/recurringInvoiceScheduler";
 import { scheduleMarketingAutomation } from "./services/marketingAutomationScheduler";
-import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries } from "./services/tokenVault";
+import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 
 assertVaultKeyConfigured();
 
@@ -29,7 +29,15 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   scheduleRecurringInvoices(logger);
   scheduleMarketingAutomation(logger);
-  invalidateUnreadableVaultEntries().catch((e) => {
-    logger.error({ err: e }, "Failed to invalidate unreadable OAuth vault entries");
-  });
+  // Migrate any tokens encrypted under VAULT_ENCRYPTION_KEY_PREVIOUS to the
+  // current key first, then invalidate whatever is still unreadable.
+  reEncryptVaultEntries()
+    .catch((e) => {
+      logger.error({ err: e }, "Failed to re-encrypt OAuth vault entries under rotated key");
+    })
+    .finally(() => {
+      invalidateUnreadableVaultEntries().catch((e) => {
+        logger.error({ err: e }, "Failed to invalidate unreadable OAuth vault entries");
+      });
+    });
 });

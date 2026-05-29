@@ -43,7 +43,12 @@ export function assertVaultKeyConfigured(): void {
   }
 }
 
-function deriveKey(): Buffer {
+function deriveKey(secret: string): Buffer {
+  return crypto.pbkdf2Sync(secret, SALT, 100_000, 32, "sha256");
+}
+
+/** The secret used to ENCRYPT new tokens (current key). */
+function currentSecret(): string {
   const secret = process.env.VAULT_ENCRYPTION_KEY
     ?? (isDevFallbackAllowed() ? DEV_FALLBACK_KEY : undefined);
   if (!secret) {
@@ -51,26 +56,52 @@ function deriveKey(): Buffer {
       "Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode.",
     );
   }
-  return crypto.pbkdf2Sync(secret, SALT, 100_000, 32, "sha256");
+  return secret;
+}
+
+/**
+ * The previous secret, used only to DECRYPT tokens written before a key
+ * rotation. Set `VAULT_ENCRYPTION_KEY_PREVIOUS` to the old value when rotating
+ * `VAULT_ENCRYPTION_KEY` so existing tokens remain readable and can be migrated
+ * to the new key without forcing every merchant to reconnect.
+ */
+function previousSecret(): string | null {
+  return process.env.VAULT_ENCRYPTION_KEY_PREVIOUS || null;
+}
+
+function decryptWith(key: Buffer, ivHex: string, encHex: string): string {
+  const iv = Buffer.from(ivHex, "hex");
+  const enc = Buffer.from(encHex, "hex");
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
 }
 
 export function encryptToken(plaintext: string): string {
-  const key = deriveKey();
+  const key = deriveKey(currentSecret());
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   return `${iv.toString("hex")}:${encrypted.toString("hex")}`;
 }
 
+/**
+ * Decrypts a stored token. Tries the current key first, then falls back to the
+ * previous key (if `VAULT_ENCRYPTION_KEY_PREVIOUS` is set) so tokens survive a
+ * key rotation until they are migrated by `reEncryptVaultEntries`.
+ */
 export function decryptToken(ciphertext: string): string {
   const parts = ciphertext.split(":");
   if (parts.length !== 2) return "";
   const [ivHex, encHex] = parts;
-  const key = deriveKey();
-  const iv = Buffer.from(ivHex, "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
+  try {
+    return decryptWith(deriveKey(currentSecret()), ivHex, encHex);
+  } catch (err) {
+    const prev = previousSecret();
+    if (prev) {
+      return decryptWith(deriveKey(prev), ivHex, encHex);
+    }
+    throw err;
+  }
 }
 
 function tryDecrypt(ciphertext: string | null): boolean {
@@ -132,6 +163,89 @@ export async function invalidateUnreadableVaultEntries(): Promise<number> {
     );
   }
   return unreadable.length;
+}
+
+/**
+ * Re-encrypt a single ciphertext field under the current key. Returns the
+ * original value untouched if it is null, already current, or unreadable; only
+ * fields that decrypt under the PREVIOUS key are re-encrypted.
+ */
+function reEncryptField(
+  ciphertext: string | null,
+  curKey: Buffer,
+  prevKey: Buffer,
+): { value: string | null; rotated: boolean } {
+  if (!ciphertext) return { value: null, rotated: false };
+  const parts = ciphertext.split(":");
+  if (parts.length !== 2) return { value: ciphertext, rotated: false };
+  const [ivHex, encHex] = parts;
+  // Already encrypted under the current key — nothing to do.
+  try {
+    decryptWith(curKey, ivHex, encHex);
+    return { value: ciphertext, rotated: false };
+  } catch { /* fall through to previous key */ }
+  // Encrypted under the previous key — migrate it to the current key.
+  try {
+    const plain = decryptWith(prevKey, ivHex, encHex);
+    return { value: encryptToken(plain), rotated: true };
+  } catch {
+    // Unreadable under either key; leave it for invalidateUnreadableVaultEntries.
+    return { value: ciphertext, rotated: false };
+  }
+}
+
+/**
+ * One-shot startup migration for key rotation: when `VAULT_ENCRYPTION_KEY_PREVIOUS`
+ * is set, finds vault rows whose tokens were encrypted under the previous key and
+ * re-encrypts them under the current `VAULT_ENCRYPTION_KEY`. This lets operators
+ * rotate the vault key without forcing merchants to reconnect their integrations.
+ * After the migration runs, `VAULT_ENCRYPTION_KEY_PREVIOUS` can be removed.
+ * Returns the number of rows re-encrypted.
+ */
+export async function reEncryptVaultEntries(): Promise<number> {
+  const prev = previousSecret();
+  if (!prev) return 0;
+
+  const curKey = deriveKey(currentSecret());
+  const prevKey = deriveKey(prev);
+
+  const rows = await db
+    .select({
+      id: oauthTokenVaultTable.id,
+      merchantId: oauthTokenVaultTable.merchantId,
+      provider: oauthTokenVaultTable.provider,
+      encryptedAccessToken: oauthTokenVaultTable.encryptedAccessToken,
+      encryptedRefreshToken: oauthTokenVaultTable.encryptedRefreshToken,
+    })
+    .from(oauthTokenVaultTable)
+    .where(or(
+      isNotNull(oauthTokenVaultTable.encryptedAccessToken),
+      isNotNull(oauthTokenVaultTable.encryptedRefreshToken),
+    ));
+
+  let rotated = 0;
+  for (const row of rows) {
+    const access = reEncryptField(row.encryptedAccessToken, curKey, prevKey);
+    const refresh = reEncryptField(row.encryptedRefreshToken, curKey, prevKey);
+    if (!access.rotated && !refresh.rotated) continue;
+
+    await db.update(oauthTokenVaultTable)
+      .set({
+        encryptedAccessToken: access.value,
+        encryptedRefreshToken: refresh.value,
+      })
+      .where(eq(oauthTokenVaultTable.id, row.id));
+    rotated += 1;
+    logger.info(
+      { merchantId: row.merchantId, provider: row.provider },
+      "Re-encrypted OAuth vault entry under new key",
+    );
+  }
+
+  if (rotated > 0) {
+    logger.info({ count: rotated }, "Re-encrypted OAuth vault entries under rotated key");
+  }
+  return rotated;
 }
 
 /* ── Vault CRUD helpers ────────────────────────────────────────────────────── */

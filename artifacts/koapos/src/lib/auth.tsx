@@ -24,14 +24,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [me, meLoading, error]);
 
+  // Auth state is sourced from the server session via useGetMe() on every mount,
+  // so there is no cached user in localStorage to trust or clear.
   const login = (newUser: Merchant) => {
     setUser(newUser);
-    try { localStorage.setItem("koapos_auth_user", JSON.stringify(newUser)); } catch { /* ignore */ }
   };
 
   const logout = () => {
     setUser(null);
-    try { localStorage.removeItem("koapos_auth_user"); } catch { /* ignore */ }
   };
 
   const isLoading = isInitializing || meLoading;

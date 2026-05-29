@@ -65,5 +65,20 @@ export function useDashboardConfig() {
     [data, mutate, queryClient]
   );
 
-  return { config, toggle, isLoading };
+  const reset = useCallback(() => {
+    queryClient.setQueryData(getGetDashboardConfigQueryKey(), (old: DashboardConfigResponse | undefined) =>
+      old ? { ...old, ...DEFAULTS } : old
+    );
+
+    mutate(
+      { data: DEFAULTS },
+      {
+        onError: () => {
+          queryClient.setQueryData(getGetDashboardConfigQueryKey(), data);
+        },
+      }
+    );
+  }, [data, mutate, queryClient]);
+
+  return { config, toggle, reset, isLoading };
 }

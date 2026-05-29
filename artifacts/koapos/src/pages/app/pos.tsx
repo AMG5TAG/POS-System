@@ -1322,6 +1322,10 @@ export default function POSPage() {
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
     extraNote?: string,
+    // Compensation hook: invoked if recording the payment/sale fails AFTER an
+    // external balance (e.g. a gift card) was already debited, so the caller
+    // can restore it and keep the debit + payment atomic (both or neither).
+    onRecordFailed?: () => void,
   ) => {
     // ── Invoice Payment Mode ──
     // Settle an existing invoice's remaining balance instead of ringing up a
@@ -1344,6 +1348,7 @@ export default function POSPage() {
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
             toast.error(err.error ?? "Failed to record payment");
+            onRecordFailed?.();
             return;
           }
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
@@ -1375,6 +1380,7 @@ export default function POSPage() {
           setTimeout(() => setReceiptOpen(true), 250);
         } catch {
           toast.error("Failed to record payment");
+          onRecordFailed?.();
         } finally {
           setInvoicePayPending(false);
         }
@@ -1496,6 +1502,7 @@ export default function POSPage() {
               ? String((err as { error: unknown }).error)
               : "Failed to process transaction";
         toast.error(message);
+        onRecordFailed?.();
       },
     });
   };
@@ -2583,10 +2590,25 @@ export default function POSPage() {
                       { id: gc.cardId, data: { currentBalance: deductNewBalance } },
                       {
                         onSuccess: () => {
+                          // Compensation: if recording the payment fails after we
+                          // debited the card, restore the pre-debit balance so the
+                          // debit and the payment stay atomic (both or neither).
+                          const restoreGiftCard = () => {
+                            updateGiftCardMutation.mutate(
+                              {
+                                id: gc.cardId,
+                                data: {
+                                  currentBalance: gc.currentBalance,
+                                  adjustmentNote: `Restored ${formatCurrency(applied)} after failed payment on card ${gc.cardNumber}`,
+                                },
+                              },
+                              { onError: () => toast.error(`Could not restore gift card ${gc.cardNumber} balance — check Management > Gift Cards`) },
+                            );
+                          };
                           if (remaining > 0.004) {
-                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`);
+                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`, restoreGiftCard);
                           } else {
-                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber}]`);
+                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber}]`, restoreGiftCard);
                           }
                         },
                         onError: () => toast.error("Failed to deduct gift card balance — sale cancelled"),

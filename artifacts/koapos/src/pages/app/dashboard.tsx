@@ -15,8 +15,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import {
-  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays,
+  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw,
 } from "lucide-react";
 
 const WIDGETS: {
@@ -64,7 +67,7 @@ const WIDGETS: {
 ];
 
 export default function DashboardPage() {
-  const { config, toggle } = useDashboardConfig();
+  const { config, toggle, reset, isLoading } = useDashboardConfig();
   const [customiseOpen, setCustomiseOpen] = useState(false);
 
   const showPanels = config.showNotifications || config.showServiceJobsPanel;
@@ -74,22 +77,39 @@ export default function DashboardPage() {
       <div className="p-6 md:p-8 space-y-6">
         <DashboardClockBar onCustomize={() => setCustomiseOpen(true)} />
 
-        {(config.showStatusTiles || config.showMetricTiles || config.showOverdueBanner) && (
-          <ServiceJobsTiles
-            showStatusTiles={config.showStatusTiles}
-            showMetricTiles={config.showMetricTiles}
-            showOverdueBanner={config.showOverdueBanner}
-          />
-        )}
+        {isLoading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 rounded-xl" />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              <Skeleton className="h-64 rounded-xl" />
+              <Skeleton className="h-64 rounded-xl" />
+            </div>
+            <Skeleton className="h-96 rounded-xl" />
+          </div>
+        ) : (
+          <>
+            {(config.showStatusTiles || config.showMetricTiles || config.showOverdueBanner) && (
+              <ServiceJobsTiles
+                showStatusTiles={config.showStatusTiles}
+                showMetricTiles={config.showMetricTiles}
+                showOverdueBanner={config.showOverdueBanner}
+              />
+            )}
 
-        {showPanels && (
-          <DashboardPanels
-            showNotifications={config.showNotifications}
-            showServiceJobsPanel={config.showServiceJobsPanel}
-          />
-        )}
+            {showPanels && (
+              <DashboardPanels
+                showNotifications={config.showNotifications}
+                showServiceJobsPanel={config.showServiceJobsPanel}
+              />
+            )}
 
-        {config.showCalendar && <DashboardCalendar />}
+            {config.showCalendar && <DashboardCalendar />}
+          </>
+        )}
       </div>
 
       {/* Customise Sheet */}
@@ -133,6 +153,20 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+
+          <Separator className="my-4" />
+
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => {
+              reset();
+              toast.success("Dashboard reset to defaults");
+            }}
+          >
+            <RotateCcw className="w-4 h-4" />
+            Reset to defaults
+          </Button>
         </SheetContent>
       </Sheet>
     </AppLayout>

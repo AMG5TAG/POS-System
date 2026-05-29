@@ -22,7 +22,19 @@ Missing any of them causes the process to fail fast on boot.
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string (Drizzle ORM). |
 | `SESSION_SECRET` | `express-session` cookie signing secret. |
-| `VAULT_ENCRYPTION_KEY` | AES-256-CBC key used to encrypt OAuth access/refresh tokens stored in `oauth_token_vault`. **The server throws `"Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode."` on startup if this is missing under `NODE_ENV=production`.** The insecure hardcoded dev fallback is only honoured when `NODE_ENV` is `development` or blank — never in production, staging, test, or any other value. Generate a strong value, e.g. `openssl rand -hex 32`. On startup the server invalidates any vault rows that cannot be decrypted with the current key (e.g. tokens encrypted under an older key); affected merchants must reconnect their integrations.
+| `VAULT_ENCRYPTION_KEY` | AES-256-CBC key used to encrypt OAuth access/refresh tokens stored in `oauth_token_vault`. **The server throws `"Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode."` on startup if this is missing under `NODE_ENV=production`.** The insecure hardcoded dev fallback is only honoured when `NODE_ENV` is `development` or blank — never in production, staging, test, or any other value. Generate a strong value, e.g. `openssl rand -hex 32`. On startup the server first re-encrypts any tokens encrypted under `VAULT_ENCRYPTION_KEY_PREVIOUS` (see below), then invalidates any vault rows that still cannot be decrypted with the current key (e.g. tokens encrypted under an unknown older key); affected merchants must reconnect their integrations.
+| `VAULT_ENCRYPTION_KEY_PREVIOUS` | Optional. Set this to the **old** `VAULT_ENCRYPTION_KEY` value when rotating the vault key. See "Rotating `VAULT_ENCRYPTION_KEY`" below.
+
+### Rotating `VAULT_ENCRYPTION_KEY`
+
+Tokens in `oauth_token_vault` are encrypted with `VAULT_ENCRYPTION_KEY`. To rotate the key **without forcing every merchant to reconnect**:
+
+1. Set `VAULT_ENCRYPTION_KEY_PREVIOUS` to the current (soon-to-be-old) key value.
+2. Set `VAULT_ENCRYPTION_KEY` to the new key value.
+3. Restart the API server. On boot it runs a one-shot migration (`reEncryptVaultEntries`) that decrypts any token readable under the previous key and re-encrypts it under the new key. While both vars are set, `decryptToken` also transparently falls back to the previous key, so reads keep working during the transition.
+4. Once the migration has run (look for `"Re-encrypted OAuth vault entries under rotated key"` in the logs), remove `VAULT_ENCRYPTION_KEY_PREVIOUS` and restart again.
+
+Any rows that cannot be decrypted under **either** key are invalidated on startup (`disconnectedReason: "key_rotated"`); those merchants must reconnect the affected integrations.
 
 ### Integration env vars
 

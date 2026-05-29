@@ -22,7 +22,7 @@ export class ManagementErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error(
-      "[ManagementErrorBoundary] Render exception:",
+      "[AppErrorBoundary] Render exception:",
       error.message,
       info.componentStack,
     );
@@ -46,10 +46,10 @@ export class ManagementErrorBoundary extends React.Component<Props, State> {
               </div>
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-destructive">
-                  Management Workspace Render Exception
+                  Something went wrong on this page
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                  This management page encountered an unhandled render error.
+                  This page encountered an unexpected error.
                   No data has been modified. Navigate to another page or use
                   the button below to recover.
                 </p>
