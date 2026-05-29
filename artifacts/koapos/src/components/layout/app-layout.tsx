@@ -119,7 +119,7 @@ const INVENTORY_SUBNAV = [
 ];
 
 type NavLeaf  = { name: string; href: string;  icon: React.ComponentType<{ className?: string }> };
-type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }>; defaultHref?: string };
 type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
@@ -178,10 +178,11 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   {
     name: "Reports",
     icon: TrendingUp,
+    defaultHref: "/management/sales-overview",
     children: [
-      { name: "Sales Overview", href: "/management/sales-overview",   icon: BarChart2  },
-      { name: "BAS / GST",      href: "/management/reports/bas",      icon: Receipt    },
-      { name: "Margin",         href: "/management/reports/margin",   icon: Percent    },
+      { name: "Overview",  href: "/management/sales-overview",   icon: BarChart2  },
+      { name: "BAS / GST", href: "/management/reports/bas",      icon: Receipt    },
+      { name: "Margin",    href: "/management/reports/margin",   icon: Percent    },
     ],
   },
   { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
@@ -537,14 +538,19 @@ function Breadcrumbs({ location }: { location: string }) {
 
 /* ─── Nested nav group (level 3, sidebar only) ───────────────────────────── */
 
-function NavNestedGroup({ name, icon: Icon, children, location }: {
+function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, navigate }: {
   name: string; icon: React.ComponentType<{ className?: string }>; children: NavLeaf[]; location: string;
+  defaultHref?: string; navigate?: (href: string) => void;
 }) {
   const isChildActive = children.some((c) => location === c.href);
   const [open, setOpen] = useState(isChildActive);
+  const handleClick = () => {
+    if (defaultHref && navigate) navigate(defaultHref);
+    setOpen((o) => !o);
+  };
   return (
     <SidebarMenuSubItem>
-      <SidebarMenuSubButton isActive={isChildActive} onClick={() => setOpen((o) => !o)} className="cursor-pointer w-full">
+      <SidebarMenuSubButton isActive={isChildActive} onClick={handleClick} className="cursor-pointer w-full">
         <Icon className="w-3.5 h-3.5 shrink-0" />
         <span className="flex-1">{name}</span>
         <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
@@ -1297,7 +1303,7 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
           <SidebarMenuSub>
             {items.map((item) => {
               if ("children" in item) {
-                return <NavNestedGroup key={item.name} name={item.name} icon={item.icon} children={item.children} location={location} />;
+                return <NavNestedGroup key={item.name} name={item.name} icon={item.icon} children={item.children} location={location} defaultHref={item.defaultHref} navigate={navigate} />;
               }
               const active = location === item.href;
               return (
