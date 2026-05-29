@@ -27,7 +27,7 @@ import { useSalesTemplate } from "@/lib/use-sales-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Tag, CalendarClock, TrendingUp, AlertCircle, ListChecks,
+  Banknote, Tag, CalendarClock, AlertCircle, ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1159,7 +1159,6 @@ export default function POSInvoicesPage() {
   const recurringFiltered = useMemo(() => filtered.filter((inv) =>  inv.isRecurring),  [filtered]);
   const recurringInstances = useMemo(() => explodeRecurringInstances(recurringFiltered), [recurringFiltered]);
 
-  const kpiRevenue     = useMemo(() => invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.total, 0),                         [invoices]);
   const kpiOutstanding = useMemo(() => invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.total, 0), [invoices]);
   const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
 
@@ -1203,7 +1202,7 @@ export default function POSInvoicesPage() {
         </div>
 
         {/* ── KPI Summary Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-5 pb-4">
               <div className="flex items-start justify-between gap-2">
@@ -1220,11 +1219,13 @@ export default function POSInvoicesPage() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Revenue Collected</p>
-                  <p className="text-2xl font-bold mt-1 text-green-600">{formatCurrency(kpiRevenue)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => i.status === "paid").length} paid invoices</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overdue</p>
+                  <p className={`text-2xl font-bold mt-1 ${kpiOverdue.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {kpiOverdue.length} invoice{kpiOverdue.length !== 1 ? "s" : ""} overdue
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(kpiOverdue.reduce((s, i) => s + i.total, 0))} outstanding</p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-green-500/20 shrink-0" />
+                <AlertCircle className={`w-8 h-8 shrink-0 ${kpiOverdue.length > 0 ? "text-destructive/20" : "text-muted-foreground/10"}`} />
               </div>
             </CardContent>
           </Card>
@@ -1237,18 +1238,6 @@ export default function POSInvoicesPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">{invoices.filter((i) => i.status === "sent" || i.status === "overdue").length} awaiting payment</p>
                 </div>
                 <Clock className="w-8 h-8 text-amber-500/20 shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overdue</p>
-                  <p className={`text-2xl font-bold mt-1 ${kpiOverdue.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>{kpiOverdue.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(kpiOverdue.reduce((s, i) => s + i.total, 0))} total value</p>
-                </div>
-                <AlertCircle className={`w-8 h-8 shrink-0 ${kpiOverdue.length > 0 ? "text-destructive/20" : "text-muted-foreground/10"}`} />
               </div>
             </CardContent>
           </Card>
