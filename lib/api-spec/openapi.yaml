@@ -5865,8 +5865,6 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
-        productType:
-          type: string
         productTypeId:
           type: integer
         groupPrices:
@@ -5918,8 +5916,6 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
-        productType:
-          type: string
         productTypeId:
           type: ["integer", "null"]
         groupPrices:

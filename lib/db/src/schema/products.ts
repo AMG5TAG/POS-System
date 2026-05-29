@@ -31,7 +31,6 @@ export const productsTable = pgTable("products", {
   categoryId:        integer("category_id").references(() => categoriesTable.id),
   brandId:           integer("brand_id").references(() => brandsTable.id),
   imageUrl:          text("image_url"),
-  productType:       text("product_type").notNull().default("standard"),
   productTypeId:     integer("product_type_id").references(() => productTypesTable.id),
   trackInventory:    text("track_inventory").notNull().default("true"),
   stockQuantity:     integer("stock_quantity").notNull().default(0),

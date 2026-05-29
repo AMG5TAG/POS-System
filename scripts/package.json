@@ -6,7 +6,6 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed-calendar": "tsx ./src/seed-calendar.ts",
-    "seed-product-types": "tsx ./src/seed-product-types.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

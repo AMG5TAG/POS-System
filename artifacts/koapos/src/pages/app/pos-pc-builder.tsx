@@ -355,7 +355,6 @@ export default function POSPCBuilderPage() {
           trackInventory: false,
           stockQuantity: 1,
           isActive: true,
-          productType: "bundle",
         },
       },
       {

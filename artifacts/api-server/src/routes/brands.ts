@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, brandsTable, productsTable } from "@workspace/db";
-import { eq, and, ilike, count, sum, sql, ne } from "drizzle-orm";
+import { db, brandsTable, productsTable, productTypesTable } from "@workspace/db";
+import { eq, and, ilike, count, sql, or, notInArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -9,6 +9,14 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
   const { search } = req.query as { search?: string };
   const conditions = [eq(brandsTable.merchantId, req.session.merchantId!)];
   if (search) conditions.push(ilike(brandsTable.name, `%${search}%`));
+
+  const excludedTypes = await db.select({ id: productTypesTable.id })
+    .from(productTypesTable)
+    .where(and(
+      eq(productTypesTable.merchantId, req.session.merchantId!),
+      or(eq(productTypesTable.slug, "service"), eq(productTypesTable.slug, "digital_code")),
+    ));
+  const excludedIds = excludedTypes.map((t) => t.id);
 
   const brands = await db
     .select({
@@ -29,8 +37,7 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
         eq(productsTable.brandId, brandsTable.id),
         eq(productsTable.merchantId, req.session.merchantId!),
         eq(productsTable.isActive, "true"),
-        ne(productsTable.productType, "service"),
-        ne(productsTable.productType, "digital_code"),
+        excludedIds.length > 0 ? notInArray(productsTable.productTypeId, excludedIds) : undefined,
       ),
     )
     .where(and(...conditions))

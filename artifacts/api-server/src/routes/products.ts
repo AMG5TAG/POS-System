@@ -46,7 +46,7 @@ function formatProduct(
       : undefined,
     brandId: p.brandId ?? null,
     imageUrl: p.imageUrl ?? null,
-    productType: productType?.slug ?? p.productType,
+    productType: productType?.slug ?? "standard",
     productTypeId: p.productTypeId ?? null,
     productTypeName: productType?.name ?? null,
     trackInventory: p.trackInventory === "true",
@@ -192,28 +192,18 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
     if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
     ptRecord = pt;
   } else {
-    const slug = rest.productType ?? "standard";
     const [pt] = await db.select().from(productTypesTable)
-      .where(and(eq(productTypesTable.slug, slug), eq(productTypesTable.merchantId, req.session.merchantId!)));
-    if (pt) {
-      ptRecord = pt;
-    } else {
-      const [fallback] = await db.select().from(productTypesTable)
-        .where(and(eq(productTypesTable.slug, "standard"), eq(productTypesTable.merchantId, req.session.merchantId!)));
-      ptRecord = fallback ?? null;
-    }
+      .where(and(eq(productTypesTable.slug, "standard"), eq(productTypesTable.merchantId, req.session.merchantId!)));
+    if (!pt) { res.status(400).json({ error: "No standard product type found; please set up product types first" }); return; }
+    ptRecord = pt;
   }
-
-  const resolvedProductTypeId = ptRecord?.id ?? null;
-  const resolvedProductType = ptRecord?.slug ?? rest.productType ?? "standard";
 
   const [product] = await db
     .insert(productsTable)
     .values({
       ...rest,
       merchantId: req.session.merchantId!,
-      productType: resolvedProductType,
-      productTypeId: resolvedProductTypeId,
+      productTypeId: ptRecord.id,
       price: price.toString(),
       costPrice: costPrice?.toString(),
       taxRate: taxRate?.toString(),
@@ -359,7 +349,6 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
       .where(and(eq(productTypesTable.id, productTypeId), eq(productTypesTable.merchantId, req.session.merchantId!)));
     if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
     updates.productTypeId = pt.id;
-    updates.productType = pt.slug;
     patchPtRecord = pt;
   }
 

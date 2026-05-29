@@ -246,7 +246,6 @@ export default function POS3DPrintsPage() {
           trackInventory: false,
           stockQuantity: 1,
           isActive: true,
-          productType: "3d_print",
         },
       },
       {

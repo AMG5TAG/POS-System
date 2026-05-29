@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable } from "@workspace/db";
+import { db, productsTable, productTypesTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ListInventoryQueryParams, UpdateInventoryParams, UpdateInventoryBody } from "@workspace/api-zod";
@@ -15,10 +15,17 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
 
   const { lowStock } = queryParams.data;
 
+  const [serviceType] = await db.select({ id: productTypesTable.id })
+    .from(productTypesTable)
+    .where(and(eq(productTypesTable.merchantId, req.session.merchantId!), eq(productTypesTable.slug, "service")));
+
   let products = await db
     .select()
     .from(productsTable)
-    .where(and(eq(productsTable.merchantId, req.session.merchantId!), ne(productsTable.productType, "service")));
+    .where(and(
+      eq(productsTable.merchantId, req.session.merchantId!),
+      serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
+    ));
 
   if (lowStock) {
     products = products.filter((p) => {

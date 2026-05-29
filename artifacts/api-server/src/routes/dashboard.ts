@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, productTypesTable } from "@workspace/db";
 import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams, UpsertDashboardConfigBody } from "@workspace/api-zod";
@@ -195,10 +195,17 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(newCustomersWhere);
 
   // Low stock count (exclude service-type products — they have no stock)
+  const [serviceType] = await db.select({ id: productTypesTable.id })
+    .from(productTypesTable)
+    .where(and(eq(productTypesTable.merchantId, merchantId), eq(productTypesTable.slug, "service")));
   const products = await db
     .select()
     .from(productsTable)
-    .where(and(eq(productsTable.merchantId, merchantId), eq(productsTable.trackInventory, "true"), ne(productsTable.productType, "service")));
+    .where(and(
+      eq(productsTable.merchantId, merchantId),
+      eq(productsTable.trackInventory, "true"),
+      serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
+    ));
 
   const lowStockCount = products.filter((p) => p.stockQuantity <= (p.lowStockThreshold ?? 5)).length;
 

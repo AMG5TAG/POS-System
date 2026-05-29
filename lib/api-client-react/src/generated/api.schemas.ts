@@ -255,7 +255,6 @@ export interface ProductInput {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
-  productType?: string;
   productTypeId?: number;
   groupPrices?: ProductInputGroupPrices;
   supplier?: string;
@@ -285,7 +284,6 @@ export interface ProductUpdate {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
-  productType?: string;
   /** @nullable */
   productTypeId?: number | null;
   groupPrices?: ProductUpdateGroupPrices;
