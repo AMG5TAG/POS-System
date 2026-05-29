@@ -204,6 +204,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Templates", href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
+  { name: "Product Types",  href: "/management/product-types",  icon: Layers         },
   { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
 ];
 
@@ -268,6 +269,7 @@ const SEARCH_INDEX = [
   { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
   { label: "POS Registers",      href: "/management/registers",        icon: Monitor,         group: "Management" },
   { label: "Sale Templates",      href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Product Types",      href: "/management/product-types",              icon: Layers,       group: "Management" },
   { label: "Tax Settings",       href: "/management/tax",                        icon: Receipt,      group: "Management" },
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
@@ -367,6 +369,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/discounts":        ["Management", "Discounts"],
   "/inventory/wastage":           ["Inventory", "Wastage"],
   "/settings/tax":                ["Management", "Tax Settings"],
+  "/management/product-types":    ["Management", "Product Types"],
   "/management/tax":              ["Management", "Tax Settings"],
   "/management/email":            ["Management", "Email"],
   "/management/templates":        ["Management", "Sale Templates"],

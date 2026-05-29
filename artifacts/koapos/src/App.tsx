@@ -80,6 +80,7 @@ import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templ
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
 import SettingsEmailPage from "@/pages/app/settings-email";
+import SettingsProductTypesPage from "@/pages/app/settings-product-types";
 import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
@@ -400,6 +401,9 @@ function Router() {
       </Route>
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />
+      </Route>
+      <Route path="/management/product-types">
+        <ManagementProtectedRoute component={SettingsProductTypesPage} />
       </Route>
       <Route path="/management/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
