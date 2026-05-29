@@ -1371,7 +1371,8 @@ export default function POSInvoicesPage() {
                       <th className="text-left p-3 font-medium">Customer &amp; Schedule</th>
                       <th className="text-right p-3 font-medium">Amount Due</th>
                       <th className="text-left p-3 font-medium w-32">Status</th>
-                      <th className="p-3 w-12" />
+                      <th className="text-left p-3 font-medium w-36 hidden md:table-cell">Receiver Viewed</th>
+                      <th className="p-3 w-32" />
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -1420,17 +1421,46 @@ export default function POSInvoicesPage() {
                             </span>
                           </td>
 
-                          {/* Col 5 — View parent invoice */}
+                          {/* Col 5 — Receiver viewed tracking */}
+                          <td className="p-3 hidden md:table-cell">
+                            {inst.parent.viewedAt ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                                <Eye className="w-2.5 h-2.5 shrink-0" />
+                                Viewed
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-500">
+                                <EyeOff className="w-2.5 h-2.5 shrink-0" />
+                                Sent / Unopened
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Col 6 — Mark Paid + View actions */}
                           <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="View invoice"
-                              onClick={() => openDetail(inst.parent)}
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {inst.instanceStatus !== "paid" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-[11px] font-medium text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
+                                  title="Mark this instance as paid"
+                                  onClick={() => updateStatus(inst.parent.id, "paid")}
+                                >
+                                  <Banknote className="w-3 h-3 mr-1" />
+                                  Mark Paid
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                title="View invoice"
+                                onClick={() => openDetail(inst.parent)}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
