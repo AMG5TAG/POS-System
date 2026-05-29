@@ -314,6 +314,17 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your brand catalogue.",
     exportUrl: "/api/brands?limit=10000",
     createUrl: "/api/brands",
+    updateUrl: "/api/brands",
+    fetchAllUrl: "/api/brands?limit=10000",
+    dedupeBy: (p, e) => {
+      const pName = String(p.name ?? "").trim().toLowerCase();
+      const eName = String(e.name ?? "").trim().toLowerCase();
+      return {
+        match: pName.length > 0 && pName === eName,
+        id: e.id as number,
+        label: String(e.name ?? ""),
+      };
+    },
     fields: [
       { key: "name",        label: "Brand Name",  required: true },
       { key: "description", label: "Description"  },
@@ -361,6 +372,17 @@ const ENTITIES: EntityConfig[] = [
     description: "Import and export your product categories including colour coding and display order.",
     exportUrl: "/api/categories",
     createUrl: "/api/categories",
+    updateUrl: "/api/categories",
+    fetchAllUrl: "/api/categories",
+    dedupeBy: (p, e) => {
+      const pName = String(p.name ?? "").trim().toLowerCase();
+      const eName = String(e.name ?? "").trim().toLowerCase();
+      return {
+        match: pName.length > 0 && pName === eName,
+        id: e.id as number,
+        label: String(e.name ?? ""),
+      };
+    },
     fields: [
       { key: "name",      label: "Category Name", required: true },
       { key: "color",     label: "Color",          hint: "Hex color e.g. #3b82f6" },
