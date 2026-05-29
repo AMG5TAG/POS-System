@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable } from "@workspace/db";
 import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams, UpsertDashboardConfigBody } from "@workspace/api-zod";
@@ -22,6 +22,20 @@ const AU_HOLIDAYS_2026: Record<string, string> = {
 
 function getPublicHoliday(dateStr: string): string | null {
   return AU_HOLIDAYS_2026[dateStr] ?? null;
+}
+
+/**
+ * Convert a UTC Date to a "YYYY-MM-DD" string in the given IANA timezone.
+ * Uses Intl.DateTimeFormat (built into Node ≥18) which handles DST correctly.
+ * en-CA locale produces ISO-style date output.
+ */
+function toLocalDateKey(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 const router: IRouter = Router();
@@ -468,8 +482,21 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   const { year, month } = parsed.data;
   const merchantId = req.session.merchantId!;
 
-  const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const monthEnd = new Date(Date.UTC(year, month, 1));
+  // Fetch the merchant's timezone so we bucket events into correct local dates
+  const [merchantRow] = await db
+    .select({ timezone: merchantsTable.timezone })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, merchantId))
+    .limit(1);
+  const timezone = merchantRow?.timezone ?? "Australia/Sydney";
+
+  // Expand the UTC query window by ±1 day so events that fall inside the local
+  // month but outside the UTC month boundary are not missed (e.g. 11 pm AWST on
+  // the last day of the month = next UTC day). Events bucketed outside the
+  // requested month are harmlessly ignored because their key won't be in dayMap.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const queryStart = new Date(Date.UTC(year, month - 1, 1) - DAY_MS);
+  const queryEnd   = new Date(Date.UTC(year, month, 1)     + DAY_MS);
 
   // Build a map of date -> events
   const dayMap: Record<string, {
@@ -495,19 +522,19 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     };
   }
 
-  // Sales (transactions) aggregated by day
+  // Sales (transactions) aggregated by day — bucket by merchant's local date
   const txns = await db
     .select()
     .from(transactionsTable)
     .where(and(
       eq(transactionsTable.merchantId, merchantId),
       eq(transactionsTable.status, "completed"),
-      gte(transactionsTable.createdAt, monthStart),
-      lt(transactionsTable.createdAt, monthEnd),
+      gte(transactionsTable.createdAt, queryStart),
+      lt(transactionsTable.createdAt, queryEnd),
     ));
 
   for (const t of txns) {
-    const key = t.createdAt.toISOString().split("T")[0];
+    const key = toLocalDateKey(t.createdAt, timezone);
     if (dayMap[key]) dayMap[key].sales += 1;
   }
 
@@ -517,8 +544,8 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     .from(appointmentsTable)
     .where(and(
       eq(appointmentsTable.merchantId, merchantId),
-      gte(appointmentsTable.scheduledAt, monthStart),
-      lt(appointmentsTable.scheduledAt, monthEnd),
+      gte(appointmentsTable.scheduledAt, queryStart),
+      lt(appointmentsTable.scheduledAt, queryEnd),
     ));
 
   // Get customer names for appointments
@@ -529,9 +556,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   const apptCustomerMap = new Map(apptCustomers.map((c) => [c.id, c]));
 
   for (const a of appts) {
-    // Convert to AEST (UTC+10) for the date key
-    const localDate = new Date(a.scheduledAt.getTime() + 10 * 60 * 60 * 1000);
-    const key = localDate.toISOString().split("T")[0];
+    const key = toLocalDateKey(a.scheduledAt, timezone);
     if (!dayMap[key]) continue;
     const customer = a.customerId ? apptCustomerMap.get(a.customerId) : null;
     dayMap[key].appointments.push({
@@ -554,21 +579,20 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
       or(
         and(
           isNotNull(serviceJobsTable.scheduledAt),
-          gte(serviceJobsTable.scheduledAt, monthStart),
-          lt(serviceJobsTable.scheduledAt, monthEnd),
+          gte(serviceJobsTable.scheduledAt, queryStart),
+          lt(serviceJobsTable.scheduledAt, queryEnd),
         ),
         and(
           isNull(serviceJobsTable.scheduledAt),
-          gte(serviceJobsTable.createdAt, monthStart),
-          lt(serviceJobsTable.createdAt, monthEnd),
+          gte(serviceJobsTable.createdAt, queryStart),
+          lt(serviceJobsTable.createdAt, queryEnd),
         ),
       ),
     ));
 
   for (const j of jobs) {
     const dateSource = j.scheduledAt ?? j.createdAt;
-    const localDate = new Date(dateSource.getTime() + 10 * 60 * 60 * 1000);
-    const key = localDate.toISOString().split("T")[0];
+    const key = toLocalDateKey(dateSource, timezone);
     if (dayMap[key]) dayMap[key].serviceJobs += 1;
   }
 
@@ -578,17 +602,16 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     .from(invoicesTable)
     .where(and(
       eq(invoicesTable.merchantId, merchantId),
-      gte(invoicesTable.createdAt, monthStart),
-      lt(invoicesTable.createdAt, monthEnd),
+      gte(invoicesTable.createdAt, queryStart),
+      lt(invoicesTable.createdAt, queryEnd),
     ));
 
   for (const inv of invs) {
-    const localDate = new Date(inv.createdAt.getTime() + 10 * 60 * 60 * 1000);
-    const key = localDate.toISOString().split("T")[0];
+    const key = toLocalDateKey(inv.createdAt, timezone);
     if (dayMap[key]) dayMap[key].invoices += 1;
   }
 
-  // Customer birthdays (match by month/day)
+  // Customer birthdays (match by month/day — dateOfBirth is stored as "YYYY-MM-DD" local date)
   const customers = await db
     .select()
     .from(customersTable)
@@ -596,7 +619,6 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
 
   for (const c of customers) {
     if (!c.dateOfBirth) continue;
-    // dateOfBirth is stored as "YYYY-MM-DD"
     const dob = c.dateOfBirth as string;
     const dobParts = dob.split("-");
     if (dobParts.length < 3) continue;
