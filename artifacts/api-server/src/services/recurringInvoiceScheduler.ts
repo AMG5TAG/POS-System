@@ -1,5 +1,5 @@
 import { db, invoicesTable, customersTable, merchantsTable } from "@workspace/db";
-import { eq, and, lte, gt, isNotNull } from "drizzle-orm";
+import { eq, and, lte, or, isNotNull } from "drizzle-orm";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -177,14 +177,17 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
 }
 
 /**
- * One-time data patch for the Koastal Komputers merchant: any recurring invoice
- * whose due date is still in the future was incorrectly left in a "paid"/viewed
- * state. Reset those rows back to unpaid (status "sent") and clear the viewed
- * marker so the ledger reflects reality.
+ * One-time data correction for the Koastal Komputers merchant: reset ALL of
+ * their recurring invoices back to unviewed and unpaid (status "sent", clearing
+ * viewedAt / paidAt and zeroing amountPaid) so the ledger reflects reality.
  */
+// One-time cutoff. Only invoices last modified before this instant are eligible,
+// so the reset corrects the existing stale data once and never clobbers any
+// payment recorded after this fix was deployed.
+const RECURRING_RESET_CUTOFF = new Date("2026-05-30T00:00:00.000Z");
+
 export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise<void> {
   const targetEmail = "admin@koastalkomputers.com.au";
-  const now = new Date();
 
   const [merchant] = await db
     .select({ id: merchantsTable.id })
@@ -192,6 +195,9 @@ export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise
     .where(eq(merchantsTable.email, targetEmail));
   if (!merchant) return;
 
+  // Reset ALL recurring invoices for this merchant to unviewed + unpaid.
+  // The updatedAt <= cutoff guard makes this idempotent: once a row is reset
+  // its updatedAt advances past the cutoff and it is never touched again.
   const result = await db
     .update(invoicesTable)
     .set({ status: "sent", viewedAt: null, paidAt: null, amountPaid: "0", updatedAt: new Date() })
@@ -199,21 +205,25 @@ export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise
       and(
         eq(invoicesTable.merchantId, merchant.id),
         eq(invoicesTable.isRecurring, "true"),
-        eq(invoicesTable.status, "paid"),
-        isNotNull(invoicesTable.dueDate),
-        gt(invoicesTable.dueDate, now),
+        lte(invoicesTable.updatedAt, RECURRING_RESET_CUTOFF),
+        or(
+          eq(invoicesTable.status, "paid"),
+          eq(invoicesTable.status, "partial"),
+          isNotNull(invoicesTable.viewedAt),
+          isNotNull(invoicesTable.paidAt),
+        ),
       ),
     )
     .returning({ id: invoicesTable.id });
 
   if (result.length > 0) {
-    logger.info({ merchantId: merchant.id, count: result.length }, "Patched future-dated recurring invoices back to unpaid");
+    logger.info({ merchantId: merchant.id, count: result.length }, "Reset recurring invoices to unviewed and unpaid");
   }
 }
 
 export function scheduleRecurringInvoices(logger: Logger): void {
   patchFutureRecurringInvoiceStates(logger).catch((err) =>
-    logger.error({ err }, "Failed to patch future recurring invoice states"),
+    logger.error({ err }, "Failed to reset recurring invoice states"),
   );
   processRecurringInvoices(logger).catch((err) =>
     logger.error({ err }, "Recurring invoice scheduler startup error"),
