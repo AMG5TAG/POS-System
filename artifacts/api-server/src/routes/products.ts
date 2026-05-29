@@ -249,9 +249,9 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
   if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
   const merchantId = req.session.merchantId!;
 
-  // CASE-based guard: the ::jsonb cast is only evaluated in the THEN branch,
-  // guaranteeing it never runs on non-array or malformed values, matching the
-  // old try/catch per-row skip behaviour.
+  // IS JSON ARRAY (PG 16) fully validates the JSON before the THEN branch runs
+  // the ::jsonb cast — rows with null, non-array, or genuinely malformed JSON
+  // (e.g. '[bad') are excluded, matching the old try/catch per-row skip behaviour.
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = (
@@ -262,9 +262,8 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
       FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
     )
     WHERE merchant_id = ${merchantId}
-      AND tags_json IS NOT NULL
       AND (
-        CASE WHEN tags_json ~ '^\\\['
+        CASE WHEN tags_json IS JSON ARRAY
           THEN tags_json::jsonb @> jsonb_build_array(${oldName}::text)
           ELSE FALSE
         END
@@ -297,9 +296,8 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
       ) deduped
     )
     WHERE merchant_id = ${merchantId}
-      AND tags_json IS NOT NULL
       AND (
-        CASE WHEN tags_json ~ '^\\\['
+        CASE WHEN tags_json IS JSON ARRAY
           THEN (${filterOr})
           ELSE FALSE
         END
@@ -325,9 +323,8 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
       '[]'
     )
     WHERE merchant_id = ${merchantId}
-      AND tags_json IS NOT NULL
       AND (
-        CASE WHEN tags_json ~ '^\\\['
+        CASE WHEN tags_json IS JSON ARRAY
           THEN tags_json::jsonb @> jsonb_build_array(${name}::text)
           ELSE FALSE
         END
