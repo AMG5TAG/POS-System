@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { User, MapPin, Settings2, CheckCircle2, AlertTriangle, Check, ChevronsUpDown, X } from "lucide-react";
+import { User, MapPin, Settings2, CheckCircle2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -263,39 +264,6 @@ export function AddCustomerWizard({
                 <Field label="ABN">
                   <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" />
                 </Field>
-                <Field label="Referral Code">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={form.referralCode}
-                      onChange={(e) => setField("referralCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))}
-                      placeholder="AB-1X2Y"
-                      className="font-mono"
-                    />
-                    {editingCustomer && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 h-9 px-2 text-xs"
-                        onClick={() => {
-                          const f = (form.firstName || "X")[0].toUpperCase();
-                          const l = (form.lastName || "X")[0].toUpperCase();
-                          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                          let suffix = "";
-                          for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-                          setField("referralCode", `${f}${l}-${suffix}`);
-                        }}
-                        type="button"
-                      >
-                        Regenerate
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {editingCustomer ? "Customers can share this code to refer friends." : "Auto-generated on save based on initials."}
-                  </p>
-                </Field>
-              </FieldRow>
-              <FieldRow>
                 <Field label="Heard From">
                   <Select value={form.heardFrom} onValueChange={(v) => { setField("heardFrom", v); setField("heardFromDetails", ""); }}>
                     <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
@@ -321,106 +289,129 @@ export function AddCustomerWizard({
               </FieldRow>
               <FieldRow>
                 <Field label="Referral" full>
-                  <div className="relative">
-                    <Popover open={referralOpen} onOpenChange={setReferralOpen}>
-                      <PopoverTrigger asChild>
+                  <div className="space-y-2">
+                    {/* Referral Picker */}
+                    <div className="relative">
+                      <Popover open={referralOpen} onOpenChange={setReferralOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-lg border bg-background px-3 py-2.5 text-sm ring-offset-background transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                              !form.referredByCustomerId && !form.referralCode && "text-muted-foreground"
+                            )}
+                          >
+                            <UserSearch className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <span className="truncate flex-1 text-left">
+                              {form.referredByCustomerId
+                                ? (() => {
+                                    const c = allCustomers.find((cust) => String(cust.id) === form.referredByCustomerId);
+                                    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Customer" : "Select customer...";
+                                  })()
+                                : "Select existing customer..."}
+                            </span>
+                            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[320px] p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="Search customers..."
+                              value={referralQuery}
+                              onValueChange={setReferralQuery}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No customers found.</CommandEmpty>
+                              <CommandGroup>
+                                {allCustomers
+                                  .filter((cust) => {
+                                    const term = referralQuery.toLowerCase();
+                                    const name = `${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim().toLowerCase();
+                                    return name.includes(term) || (cust.email ?? "").toLowerCase().includes(term) || (cust.phone ?? "").toLowerCase().includes(term);
+                                  })
+                                  .map((cust) => (
+                                    <CommandItem
+                                      key={cust.id}
+                                      value={String(cust.id)}
+                                      onSelect={() => {
+                                        setField("referredByCustomerId", String(cust.id));
+                                        setField("referralCode", cust.referralCode ?? "");
+                                        setReferralOpen(false);
+                                      }}
+                                    >
+                                      <Check className={cn("mr-2 h-4 w-4", form.referredByCustomerId === String(cust.id) ? "opacity-100" : "opacity-0")} />
+                                      <span className="truncate">{`${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() || "Unnamed"}</span>
+                                      {cust.phone && <span className="ml-2 text-xs text-muted-foreground">{cust.phone}</span>}
+                                    </CommandItem>
+                                  ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {form.referredByCustomerId && (
                         <button
                           type="button"
-                          className={cn(
-                            "flex w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-                            !form.referralCode && !form.referredByCustomerId && "text-muted-foreground"
-                          )}
+                          onClick={() => { setField("referredByCustomerId", ""); setField("referralCode", ""); }}
+                          className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Clear selection"
                         >
-                          <span className="truncate">
-                            {form.referredByCustomerId
-                              ? (() => {
-                                  const c = allCustomers.find((cust) => String(cust.id) === form.referredByCustomerId);
-                                  return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Customer" : "Select customer...";
-                                })()
-                              : form.referralCode || "Select existing customer or type a code"}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <X className="h-3.5 w-3.5" />
                         </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[320px] p-0" align="start">
-                        <Command>
-                          <CommandInput
-                            placeholder="Search customers..."
-                            value={referralQuery}
-                            onValueChange={setReferralQuery}
-                          />
-                          <CommandList>
-                            <CommandEmpty>No customers found.</CommandEmpty>
-                            <CommandGroup>
-                              {allCustomers
-                                .filter((cust) => {
-                                  const term = referralQuery.toLowerCase();
-                                  const name = `${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim().toLowerCase();
-                                  return name.includes(term) || (cust.email ?? "").toLowerCase().includes(term) || (cust.phone ?? "").toLowerCase().includes(term);
-                                })
-                                .map((cust) => (
-                                  <CommandItem
-                                    key={cust.id}
-                                    value={String(cust.id)}
-                                    onSelect={() => {
-                                      setField("referredByCustomerId", String(cust.id));
-                                      setField("referralCode", cust.referralCode ?? "");
-                                      setReferralOpen(false);
-                                    }}
-                                  >
-                                    <Check className={cn("mr-2 h-4 w-4", form.referredByCustomerId === String(cust.id) ? "opacity-100" : "opacity-0")} />
-                                    <span className="truncate">{`${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() || "Unnamed"}</span>
-                                    {cust.phone && <span className="ml-2 text-xs text-muted-foreground">{cust.phone}</span>}
-                                  </CommandItem>
-                                ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    {(form.referredByCustomerId || form.referralCode) && (
-                      <button
-                        type="button"
-                        onClick={() => { setField("referredByCustomerId", ""); setField("referralCode", ""); }}
-                        className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      )}
+                    </div>
+
+                    {/* Divider or active selection */}
+                    {form.referredByCustomerId && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="secondary" className="font-normal">
+                          <Check className="w-3 h-3 mr-1 text-green-600" />
+                          {(() => {
+                            const c = allCustomers.find((cust) => String(cust.id) === form.referredByCustomerId);
+                            return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Customer" : "Customer";
+                          })()}
+                          {form.referralCode && (
+                            <span className="ml-1.5 font-mono text-xs text-muted-foreground">({form.referralCode})</span>
+                          )}
+                        </Badge>
+                      </div>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Input
-                      value={form.referralCode}
-                      onChange={(e) => {
-                        setField("referralCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""));
-                        if (form.referredByCustomerId) setField("referredByCustomerId", "");
-                      }}
-                      placeholder="Or type a manual promo code"
-                      className="font-mono text-xs h-8"
-                    />
-                    {editingCustomer && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 h-8 px-2 text-xs"
-                        onClick={() => {
-                          const f = (form.firstName || "X")[0].toUpperCase();
-                          const l = (form.lastName || "X")[0].toUpperCase();
-                          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                          let suffix = "";
-                          for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-                          setField("referralCode", `${f}${l}-${suffix}`);
-                          setField("referredByCustomerId", "");
+
+                    {/* Manual promo code */}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={form.referralCode}
+                        onChange={(e) => {
+                          setField("referralCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""));
+                          if (form.referredByCustomerId) setField("referredByCustomerId", "");
                         }}
-                        type="button"
-                      >
-                        Regenerate
-                      </Button>
-                    )}
+                        placeholder="Or enter a manual promo code"
+                        className="font-mono text-sm h-9"
+                      />
+                      {editingCustomer && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 h-9 px-2.5 text-xs"
+                          onClick={() => {
+                            const f = (form.firstName || "X")[0].toUpperCase();
+                            const l = (form.lastName || "X")[0].toUpperCase();
+                            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                            let suffix = "";
+                            for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+                            setField("referralCode", `${f}${l}-${suffix}`);
+                            setField("referredByCustomerId", "");
+                          }}
+                          type="button"
+                        >
+                          Generate
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {editingCustomer ? "Customers can share this code to refer friends." : "Choose a referring customer or type a manual promo code."}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {editingCustomer ? "Customers can share this code to refer friends." : "Select an existing customer as referrer, or type a manual code."}
-                  </p>
                 </Field>
               </FieldRow>
             </>
