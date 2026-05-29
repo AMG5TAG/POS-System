@@ -419,8 +419,19 @@ const ENTITIES: EntityConfig[] = [
     pluralLabel: "Product Types",
     icon: Layers,
     description: "Define custom product types for your catalogue (standard, service, digital, bundle, and more).",
-    exportUrl: "",
-    createUrl: "",
+    exportUrl: "/api/product-types",
+    createUrl: "/api/product-types",
+    updateUrl: "/api/product-types",
+    fetchAllUrl: "/api/product-types",
+    dedupeBy: (p, e) => {
+      const pName = String(p.name ?? "").trim().toLowerCase();
+      const eName = String(e.name ?? "").trim().toLowerCase();
+      return {
+        match: pName.length > 0 && pName === eName,
+        id: e.id as number,
+        label: String(e.name ?? ""),
+      };
+    },
     fields: [
       { key: "name",        label: "Type Name",    required: true, hint: "e.g. Standard, Service, Digital, Bundle" },
       { key: "slug",        label: "Slug",         hint: "URL-safe identifier, e.g. digital_code" },

@@ -10,6 +10,7 @@ export * from "./brands";
 export * from "./suppliers";
 export * from "./loyalty-settings";
 export * from "./tags";
+export * from "./product-types";
 export * from "./customer-notes";
 export * from "./customer-files";
 export * from "./cash-drawer";
