@@ -1,0 +1,21 @@
+Act as a Senior Lead QA & Full-Stack Systems Engineer. Conduct a rigorous, comprehensive application-wide evaluation of the entire repository to locate, wire up, and 100% complete all partial feature setups before shipping to production. 
+
+Perform a methodical sweep across the codebase and execute the following:
+
+1. Scan for Front-End & Back-End Disconnects:
+   - Systematically audit all frontend route pages ('artifacts/koapos/src/pages/app/') against backend controllers ('artifacts/api-server/src/routes/').
+   - Identify any UI buttons, forms, modals, or tracking tabs that are currently mocking data, using hardcoded local component states, or containing '// TODO: connect to API' placeholders. Build and connect the corresponding production endpoints immediately.
+
+2. Verify Core Business Modules Are 100% End-to-End Operational:
+   - POS Terminal & Till: Ensure the persistent Till layout handles opening/closing floats without reset loops, and that checking out instantly updates stock-on-hand counts and registers EOD cash drawer logs.
+   - Invoices & Recurring Billing: Verify that the new individual recurring instances sequence unique invoice numbers correctly, sync seamlessly with the searchable Customer Referral fields, track 'Receiver Viewed' stamps, and accept POS-driven partial payments smoothly.
+   - CSV Importers: Double-check that the updated Upsert (Update-or-Insert) logic compares and overwrites customer groups, supplier costs, and retail prices flawlessly without duplicate key crashes.
+
+3. Fix UI Layout Anomalies & Edge Cases:
+   - Ensure all multi-tab creation modals (Customers, Products, Services) utilize the locked static width configuration to eliminate visual snapping.
+   - Verify that the main navigation sidebar utilizes the widened spacing bounds to permanently prevent text wrapping or overlapping across all standard screen resolutions.
+   - Confirm that sticker and receipt printing canvas boundaries enforce native page dimensions and proper orientation constraints to stop label waste.
+
+4. Run Final Compilation & Stability Hardening:
+   - Review error-catching hooks app-wide to prevent unhandled runtime panics (like React Error #185) from ever showing a red screen to a customer. Ensure failures show graceful, non-breaking alert banners that preserve user input data.
+   - Run 'pnpm run typecheck' and execute your production build scripts. Fix any remaining typescript compiler friction, broken relational data constraints, or missing system keys so the app runs with zero human intervention or further coding required.
