@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant,
@@ -1402,7 +1402,7 @@ export default function ManagementTemplatesPage() {
   const { data: tplData, isLoading: tplLoading } = useListSalesTemplates({
     query: { queryKey: ["sales-templates"] },
   });
-  const templates: SalesTemplate[] = tplData?.items ?? [];
+  const templates = useMemo<SalesTemplate[]>(() => tplData?.items ?? [], [tplData]);
 
   const { opts, update, reset, isDefault, setIsDefault, save, saving } = useTplOpts(
     activeCategory,
