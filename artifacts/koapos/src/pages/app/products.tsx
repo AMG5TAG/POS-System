@@ -500,8 +500,8 @@ function ProductDetailDialog({
   return (
     <>
     <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -522,7 +522,7 @@ function ProductDetailDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex border-b -mx-6 px-6 gap-0">
+        <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
           {TABS.map(({ key, label }) => (
             <button key={key} onClick={() => setTab(key)} className={cn(
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
@@ -533,8 +533,10 @@ function ProductDetailDialog({
           ))}
         </div>
 
+        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+
         {tab === "details" && (
-          <div className="space-y-3">
+          <div className="space-y-3 py-4">
             {/* Pricing */}
             <div className="rounded-xl border bg-muted/20 divide-y">
               <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
@@ -571,7 +573,7 @@ function ProductDetailDialog({
         )}
 
         {tab === "inventory" && (
-          <div className="space-y-3">
+          <div className="space-y-3 py-4">
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-3 px-4 py-3">
                 <Boxes className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -624,7 +626,7 @@ function ProductDetailDialog({
         )}
 
         {tab === "settings" && (
-          <div className="space-y-3">
+          <div className="space-y-3 py-4">
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-3 px-4 py-3">
                 <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -644,7 +646,9 @@ function ProductDetailDialog({
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t">
+        </div>
+
+        <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
           <Button variant="destructive" size="sm" className="gap-1.5"
             onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
             <Trash2 className="w-3.5 h-3.5" /> Delete

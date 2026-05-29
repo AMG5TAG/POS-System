@@ -213,8 +213,8 @@ export function ServiceJobDetailDialog({
       )}
 
       <Dialog open={!!job} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+          <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold flex-wrap">
               <Wrench className="w-5 h-5 text-primary shrink-0" />
               <span className="font-mono">{job.jobNumber}</span>
@@ -243,7 +243,8 @@ export function ServiceJobDetailDialog({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-1">
+          <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+          <div className="space-y-4 py-4">
             {(job.isCritical || job.isUnderWarranty || job.isPartnerRepair) && (
               <div className="flex flex-wrap gap-2">
                 {job.isCritical && (
@@ -496,8 +497,9 @@ export function ServiceJobDetailDialog({
               customerName={job.customerName ?? undefined}
             />
           </div>
+          </div>
 
-          <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
             {onDelete && (
               <Button
                 variant="destructive"

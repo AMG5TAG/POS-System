@@ -1084,7 +1084,7 @@ function CustomerDetailInner({
 
   return (
     <>
-      <DialogHeader>
+      <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
         <DialogTitle>
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
@@ -1115,7 +1115,7 @@ function CustomerDetailInner({
       </DialogHeader>
 
       {/* Tabs */}
-      <div className="flex flex-wrap border-b -mx-6 px-6 gap-0">
+      <div className="flex flex-wrap border-b px-6 gap-0 shrink-0 mt-3">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -1132,7 +1132,7 @@ function CustomerDetailInner({
         ))}
       </div>
 
-      <div className="min-h-[320px]">
+      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-[520px]">
       {/* ── Overview ── */}
       {tab === "overview" && (
         <div className="space-y-3">
@@ -1676,7 +1676,7 @@ function CustomerDetailInner({
       )}
 
       </div>
-      <DialogFooter className="flex-row justify-between sm:justify-between gap-2 flex-wrap">
+      <DialogFooter className="flex-row justify-between sm:justify-between gap-2 flex-wrap px-6 pb-5 pt-4 border-t shrink-0">
         <Button
           variant="destructive" size="sm" className="gap-1.5"
           onClick={() => { onDelete(customer.id); onClose(); }}
@@ -1969,7 +1969,7 @@ function CustomerDetailDialog({
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
         {customer && (
           <CustomerDetailInner
             customer={customer}

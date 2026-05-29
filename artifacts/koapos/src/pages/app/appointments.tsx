@@ -183,8 +183,8 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   return (
     <>
     <Dialog open={!!appt} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary shrink-0" />
             <span className="truncate">{appt.title || "Appointment"}</span>
@@ -195,7 +195,8 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
+        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+        <div className="space-y-4 py-4">
           {/* Time */}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <div className="flex items-start gap-3 px-4 py-3">
@@ -287,8 +288,9 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             customerName={appt.customerName ?? undefined}
           />
         </div>
+        </div>
 
-        <DialogFooter className="gap-2 flex-row justify-between sm:justify-between">
+        <DialogFooter className="gap-2 flex-row justify-between sm:justify-between px-6 pb-5 pt-4 border-t shrink-0">
           <Button
             variant="destructive" size="sm" className="gap-1.5"
             onClick={() => setConfirmDelete(true)}
@@ -405,15 +407,16 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
+        <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="w-5 h-5 text-primary" />
             {editing ? "Edit Appointment" : "New On-Site Appointment"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
+        <div className="flex-1 overflow-y-auto px-6 min-h-[520px]">
+        <div className="space-y-5 py-4">
           {/* Customer */}
           <div className="space-y-1.5">
             <Label>
@@ -489,8 +492,9 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
               onChange={(e) => setField("notes", e.target.value)} rows={3} className="text-sm resize-none" />
           </div>
         </div>
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 pb-5 pt-4 border-t shrink-0">
           <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={isPending}>
             {isPending ? "Saving..." : editing ? "Save Changes" : "Book Appointment"}
