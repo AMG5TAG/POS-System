@@ -524,6 +524,164 @@ function MergeWizardModal({
   );
 }
 
+/* ─── Multi-merge modal (3+ customers) ───────────────────────────────────── */
+
+function MultiMergeModal({
+  customers, open, onOpenChange, onComplete,
+}: {
+  customers: Customer[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onComplete: () => void;
+}) {
+  const queryClient  = useQueryClient();
+  const mergeMutation = useMergeCustomerProfiles();
+
+  const [survivorId, setSurvivorId] = useState<number | null>(null);
+  const [reason,     setReason]     = useState("");
+  const [progress,   setProgress]   = useState<{ done: number; total: number } | null>(null);
+  const [pending,    setPending]    = useState(false);
+
+  useEffect(() => {
+    if (open && customers.length > 0) {
+      setSurvivorId(customers[0].id);
+      setReason("");
+      setProgress(null);
+    }
+  }, [open, customers]);
+
+  if (!open || customers.length === 0) return null;
+
+  const survivor    = customers.find((c) => c.id === survivorId);
+  const secondaries = customers.filter((c) => c.id !== survivorId);
+  const displayName = (c: Customer) =>
+    [c.firstName, c.lastName].filter(Boolean).join(" ") || `Customer #${c.id}`;
+
+  const handleMerge = async () => {
+    if (!survivorId) return;
+    setPending(true);
+    const total = secondaries.length;
+    let done = 0;
+    setProgress({ done, total });
+    try {
+      for (const secondary of secondaries) {
+        await mergeMutation.mutateAsync({
+          primaryId:   survivorId,
+          secondaryId: secondary.id,
+          ...(reason.trim() ? { data: { reason: reason.trim() } } : {}),
+        });
+        done++;
+        setProgress({ done, total });
+      }
+      queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+      toast.success(
+        `${total} profile${total === 1 ? "" : "s"} merged into ${displayName(survivor!)}`
+      );
+      onComplete();
+      onOpenChange(false);
+    } catch {
+      toast.error("Merge failed. Some profiles may not have been merged.");
+    } finally {
+      setPending(false);
+      setProgress(null);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <GitMerge className="w-5 h-5" />
+            Merge {customers.length} Customers
+          </DialogTitle>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">
+          Pick the profile to keep. The other {secondaries.length}{" "}
+          {secondaries.length === 1 ? "record" : "records"} will be absorbed
+          into it and permanently removed. This cannot be undone.
+        </p>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Select survivor
+          </p>
+          {customers.map((c) => {
+            const isSurvivor = c.id === survivorId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSurvivorId(c.id)}
+                disabled={pending}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors",
+                  isSurvivor
+                    ? "border-green-500 bg-green-50 dark:bg-green-950/30"
+                    : "border-border hover:bg-muted/50"
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center",
+                    isSurvivor ? "border-green-500 bg-green-500" : "border-muted-foreground"
+                  )}
+                >
+                  {isSurvivor && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-sm">{displayName(c)}</span>
+                  {c.email && (
+                    <span className="text-xs text-muted-foreground ml-2">{c.email}</span>
+                  )}
+                </div>
+                {isSurvivor && (
+                  <Badge variant="outline" className="text-[10px] border-green-500 text-green-700 dark:text-green-400 shrink-0">
+                    Keep
+                  </Badge>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Reason (optional)
+          </Label>
+          <Textarea
+            placeholder="e.g. Same customer imported from two sources"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="resize-none text-sm"
+            rows={2}
+            disabled={pending}
+          />
+        </div>
+
+        {progress && (
+          <p className="text-sm text-center text-muted-foreground">
+            Merging… {progress.done} of {progress.total} done
+          </p>
+        )}
+
+        <DialogFooter className="gap-2 mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button onClick={handleMerge} disabled={pending || !survivorId} className="gap-2">
+            {pending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <GitMerge className="w-4 h-4" />}
+            {pending ? "Merging…" : `Merge ${customers.length} Profiles`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Manual merge picker ─────────────────────────────────────────────────── */
 
 function ManualMergePickerDialog({
@@ -1998,6 +2156,13 @@ export default function CustomersPage() {
   /* ── Row-level merge picker state ── */
   const [rowMergePickerCustomer, setRowMergePickerCustomer] = useState<Customer | null>(null);
 
+  /* ── Bulk merge confirmation (2-customer manual path) ── */
+  const [mergeConfirmOpen, setMergeConfirmOpen] = useState(false);
+
+  /* ── Multi-merge state (3+ customers) ── */
+  const [multiMergeOpen,      setMultiMergeOpen]      = useState(false);
+  const [multiMergeCustomers, setMultiMergeCustomers] = useState<Customer[]>([]);
+
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
@@ -2200,22 +2365,28 @@ export default function CustomersPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </Button>
                   )}
-                  {canMerge && checked.size === 2 && (
+                  {canMerge && checked.size >= 2 && (
                     <Button
                       size="sm"
                       variant="outline"
                       className="gap-1.5 h-8"
                       onClick={() => {
-                        const [idA, idB] = [...checked];
-                        const custA = sorted.find((x) => x.id === idA);
-                        const custB = sorted.find((x) => x.id === idB);
-                        if (custA && custB) {
-                          setMergePair({ key: `${idA}-${idB}`, a: custA, b: custB, reason: "manual" });
-                          setMergeWizardOpen(true);
+                        if (checked.size === 2) {
+                          const [idA, idB] = [...checked];
+                          const custA = sorted.find((x) => x.id === idA);
+                          const custB = sorted.find((x) => x.id === idB);
+                          if (custA && custB) {
+                            setMergePair({ key: `${idA}-${idB}`, a: custA, b: custB, reason: "manual" });
+                            setMergeConfirmOpen(true);
+                          }
+                        } else {
+                          setMultiMergeCustomers(sorted.filter((x) => checked.has(x.id)));
+                          setMultiMergeOpen(true);
                         }
                       }}
                     >
-                      <GitMerge className="w-3.5 h-3.5" /> Merge
+                      <GitMerge className="w-3.5 h-3.5" />
+                      {checked.size > 2 ? `Merge (${checked.size})` : "Merge"}
                     </Button>
                   )}
                   <Button
@@ -2499,6 +2670,43 @@ export default function CustomersPage() {
         />
       )}
 
+      {/* ── Bulk merge confirmation (manual 2-customer path) ── */}
+      <Dialog open={mergeConfirmOpen} onOpenChange={setMergeConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Merge these two customers?</DialogTitle>
+          </DialogHeader>
+          {mergePair && (
+            <p className="text-sm text-muted-foreground">
+              You're about to merge{" "}
+              <strong>
+                {[mergePair.a.firstName, mergePair.a.lastName].filter(Boolean).join(" ") ||
+                  `#${mergePair.a.id}`}
+              </strong>{" "}
+              and{" "}
+              <strong>
+                {[mergePair.b.firstName, mergePair.b.lastName].filter(Boolean).join(" ") ||
+                  `#${mergePair.b.id}`}
+              </strong>
+              . One profile will be permanently removed. This cannot be undone.
+            </p>
+          )}
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setMergeConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setMergeConfirmOpen(false);
+                setMergeWizardOpen(true);
+              }}
+            >
+              Continue to Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Merge wizard ── */}
       <MergeWizardModal
         pair={mergePair}
@@ -2507,6 +2715,17 @@ export default function CustomersPage() {
         onComplete={() => {
           setMergePair(null);
           setDuplicateModalOpen(false);
+          setChecked(new Set());
+        }}
+      />
+
+      {/* ── Multi-merge (3+ customers) ── */}
+      <MultiMergeModal
+        customers={multiMergeCustomers}
+        open={multiMergeOpen}
+        onOpenChange={setMultiMergeOpen}
+        onComplete={() => {
+          setMultiMergeCustomers([]);
           setChecked(new Set());
         }}
       />
