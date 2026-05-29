@@ -743,6 +743,33 @@ function PricingHistoryTable({ productId }: { productId: number }) {
   );
 }
 
+/* ─── Category → suggested tags ─────────────────────────────────────────── */
+
+const TAG_SUGGESTIONS: [string[], string[]][] = [
+  [["beverage", "drink", "coffee", "tea", "juice", "water", "soda", "beer", "wine", "spirit", "alcohol"], ["hot", "cold", "caffeine-free", "sugar-free", "organic", "local", "imported", "seasonal", "vegan", "gluten-free"]],
+  [["snack", "chip", "crisp", "candy", "chocolate", "confection", "sweet", "lolly", "biscuit", "cookie"], ["sweet", "savoury", "gluten-free", "vegan", "low-sugar", "organic", "bulk", "seasonal", "imported", "local"]],
+  [["food", "grocery", "produce", "meat", "seafood", "dairy", "bakery", "deli", "frozen"], ["fresh", "frozen", "organic", "local", "imported", "seasonal", "gluten-free", "vegan", "low-fat", "sugar-free"]],
+  [["electronic", "tech", "computer", "laptop", "phone", "tablet", "camera", "audio", "gaming", "console", "accessory"], ["new", "refurbished", "wireless", "bluetooth", "usb-c", "hdmi", "compatible", "bundle", "official", "spare"]],
+  [["clothing", "apparel", "fashion", "shirt", "pants", "dress", "jacket", "shoe", "footwear", "wear", "garment"], ["unisex", "mens", "womens", "kids", "casual", "formal", "summer", "winter", "sale", "new-arrival"]],
+  [["beauty", "cosmetic", "skincare", "haircare", "makeup", "fragrance", "perfume", "grooming", "personal care"], ["vegan", "cruelty-free", "natural", "organic", "spf", "travel-size", "gift-set", "sensitive", "hypoallergenic", "bestseller"]],
+  [["health", "vitamin", "supplement", "pharmacy", "medicine", "wellness", "fitness", "protein", "nutrition"], ["daily", "vegan", "gluten-free", "sugar-free", "organic", "clinically-tested", "bundle", "travel-size", "bestseller", "new"]],
+  [["toy", "game", "puzzle", "hobby", "craft", "kids", "children", "baby", "infant"], ["ages-3+", "ages-6+", "educational", "stem", "outdoor", "indoor", "multiplayer", "battery-free", "eco-friendly", "gift"]],
+  [["book", "magazine", "stationery", "office", "art", "drawing", "writing", "journal", "notebook"], ["fiction", "non-fiction", "educational", "kids", "adult", "bestseller", "new-release", "signed", "illustrated", "hardcover"]],
+  [["furniture", "home", "decor", "kitchen", "bedroom", "bathroom", "garden", "outdoor", "tool", "hardware", "cleaning"], ["new-arrival", "sale", "bundle", "eco-friendly", "handmade", "local", "imported", "bestseller", "gift", "premium"]],
+  [["sport", "gym", "fitness", "yoga", "running", "cycling", "swim", "outdoor", "camping", "hiking"], ["unisex", "performance", "lightweight", "waterproof", "breathable", "bundle", "sale", "new-arrival", "eco-friendly", "premium"]],
+  [["pet", "dog", "cat", "bird", "fish", "animal", "vet"], ["dogs", "cats", "birds", "small-animals", "natural", "grain-free", "organic", "vet-approved", "bestseller", "new"]],
+  [["service", "repair", "install", "consult", "support", "labour", "hire"], ["labour", "on-site", "remote", "express", "warranty", "bundle", "scheduled", "emergency", "certified", "fixed-price"]],
+  [["gift", "wrap", "card", "voucher"], ["gift-wrap", "personalised", "same-day", "express", "luxury", "eco-friendly", "digital", "physical", "bundle", "seasonal"]],
+];
+
+function getSuggestedTags(categoryName: string): string[] {
+  const lower = categoryName.toLowerCase();
+  for (const [keywords, tags] of TAG_SUGGESTIONS) {
+    if (keywords.some((k) => lower.includes(k))) return tags;
+  }
+  return ["new-arrival", "sale", "bestseller", "bundle", "local", "imported", "organic", "eco-friendly", "premium", "seasonal"];
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ProductsPage() {
@@ -1680,43 +1707,83 @@ export default function ProductsPage() {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Tags <span className="text-muted-foreground/50">(up to 5)</span></Label>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5 min-h-[36px] rounded-md border bg-background px-2.5 py-1.5">
-                      {form.tags.map((t) => (
-                        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
-                          {t}
-                          <button type="button" onClick={() => setField("tags", form.tags.filter((x) => x !== t))} className="hover:text-destructive leading-none">&times;</button>
-                        </span>
-                      ))}
-                      {form.tags.length < 5 && (
-                        <input
-                          className="flex-1 min-w-[80px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-                          placeholder={form.tags.length === 0 ? "Type and press Enter…" : "Add tag…"}
-                          value={tagInput}
-                          onChange={(e) => setTagInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
-                              e.preventDefault();
+                  <div className="col-span-2 grid grid-cols-2 gap-4 items-start">
+                    {/* Tags input */}
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Tags <span className="text-muted-foreground/50">(up to 5)</span></Label>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5 min-h-[36px] rounded-md border bg-background px-2.5 py-1.5">
+                        {form.tags.map((t) => (
+                          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+                            {t}
+                            <button type="button" onClick={() => setField("tags", form.tags.filter((x) => x !== t))} className="hover:text-destructive leading-none">&times;</button>
+                          </span>
+                        ))}
+                        {form.tags.length < 5 && (
+                          <input
+                            className="flex-1 min-w-[80px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                            placeholder={form.tags.length === 0 ? "Type and press Enter…" : "Add tag…"}
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                                e.preventDefault();
+                                const val = tagInput.trim().replace(/,$/, "");
+                                if (val && !form.tags.includes(val) && form.tags.length < 5) {
+                                  setField("tags", [...form.tags, val]);
+                                }
+                                setTagInput("");
+                              } else if (e.key === "Backspace" && !tagInput && form.tags.length > 0) {
+                                setField("tags", form.tags.slice(0, -1));
+                              }
+                            }}
+                            onBlur={() => {
                               const val = tagInput.trim().replace(/,$/, "");
                               if (val && !form.tags.includes(val) && form.tags.length < 5) {
                                 setField("tags", [...form.tags, val]);
+                                setTagInput("");
                               }
-                              setTagInput("");
-                            } else if (e.key === "Backspace" && !tagInput && form.tags.length > 0) {
-                              setField("tags", form.tags.slice(0, -1));
-                            }
-                          }}
-                          onBlur={() => {
-                            const val = tagInput.trim().replace(/,$/, "");
-                            if (val && !form.tags.includes(val) && form.tags.length < 5) {
-                              setField("tags", [...form.tags, val]);
-                              setTagInput("");
-                            }
-                          }}
-                        />
-                      )}
+                            }}
+                          />
+                        )}
+                      </div>
                     </div>
+                    {/* Suggested tags based on selected category */}
+                    {(() => {
+                      const selectedCat = form.categoryId
+                        ? categories.find((c) => c.id.toString() === form.categoryId)
+                        : null;
+                      if (!selectedCat) return (
+                        <div className="flex items-center justify-center h-full min-h-[48px]">
+                          <p className="text-xs text-muted-foreground/50 italic">Select a category to see suggested tags</p>
+                        </div>
+                      );
+                      const suggestions = getSuggestedTags(selectedCat.name).filter((s) => !form.tags.includes(s));
+                      if (suggestions.length === 0) return null;
+                      return (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1.5">
+                            Suggested for <span className="font-medium text-foreground">{selectedCat.name}</span>
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {suggestions.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                disabled={form.tags.length >= 5}
+                                onClick={() => {
+                                  if (!form.tags.includes(s) && form.tags.length < 5) {
+                                    setField("tags", [...form.tags, s]);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/40 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              >
+                                + {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
