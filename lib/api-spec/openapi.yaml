@@ -5668,6 +5668,8 @@ components:
           maxItems: 5
         stockLocation:
           type: ["string", "null"]
+        overflowLocation:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -5777,6 +5779,8 @@ components:
             type: string
           maxItems: 5
         stockLocation:
+          type: string
+        overflowLocation:
           type: string
 
     ProductList:

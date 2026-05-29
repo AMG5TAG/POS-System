@@ -43,6 +43,7 @@ export const productsTable = pgTable("products", {
   isEpay:             text("is_epay").notNull().default("false"),
   tagsJson:           text("tags_json"),
   stockLocation:      text("stock_location"),
+  overflowLocation:   text("overflow_location"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -192,6 +192,8 @@ export interface Product {
   tags?: string[];
   /** @nullable */
   stockLocation?: string | null;
+  /** @nullable */
+  overflowLocation?: string | null;
   createdAt: string;
 }
 
@@ -254,6 +256,7 @@ export interface ProductUpdate {
   /** @maxItems 5 */
   tags?: string[];
   stockLocation?: string;
+  overflowLocation?: string;
 }
 
 export interface ProductList {

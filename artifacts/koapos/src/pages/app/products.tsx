@@ -57,7 +57,7 @@ import {
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
-type FormTab   = "details" | "pricing" | "media" | "settings" | "digital_codes" | "compatibility" | "variants";
+type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
@@ -81,8 +81,9 @@ type ProductForm = {
   groupPrices: Record<string, string>;
   /* digital code */
   isEpay: boolean;
-  /* floor plan */
-  stockLocation: string;
+  /* stock locations */
+  stockLocationDisplay: string;
+  stockLocationOverflow: string;
 };
 
 const defaultForm: ProductForm = {
@@ -99,16 +100,18 @@ const defaultForm: ProductForm = {
   internalNotes: "",
   groupPrices: {},
   isEpay: false,
-  stockLocation: "",
+  stockLocationDisplay: "",
+  stockLocationOverflow: "",
 };
 
 const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean }[] = [
   { key: "details",       label: "Details"       },
-  { key: "pricing",       label: "Pricing"       },
   { key: "media",         label: "Media"         },
+  { key: "pricing",       label: "Pricing"       },
+  { key: "stock",         label: "Stock"         },
+  { key: "compatibility", label: "Compatibility" },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
-  { key: "compatibility", label: "Compatibility" },
   { key: "variants",      label: "Variants",     variantOnly: true },
 ];
 
@@ -971,7 +974,8 @@ export default function ProductsPage() {
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
       isEpay: ep.isEpay ?? false,
-      stockLocation: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
+      stockLocationDisplay: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
+      stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
     });
     if ((ep.productType ?? "standard") === "digital_code") {
       loadDigitalCodes(p.id);
@@ -1006,7 +1010,8 @@ export default function ProductsPage() {
       supplierCode: form.supplierCode || undefined,
       isEpay: form.isEpay,
       tags: form.tags,
-      stockLocation: form.stockLocation || undefined,
+      stockLocation: form.stockLocationDisplay || undefined,
+      overflowLocation: form.stockLocationOverflow || undefined,
       groupPrices: Object.fromEntries(
         Object.entries(form.groupPrices)
           .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
@@ -1530,25 +1535,6 @@ export default function ProductsPage() {
                       className="mt-1.5"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> Stock Location
-                    </Label>
-                    <Select value={form.stockLocation || "__none__"} onValueChange={(v) => setField("stockLocation", v === "__none__" ? "" : v)}>
-                      <SelectTrigger className="mt-1.5">
-                        <SelectValue placeholder="No location assigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— No location —</SelectItem>
-                        {(floorPlanZones ?? []).map((z) => (
-                          <SelectItem key={z.id} value={z.label}>{z.label}</SelectItem>
-                        ))}
-                        {(!floorPlanZones || floorPlanZones.length === 0) && (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">No zones defined — add zones in the Floor Plan editor</div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Category</Label>
                     <TreeCategorySelect
@@ -1884,9 +1870,10 @@ export default function ProductsPage() {
               </div>
             )}
 
-            {/* ── Settings ── */}
-            {formTab === "settings" && (
-              <div className="py-5 space-y-5">
+            {/* ── Stock ── */}
+            {formTab === "stock" && (
+              <div className="py-5 space-y-6">
+
                 {/* Inventory */}
                 <div>
                   <SectionHeader label="Inventory" />
@@ -1925,6 +1912,61 @@ export default function ProductsPage() {
                     </>
                   )}
                 </div>
+
+                {/* Stock Locations */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Stock Locations" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Specify where this product can be found in your store.</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> Display
+                      </Label>
+                      <Select value={form.stockLocationDisplay || "__none__"} onValueChange={(v) => setField("stockLocationDisplay", v === "__none__" ? "" : v)}>
+                        <SelectTrigger className="mt-1.5">
+                          <SelectValue placeholder="No location assigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— No location —</SelectItem>
+                          {(floorPlanZones ?? []).map((z) => (
+                            <SelectItem key={z.id} value={z.label}>{z.label}</SelectItem>
+                          ))}
+                          {(!floorPlanZones || floorPlanZones.length === 0) && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">No zones defined — add zones in the Floor Plan editor</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1.5">Where the product is shown on the shop floor.</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> Overflow
+                      </Label>
+                      <Select value={form.stockLocationOverflow || "__none__"} onValueChange={(v) => setField("stockLocationOverflow", v === "__none__" ? "" : v)}>
+                        <SelectTrigger className="mt-1.5">
+                          <SelectValue placeholder="No location assigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— No location —</SelectItem>
+                          {(floorPlanZones ?? []).map((z) => (
+                            <SelectItem key={z.id} value={z.label}>{z.label}</SelectItem>
+                          ))}
+                          {(!floorPlanZones || floorPlanZones.length === 0) && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">No zones defined — add zones in the Floor Plan editor</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1.5">Where backup / overflow stock is held.</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* ── Settings ── */}
+            {formTab === "settings" && (
+              <div className="py-5 space-y-5">
 
                 {/* Availability — only shown when editing an existing product */}
                 {editingProduct && (

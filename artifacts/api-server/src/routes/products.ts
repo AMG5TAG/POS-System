@@ -55,6 +55,7 @@ function formatProduct(p: typeof productsTable.$inferSelect, category?: typeof c
     isEpay: p.isEpay === "true",
     tags: p.tagsJson ? (() => { try { return JSON.parse(p.tagsJson!); } catch { return []; } })() : [],
     stockLocation: p.stockLocation ?? null,
+    overflowLocation: p.overflowLocation ?? null,
     createdAt: p.createdAt.toISOString(),
   };
 }

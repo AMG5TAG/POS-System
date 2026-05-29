@@ -320,6 +320,7 @@ export const ListProductsResponse = zod.object({
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
+  "overflowLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -407,6 +408,7 @@ export const GetProductResponse = zod.object({
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
+  "overflowLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -444,7 +446,8 @@ export const UpdateProductBody = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
-  "stockLocation": zod.string().optional()
+  "stockLocation": zod.string().optional(),
+  "overflowLocation": zod.string().optional()
 })
 
 export const updateProductResponseTagsMax = 5;
@@ -486,6 +489,7 @@ export const UpdateProductResponse = zod.object({
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
+  "overflowLocation": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
