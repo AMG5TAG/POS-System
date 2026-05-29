@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, date, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, date, doublePrecision, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -41,7 +41,10 @@ export const customersTable = pgTable("customers", {
   heardFrom: text("heard_from"),
   heardFromDetails: text("heard_from_details"),
   referredByCustomerId: integer("referred_by_customer_id"),
-});
+}, (t) => [
+  index("customers_merchant_id_idx").on(t.merchantId),
+  index("customers_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+]);
 
 export function generateReferralCode(firstName?: string | null, lastName?: string | null): string {
   const f = (firstName ?? "X")[0].toUpperCase();

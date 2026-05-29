@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, json, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, json, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -30,7 +30,11 @@ export const invoicesTable = pgTable("invoices", {
   parentInvoiceId: integer("parent_invoice_id").references((): AnyPgColumn => invoicesTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("invoices_merchant_id_idx").on(t.merchantId),
+  index("invoices_merchant_id_status_idx").on(t.merchantId, t.status),
+  index("invoices_merchant_id_paid_at_idx").on(t.merchantId, t.paidAt),
+]);
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;

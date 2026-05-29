@@ -49,6 +49,9 @@ export const productsTable = pgTable("products", {
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
   index("products_merchant_id_idx").on(t.merchantId),
+  index("products_merchant_id_category_id_idx").on(t.merchantId, t.categoryId),
+  index("products_merchant_id_brand_id_idx").on(t.merchantId, t.brandId),
+  index("products_merchant_id_product_type_id_idx").on(t.merchantId, t.productTypeId),
 ]);
 
 export const digitalCodesTable = pgTable("digital_codes", {

@@ -29,6 +29,7 @@ export const transactionsTable = pgTable("transactions", {
 }, (t) => [
   index("transactions_merchant_id_idx").on(t.merchantId),
   index("transactions_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+  index("transactions_merchant_id_status_idx").on(t.merchantId, t.status),
   // Postgres treats NULLs as distinct, so rows without an idempotency key never
   // collide; only repeated keys for the same merchant are deduplicated.
   uniqueIndex("transactions_merchant_idempotency_idx").on(t.merchantId, t.idempotencyKey),
