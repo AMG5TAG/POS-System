@@ -83,6 +83,8 @@ export interface TplOpts {
   callHistoryRows:      string;
   warrantyText:         string;
   jobNoFontSize:        string;
+  showLogins:           boolean;
+  showFormsFiles:       boolean;
   // Font
   fontFamily:           string;
 }
@@ -103,6 +105,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
+  showLogins: false, showFormsFiles: false,
   fontFamily: "inter",
 };
 
@@ -245,6 +248,8 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showSignature",        label: "Show Signature Area",      type: "toggle" },
       { section: "Sections", key: "showCallHistory",      label: "Show Call History",        type: "toggle" },
       { section: "Sections", key: "callHistoryRows",      label: "Call History Rows",        type: "text",     placeholder: "6", hint: "Number of blank rows for manual notes" },
+      { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
+      { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
     ];
@@ -1284,6 +1289,33 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Logins / Accounts */}
+      {opts.showLogins && (
+        <div>
+          <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide mb-1">Logins / Accounts</p>
+          <div className="border rounded p-1.5 space-y-0.5 text-[8px] text-gray-500">
+            <div className="flex justify-between"><span className="text-gray-400">iCloud:</span><span className="font-mono">sarah@icloud.com</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Google:</span><span className="font-mono">sarah.j@email.com</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Microsoft:</span><span className="font-mono">sarah@workplace.com</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Screen PIN:</span><span className="font-mono">0458</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Password Manager:</span><span className="font-mono">1Password (vault key: 3x7)</span></div>
+          </div>
+        </div>
+      )}
+
+      {/* Forms and Files */}
+      {opts.showFormsFiles && (
+        <div>
+          <p className="font-bold text-[7.5px] uppercase text-gray-400 tracking-wide mb-1">Forms and Files</p>
+          <div className="border rounded p-1.5 space-y-0.5 text-[8px] text-gray-500">
+            <div className="flex justify-between"><span>Device Damage Waiver</span><span className="text-gray-400">signed 18/05/2026</span></div>
+            <div className="flex justify-between"><span>Data Recovery Consent</span><span className="text-gray-400">signed 18/05/2026</span></div>
+            <div className="flex justify-between"><span>Backup Confirmation</span><span className="text-gray-400">signed 18/05/2026</span></div>
+            <div className="flex justify-between"><span>Pre-Service Photos</span><span className="text-gray-400">3 photos attached</span></div>
+          </div>
         </div>
       )}
 
