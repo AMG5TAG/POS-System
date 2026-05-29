@@ -163,6 +163,7 @@ export default function POSPage() {
      existing invoice's remaining balance rather than ringing up a cart sale. */
   const [invoicePay, setInvoicePay] = useState<PendingInvoicePayment | null>(null);
   const [invoicePayPending, setInvoicePayPending] = useState(false);
+  const invoicePayActiveRef = useRef(false);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -632,6 +633,7 @@ export default function POSPage() {
   useEffect(() => {
     const pending = takePendingInvoicePayment();
     if (!pending) return;
+    invoicePayActiveRef.current = true;
     setInvoicePay(pending);
     setCart([]);
     setOverallDiscount("");
@@ -642,6 +644,14 @@ export default function POSPage() {
   }, []);
 
   useEffect(() => {
+    // Invoice Payment Mode locks the terminal to a single invoice balance, so a
+    // parked-cart restore must never run alongside it. The invoice-payment effect
+    // above runs first on mount and sets this ref; skip (and discard any pending
+    // parked cart) when an invoice payment was just handed over.
+    if (invoicePayActiveRef.current) {
+      takePendingCart();
+      return;
+    }
     const raw = takePendingCart();
     if (!raw) return;
     try {
