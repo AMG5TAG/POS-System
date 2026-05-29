@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation } from "wouter";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { setPendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,9 +206,6 @@ export default function POSInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
-  const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [recordingPayment, setRecordingPayment] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -250,6 +249,7 @@ export default function POSInvoicesPage() {
 
   const [activeTab, setActiveTab] = useState<"standard" | "recurring">("standard");
 
+  const [, navigate] = useLocation();
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
@@ -505,44 +505,23 @@ export default function POSInvoicesPage() {
     }
   };
 
-  /* ── Record a (partial or full) payment ── */
-  const openPaymentDialog = (inv: Invoice) => {
+  /* ── Record a payment at the POS terminal ──
+     Hands the invoice's remaining balance + linked customer to the POS terminal,
+     which enters "Invoice Payment Mode" and processes via any payment method. */
+  const payAtTerminal = (inv: Invoice) => {
     const balance = Math.max(0, inv.total - (inv.amountPaid ?? 0));
-    setPaymentAmount(balance.toFixed(2));
-    setPaymentDialog({ open: true, invoice: inv });
-  };
-
-  const recordPayment = async () => {
-    const inv = paymentDialog.invoice;
-    if (!inv) return;
-    const amount = parseFloat(paymentAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Enter a valid payment amount");
+    if (balance <= 0) {
+      toast.error("This invoice is already paid in full");
       return;
     }
-    setRecordingPayment(true);
-    try {
-      const res = await fetch(`${API}/${inv.id}/payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ amount }),
-      });
-      if (res.ok) {
-        const updated = await res.json() as Invoice;
-        setInvoices((prev) => prev.map((i) => i.id === inv.id ? updated : i));
-        if (detailInvoice?.id === inv.id) setDetailInvoice(updated);
-        const balance = Math.max(0, updated.total - (updated.amountPaid ?? 0));
-        toast.success(balance <= 0 ? "Invoice paid in full" : `Payment recorded — $${balance.toFixed(2)} remaining`);
-        setPaymentDialog({ open: false, invoice: null });
-        setPaymentAmount("");
-      } else {
-        const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
-        toast.error(err.error ?? "Failed to record payment");
-      }
-    } finally {
-      setRecordingPayment(false);
-    }
+    setPendingInvoicePayment({
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      balance,
+      customerId: inv.customerId ?? null,
+      customerName: inv.customerName,
+    });
+    navigate("/pos");
   };
 
   /* ── Delete ── */
@@ -1235,7 +1214,7 @@ export default function POSInvoicesPage() {
       )}
       {(inv.status === "sent" || inv.status === "overdue" || inv.status === "partial") && (
         <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Record payment"
-          onClick={(e) => { e.stopPropagation(); openPaymentDialog(inv); }}>
+          onClick={(e) => { e.stopPropagation(); payAtTerminal(inv); }}>
           <Banknote className="w-4 h-4" />
         </Button>
       )}
@@ -1496,7 +1475,7 @@ export default function POSInvoicesPage() {
                                   size="sm"
                                   className="h-7 px-2 text-[11px] font-medium text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
                                   title="Record a payment"
-                                  onClick={() => openPaymentDialog(inst.parent)}
+                                  onClick={() => payAtTerminal(inst.parent)}
                                 >
                                   <Banknote className="w-3 h-3 mr-1" />
                                   Record Payment
@@ -1733,7 +1712,7 @@ export default function POSInvoicesPage() {
                   )}
                   {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue" || detailInvoice.status === "partial") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
-                      onClick={() => openPaymentDialog(detailInvoice)}>
+                      onClick={() => payAtTerminal(detailInvoice)}>
                       <Banknote className="w-4 h-4" /> Record Payment
                     </Button>
                   )}
@@ -1788,68 +1767,6 @@ export default function POSInvoicesPage() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Record Payment Dialog ─── */}
-      <Dialog open={paymentDialog.open} onOpenChange={(o) => { if (!o) { setPaymentDialog({ open: false, invoice: null }); setPaymentAmount(""); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-          </DialogHeader>
-          {paymentDialog.invoice && (() => {
-            const inv = paymentDialog.invoice;
-            const alreadyPaid = inv.amountPaid ?? 0;
-            const balance = Math.max(0, inv.total - alreadyPaid);
-            const entered = parseFloat(paymentAmount);
-            const remaining = Number.isFinite(entered) ? Math.max(0, balance - entered) : balance;
-            return (
-              <div className="space-y-4 py-2">
-                <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm space-y-1">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><span className="font-medium">{inv.invoiceNumber}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice Total</span><span>{formatCurrency(inv.total)}</span></div>
-                  {alreadyPaid > 0 && (
-                    <div className="flex justify-between text-green-700"><span>Already Paid</span><span>−{formatCurrency(alreadyPaid)}</span></div>
-                  )}
-                  <div className="flex justify-between font-semibold border-t pt-1"><span>Balance Due</span><span>{formatCurrency(balance)}</span></div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Payment Amount (AUD)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    max={balance}
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") void recordPayment(); }}
-                    autoFocus
-                  />
-                  <div className="flex gap-2 pt-1">
-                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
-                      onClick={() => setPaymentAmount(balance.toFixed(2))}>
-                      Pay in full
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
-                      onClick={() => setPaymentAmount((balance / 2).toFixed(2))}>
-                      Half
-                    </Button>
-                  </div>
-                  {Number.isFinite(entered) && entered > 0 && (
-                    <p className="text-xs text-muted-foreground pt-1">
-                      {remaining <= 0 ? "This will mark the invoice as paid in full." : `Remaining balance after this payment: ${formatCurrency(remaining)}`}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => { setPaymentDialog({ open: false, invoice: null }); setPaymentAmount(""); }}>Cancel</Button>
-                  <Button onClick={() => void recordPayment()} disabled={recordingPayment || !(Number.isFinite(entered) && entered > 0)}>
-                    {recordingPayment ? "Recording…" : <><Banknote className="w-3.5 h-3.5 mr-1.5" /> Record Payment</>}
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
         </DialogContent>
       </Dialog>
 

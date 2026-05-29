@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { takePendingCart } from "@/lib/pending-cart";
+import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
@@ -164,6 +165,10 @@ export default function POSPage() {
   /* customer */
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [walkIn, setWalkIn] = useState<WalkIn | null>(null);
+  /* Invoice Payment Mode — when set, the terminal is locked to settling an
+     existing invoice's remaining balance rather than ringing up a cart sale. */
+  const [invoicePay, setInvoicePay] = useState<PendingInvoicePayment | null>(null);
+  const [invoicePayPending, setInvoicePayPending] = useState(false);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -472,6 +477,10 @@ export default function POSPage() {
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
   }, [cart, overallDiscount, customerTier]);
 
+  /* The amount the terminal actually charges. In Invoice Payment Mode this is
+     the locked remaining balance; otherwise it's the cart total. */
+  const effectiveTotal = invoicePay ? invoicePay.balance : total;
+
   /* Loyalty — base earn + active promotion bonuses */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
     if (walkIn || !loyaltySettings?.isEnabled || cart.length === 0)
@@ -592,22 +601,38 @@ export default function POSPage() {
 
   /* Split derived values */
   const splitTotal = splitLegs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
-  const splitRemaining = Math.max(0, total - splitTotal);
-  const splitComplete = Math.abs(splitTotal - total) < 0.005;
+  const splitRemaining = Math.max(0, effectiveTotal - splitTotal);
+  const splitComplete = Math.abs(splitTotal - effectiveTotal) < 0.005;
 
   /* Numpad derived — only cash and loyalty use the numpad for amount entry.
      For all other methods (EFTPOS, card, voucher, etc.) the tendered amount
      always equals the total since the terminal/processor charges exact. */
   const numpadIsRelevant = payMethod === "cash" || payMethod === "loyalty";
   const enteredAmount = numpadIsRelevant
-    ? (numpadInput ? (parseFloat(numpadInput) || 0) : total)
-    : total;
-  const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - total) : 0;
-  const amountRemaining = payMethod === "cash" ? Math.max(0, total - enteredAmount) : 0;
+    ? (numpadInput ? (parseFloat(numpadInput) || 0) : effectiveTotal)
+    : effectiveTotal;
+  const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - effectiveTotal) : 0;
+  const amountRemaining = payMethod === "cash" ? Math.max(0, effectiveTotal - enteredAmount) : 0;
 
   /* Restore a parked sale that was triggered from the /pos/parked page.
      pos-parked writes the full sale payload to a module store and then
      navigates here; we take it on mount and hydrate the cart. */
+  /* Invoice Payment Mode — the invoices page parks the remaining balance +
+     linked customer in a module store and navigates here. Take it on mount and
+     lock the terminal to settling that invoice. Runs before the parked-cart
+     restore so the two flows never collide. */
+  useEffect(() => {
+    const pending = takePendingInvoicePayment();
+    if (!pending) return;
+    setInvoicePay(pending);
+    setCart([]);
+    setOverallDiscount("");
+    setSaleNotes("");
+    setSelectedCustomer(null);
+    setWalkIn(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const raw = takePendingCart();
     if (!raw) return;
@@ -808,6 +833,10 @@ export default function POSPage() {
   };
 
   const addToCart = (product: Product) => {
+    if (invoicePay) {
+      toast.error("Finish or cancel the invoice payment before adding items");
+      return;
+    }
     if (!registerOpen) {
       setTillClosedDialogOpen(true);
       return;
@@ -1247,6 +1276,64 @@ export default function POSPage() {
     amountTendered: number,
     extraNote?: string,
   ) => {
+    // ── Invoice Payment Mode ──
+    // Settle an existing invoice's remaining balance instead of ringing up a
+    // cart sale. Reuses the purpose-built POST /invoices/:id/payment endpoint
+    // which appends the payment, updates the ledger, flips the badge to
+    // partial/paid, and credits loyalty on full settlement.
+    if (invoicePay) {
+      if (invoicePayPending) return;
+      const inv = invoicePay;
+      const amount = inv.balance;
+      setInvoicePayPending(true);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/invoices/${inv.invoiceId}/payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ amount }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
+            toast.error(err.error ?? "Failed to record payment");
+            return;
+          }
+          const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
+          // Synthesize a receipt for the invoice payment (no cart sale exists).
+          const lineProduct = {
+            id: inv.invoiceId,
+            name: `Invoice ${inv.invoiceNumber} Payment`,
+            price: amount,
+          } as Product;
+          setCompletedCart([{ product: lineProduct, quantity: 1, itemDiscount: 0 }]);
+          setCompletedPaymentMethod(paymentMethod);
+          setCompletedSubtotal(amount);
+          setCompletedTaxTotal(0);
+          setCompletedCustomer(
+            inv.customerId != null
+              ? ({ id: inv.customerId, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer)
+              : null,
+          );
+          setCompletedLoyaltyAmount(0);
+          setCompletedTx({ id: inv.invoiceId, receiptNumber: inv.invoiceNumber });
+          setCompletedTotal(amount);
+          setReceiptEmail("");
+          setReceiptPhone("");
+          setReceiptMode("idle");
+          setInvoicePay(null);
+          setNumpadInput("");
+          setPaymentModalOpen(false);
+          toast.success(`Payment recorded for invoice ${inv.invoiceNumber} via ${methodLabel}`);
+          setTimeout(() => setReceiptOpen(true), 250);
+        } catch {
+          toast.error("Failed to record payment");
+        } finally {
+          setInvoicePayPending(false);
+        }
+      })();
+      return;
+    }
     // Distribute cart-level (overall) and tier discounts proportionally across
     // all items so the server's recomputed total matches the client total.
     // Without this, the server ignores the overall discount and rejects with 409.
@@ -1768,8 +1855,44 @@ export default function POSPage() {
             </div>
           )}
 
+          {/* Invoice Payment Mode banner */}
+          {invoicePay && (
+            <div className="border-b px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 shrink-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                <Banknote className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Invoice Payment Mode · {invoicePay.invoiceNumber}</span>
+                <button
+                  onClick={() => { setInvoicePay(null); setNumpadInput(""); }}
+                  className="ml-auto shrink-0 hover:text-destructive"
+                  title="Cancel invoice payment"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Cart items */}
-          {cart.length === 0 ? (
+          {invoicePay ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
+              <div className="w-full max-w-sm border rounded-xl bg-background p-4 text-left space-y-2">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                  <Banknote className="w-5 h-5" />
+                  <p className="font-semibold text-sm">Settling Invoice {invoicePay.invoiceNumber}</p>
+                </div>
+                {invoicePay.customerName && (
+                  <p className="text-xs text-muted-foreground">Customer: {invoicePay.customerName}</p>
+                )}
+                <div className="flex justify-between items-baseline border-t pt-2">
+                  <span className="text-sm text-muted-foreground">Balance due</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(invoicePay.balance)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                The terminal is locked to this invoice balance. Choose any payment method and tap Charge to record the payment.
+              </p>
+            </div>
+          ) : cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
               <Receipt className="w-14 h-14 mb-3 opacity-20" />
               <p className="font-medium text-sm">No items in cart</p>
@@ -1918,7 +2041,7 @@ export default function POSPage() {
               </Button>
               <Button
                 className="flex-1 h-12 text-base font-bold"
-                disabled={cart.length === 0}
+                disabled={!invoicePay && cart.length === 0}
                 onClick={() => {
                   if (!registerOpen) {
                     setTillClosedDialogOpen(true);
@@ -1932,7 +2055,7 @@ export default function POSPage() {
                   setPaymentModalOpen(true);
                 }}
               >
-                Charge {formatCurrency(total)}
+                Charge {formatCurrency(effectiveTotal)}
               </Button>
             </div>
           </div>
@@ -1951,7 +2074,7 @@ export default function POSPage() {
               {/* Amount card */}
               <div className="rounded-xl bg-muted/40 border px-5 py-4 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">Amount Due</p>
-                <p className="text-4xl font-bold tabular-nums">{formatCurrency(total)}</p>
+                <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
                 {numpadInput && parseFloat(numpadInput) > 0 && (
                   <p className="text-sm text-muted-foreground mt-1.5 tabular-nums">
                     {changeDue > 0
@@ -2032,12 +2155,12 @@ export default function POSPage() {
                       <div className={cn(
                         "rounded-lg px-3 py-2 flex items-center justify-between text-xs font-medium",
                         splitComplete ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300" :
-                        splitTotal > total + 0.005 ? "bg-destructive/10 text-destructive" :
+                        splitTotal > effectiveTotal + 0.005 ? "bg-destructive/10 text-destructive" :
                         "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300"
                       )}>
-                        <span>{splitComplete ? "Fully covered" : splitTotal > total + 0.005 ? "Over by" : "Remaining"}</span>
+                        <span>{splitComplete ? "Fully covered" : splitTotal > effectiveTotal + 0.005 ? "Over by" : "Remaining"}</span>
                         <span className="tabular-nums">
-                          {splitComplete ? "✓" : splitTotal > total + 0.005 ? formatCurrency(splitTotal - total) : formatCurrency(splitRemaining)}
+                          {splitComplete ? "✓" : splitTotal > effectiveTotal + 0.005 ? formatCurrency(splitTotal - effectiveTotal) : formatCurrency(splitRemaining)}
                         </span>
                       </div>
                     </div>
@@ -2114,7 +2237,7 @@ export default function POSPage() {
                 const dpp = (loyaltySettings?.dollarPerPoint ?? 0.01) || 0.01;
                 /* For points programs, balance is in points and 1 pt = dpp dollars.
                    For cash types, balance is dollars (1 unit = $1). */
-                const requiredUnits = isCashType ? Math.ceil(total) : Math.ceil(total / dpp);
+                const requiredUnits = isCashType ? Math.ceil(effectiveTotal) : Math.ceil(effectiveTotal / dpp);
                 const availableDisplay = isCashType ? formatCurrency(availablePts) : `${availablePts} pts`;
                 const requiredDisplay  = isCashType ? formatCurrency(requiredUnits) : `${requiredUnits} pts`;
                 const enteredLoyalty = parseFloat(numpadInput) || 0;
@@ -2177,11 +2300,11 @@ export default function POSPage() {
                       <span className={cn(
                         "text-lg font-bold tabular-nums",
                         splitComplete ? "text-green-600 dark:text-green-400" :
-                        splitTotal > total + 0.005 ? "text-destructive" :
+                        splitTotal > effectiveTotal + 0.005 ? "text-destructive" :
                         "text-amber-600 dark:text-amber-500"
                       )}>
                         {formatCurrency(splitTotal)}
-                        {!splitComplete && <span className="text-xs font-normal text-muted-foreground ml-1">/ {formatCurrency(total)}</span>}
+                        {!splitComplete && <span className="text-xs font-normal text-muted-foreground ml-1">/ {formatCurrency(effectiveTotal)}</span>}
                       </span>
                     </div>
                   </div>
@@ -2203,7 +2326,7 @@ export default function POSPage() {
                           onKeyDown={e => {
                             if (e.key === "Enter" && gcPayCardNumber.trim()) {
                               validateGiftCardMutation.mutate(
-                                { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: total } },
+                                { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: effectiveTotal } },
                                 { onSuccess: d => setGcValidation(d), onError: () => toast.error("Could not validate card") }
                               );
                             }
@@ -2216,7 +2339,7 @@ export default function POSPage() {
                         className="shrink-0"
                         disabled={!gcPayCardNumber.trim() || validateGiftCardMutation.isPending}
                         onClick={() => validateGiftCardMutation.mutate(
-                          { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: total } },
+                          { data: { cardNumber: gcPayCardNumber.trim(), saleTotal: effectiveTotal } },
                           { onSuccess: d => setGcValidation(d), onError: () => toast.error("Could not validate card") }
                         )}
                       >
@@ -2244,14 +2367,14 @@ export default function POSPage() {
                             <span className="font-semibold tabular-nums">{formatCurrency(gcValidation.currentBalance)}</span>
                             <span className="text-muted-foreground">Applied</span>
                             <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">{formatCurrency(gcValidation.applicableAmount)}</span>
-                            {gcValidation.applicableAmount < total - 0.005 && (
+                            {gcValidation.applicableAmount < effectiveTotal - 0.005 && (
                               <>
                                 <span className="text-muted-foreground">Still needed</span>
-                                <span className="font-semibold tabular-nums text-amber-600">{formatCurrency(total - gcValidation.applicableAmount)}</span>
+                                <span className="font-semibold tabular-nums text-amber-600">{formatCurrency(effectiveTotal - gcValidation.applicableAmount)}</span>
                               </>
                             )}
                           </div>
-                          {gcValidation.applicableAmount < total - 0.005 && (
+                          {gcValidation.applicableAmount < effectiveTotal - 0.005 && (
                             <div className="pt-1 border-t border-green-200 dark:border-green-800">
                               <p className="text-[11px] text-muted-foreground mb-1.5">Collect remaining via</p>
                               <div className="flex gap-2">
@@ -2337,10 +2460,10 @@ export default function POSPage() {
                     </button>
                     {/* Exact */}
                     <button
-                      onClick={() => setNumpadInput(total.toFixed(2))}
+                      onClick={() => setNumpadInput(effectiveTotal.toFixed(2))}
                       className="col-span-2 rounded-xl border bg-muted text-sm font-semibold hover:bg-muted/60 active:scale-95 transition-all flex items-center justify-center"
                     >
-                      Exact {formatCurrency(total)}
+                      Exact {formatCurrency(effectiveTotal)}
                     </button>
                   </div>
                 </>
@@ -2351,6 +2474,7 @@ export default function POSPage() {
                 className="w-full h-12 text-base font-semibold"
                 disabled={
                   createTransactionMutation.isPending ||
+                  invoicePayPending ||
                   updateGiftCardMutation.isPending ||
                   (payMethod === "gift_card" && (!gcValidation?.valid)) ||
                   (payMethod === "split" && !splitComplete) ||
@@ -2367,7 +2491,7 @@ export default function POSPage() {
                     const dpp = (loyaltySettings?.dollarPerPoint ?? 0.01) || 0.01;
                     const enteredLoyalty = parseFloat(numpadInput) || 0;
                     const balance = selectedCustomer?.loyaltyPoints ?? 0;
-                    const required = isCashType ? Math.ceil(total) : Math.ceil(total / dpp);
+                    const required = isCashType ? Math.ceil(effectiveTotal) : Math.ceil(effectiveTotal / dpp);
                     return (
                       enteredLoyalty < required ||
                       enteredLoyalty > balance ||
@@ -2380,16 +2504,16 @@ export default function POSPage() {
                   if (payMethod === "gift_card" && gcValidation?.valid) {
                     const gc = gcValidation;
                     const applied = gc.applicableAmount;
-                    const remaining = total - applied;
+                    const remaining = effectiveTotal - applied;
                     const deductNewBalance = gc.currentBalance - applied;
                     updateGiftCardMutation.mutate(
                       { id: gc.cardId, data: { currentBalance: deductNewBalance } },
                       {
                         onSuccess: () => {
                           if (remaining > 0.004) {
-                            handleCheckout("other", total, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`);
+                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber} ${formatCurrency(applied)} + ${gcRemainingMethod === "cash" ? "Cash" : "EFTPOS"} ${formatCurrency(remaining)}]`);
                           } else {
-                            handleCheckout("other", total, `[Gift Card ${gc.cardNumber}]`);
+                            handleCheckout("other", effectiveTotal, `[Gift Card ${gc.cardNumber}]`);
                           }
                         },
                         onError: () => toast.error("Failed to deduct gift card balance — sale cancelled"),
@@ -2415,7 +2539,7 @@ export default function POSPage() {
                         return `${label} ${formatCurrency(parseFloat(l.amount) || 0)}`;
                       })
                       .join(" + ");
-                    handleCheckout("split", total, `[Split: ${legDetails}]`);
+                    handleCheckout("split", effectiveTotal, `[Split: ${legDetails}]`);
                     return;
                   }
                   // For integration methods, preserve the integration key in
@@ -2440,7 +2564,7 @@ export default function POSPage() {
                   handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
-                {(createTransactionMutation.isPending || updateGiftCardMutation.isPending) ? "Processing…" : "Complete Sale"}
+                {(createTransactionMutation.isPending || updateGiftCardMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
               </Button>
             </div>
           </div>
