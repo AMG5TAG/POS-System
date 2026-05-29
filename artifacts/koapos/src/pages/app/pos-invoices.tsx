@@ -181,9 +181,9 @@ function explodeRecurringInstances(invoices: Invoice[]): RecurringInstance[] {
       let instanceStatus: InstanceStatus;
       if (inv.status === "paid")           instanceStatus = "paid";
       else if (inv.status === "partial")   instanceStatus = "partial";
-      else if (sendDate > today)           instanceStatus = "scheduled";
       else if (inv.status === "overdue")   instanceStatus = "overdue";
-      else                                 instanceStatus = "sent";
+      else if (inv.status === "sent" && sendDate <= today) instanceStatus = "sent";
+      else                                 instanceStatus = "scheduled";
 
       rows.push({ instanceId, index: i, sendDate, instanceStatus, parent: inv });
     }
