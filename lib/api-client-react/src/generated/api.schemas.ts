@@ -891,6 +891,7 @@ export interface DashboardSummary {
   refundTotal?: number;
   discountTotal?: number;
   itemsSold?: number;
+  costTotal?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
 }

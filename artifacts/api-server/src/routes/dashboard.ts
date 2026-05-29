@@ -157,12 +157,31 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const transactionCount = completedTxns.length + paidInvoices.length;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
 
-  // Items sold: sum of quantity across all line items in completed transactions
+  // Items sold + collect unique productIds for COGS lookup
   let itemsSold = 0;
+  const soldItems: { productId: number; quantity: number }[] = [];
   for (const t of completedTxns) {
     const items = Array.isArray(t.items) ? t.items : [];
-    for (const item of items as { quantity?: number }[]) {
-      itemsSold += item.quantity ?? 0;
+    for (const item of items as { productId?: number; quantity?: number }[]) {
+      const qty = item.quantity ?? 0;
+      itemsSold += qty;
+      if (item.productId && item.productId > 0 && qty > 0) {
+        soldItems.push({ productId: item.productId, quantity: qty });
+      }
+    }
+  }
+
+  // COGS: look up costPrice for each unique product sold, then multiply by quantity
+  let costTotal = 0;
+  if (soldItems.length > 0) {
+    const uniqueIds = [...new Set(soldItems.map((i) => i.productId))];
+    const costRows = await db
+      .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+      .from(productsTable)
+      .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, uniqueIds)));
+    const costMap = new Map(costRows.map((r) => [r.id, r.costPrice ? parseFloat(r.costPrice) : 0]));
+    for (const { productId, quantity } of soldItems) {
+      costTotal += (costMap.get(productId) ?? 0) * quantity;
     }
   }
 
@@ -215,6 +234,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     refundTotal: Math.round(refundTotal * 100) / 100,
     discountTotal: Math.round(discountTotal * 100) / 100,
     itemsSold,
+    costTotal: Math.round(costTotal * 100) / 100,
     topPaymentMethod,
   });
 });

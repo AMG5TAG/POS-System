@@ -1911,6 +1911,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "refundTotal": zod.number().optional(),
   "discountTotal": zod.number().optional(),
   "itemsSold": zod.number().optional(),
+  "costTotal": zod.number().optional(),
   "topPaymentMethod": zod.string().nullish()
 })
 

@@ -6660,6 +6660,8 @@ components:
           type: number
         itemsSold:
           type: integer
+        costTotal:
+          type: number
         topPaymentMethod:
           type: ["string", "null"]
 

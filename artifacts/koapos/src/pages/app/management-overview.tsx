@@ -6,7 +6,6 @@ import {
   useGetTaxSettings,
   useGetLoyaltySettings,
   useListCustomers,
-  useListLaybys,
   GetDashboardSummaryPeriod,
   GetDashboardActivityPeriod,
 } from "@workspace/api-client-react";
@@ -142,7 +141,6 @@ export default function ManagementOverviewPage() {
   const { data: taxData }     = useGetTaxSettings();
   const { data: loyaltyData } = useGetLoyaltySettings();
   const { data: customerData } = useListCustomers({ limit: 500 });
-  const { data: laybyData }   = useListLaybys({ status: "active" });
 
   /* Derived sales values */
   const totalSales    = summary?.totalSales       ?? 0;
@@ -162,10 +160,8 @@ export default function ManagementOverviewPage() {
     : totalSales * (gstRatePct / 100);
   const revenueExGst  = totalSales - gstCollected;
 
-  /* Active laybys outstanding balance */
-  const activeLaybys  = laybyData?.items ?? [];
-  const laybyBalance  = activeLaybys.reduce((s, l) => s + (l.balance ?? 0), 0);
-  const laybyCount    = activeLaybys.length;
+  /* Cost of goods sold */
+  const costTotal = summary?.costTotal ?? 0;
 
   /* Loyalty / store credit dollar value */
   const customers     = customerData?.items ?? [];
@@ -334,13 +330,12 @@ export default function ManagementOverviewPage() {
               href="/management/sales-overview#profit-loss"
             />
             <KpiCard
-              title="Laybys"
+              title="Cost"
               icon={Package2}
               iconBg="bg-sky-100 dark:bg-sky-900/30 text-sky-600"
-              value={formatCurrency(laybyBalance)}
-              sub={laybyCount === 0 ? "No active laybys" : `${laybyCount} active layby${laybyCount === 1 ? "" : "s"} outstanding`}
+              value={isLoading ? "—" : formatCurrency(costTotal)}
+              sub={`Cost of items sold ${periodLabel}`}
               valueClass="text-sky-600"
-              href="/management/layby"
             />
           </div>
 
