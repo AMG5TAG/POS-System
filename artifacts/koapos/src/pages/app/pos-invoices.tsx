@@ -115,6 +115,77 @@ const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", year
 
 const API = "/api/invoices";
 
+/* ── Recurring instance types & helpers ──────────────────────────────────── */
+
+type InstanceStatus = "paid" | "sent" | "scheduled" | "overdue";
+
+interface RecurringInstance {
+  instanceId:     string;
+  index:          number;
+  sendDate:       Date;
+  instanceStatus: InstanceStatus;
+  parent:         Invoice;
+}
+
+const INSTANCE_STATUS_COLORS: Record<InstanceStatus, string> = {
+  paid:      "text-green-700 bg-green-50 border-green-200",
+  sent:      "text-blue-700 bg-blue-50 border-blue-200",
+  scheduled: "text-gray-500 bg-gray-50 border-gray-200",
+  overdue:   "text-red-700 bg-red-50 border-red-200",
+};
+
+const INSTANCE_STATUS_LABELS: Record<InstanceStatus, string> = {
+  paid:      "Paid",
+  sent:      "Sent",
+  scheduled: "Scheduled",
+  overdue:   "Overdue",
+};
+
+function addByFrequency(date: Date, freq: string, n: number): Date {
+  const d = new Date(date);
+  if (freq === "daily")   d.setDate(d.getDate() + n);
+  if (freq === "weekly")  d.setDate(d.getDate() + n * 7);
+  if (freq === "monthly") d.setMonth(d.getMonth() + n);
+  if (freq === "yearly")  d.setFullYear(d.getFullYear() + n);
+  return d;
+}
+
+function scheduleTag(inv: Invoice): string {
+  const freq = FREQ_LABELS[(inv.recurringFrequency ?? "monthly") as keyof typeof FREQ_LABELS] ?? "Recurring";
+  const desc = inv.items?.[0]?.description?.trim();
+  return desc ? `${freq} · ${desc}` : `${freq} Schedule`;
+}
+
+function explodeRecurringInstances(invoices: Invoice[]): RecurringInstance[] {
+  const today = new Date();
+  const rows: RecurringInstance[] = [];
+
+  for (const inv of invoices) {
+    if (!inv.isRecurring) continue;
+    const freq  = inv.recurringFrequency ?? "monthly";
+    const count = Math.min(inv.recurringOccurrences ?? 6, 24);
+    const start = inv.recurringStartDate
+      ? new Date(inv.recurringStartDate)
+      : new Date(inv.createdAt);
+
+    for (let i = 0; i < count; i++) {
+      const sendDate = addByFrequency(start, freq, i);
+      const suffix   = i < 26 ? String.fromCharCode(65 + i) : String(i + 1);
+      const instanceId = `${inv.invoiceNumber}-${suffix}`;
+
+      let instanceStatus: InstanceStatus;
+      if (inv.status === "paid")           instanceStatus = "paid";
+      else if (sendDate > today)           instanceStatus = "scheduled";
+      else if (inv.status === "overdue")   instanceStatus = "overdue";
+      else                                 instanceStatus = "sent";
+
+      rows.push({ instanceId, index: i, sendDate, instanceStatus, parent: inv });
+    }
+  }
+
+  return rows.sort((a, b) => b.sendDate.getTime() - a.sendDate.getTime());
+}
+
 /* ── Prefix settings ──────────────────────────────────────────────────── */
 
 function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
@@ -1086,6 +1157,7 @@ export default function POSInvoicesPage() {
 
   const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring),  [filtered]);
   const recurringFiltered = useMemo(() => filtered.filter((inv) =>  inv.isRecurring),  [filtered]);
+  const recurringInstances = useMemo(() => explodeRecurringInstances(recurringFiltered), [recurringFiltered]);
 
   const kpiRevenue     = useMemo(() => invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.total, 0),                         [invoices]);
   const kpiOutstanding = useMemo(() => invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.total, 0), [invoices]);
@@ -1196,7 +1268,7 @@ export default function POSInvoicesPage() {
               <TabsTrigger value="recurring" className="gap-1.5">
                 <CalendarClock className="w-3.5 h-3.5" />
                 Recurring Invoices
-                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{recurringFiltered.length}</Badge>
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{recurringInstances.length}</Badge>
               </TabsTrigger>
             </TabsList>
 
@@ -1277,11 +1349,11 @@ export default function POSInvoicesPage() {
             )}
           </TabsContent>
 
-          {/* ── Tab 2: Recurring Invoices ── */}
+          {/* ── Tab 2: Recurring Invoices — exploded instances ── */}
           <TabsContent value="recurring" className="mt-0">
             {loading ? (
               <div className="text-center py-16 text-muted-foreground">Loading invoices…</div>
-            ) : recurringFiltered.length === 0 ? (
+            ) : recurringInstances.length === 0 ? (
               <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
                 <CalendarClock className="w-16 h-16 text-muted-foreground/30" />
                 <div>
@@ -1295,57 +1367,90 @@ export default function POSInvoicesPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 border-b">
                     <tr>
-                      <th className="text-left p-3 font-medium">Invoice</th>
-                      <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
-                      <th className="text-left p-3 font-medium hidden md:table-cell">Frequency</th>
-                      <th className="text-left p-3 font-medium hidden lg:table-cell">Next Send Date</th>
-                      <th className="text-left p-3 font-medium hidden xl:table-cell">Occurrences</th>
-                      <th className="text-left p-3 font-medium">Status</th>
-                      <th className="text-right p-3 font-medium">Total</th>
-                      <th className="p-3 w-24" />
+                      <th className="text-left p-3 font-medium">Instance ID / Generation Date</th>
+                      <th className="text-left p-3 font-medium">Customer &amp; Schedule</th>
+                      <th className="text-right p-3 font-medium">Amount Due</th>
+                      <th className="text-left p-3 font-medium w-32">Status</th>
+                      <th className="p-3 w-12" />
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {recurringFiltered.map((inv) => (
-                      <tr key={inv.id} className="bg-background hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => openDetail(inv)}>
-                        <td className="p-3">
-                          <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <RefreshCw className="w-2.5 h-2.5 text-blue-500" />
-                            <span className="text-[10px] text-blue-600 font-medium">Recurring</span>
-                          </div>
-                        </td>
-                        <td className="p-3 hidden sm:table-cell">{inv.customerName ?? <span className="text-muted-foreground">—</span>}</td>
-                        <td className="p-3 hidden md:table-cell">
-                          {inv.recurringFrequency ? (
-                            <Badge variant="outline" className="text-xs gap-1 font-normal">
-                              <RefreshCw className="w-2.5 h-2.5" />
-                              {FREQ_LABELS[inv.recurringFrequency as keyof typeof FREQ_LABELS] ?? inv.recurringFrequency}
-                            </Badge>
-                          ) : <span className="text-muted-foreground text-xs">—</span>}
-                        </td>
-                        <td className="p-3 hidden lg:table-cell">
-                          {inv.nextSendDate ? (
-                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <CalendarClock className="w-3.5 h-3.5 text-blue-500" />
-                              {formatDateOnly(inv.nextSendDate)}
+                    {recurringInstances.map((inst) => {
+                      const isPast = inst.sendDate <= new Date();
+                      const dateLabel = isPast
+                        ? `Sent ${inst.sendDate.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`
+                        : `Due ${inst.sendDate.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`;
+                      return (
+                        <tr
+                          key={inst.instanceId}
+                          className="bg-background hover:bg-muted/30 cursor-pointer transition-colors"
+                          onClick={() => openDetail(inst.parent)}
+                        >
+                          {/* Col 1 — Instance ID + generation date */}
+                          <td className="p-3">
+                            <span className="font-mono font-semibold text-xs tracking-wide">{inst.instanceId}</span>
+                            <div className={`flex items-center gap-1 mt-0.5 text-[11px] ${isPast ? "text-muted-foreground" : "text-blue-600 font-medium"}`}>
+                              {isPast
+                                ? <Send className="w-2.5 h-2.5 shrink-0" />
+                                : <CalendarClock className="w-2.5 h-2.5 shrink-0" />}
+                              {dateLabel}
+                            </div>
+                          </td>
+
+                          {/* Col 2 — Customer + schedule tag */}
+                          <td className="p-3">
+                            <span className="font-medium text-sm">
+                              {inst.parent.customerName ?? <span className="text-muted-foreground italic">No customer</span>}
                             </span>
-                          ) : <span className="text-muted-foreground text-xs">—</span>}
-                        </td>
-                        <td className="p-3 hidden xl:table-cell text-xs text-muted-foreground">
-                          {inv.recurringOccurrences != null ? `${inv.recurringOccurrences}×` : "—"}
-                        </td>
-                        <td className="p-3">
-                          <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
-                        </td>
-                        <td className="p-3 text-right font-medium">{formatCurrency(inv.total)}</td>
-                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                          <InvoiceRowActions inv={inv} />
-                        </td>
-                      </tr>
-                    ))}
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <RefreshCw className="w-2.5 h-2.5 text-blue-400 shrink-0" />
+                              <span className="text-[11px] text-muted-foreground">{scheduleTag(inst.parent)}</span>
+                            </div>
+                          </td>
+
+                          {/* Col 3 — Amount due */}
+                          <td className="p-3 text-right font-semibold tabular-nums">
+                            {formatCurrency(inst.parent.total)}
+                          </td>
+
+                          {/* Col 4 — Instance status badge */}
+                          <td className="p-3">
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${INSTANCE_STATUS_COLORS[inst.instanceStatus]}`}>
+                              {INSTANCE_STATUS_LABELS[inst.instanceStatus]}
+                            </span>
+                          </td>
+
+                          {/* Col 5 — View parent invoice */}
+                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="View invoice"
+                              onClick={() => openDetail(inst.parent)}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+
+                {/* Footer: parent schedule summary */}
+                <div className="border-t bg-muted/30 px-4 py-2 flex flex-wrap gap-x-6 gap-y-1">
+                  {recurringFiltered.map((inv) => (
+                    <span key={inv.id} className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <RefreshCw className="w-2.5 h-2.5 text-blue-400" />
+                      <span className="font-medium text-foreground">{inv.invoiceNumber}</span>
+                      &nbsp;·&nbsp;
+                      {scheduleTag(inv)}
+                      &nbsp;·&nbsp;
+                      {Math.min(inv.recurringOccurrences ?? 6, 24)} instances
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </TabsContent>
