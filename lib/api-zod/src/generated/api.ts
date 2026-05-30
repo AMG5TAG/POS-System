@@ -2108,6 +2108,145 @@ export const ListInventoryResponse = zod.object({
 
 
 /**
+ * @summary List stock takes (history)
+ */
+export const ListStockTakesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['open', 'applied']),
+  "notes": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "appliedAt": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "sku": zod.string().nullish(),
+  "categoryId": zod.number().nullish(),
+  "categoryName": zod.string().nullish(),
+  "systemQty": zod.number(),
+  "countedQty": zod.number().nullish(),
+  "variance": zod.number().nullish().describe('countedQty - systemQty; null when countedQty is not yet entered')
+})),
+  "totalLines": zod.number().optional(),
+  "countedLines": zod.number().optional()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Start a new stock take (snapshots all tracked products)
+ */
+export const CreateStockTakeBody = zod.object({
+  "notes": zod.string().optional(),
+  "categoryId": zod.number().optional().describe('If supplied, only snapshot products in this category')
+})
+
+
+/**
+ * @summary Get a single stock take with all lines
+ */
+export const GetStockTakeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetStockTakeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['open', 'applied']),
+  "notes": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "appliedAt": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "sku": zod.string().nullish(),
+  "categoryId": zod.number().nullish(),
+  "categoryName": zod.string().nullish(),
+  "systemQty": zod.number(),
+  "countedQty": zod.number().nullish(),
+  "variance": zod.number().nullish().describe('countedQty - systemQty; null when countedQty is not yet entered')
+})),
+  "totalLines": zod.number().optional(),
+  "countedLines": zod.number().optional()
+})
+
+
+/**
+ * @summary Save counted quantities (progress save)
+ */
+export const SaveStockTakeProgressParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SaveStockTakeProgressBody = zod.object({
+  "lines": zod.array(zod.object({
+  "productId": zod.number(),
+  "countedQty": zod.number().nullish()
+}))
+})
+
+export const SaveStockTakeProgressResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['open', 'applied']),
+  "notes": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "appliedAt": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "sku": zod.string().nullish(),
+  "categoryId": zod.number().nullish(),
+  "categoryName": zod.string().nullish(),
+  "systemQty": zod.number(),
+  "countedQty": zod.number().nullish(),
+  "variance": zod.number().nullish().describe('countedQty - systemQty; null when countedQty is not yet entered')
+})),
+  "totalLines": zod.number().optional(),
+  "countedLines": zod.number().optional()
+})
+
+
+/**
+ * @summary Apply stock take variances to product stock quantities
+ */
+export const SubmitStockTakeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SubmitStockTakeResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "staffId": zod.number().nullish(),
+  "status": zod.enum(['open', 'applied']),
+  "notes": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "appliedAt": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "sku": zod.string().nullish(),
+  "categoryId": zod.number().nullish(),
+  "categoryName": zod.string().nullish(),
+  "systemQty": zod.number(),
+  "countedQty": zod.number().nullish(),
+  "variance": zod.number().nullish().describe('countedQty - systemQty; null when countedQty is not yet entered')
+})),
+  "totalLines": zod.number().optional(),
+  "countedLines": zod.number().optional()
+})
+
+
+/**
  * @summary Update inventory for a product
  */
 export const UpdateInventoryParams = zod.object({

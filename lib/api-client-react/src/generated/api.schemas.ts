@@ -773,6 +773,71 @@ export interface InventoryUpdate {
   lowStockThreshold?: number;
 }
 
+export interface StockTakeLine {
+  id: number;
+  productId: number;
+  productName: string;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  categoryName?: string | null;
+  systemQty: number;
+  /** @nullable */
+  countedQty?: number | null;
+  /**
+     * countedQty - systemQty; null when countedQty is not yet entered
+     * @nullable
+     */
+  variance?: number | null;
+}
+
+export type StockTakeStatus = typeof StockTakeStatus[keyof typeof StockTakeStatus];
+
+
+export const StockTakeStatus = {
+  open: 'open',
+  applied: 'applied',
+} as const;
+
+export interface StockTake {
+  id: number;
+  merchantId: number;
+  /** @nullable */
+  staffId?: number | null;
+  status: StockTakeStatus;
+  /** @nullable */
+  notes?: string | null;
+  startedAt: string;
+  /** @nullable */
+  appliedAt?: string | null;
+  lines: StockTakeLine[];
+  totalLines?: number;
+  countedLines?: number;
+}
+
+export interface StockTakeList {
+  items: StockTake[];
+  total: number;
+}
+
+export interface StockTakeInput {
+  notes?: string;
+  /** If supplied, only snapshot products in this category */
+  categoryId?: number;
+}
+
+export type StockTakeProgressInputLinesItem = {
+  productId: number;
+  /** @nullable */
+  countedQty?: number | null;
+};
+
+export interface StockTakeProgressInput {
+  lines: StockTakeProgressInputLinesItem[];
+}
+
 export interface CalendarAppointment {
   id: number;
   title: string;

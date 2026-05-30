@@ -302,6 +302,10 @@ import type {
   StickerTemplate,
   StickerTemplateInput,
   StickerTemplateUpdateInput,
+  StockTake,
+  StockTakeInput,
+  StockTakeList,
+  StockTakeProgressInput,
   Subscription,
   Supplier,
   SupplierInput,
@@ -5524,6 +5528,373 @@ export function useListInventory<TData = Awaited<ReturnType<typeof listInventory
 
 
 
+
+export const getListStockTakesUrl = () => {
+
+
+
+
+  return `/api/stock-takes`
+}
+
+/**
+ * @summary List stock takes (history)
+ */
+export const listStockTakes = async ( options?: RequestInit): Promise<StockTakeList> => {
+
+  return customFetch<StockTakeList>(getListStockTakesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStockTakesQueryKey = () => {
+    return [
+    `/api/stock-takes`
+    ] as const;
+    }
+
+
+export const getListStockTakesQueryOptions = <TData = Awaited<ReturnType<typeof listStockTakes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStockTakes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStockTakesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStockTakes>>> = ({ signal }) => listStockTakes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStockTakes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStockTakesQueryResult = NonNullable<Awaited<ReturnType<typeof listStockTakes>>>
+export type ListStockTakesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List stock takes (history)
+ */
+
+export function useListStockTakes<TData = Awaited<ReturnType<typeof listStockTakes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStockTakes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStockTakesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateStockTakeUrl = () => {
+
+
+
+
+  return `/api/stock-takes`
+}
+
+/**
+ * @summary Start a new stock take (snapshots all tracked products)
+ */
+export const createStockTake = async (stockTakeInput?: StockTakeInput, options?: RequestInit): Promise<StockTake> => {
+
+  return customFetch<StockTake>(getCreateStockTakeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      stockTakeInput,)
+  }
+);}
+
+
+
+
+export const getCreateStockTakeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStockTake>>, TError,{data?: BodyType<StockTakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createStockTake>>, TError,{data?: BodyType<StockTakeInput>}, TContext> => {
+
+const mutationKey = ['createStockTake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStockTake>>, {data?: BodyType<StockTakeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createStockTake(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateStockTakeMutationResult = NonNullable<Awaited<ReturnType<typeof createStockTake>>>
+    export type CreateStockTakeMutationBody = BodyType<StockTakeInput> | undefined
+    export type CreateStockTakeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start a new stock take (snapshots all tracked products)
+ */
+export const useCreateStockTake = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStockTake>>, TError,{data?: BodyType<StockTakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createStockTake>>,
+        TError,
+        {data?: BodyType<StockTakeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateStockTakeMutationOptions(options));
+    }
+
+export const getGetStockTakeUrl = (id: number,) => {
+
+
+
+
+  return `/api/stock-takes/${id}`
+}
+
+/**
+ * @summary Get a single stock take with all lines
+ */
+export const getStockTake = async (id: number, options?: RequestInit): Promise<StockTake> => {
+
+  return customFetch<StockTake>(getGetStockTakeUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStockTakeQueryKey = (id: number,) => {
+    return [
+    `/api/stock-takes/${id}`
+    ] as const;
+    }
+
+
+export const getGetStockTakeQueryOptions = <TData = Awaited<ReturnType<typeof getStockTake>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStockTake>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStockTakeQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStockTake>>> = ({ signal }) => getStockTake(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStockTake>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStockTakeQueryResult = NonNullable<Awaited<ReturnType<typeof getStockTake>>>
+export type GetStockTakeQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a single stock take with all lines
+ */
+
+export function useGetStockTake<TData = Awaited<ReturnType<typeof getStockTake>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStockTake>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStockTakeQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSaveStockTakeProgressUrl = (id: number,) => {
+
+
+
+
+  return `/api/stock-takes/${id}`
+}
+
+/**
+ * @summary Save counted quantities (progress save)
+ */
+export const saveStockTakeProgress = async (id: number,
+    stockTakeProgressInput: StockTakeProgressInput, options?: RequestInit): Promise<StockTake> => {
+
+  return customFetch<StockTake>(getSaveStockTakeProgressUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      stockTakeProgressInput,)
+  }
+);}
+
+
+
+
+export const getSaveStockTakeProgressMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveStockTakeProgress>>, TError,{id: number;data: BodyType<StockTakeProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveStockTakeProgress>>, TError,{id: number;data: BodyType<StockTakeProgressInput>}, TContext> => {
+
+const mutationKey = ['saveStockTakeProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveStockTakeProgress>>, {id: number;data: BodyType<StockTakeProgressInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  saveStockTakeProgress(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveStockTakeProgressMutationResult = NonNullable<Awaited<ReturnType<typeof saveStockTakeProgress>>>
+    export type SaveStockTakeProgressMutationBody = BodyType<StockTakeProgressInput>
+    export type SaveStockTakeProgressMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save counted quantities (progress save)
+ */
+export const useSaveStockTakeProgress = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveStockTakeProgress>>, TError,{id: number;data: BodyType<StockTakeProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveStockTakeProgress>>,
+        TError,
+        {id: number;data: BodyType<StockTakeProgressInput>},
+        TContext
+      > => {
+      return useMutation(getSaveStockTakeProgressMutationOptions(options));
+    }
+
+export const getSubmitStockTakeUrl = (id: number,) => {
+
+
+
+
+  return `/api/stock-takes/${id}/submit`
+}
+
+/**
+ * @summary Apply stock take variances to product stock quantities
+ */
+export const submitStockTake = async (id: number, options?: RequestInit): Promise<StockTake> => {
+
+  return customFetch<StockTake>(getSubmitStockTakeUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSubmitStockTakeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStockTake>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitStockTake>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['submitStockTake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitStockTake>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  submitStockTake(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitStockTakeMutationResult = NonNullable<Awaited<ReturnType<typeof submitStockTake>>>
+
+    export type SubmitStockTakeMutationError = ErrorType<void>
+
+    /**
+ * @summary Apply stock take variances to product stock quantities
+ */
+export const useSubmitStockTake = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStockTake>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitStockTake>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSubmitStockTakeMutationOptions(options));
+    }
 
 export const getUpdateInventoryUrl = (productId: number,) => {
 

@@ -83,3 +83,4 @@ export * from "./staff-notes";
 export * from "./roster-shifts";
 export * from "./leave-requests";
 export * from "./daily-closes";
+export * from "./stock-takes";

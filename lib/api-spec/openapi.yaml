@@ -1484,6 +1484,101 @@ paths:
               schema:
                 $ref: "#/components/schemas/InventoryList"
 
+  /stock-takes:
+    get:
+      operationId: listStockTakes
+      tags: [inventory]
+      summary: List stock takes (history)
+      responses:
+        "200":
+          description: Stock take list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockTakeList"
+    post:
+      operationId: createStockTake
+      tags: [inventory]
+      summary: Start a new stock take (snapshots all tracked products)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockTakeInput"
+      responses:
+        "201":
+          description: Created stock take with product lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockTake"
+
+  /stock-takes/{id}:
+    get:
+      operationId: getStockTake
+      tags: [inventory]
+      summary: Get a single stock take with all lines
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stock take
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockTake"
+        "404":
+          description: Not found
+    patch:
+      operationId: saveStockTakeProgress
+      tags: [inventory]
+      summary: Save counted quantities (progress save)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockTakeProgressInput"
+      responses:
+        "200":
+          description: Updated stock take
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockTake"
+
+  /stock-takes/{id}/submit:
+    post:
+      operationId: submitStockTake
+      tags: [inventory]
+      summary: Apply stock take variances to product stock quantities
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stock take applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockTake"
+        "404":
+          description: Not found
+
   /inventory/{productId}:
     patch:
       operationId: updateInventory
@@ -7038,6 +7133,95 @@ components:
           type: integer
         lowStockThreshold:
           type: integer
+
+    # ── Stock Takes ───────────────────────────────────────────────────────────
+    StockTakeLine:
+      type: object
+      required: [id, productId, productName, systemQty]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        productName:
+          type: string
+        sku:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+        systemQty:
+          type: integer
+        countedQty:
+          type: ["integer", "null"]
+        variance:
+          type: ["integer", "null"]
+          description: countedQty - systemQty; null when countedQty is not yet entered
+
+    StockTake:
+      type: object
+      required: [id, merchantId, status, startedAt, lines]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        staffId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [open, applied]
+        notes:
+          type: ["string", "null"]
+        startedAt:
+          type: string
+          format: date-time
+        appliedAt:
+          type: ["string", "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTakeLine"
+        totalLines:
+          type: integer
+        countedLines:
+          type: integer
+
+    StockTakeList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTake"
+        total:
+          type: integer
+
+    StockTakeInput:
+      type: object
+      properties:
+        notes:
+          type: string
+        categoryId:
+          type: integer
+          description: If supplied, only snapshot products in this category
+
+    StockTakeProgressInput:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            required: [productId]
+            properties:
+              productId:
+                type: integer
+              countedQty:
+                type: ["integer", "null"]
 
     # ── Dashboard ────────────────────────────────────────────────────────────
     CalendarAppointment:
