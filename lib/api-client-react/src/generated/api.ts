@@ -149,6 +149,8 @@ import type {
   ListInventoryParams,
   ListLaybys200,
   ListLaybysParams,
+  ListLowStockAlertLog200,
+  ListLowStockAlertLogParams,
   ListPcSavedBuilds200,
   ListPosRegisterSessionsParams,
   ListPosStaffSessionsParams,
@@ -162,6 +164,8 @@ import type {
   ListTransactionsParams,
   ListWastageParams,
   LoginInput,
+  LowStockAlertSettings,
+  LowStockAlertSettingsInput,
   LoyaltyLeaderboard,
   LoyaltySettings,
   LoyaltySettingsInput,
@@ -21229,6 +21233,238 @@ export const useUpdateInventorySettings = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateInventorySettingsMutationOptions(options));
     }
+
+export const getGetLowStockAlertSettingsUrl = () => {
+
+
+
+
+  return `/api/low-stock-alert-settings`
+}
+
+/**
+ * @summary Get low-stock alert settings
+ */
+export const getLowStockAlertSettings = async ( options?: RequestInit): Promise<LowStockAlertSettings> => {
+
+  return customFetch<LowStockAlertSettings>(getGetLowStockAlertSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLowStockAlertSettingsQueryKey = () => {
+    return [
+    `/api/low-stock-alert-settings`
+    ] as const;
+    }
+
+
+export const getGetLowStockAlertSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getLowStockAlertSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLowStockAlertSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLowStockAlertSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLowStockAlertSettings>>> = ({ signal }) => getLowStockAlertSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLowStockAlertSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLowStockAlertSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getLowStockAlertSettings>>>
+export type GetLowStockAlertSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get low-stock alert settings
+ */
+
+export function useGetLowStockAlertSettings<TData = Awaited<ReturnType<typeof getLowStockAlertSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLowStockAlertSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLowStockAlertSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateLowStockAlertSettingsUrl = () => {
+
+
+
+
+  return `/api/low-stock-alert-settings`
+}
+
+/**
+ * @summary Update low-stock alert settings
+ */
+export const updateLowStockAlertSettings = async (lowStockAlertSettingsInput: LowStockAlertSettingsInput, options?: RequestInit): Promise<LowStockAlertSettings> => {
+
+  return customFetch<LowStockAlertSettings>(getUpdateLowStockAlertSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      lowStockAlertSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateLowStockAlertSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLowStockAlertSettings>>, TError,{data: BodyType<LowStockAlertSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLowStockAlertSettings>>, TError,{data: BodyType<LowStockAlertSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateLowStockAlertSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLowStockAlertSettings>>, {data: BodyType<LowStockAlertSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateLowStockAlertSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLowStockAlertSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateLowStockAlertSettings>>>
+    export type UpdateLowStockAlertSettingsMutationBody = BodyType<LowStockAlertSettingsInput>
+    export type UpdateLowStockAlertSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update low-stock alert settings
+ */
+export const useUpdateLowStockAlertSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLowStockAlertSettings>>, TError,{data: BodyType<LowStockAlertSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLowStockAlertSettings>>,
+        TError,
+        {data: BodyType<LowStockAlertSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLowStockAlertSettingsMutationOptions(options));
+    }
+
+export const getListLowStockAlertLogUrl = (params?: ListLowStockAlertLogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/low-stock-alert-log?${stringifiedParams}` : `/api/low-stock-alert-log`
+}
+
+/**
+ * @summary List low-stock alert send history
+ */
+export const listLowStockAlertLog = async (params?: ListLowStockAlertLogParams, options?: RequestInit): Promise<ListLowStockAlertLog200> => {
+
+  return customFetch<ListLowStockAlertLog200>(getListLowStockAlertLogUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLowStockAlertLogQueryKey = (params?: ListLowStockAlertLogParams,) => {
+    return [
+    `/api/low-stock-alert-log`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLowStockAlertLogQueryOptions = <TData = Awaited<ReturnType<typeof listLowStockAlertLog>>, TError = ErrorType<unknown>>(params?: ListLowStockAlertLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLowStockAlertLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLowStockAlertLogQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLowStockAlertLog>>> = ({ signal }) => listLowStockAlertLog(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLowStockAlertLog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLowStockAlertLogQueryResult = NonNullable<Awaited<ReturnType<typeof listLowStockAlertLog>>>
+export type ListLowStockAlertLogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List low-stock alert send history
+ */
+
+export function useListLowStockAlertLog<TData = Awaited<ReturnType<typeof listLowStockAlertLog>>, TError = ErrorType<unknown>>(
+ params?: ListLowStockAlertLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLowStockAlertLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLowStockAlertLogQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetRegionalExtSettingsUrl = () => {
 

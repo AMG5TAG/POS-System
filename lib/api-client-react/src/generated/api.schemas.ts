@@ -2921,6 +2921,40 @@ export interface PosCodePrefixesInput {
   poDigits?: number;
 }
 
+export interface LowStockAlertSettings {
+  id: number;
+  merchantId: number;
+  enabled: string;
+  emailAddresses: string[];
+  mode: string;
+  globalThreshold?: number | null;
+}
+
+export interface LowStockAlertSettingsInput {
+  enabled?: string;
+  emailAddresses?: string[];
+  mode?: string;
+  globalThreshold?: number | null;
+}
+
+export type LowStockAlertLogEntryItemsItem = {
+  productId: number;
+  productName: string;
+  sku?: string | null;
+  stockQuantity: number;
+  threshold: number;
+};
+
+export interface LowStockAlertLogEntry {
+  id: number;
+  merchantId: number;
+  sentAt: string;
+  mode: string;
+  itemCount: number;
+  emailAddresses: string[];
+  items: LowStockAlertLogEntryItemsItem[];
+}
+
 export interface InventorySettings {
   id: number;
   merchantId: number;
@@ -3856,6 +3890,16 @@ registerId?: string;
 
 export type ListPosStaffSessionsParams = {
 registerId?: string;
+};
+
+export type ListLowStockAlertLogParams = {
+limit?: number;
+offset?: number;
+};
+
+export type ListLowStockAlertLog200 = {
+  items: LowStockAlertLogEntry[];
+  total: number;
 };
 
 export type GetProfitLossParams = {

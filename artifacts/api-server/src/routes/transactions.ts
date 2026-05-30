@@ -12,6 +12,7 @@ import {
   SendTransactionReceiptParams,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 
 const router: IRouter = Router();
 
@@ -503,6 +504,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // entity completion) commit together or roll back together. Prevents
   // partial commits where a sale is recorded but stock/customer state drift.
   let transaction: typeof transactionsTable.$inferSelect;
+  const updatedStockItems: Array<{ id: number; name: string; sku: string | null; stockQuantity: number; lowStockThreshold: number | null; trackInventory: string }> = [];
   try {
     transaction = await db.transaction(async (tx) => {
     const [row] = await tx
@@ -602,10 +604,12 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     for (const [productId, qty] of qtyByProduct) {
       const product = productMap.get(productId);
       if (product?.trackInventory === "true") {
+        const newQty = Math.max(0, product.stockQuantity - qty);
         await tx
           .update(productsTable)
-          .set({ stockQuantity: Math.max(0, product.stockQuantity - qty) })
+          .set({ stockQuantity: newQty })
           .where(eq(productsTable.id, productId));
+        updatedStockItems.push({ id: product.id, name: product.name, sku: product.sku ?? null, stockQuantity: newQty, lowStockThreshold: product.lowStockThreshold ?? null, trackInventory: product.trackInventory });
       }
     }
 
@@ -677,6 +681,12 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       }
     }
     throw err;
+  }
+
+  if (updatedStockItems.length) {
+    const merchantId = req.session.merchantId!;
+    Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p)))
+      .catch(() => { /* non-blocking */ });
   }
 
   res.status(201).json(formatTransaction(transaction, scopedCustomer));

@@ -6706,6 +6706,67 @@ export const UpdateInventorySettingsResponse = zod.object({
 
 
 /**
+ * @summary Get low-stock alert settings
+ */
+export const GetLowStockAlertSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "enabled": zod.string(),
+  "emailAddresses": zod.array(zod.string()),
+  "mode": zod.string(),
+  "globalThreshold": zod.number().nullish()
+})
+
+
+/**
+ * @summary Update low-stock alert settings
+ */
+export const UpdateLowStockAlertSettingsBody = zod.object({
+  "enabled": zod.string().optional(),
+  "emailAddresses": zod.array(zod.string()).optional(),
+  "mode": zod.string().optional(),
+  "globalThreshold": zod.number().nullish()
+})
+
+export const UpdateLowStockAlertSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "enabled": zod.string(),
+  "emailAddresses": zod.array(zod.string()),
+  "mode": zod.string(),
+  "globalThreshold": zod.number().nullish()
+})
+
+
+/**
+ * @summary List low-stock alert send history
+ */
+export const ListLowStockAlertLogQueryParams = zod.object({
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListLowStockAlertLogResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "sentAt": zod.string(),
+  "mode": zod.string(),
+  "itemCount": zod.number(),
+  "emailAddresses": zod.array(zod.string()),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "sku": zod.string().nullish(),
+  "stockQuantity": zod.number(),
+  "threshold": zod.number()
+}))
+})),
+  "total": zod.number()
+})
+
+
+/**
  * @summary Get regional ext settings
  */
 export const GetRegionalExtSettingsResponse = zod.object({

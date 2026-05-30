@@ -5166,6 +5166,59 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/InventorySettings" }
 
+  /low-stock-alert-settings:
+    get:
+      operationId: getLowStockAlertSettings
+      summary: Get low-stock alert settings
+      tags: [inventory-settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LowStockAlertSettings" }
+    put:
+      operationId: updateLowStockAlertSettings
+      summary: Update low-stock alert settings
+      tags: [inventory-settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LowStockAlertSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LowStockAlertSettings" }
+
+  /low-stock-alert-log:
+    get:
+      operationId: listLowStockAlertLog
+      summary: List low-stock alert send history
+      tags: [inventory-settings]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LowStockAlertLogEntry" }
+                  total: { type: integer }
+
   /regional-ext-settings:
     get:
       operationId: getRegionalExtSettings
@@ -9904,6 +9957,47 @@ components:
         appointmentDigits: { type: integer }
         poPrefix: { type: string }
         poDigits: { type: integer }
+
+    LowStockAlertSettings:
+      type: object
+      required: [id, merchantId, enabled, emailAddresses, mode]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        enabled: { type: string }
+        emailAddresses: { type: array, items: { type: string } }
+        mode: { type: string }
+        globalThreshold: { type: integer, nullable: true }
+
+    LowStockAlertSettingsInput:
+      type: object
+      properties:
+        enabled: { type: string }
+        emailAddresses: { type: array, items: { type: string } }
+        mode: { type: string }
+        globalThreshold: { type: integer, nullable: true }
+
+    LowStockAlertLogEntry:
+      type: object
+      required: [id, merchantId, sentAt, mode, itemCount, emailAddresses, items]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        sentAt: { type: string }
+        mode: { type: string }
+        itemCount: { type: integer }
+        emailAddresses: { type: array, items: { type: string } }
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, productName, stockQuantity, threshold]
+            properties:
+              productId: { type: integer }
+              productName: { type: string }
+              sku: { type: string, nullable: true }
+              stockQuantity: { type: integer }
+              threshold: { type: integer }
 
     InventorySettings:
       type: object

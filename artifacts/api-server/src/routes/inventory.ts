@@ -3,6 +3,7 @@ import { db, productsTable, productTypesTable } from "@workspace/db";
 import { eq, and, ne, sql, ilike } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ListInventoryQueryParams, UpdateInventoryParams, UpdateInventoryBody } from "@workspace/api-zod";
+import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 
 const router: IRouter = Router();
 
@@ -89,6 +90,16 @@ router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<voi
   }
 
   const tracked = product.trackInventory === "true";
+
+  maybeQueueImmediateAlert(req.session.merchantId!, {
+    id: product.id,
+    name: product.name,
+    sku: product.sku ?? null,
+    stockQuantity: product.stockQuantity,
+    lowStockThreshold: product.lowStockThreshold ?? null,
+    trackInventory: product.trackInventory,
+  }).catch(() => { /* non-blocking */ });
+
   res.json({
     productId: product.id,
     productName: product.name,
