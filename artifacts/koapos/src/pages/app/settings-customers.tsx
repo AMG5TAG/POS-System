@@ -31,6 +31,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -575,48 +581,50 @@ export default function SettingsCustomersPage() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={heardFromBreakdown.length === 0}
-                onClick={() => exportHeardFromCSV(heardFromData, heardFromPeriod)}
-              >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={heardFromBreakdown.length === 0}
-                onClick={async () => {
-                  try {
-                    await exportHeardFromXLSX(heardFromData, heardFromPeriod);
-                  } catch {
-                    toast.error("Couldn't generate the Excel file. Please try again.");
-                  }
-                }}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Export XLSX
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={heardFromBreakdown.length === 0}
-                onClick={async () => {
-                  try {
-                    await exportHeardFromPDF(heardFromData, heardFromPeriod);
-                  } catch {
-                    toast.error("Couldn't generate the PDF. Please try again.");
-                  }
-                }}
-              >
-                <FileText className="w-4 h-4" />
-                Export PDF
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={heardFromBreakdown.length === 0}
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportHeardFromCSV(heardFromData, heardFromPeriod)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await exportHeardFromXLSX(heardFromData, heardFromPeriod);
+                      } catch {
+                        toast.error("Couldn't generate the Excel file. Please try again.");
+                      }
+                    }}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Excel (XLSX)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await exportHeardFromPDF(heardFromData, heardFromPeriod);
+                      } catch {
+                        toast.error("Couldn't generate the PDF. Please try again.");
+                      }
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <div className="inline-flex rounded-md border p-0.5 bg-muted/40 shrink-0">
                 {HEARD_FROM_METRICS.map((m) => (
                   <button
