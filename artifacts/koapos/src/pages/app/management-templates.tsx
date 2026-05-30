@@ -20,6 +20,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Barcode from "react-barcode";
@@ -566,28 +573,27 @@ function OptionsPanel({
         <button onClick={reset} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Reset</button>
       </div>
 
-      {/* Font swatches */}
-      <div className="p-4 border-b space-y-2">
+      {/* Font Family dropdown */}
+      <div className="px-4 py-3 border-b space-y-2">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Font Family</p>
-        <div className="grid grid-cols-5 gap-1.5">
-          {FONT_OPTIONS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => update("fontFamily", f.value)}
-              title={f.label}
-              className={cn(
-                "rounded-lg border-2 py-2 px-1 text-center transition-all text-[10px] leading-tight",
-                opts.fontFamily === f.value
-                  ? "border-primary bg-primary/5 text-primary font-semibold"
-                  : "border-border hover:border-primary/40 text-muted-foreground",
-              )}
-              style={{ fontFamily: f.css }}
-            >
-              <span className="text-base leading-none">Aa</span>
-              <p className="mt-0.5 truncate">{f.label}</p>
-            </button>
-          ))}
-        </div>
+        <Select
+          value={opts.fontFamily || "inter"}
+          onValueChange={(v) => update("fontFamily", v)}
+        >
+          <SelectTrigger className="h-9 text-sm w-full">
+            <SelectValue placeholder="Select font" />
+          </SelectTrigger>
+          <SelectContent>
+            {FONT_OPTIONS.map((f) => (
+              <SelectItem key={f.value} value={f.value} style={{ fontFamily: f.css }}>
+                <span className="flex items-center gap-2">
+                  <span className="text-base leading-none">Aa</span>
+                  {f.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* System default toggle */}
