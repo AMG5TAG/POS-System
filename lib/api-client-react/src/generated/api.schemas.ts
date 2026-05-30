@@ -751,6 +751,42 @@ export interface StaffUpdate {
   superRate?: string;
 }
 
+export interface StaffSalesReportRow {
+  /**
+     * Null means transactions not assigned to any staff member
+     * @nullable
+     */
+  staffId: number | null;
+  staffName: string;
+  /** @nullable */
+  role: string | null;
+  /** Number of completed (non-refund) transactions */
+  transactionCount: number;
+  /** Sum of completed transaction totals */
+  grossRevenue: number;
+  /** Number of refund transactions */
+  refundCount: number;
+  /** Sum of refunded transaction totals */
+  refundAmount: number;
+  /** grossRevenue minus refundAmount */
+  netRevenue: number;
+  /** Average transaction value (grossRevenue / transactionCount, or 0) */
+  avgBasket: number;
+  /**
+     * Name of the product with the highest total quantity sold
+     * @nullable
+     */
+  topProduct?: string | null;
+}
+
+export interface StaffSalesReport {
+  /** Report start date (YYYY-MM-DD) */
+  from: string;
+  /** Report end date (YYYY-MM-DD) */
+  to: string;
+  items: StaffSalesReportRow[];
+}
+
 export interface InventoryItem {
   productId: number;
   productName: string;
@@ -3569,6 +3605,26 @@ export type ListTransactionsParams = {
 limit?: number;
 offset?: number;
 status?: string;
+staffId?: number;
+/**
+ * ISO date string (YYYY-MM-DD) — filter transactions on or after this date
+ */
+from?: string;
+/**
+ * ISO date string (YYYY-MM-DD) — filter transactions on or before this date
+ */
+to?: string;
+};
+
+export type GetStaffSalesReportParams = {
+/**
+ * Start date ISO string (YYYY-MM-DD)
+ */
+from: string;
+/**
+ * End date ISO string (YYYY-MM-DD)
+ */
+to: string;
 };
 
 export type ListInventoryParams = {

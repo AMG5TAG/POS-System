@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInput, StaffUpdate, useListPosRegisters } from "@workspace/api-client-react";
+import {
+  useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff,
+  useGetStaffSalesReport, useListTransactions,
+  Staff, StaffInput, StaffUpdate, useListPosRegisters,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +17,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
-  Clock, CalendarClock, ClipboardList, Coins, StickyNote, Target, Link2,
-  ArrowUpDown, ArrowUp, ArrowDown,
+  ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Download, Calendar, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -27,7 +31,6 @@ type AddressFields = {
 };
 
 type WizardForm = {
-  // Step 1 – Personal
   firstName: string;
   lastName: string;
   email: string;
@@ -35,15 +38,12 @@ type WizardForm = {
   dateOfBirth: string;
   company: string;
   abn: string;
-  // Step 2 – Address
   billing: AddressFields;
   postalSameAsBilling: boolean;
   postal: AddressFields;
-  // Step 3 – Account
   role: string;
   isActive: boolean;
   pin: string;
-  // Step 4 – Employment
   defaultRegisterType: string;
   payRate: string;
   loadingRate: string;
@@ -97,10 +97,10 @@ function StepNav({ current }: { current: number }) {
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {STEPS.map((step, i) => {
-        const Icon      = step.icon;
-        const done      = i < current;
-        const active    = i === current;
-        const future    = i > current;
+        const Icon   = step.icon;
+        const done   = i < current;
+        const active = i === current;
+        const future = i > current;
         return (
           <div key={step.label} className="flex items-center gap-1">
             <div
@@ -236,9 +236,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardForm>(defaultForm);
 
-  /* Reset form whenever the dialog opens (open prop → true).
-     Radix UI does NOT fire onOpenChange when the controlled `open` prop changes
-     programmatically, so we use an effect to reliably reset state. */
   useEffect(() => {
     if (open) {
       setStep(0);
@@ -247,11 +244,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* Sync form when dialog opens */
   const handleOpen = (isOpen: boolean) => {
-    if (!isOpen) {
-      onClose();
-    }
+    if (!isOpen) onClose();
   };
 
   const set = <K extends keyof WizardForm>(key: K) => (val: WizardForm[K]) =>
@@ -272,11 +266,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
     if (isLastStep) { onSave(form); } else { setStep((s) => s + 1); }
   };
 
-  /* Sync postal to billing when toggle is on */
   const togglePostalSame = (v: boolean) =>
     setForm((f) => ({ ...f, postalSameAsBilling: v, postal: v ? { ...f.billing } : f.postal }));
-
-  const fullName = `${form.firstName} ${form.lastName}`.trim() || "—";
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -291,10 +282,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
         </DialogHeader>
 
         <div className="px-6 py-5 min-h-[300px]">
-          {/* ── Step 1: Personal ── */}
           {step === 0 && (
             <div className="space-y-4">
-              {/* Avatar */}
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center text-muted-foreground/50 bg-muted/20 shrink-0">
                   <User className="w-6 h-6" />
@@ -306,7 +295,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                   </Button>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <PillInput label="First Name" value={form.firstName} onChange={setField("firstName")} />
                 <PillInput label="Last Name"  value={form.lastName}  onChange={setField("lastName")} />
@@ -322,7 +310,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
             </div>
           )}
 
-          {/* ── Step 2: Address ── */}
           {step === 1 && (
             <div className="space-y-5">
               <AddressBlock title="Billing Address" addr={form.billing} onChange={set("billing")} />
@@ -344,10 +331,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
             </div>
           )}
 
-          {/* ── Step 3: Account ── */}
           {step === 2 && (
             <div className="space-y-5">
-              {/* Role */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-foreground/80">Role</Label>
                 <Select value={form.role} onValueChange={set("role")}>
@@ -361,8 +346,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Active toggle */}
               <div className="flex items-center gap-3 border rounded-full px-4 py-2.5">
                 <Switch
                   checked={form.isActive}
@@ -371,8 +354,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                 />
                 <span className="text-sm font-medium">Active Employee</span>
               </div>
-
-              {/* PIN */}
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-primary" />
@@ -390,17 +371,12 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                   Used to quickly switch staff on the POS without logging out. Leave blank to disable PIN login for this employee.
                 </p>
               </div>
-
             </div>
           )}
 
-          {/* ── Step 4: Employment ── */}
           {step === 3 && (
             <div className="space-y-5">
-              {/* POS Register Default */}
               <PosRegisterSelect value={form.defaultRegisterType} onChange={set("defaultRegisterType")} />
-
-              {/* Payroll Details */}
               <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
                 <SectionHeader icon={DollarSign} label="Payroll Details" />
                 <div className="grid grid-cols-3 gap-3">
@@ -417,7 +393,6 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
           )}
         </div>
 
-        {/* ── Footer ── */}
         <div className="flex items-center justify-between border-t px-6 py-4">
           {step === 0 ? (
             <Button variant="outline" size="sm" className="rounded-full" onClick={onClose}>
@@ -447,10 +422,384 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
   );
 }
 
+/* ─── Date range helpers ──────────────────────────────────────────────────── */
+
+type Preset = "today" | "week" | "month" | "custom";
+
+function getPresetRange(preset: Preset, customFrom: string, customTo: string): { from: string; to: string } {
+  const today = new Date();
+  if (preset === "today") {
+    const d = format(today, "yyyy-MM-dd");
+    return { from: d, to: d };
+  }
+  if (preset === "week") {
+    return {
+      from: format(subDays(today, 6), "yyyy-MM-dd"),
+      to: format(today, "yyyy-MM-dd"),
+    };
+  }
+  if (preset === "month") {
+    return {
+      from: format(startOfMonth(today), "yyyy-MM-dd"),
+      to: format(endOfMonth(today), "yyyy-MM-dd"),
+    };
+  }
+  return { from: customFrom, to: customTo };
+}
+
+/* ─── Drill-down transactions dialog ─────────────────────────────────────── */
+
+function DrillDownDialog({
+  open,
+  onClose,
+  staffId,
+  staffName,
+  from,
+  to,
+}: {
+  open: boolean;
+  onClose: () => void;
+  staffId: number | null;
+  staffName: string;
+  from: string;
+  to: string;
+}) {
+  const enabled = open && staffId !== null;
+  const { data, isLoading } = useListTransactions(
+    { staffId: staffId ?? undefined, from, to, limit: 200 },
+    { query: { queryKey: ["transactions", "staff-drill", staffId, from, to], enabled } },
+  );
+  const transactions = data?.items ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-primary" />
+            {staffName} — Transactions
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            {from} to {to}
+            {!isLoading && <span className="ml-2">· {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}</span>}
+          </p>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 p-4">
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">Loading transactions…</div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">No transactions found for this period.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left pb-2 font-medium text-muted-foreground">Date</th>
+                  <th className="text-left pb-2 font-medium text-muted-foreground hidden sm:table-cell">Receipt #</th>
+                  <th className="text-left pb-2 font-medium text-muted-foreground hidden md:table-cell">Status</th>
+                  <th className="text-left pb-2 font-medium text-muted-foreground hidden md:table-cell">Payment</th>
+                  <th className="text-right pb-2 font-medium text-muted-foreground">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {transactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-muted/30">
+                    <td className="py-2.5 pr-4">
+                      <p className="font-medium">{format(new Date(tx.createdAt), "dd MMM yyyy")}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(tx.createdAt), "h:mm a")}</p>
+                    </td>
+                    <td className="py-2.5 pr-4 hidden sm:table-cell text-muted-foreground font-mono text-xs">{tx.receiptNumber}</td>
+                    <td className="py-2.5 pr-4 hidden md:table-cell">
+                      <Badge
+                        variant={tx.status === "completed" ? "default" : "secondary"}
+                        className="capitalize text-xs"
+                      >
+                        {tx.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 pr-4 hidden md:table-cell capitalize text-muted-foreground">{tx.paymentMethod}</td>
+                    <td className={cn(
+                      "py-2.5 text-right font-semibold",
+                      tx.status === "refunded" || tx.status === "partial_refund"
+                        ? "text-destructive"
+                        : "text-foreground",
+                    )}>
+                      {tx.status === "refunded" || tx.status === "partial_refund" ? "−" : ""}
+                      ${tx.total.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Sales Report view ───────────────────────────────────────────────────── */
+
+function SalesReportView() {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [preset, setPreset] = useState<Preset>("month");
+  const [customFrom, setCustomFrom] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
+  const [customTo, setCustomTo] = useState(today);
+
+  const { from, to } = getPresetRange(preset, customFrom, customTo);
+
+  const { data, isLoading } = useGetStaffSalesReport(
+    { from, to },
+    { query: { queryKey: ["staff-sales-report", from, to] } },
+  );
+  const rows = data?.items ?? [];
+
+  type ReportSortKey = "staffName" | "transactionCount" | "grossRevenue" | "refundCount" | "refundAmount" | "netRevenue" | "avgBasket";
+  const [sortKey, setSortKey] = useState<ReportSortKey>("netRevenue");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (key: ReportSortKey) => {
+    if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...rows];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      if (sortKey === "staffName") return (a.staffName ?? "").localeCompare(b.staffName ?? "") * dir;
+      return ((a[sortKey] ?? 0) - (b[sortKey] ?? 0)) * dir;
+    });
+    return arr;
+  }, [rows, sortKey, sortDir]);
+
+  const SortIcon = ({ k }: { k: ReportSortKey }) =>
+    sortKey === k
+      ? sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+      : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;
+
+  const SortBtn = ({ k, children }: { k: ReportSortKey; children: React.ReactNode }) => (
+    <button onClick={() => toggleSort(k)} className="flex items-center gap-1 hover:text-primary whitespace-nowrap">
+      {children} <SortIcon k={k} />
+    </button>
+  );
+
+  const exportCsv = () => {
+    const headers = ["Staff", "Role", "Sales", "Gross Revenue", "Refunds", "Refund Amount", "Net Revenue", "Avg Basket", "Top Product"];
+    const csvRows = [
+      headers.join(","),
+      ...sorted.map((r) =>
+        [
+          `"${r.staffName}"`,
+          `"${r.role ?? ""}"`,
+          r.transactionCount,
+          r.grossRevenue.toFixed(2),
+          r.refundCount,
+          r.refundAmount.toFixed(2),
+          r.netRevenue.toFixed(2),
+          r.avgBasket.toFixed(2),
+          `"${r.topProduct ?? ""}"`,
+        ].join(","),
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvRows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `staff-sales-report_${from}_${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /* Drill-down state */
+  const [drillOpen, setDrillOpen] = useState(false);
+  const [drillStaff, setDrillStaff] = useState<{ staffId: number | null; staffName: string } | null>(null);
+
+  const openDrill = (staffId: number | null, staffName: string) => {
+    setDrillStaff({ staffId, staffName });
+    setDrillOpen(true);
+  };
+
+  /* Summary totals */
+  const totals = useMemo(() => ({
+    transactionCount: rows.reduce((s, r) => s + r.transactionCount, 0),
+    grossRevenue:     rows.reduce((s, r) => s + r.grossRevenue, 0),
+    refundCount:      rows.reduce((s, r) => s + r.refundCount, 0),
+    refundAmount:     rows.reduce((s, r) => s + r.refundAmount, 0),
+    netRevenue:       rows.reduce((s, r) => s + r.netRevenue, 0),
+  }), [rows]);
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+        {/* Preset pills */}
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1">
+          {(["today", "week", "month", "custom"] as Preset[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPreset(p)}
+              className={cn(
+                "px-3 py-1 rounded-md text-sm font-medium transition-all capitalize",
+                preset === p
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {p === "week" ? "Last 7d" : p === "month" ? "This month" : p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom date inputs */}
+        {preset === "custom" && (
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="border rounded-md px-2 py-1 text-sm bg-background"
+            />
+            <span className="text-muted-foreground">to</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              max={today}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="border rounded-md px-2 py-1 text-sm bg-background"
+            />
+          </div>
+        )}
+
+        <div className="sm:ml-auto">
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary KPI cards */}
+      {!isLoading && rows.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Total Sales", value: totals.transactionCount.toString() },
+            { label: "Gross Revenue", value: `$${totals.grossRevenue.toFixed(2)}` },
+            { label: "Refunds", value: totals.refundCount.toString() },
+            { label: "Net Revenue", value: `$${totals.netRevenue.toFixed(2)}` },
+          ].map(({ label, value }) => (
+            <Card key={label}>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-xl font-bold mt-1">{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Report table */}
+      {isLoading ? (
+        <div className="text-center py-16 text-muted-foreground">Loading report…</div>
+      ) : rows.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-3">
+            <BarChart2 className="w-12 h-12 text-muted-foreground/30" />
+            <p className="font-medium">No sales data for this period</p>
+            <p className="text-sm text-muted-foreground">Try a different date range.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left p-3 font-medium">
+                  <SortBtn k="staffName">Staff</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium hidden sm:table-cell">
+                  <SortBtn k="transactionCount">Sales</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium">
+                  <SortBtn k="grossRevenue">Gross</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium hidden lg:table-cell">
+                  <SortBtn k="refundCount">Refunds</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium hidden lg:table-cell">
+                  <SortBtn k="refundAmount">Refund $</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium">
+                  <SortBtn k="netRevenue">Net</SortBtn>
+                </th>
+                <th className="text-right p-3 font-medium hidden md:table-cell">
+                  <SortBtn k="avgBasket">Avg Basket</SortBtn>
+                </th>
+                <th className="text-left p-3 font-medium hidden xl:table-cell">Top Product</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {sorted.map((row) => (
+                <tr
+                  key={row.staffId ?? "unassigned"}
+                  className="bg-background hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => openDrill(row.staffId ?? null, row.staffName)}
+                >
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                        {row.staffName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium">{row.staffName}</p>
+                        {row.role && (
+                          <Badge variant="secondary" className="capitalize text-xs mt-0.5">{row.role}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3 text-right hidden sm:table-cell">{row.transactionCount}</td>
+                  <td className="p-3 text-right">${row.grossRevenue.toFixed(2)}</td>
+                  <td className="p-3 text-right hidden lg:table-cell text-muted-foreground">{row.refundCount}</td>
+                  <td className="p-3 text-right hidden lg:table-cell text-destructive">
+                    {row.refundAmount > 0 ? `$${row.refundAmount.toFixed(2)}` : "—"}
+                  </td>
+                  <td className="p-3 text-right font-semibold">${row.netRevenue.toFixed(2)}</td>
+                  <td className="p-3 text-right hidden md:table-cell text-muted-foreground">
+                    {row.transactionCount > 0 ? `$${row.avgBasket.toFixed(2)}` : "—"}
+                  </td>
+                  <td className="p-3 hidden xl:table-cell text-muted-foreground text-xs">
+                    {row.topProduct ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {drillStaff && (
+        <DrillDownDialog
+          open={drillOpen}
+          onClose={() => setDrillOpen(false)}
+          staffId={drillStaff.staffId}
+          staffName={drillStaff.staffName}
+          from={from}
+          to={to}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffPage() {
-  const queryClient   = useQueryClient();
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<"staff" | "report">("staff");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [delDialogOpen, setDelDialog]   = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
@@ -472,12 +821,8 @@ export default function StaffPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
   };
 
   const sorted = useMemo(() => {
@@ -487,10 +832,10 @@ export default function StaffPage() {
       const aReg = registerMap[String(a.defaultRegisterType ?? "")] ?? "—";
       const bReg = registerMap[String(b.defaultRegisterType ?? "")] ?? "—";
       switch (sortKey) {
-        case "name":    return (a.name ?? "").localeCompare(b.name ?? "") * dir;
-        case "email":   return (a.email ?? "").localeCompare(b.email ?? "") * dir;
-        case "role":    return (a.role ?? "").localeCompare(b.role ?? "") * dir;
-        case "status":  return (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0) * dir;
+        case "name":     return (a.name ?? "").localeCompare(b.name ?? "") * dir;
+        case "email":    return (a.email ?? "").localeCompare(b.email ?? "") * dir;
+        case "role":     return (a.role ?? "").localeCompare(b.role ?? "") * dir;
+        case "status":   return (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0) * dir;
         case "register": return aReg.localeCompare(bReg) * dir;
       }
     });
@@ -562,113 +907,151 @@ export default function StaffPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold">Employees</h1>
-          <p className="text-sm text-muted-foreground">Manage your team members, roles, and access permissions.</p>
-          <Button onClick={openCreate}>
-            <Plus className="w-4 h-4 mr-2" /> Add Staff Member
-          </Button>
-        </div>
-
-        {isLoading ? (
-          <div className="text-center py-16 text-muted-foreground">Loading staff...</div>
-        ) : members.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
-              <UserSquare2 className="w-16 h-16 text-muted-foreground/30" />
-              <div>
-                <p className="font-medium text-lg">No staff added yet</p>
-                <p className="text-muted-foreground text-sm">Add staff members to manage access and track sales.</p>
-              </div>
+          <div>
+            <h1 className="text-2xl font-bold">{view === "staff" ? "Employees" : "Sales Report"}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {view === "staff"
+                ? "Manage your team members, roles, and access permissions."
+                : "Sales performance by staff member."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center rounded-lg border bg-muted/30 p-1 gap-1">
+              <button
+                onClick={() => setView("staff")}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
+                  view === "staff" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <UserSquare2 className="w-4 h-4" /> Employees
+              </button>
+              <button
+                onClick={() => setView("report")}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
+                  view === "report" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <BarChart2 className="w-4 h-4" /> Sales Report
+              </button>
+            </div>
+            {view === "staff" && (
               <Button onClick={openCreate}>
                 <Plus className="w-4 h-4 mr-2" /> Add Staff Member
               </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-4 font-medium">
-                    <button onClick={() => toggleSort("name")} className="flex items-center gap-1 hover:text-primary">
-                      Name
-                      {sortKey === "name" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
-                    </button>
-                  </th>
-                  <th className="text-left p-4 font-medium hidden md:table-cell">
-                    <button onClick={() => toggleSort("email")} className="flex items-center gap-1 hover:text-primary">
-                      Email
-                      {sortKey === "email" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
-                    </button>
-                  </th>
-                  <th className="text-left p-4 font-medium hidden sm:table-cell">
-                    <button onClick={() => toggleSort("role")} className="flex items-center gap-1 hover:text-primary">
-                      Role
-                      {sortKey === "role" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
-                    </button>
-                  </th>
-                  <th className="text-center p-4 font-medium hidden lg:table-cell">
-                    <button onClick={() => toggleSort("status")} className="flex items-center gap-1 hover:text-primary mx-auto">
-                      Status
-                      {sortKey === "status" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
-                    </button>
-                  </th>
-                  <th className="text-left p-4 font-medium hidden lg:table-cell">
-                    <button onClick={() => toggleSort("register")} className="flex items-center gap-1 hover:text-primary">
-                      Register
-                      {sortKey === "register" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
-                    </button>
-                  </th>
-                  <th className="p-4" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {sorted.map((member) => (
-                  <tr key={member.id} className="bg-background hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                          {member.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-medium">{member.name}</p>
-                          {member.company && <p className="text-xs text-muted-foreground">{member.company}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 hidden md:table-cell text-muted-foreground">{member.email || "—"}</td>
-                    <td className="p-4 hidden sm:table-cell">
-                      <Badge variant="secondary" className="capitalize">{member.role.replace("_", " ")}</Badge>
-                    </td>
-                    <td className="p-4 text-center hidden lg:table-cell">
-                      <Badge variant={member.isActive ? "default" : "secondary"}>
-                        {member.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="p-4 hidden lg:table-cell text-muted-foreground">
-                      {registerMap[String(member.defaultRegisterType ?? "")] || "—"}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(member)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => { setDeleting(member); setDelDialog(true); }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            )}
           </div>
+        </div>
+
+        {/* Staff list view */}
+        {view === "staff" && (
+          isLoading ? (
+            <div className="text-center py-16 text-muted-foreground">Loading staff...</div>
+          ) : members.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                <UserSquare2 className="w-16 h-16 text-muted-foreground/30" />
+                <div>
+                  <p className="font-medium text-lg">No staff added yet</p>
+                  <p className="text-muted-foreground text-sm">Add staff members to manage access and track sales.</p>
+                </div>
+                <Button onClick={openCreate}>
+                  <Plus className="w-4 h-4 mr-2" /> Add Staff Member
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-4 font-medium">
+                      <button onClick={() => toggleSort("name")} className="flex items-center gap-1 hover:text-primary">
+                        Name
+                        {sortKey === "name" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                      </button>
+                    </th>
+                    <th className="text-left p-4 font-medium hidden md:table-cell">
+                      <button onClick={() => toggleSort("email")} className="flex items-center gap-1 hover:text-primary">
+                        Email
+                        {sortKey === "email" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                      </button>
+                    </th>
+                    <th className="text-left p-4 font-medium hidden sm:table-cell">
+                      <button onClick={() => toggleSort("role")} className="flex items-center gap-1 hover:text-primary">
+                        Role
+                        {sortKey === "role" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                      </button>
+                    </th>
+                    <th className="text-center p-4 font-medium hidden lg:table-cell">
+                      <button onClick={() => toggleSort("status")} className="flex items-center gap-1 hover:text-primary mx-auto">
+                        Status
+                        {sortKey === "status" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                      </button>
+                    </th>
+                    <th className="text-left p-4 font-medium hidden lg:table-cell">
+                      <button onClick={() => toggleSort("register")} className="flex items-center gap-1 hover:text-primary">
+                        Register
+                        {sortKey === "register" ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 text-muted-foreground" />}
+                      </button>
+                    </th>
+                    <th className="p-4" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {sorted.map((member) => (
+                    <tr key={member.id} className="bg-background hover:bg-muted/30 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                            {member.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-medium">{member.name}</p>
+                            {member.company && <p className="text-xs text-muted-foreground">{member.company}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 hidden md:table-cell text-muted-foreground">{member.email || "—"}</td>
+                      <td className="p-4 hidden sm:table-cell">
+                        <Badge variant="secondary" className="capitalize">{member.role.replace("_", " ")}</Badge>
+                      </td>
+                      <td className="p-4 text-center hidden lg:table-cell">
+                        <Badge variant={member.isActive ? "default" : "secondary"}>
+                          {member.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="p-4 hidden lg:table-cell text-muted-foreground">
+                        {registerMap[String(member.defaultRegisterType ?? "")] || "—"}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(member)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => { setDeleting(member); setDelDialog(true); }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
+
+        {/* Sales report view */}
+        {view === "report" && <SalesReportView />}
       </div>
 
       {/* 4-step wizard */}

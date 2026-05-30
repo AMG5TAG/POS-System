@@ -1459,7 +1459,10 @@ export const GetInvoicePdfParams = zod.object({
 export const ListTransactionsQueryParams = zod.object({
   "limit": zod.coerce.number().optional(),
   "offset": zod.coerce.number().optional(),
-  "status": zod.coerce.string().optional()
+  "status": zod.coerce.string().optional(),
+  "staffId": zod.coerce.number().optional(),
+  "from": zod.coerce.string().optional().describe('ISO date string (YYYY-MM-DD) — filter transactions on or after this date'),
+  "to": zod.coerce.string().optional().describe('ISO date string (YYYY-MM-DD) — filter transactions on or before this date')
 })
 
 export const ListTransactionsResponse = zod.object({
@@ -1794,6 +1797,32 @@ export const CreateStaffBody = zod.object({
   "payRate": zod.string().optional(),
   "loadingRate": zod.string().optional(),
   "superRate": zod.string().optional()
+})
+
+
+/**
+ * @summary Aggregated sales performance report per staff member for a date range
+ */
+export const GetStaffSalesReportQueryParams = zod.object({
+  "from": zod.coerce.string().describe('Start date ISO string (YYYY-MM-DD)'),
+  "to": zod.coerce.string().describe('End date ISO string (YYYY-MM-DD)')
+})
+
+export const GetStaffSalesReportResponse = zod.object({
+  "from": zod.string().describe('Report start date (YYYY-MM-DD)'),
+  "to": zod.string().describe('Report end date (YYYY-MM-DD)'),
+  "items": zod.array(zod.object({
+  "staffId": zod.number().nullable().describe('Null means transactions not assigned to any staff member'),
+  "staffName": zod.string(),
+  "role": zod.string().nullable(),
+  "transactionCount": zod.number().describe('Number of completed (non-refund) transactions'),
+  "grossRevenue": zod.number().describe('Sum of completed transaction totals'),
+  "refundCount": zod.number().describe('Number of refund transactions'),
+  "refundAmount": zod.number().describe('Sum of refunded transaction totals'),
+  "netRevenue": zod.number().describe('grossRevenue minus refundAmount'),
+  "avgBasket": zod.number().describe('Average transaction value (grossRevenue \/ transactionCount, or 0)'),
+  "topProduct": zod.string().nullish().describe('Name of the product with the highest total quantity sold')
+}))
 })
 
 

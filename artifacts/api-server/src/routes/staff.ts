@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, staffTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, staffTable, transactionsTable } from "@workspace/db";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateStaffBody,
@@ -53,7 +53,6 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { firstName, lastName, isActive, ...rest } = parsed.data as typeof parsed.data & { isActive?: boolean };
-  // Derive combined name from firstName + lastName if provided
   const derivedName =
     firstName || lastName
       ? `${firstName ?? ""} ${lastName ?? ""}`.trim() || parsed.data.name
@@ -69,6 +68,127 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
   res.status(201).json(formatStaff(member));
+});
+
+// GET /staff/sales-report — must be defined BEFORE /staff/:id to avoid param conflict
+router.get("/staff/sales-report", requireAuth, async (req, res): Promise<void> => {
+  const { from, to } = req.query as Record<string, string>;
+  if (!from || !to) {
+    res.status(400).json({ error: "from and to query params are required (YYYY-MM-DD)" });
+    return;
+  }
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  // Include the full "to" day by advancing to end-of-day
+  toDate.setHours(23, 59, 59, 999);
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD." });
+    return;
+  }
+
+  // Fetch all transactions for the merchant in the date range
+  const transactions = await db
+    .select()
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.merchantId, req.session.merchantId!),
+        gte(transactionsTable.createdAt, fromDate),
+        lte(transactionsTable.createdAt, toDate),
+      ),
+    );
+
+  // Fetch all staff members for the merchant (for name/role lookup)
+  const staffMembers = await db
+    .select()
+    .from(staffTable)
+    .where(eq(staffTable.merchantId, req.session.merchantId!));
+
+  const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
+
+  // Aggregate per staffId (null = unassigned)
+  type Agg = {
+    staffId: number | null;
+    staffName: string;
+    role: string | null;
+    transactionCount: number;
+    grossRevenue: number;
+    refundCount: number;
+    refundAmount: number;
+    productQty: Map<string, number>;
+  };
+
+  const aggMap = new Map<string, Agg>();
+
+  for (const tx of transactions) {
+    const key = tx.staffId === null ? "unassigned" : String(tx.staffId);
+    if (!aggMap.has(key)) {
+      const staff = tx.staffId !== null ? staffMap.get(tx.staffId) : null;
+      aggMap.set(key, {
+        staffId: tx.staffId,
+        staffName: staff ? staff.name : "Unassigned",
+        role: staff ? staff.role : null,
+        transactionCount: 0,
+        grossRevenue: 0,
+        refundCount: 0,
+        refundAmount: 0,
+        productQty: new Map(),
+      });
+    }
+    const agg = aggMap.get(key)!;
+    const total = parseFloat(tx.total);
+
+    if (tx.status === "refunded" || tx.status === "partial_refund") {
+      agg.refundCount += 1;
+      agg.refundAmount += total;
+    } else if (tx.status !== "voided") {
+      agg.transactionCount += 1;
+      agg.grossRevenue += total;
+
+      // Aggregate product quantities for top-product calculation
+      const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; giftCardIssue?: boolean }>;
+      for (const item of items) {
+        if (item.productName && !item.giftCardIssue) {
+          const existing = agg.productQty.get(item.productName) ?? 0;
+          agg.productQty.set(item.productName, existing + (item.quantity ?? 1));
+        }
+      }
+    }
+  }
+
+  const items = Array.from(aggMap.values()).map((agg) => {
+    const netRevenue = agg.grossRevenue - agg.refundAmount;
+    const avgBasket = agg.transactionCount > 0 ? agg.grossRevenue / agg.transactionCount : 0;
+
+    let topProduct: string | null = null;
+    let topQty = 0;
+    for (const [name, qty] of agg.productQty) {
+      if (qty > topQty) {
+        topQty = qty;
+        topProduct = name;
+      }
+    }
+
+    return {
+      staffId: agg.staffId,
+      staffName: agg.staffName,
+      role: agg.role,
+      transactionCount: agg.transactionCount,
+      grossRevenue: Math.round(agg.grossRevenue * 100) / 100,
+      refundCount: agg.refundCount,
+      refundAmount: Math.round(agg.refundAmount * 100) / 100,
+      netRevenue: Math.round(netRevenue * 100) / 100,
+      avgBasket: Math.round(avgBasket * 100) / 100,
+      topProduct,
+    };
+  });
+
+  // Sort by netRevenue descending by default
+  items.sort((a, b) => b.netRevenue - a.netRevenue);
+
+  res.json({ from, to, items });
 });
 
 router.get("/staff/:id", requireAuth, async (req, res): Promise<void> => {
@@ -107,7 +227,6 @@ router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (firstName !== undefined) updates.firstName = firstName;
   if (lastName !== undefined) updates.lastName = lastName;
-  // Recompute combined name if first/last supplied
   if (firstName !== undefined || lastName !== undefined) {
     const existing = await db
       .select()

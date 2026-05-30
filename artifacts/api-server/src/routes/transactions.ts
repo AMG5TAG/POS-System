@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
-import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListTransactionsQueryParams,
@@ -82,10 +82,22 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { limit = 50, offset = 0, status } = queryParams.data;
+  const { limit = 50, offset = 0, status, staffId, from, to } = queryParams.data;
 
   const conditions = [eq(transactionsTable.merchantId, req.session.merchantId!)];
   if (status) conditions.push(eq(transactionsTable.status, status));
+  if (staffId !== undefined) conditions.push(eq(transactionsTable.staffId, staffId));
+  if (from) {
+    const fromDate = new Date(from);
+    if (!isNaN(fromDate.getTime())) conditions.push(gte(transactionsTable.createdAt, fromDate));
+  }
+  if (to) {
+    const toDate = new Date(to);
+    if (!isNaN(toDate.getTime())) {
+      toDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(transactionsTable.createdAt, toDate));
+    }
+  }
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })

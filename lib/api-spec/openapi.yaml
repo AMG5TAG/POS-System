@@ -1238,6 +1238,20 @@ paths:
           in: query
           schema:
             type: string
+        - name: staffId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          description: ISO date string (YYYY-MM-DD) — filter transactions on or after this date
+          schema:
+            type: string
+        - name: to
+          in: query
+          description: ISO date string (YYYY-MM-DD) — filter transactions on or before this date
+          schema:
+            type: string
       responses:
         "200":
           description: List of transactions
@@ -1352,6 +1366,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Staff"
+
+  /staff/sales-report:
+    get:
+      operationId: getStaffSalesReport
+      tags: [staff]
+      summary: Aggregated sales performance report per staff member for a date range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start date ISO string (YYYY-MM-DD)
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: true
+          description: End date ISO string (YYYY-MM-DD)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Staff sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffSalesReport"
 
   /staff/{id}:
     get:
@@ -7093,6 +7133,55 @@ components:
           type: string
         superRate:
           type: string
+
+    # ── Staff Sales Report ───────────────────────────────────────────────────
+    StaffSalesReportRow:
+      type: object
+      required: [staffId, staffName, role, transactionCount, grossRevenue, refundCount, refundAmount, netRevenue, avgBasket]
+      properties:
+        staffId:
+          type: ["integer", "null"]
+          description: Null means transactions not assigned to any staff member
+        staffName:
+          type: string
+        role:
+          type: ["string", "null"]
+        transactionCount:
+          type: integer
+          description: Number of completed (non-refund) transactions
+        grossRevenue:
+          type: number
+          description: Sum of completed transaction totals
+        refundCount:
+          type: integer
+          description: Number of refund transactions
+        refundAmount:
+          type: number
+          description: Sum of refunded transaction totals
+        netRevenue:
+          type: number
+          description: grossRevenue minus refundAmount
+        avgBasket:
+          type: number
+          description: Average transaction value (grossRevenue / transactionCount, or 0)
+        topProduct:
+          type: ["string", "null"]
+          description: Name of the product with the highest total quantity sold
+
+    StaffSalesReport:
+      type: object
+      required: [from, to, items]
+      properties:
+        from:
+          type: string
+          description: Report start date (YYYY-MM-DD)
+        to:
+          type: string
+          description: Report end date (YYYY-MM-DD)
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffSalesReportRow"
 
     # ── Inventory ────────────────────────────────────────────────────────────
     InventoryItem:
