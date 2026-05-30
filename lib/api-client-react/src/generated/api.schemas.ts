@@ -3836,9 +3836,50 @@ export interface InvoicePaymentInput {
   idempotencyKey?: string;
 }
 
-export interface InvoicePaymentResult {
-  ok: boolean;
-  invoice: Invoice;
+export type InvoicePaymentResult = Invoice;
+
+export type SendInvoiceEmailInputTemplateSocialLinks = {[key: string]: string};
+
+/**
+ * Optional email template overrides
+ */
+export type SendInvoiceEmailInputTemplate = {
+  templateId?: string;
+  subjectLine?: string;
+  customGreeting?: string;
+  customMessage?: string;
+  customSignOff?: string;
+  footerText?: string;
+  thankYouMsg?: string;
+  showGstBreakdown?: boolean;
+  showWebsite?: boolean;
+  showSocialLinks?: boolean;
+  showLogo?: boolean;
+  brandColor?: string;
+  logo?: string;
+  website?: string;
+  contactEmail?: string;
+  tagline?: string;
+  socialLinks?: SendInvoiceEmailInputTemplateSocialLinks;
+  [key: string]: unknown;
+ };
+
+export interface SendInvoiceEmailInput {
+  email: string;
+  /** Optional email template overrides */
+  template?: SendInvoiceEmailInputTemplate;
+}
+
+export type IntegrationActionResultStatus = typeof IntegrationActionResultStatus[keyof typeof IntegrationActionResultStatus];
+
+
+export const IntegrationActionResultStatus = {
+  connected: 'connected',
+  disconnected: 'disconnected',
+} as const;
+
+export interface IntegrationActionResult {
+  status: IntegrationActionResultStatus;
 }
 
 export interface InvoiceEventInput {

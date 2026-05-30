@@ -6247,7 +6247,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OkResult"
+                $ref: "#/components/schemas/IntegrationActionResult"
         "404":
           description: Integration not found
 
@@ -6274,7 +6274,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OkResult"
+                $ref: "#/components/schemas/IntegrationActionResult"
         "400":
           description: Validation error
 
@@ -6426,11 +6426,11 @@ paths:
               $ref: "#/components/schemas/InvoicePaymentInput"
       responses:
         "200":
-          description: Payment recorded
+          description: Updated invoice after payment recorded
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoicePaymentResult"
+                $ref: "#/components/schemas/Invoice"
         "400":
           description: Validation error
         "404":
@@ -6447,6 +6447,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendInvoiceEmailInput"
       responses:
         "200":
           description: Email sent
@@ -6476,11 +6482,11 @@ paths:
               $ref: "#/components/schemas/InvoiceEventInput"
       responses:
         "200":
-          description: Event appended
+          description: Updated invoice after event appended
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OkResult"
+                $ref: "#/components/schemas/Invoice"
         "404":
           description: Invoice not found
 
@@ -11708,11 +11714,48 @@ components:
         idempotencyKey:  { type: string }
 
     InvoicePaymentResult:
+      allOf:
+        - $ref: "#/components/schemas/Invoice"
+
+    SendInvoiceEmailInput:
       type: object
-      required: [ok, invoice]
+      required: [email]
       properties:
-        ok:      { type: boolean }
-        invoice: { $ref: "#/components/schemas/Invoice" }
+        email:
+          type: string
+          format: email
+        template:
+          type: object
+          description: Optional email template overrides
+          properties:
+            templateId:         { type: string }
+            subjectLine:        { type: string }
+            customGreeting:     { type: string }
+            customMessage:      { type: string }
+            customSignOff:      { type: string }
+            footerText:         { type: string }
+            thankYouMsg:        { type: string }
+            showGstBreakdown:   { type: boolean }
+            showWebsite:        { type: boolean }
+            showSocialLinks:    { type: boolean }
+            showLogo:           { type: boolean }
+            brandColor:         { type: string }
+            logo:               { type: string }
+            website:            { type: string }
+            contactEmail:       { type: string }
+            tagline:            { type: string }
+            socialLinks:
+              type: object
+              additionalProperties: { type: string }
+          additionalProperties: true
+
+    IntegrationActionResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [connected, disconnected]
 
     InvoiceEventInput:
       type: object

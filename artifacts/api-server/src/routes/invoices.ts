@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
-import { RecordInvoicePaymentBody, AddInvoiceEventBody } from "@workspace/api-zod";
+import { RecordInvoicePaymentBody, AddInvoiceEventBody, SendInvoiceEmailBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -671,29 +671,9 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
 router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { email, template } = req.body as {
-    email: string;
-    template?: {
-      templateId?: string;
-      subjectLine?: string;
-      customGreeting?: string;
-      customMessage?: string;
-      customSignOff?: string;
-      footerText?: string;
-      thankYouMsg?: string;
-      showGstBreakdown?: boolean;
-      showWebsite?: boolean;
-      showSocialLinks?: boolean;
-      showLogo?: boolean;
-      brandColor?: string;
-      logo?: string;
-      website?: string;
-      contactEmail?: string;
-      tagline?: string;
-      socialLinks?: Record<string, string | undefined>;
-    };
-  };
-  if (!email) { res.status(400).json({ error: "Email is required" }); return; }
+  const bodyParsed = SendInvoiceEmailBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { email, template } = bodyParsed.data;
 
   const [row] = await db
     .select({

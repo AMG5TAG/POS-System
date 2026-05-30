@@ -121,6 +121,7 @@ import type {
   HealthStatus,
   ImportCustomersBody,
   ImportProductsBody,
+  IntegrationActionResult,
   IntegrationConnectInput,
   IntegrationStatus,
   InventoryItem,
@@ -134,7 +135,6 @@ import type {
   InvoiceInput,
   InvoiceList,
   InvoicePaymentInput,
-  InvoicePaymentResult,
   InvoiceUpdate,
   KpiSettings,
   KpiSettingsInput,
@@ -294,6 +294,7 @@ import type {
   SalesTemplateListResponse,
   SaveAiSettings200,
   SaveFloorPlan200,
+  SendInvoiceEmailInput,
   SendPurchaseOrderEmail200,
   SendPurchaseOrderEmailBody,
   SendReceiptRequest,
@@ -25938,9 +25939,9 @@ export const getDisconnectIntegrationUrl = (key: string,) => {
 /**
  * @summary Disconnect an integration and remove stored credentials
  */
-export const disconnectIntegration = async (key: string, options?: RequestInit): Promise<OkResult> => {
+export const disconnectIntegration = async (key: string, options?: RequestInit): Promise<IntegrationActionResult> => {
 
-  return customFetch<OkResult>(getDisconnectIntegrationUrl(key),
+  return customFetch<IntegrationActionResult>(getDisconnectIntegrationUrl(key),
   {
     ...options,
     method: 'DELETE'
@@ -26009,9 +26010,9 @@ export const getConnectIntegrationUrl = (key: string,) => {
  * @summary Connect (or update credentials for) an integration
  */
 export const connectIntegration = async (key: string,
-    integrationConnectInput: IntegrationConnectInput, options?: RequestInit): Promise<OkResult> => {
+    integrationConnectInput: IntegrationConnectInput, options?: RequestInit): Promise<IntegrationActionResult> => {
 
-  return customFetch<OkResult>(getConnectIntegrationUrl(key),
+  return customFetch<IntegrationActionResult>(getConnectIntegrationUrl(key),
   {
     ...options,
     method: 'POST',
@@ -26525,9 +26526,9 @@ export const getRecordInvoicePaymentUrl = (id: number,) => {
  * @summary Record a payment against an invoice (partial or full)
  */
 export const recordInvoicePayment = async (id: number,
-    invoicePaymentInput: InvoicePaymentInput, options?: RequestInit): Promise<InvoicePaymentResult> => {
+    invoicePaymentInput: InvoicePaymentInput, options?: RequestInit): Promise<Invoice> => {
 
-  return customFetch<InvoicePaymentResult>(getRecordInvoicePaymentUrl(id),
+  return customFetch<Invoice>(getRecordInvoicePaymentUrl(id),
   {
     ...options,
     method: 'POST',
@@ -26596,14 +26597,16 @@ export const getSendInvoiceEmailUrl = (id: number,) => {
 /**
  * @summary Send the invoice by email to the customer
  */
-export const sendInvoiceEmail = async (id: number, options?: RequestInit): Promise<OkResult> => {
+export const sendInvoiceEmail = async (id: number,
+    sendInvoiceEmailInput: SendInvoiceEmailInput, options?: RequestInit): Promise<OkResult> => {
 
   return customFetch<OkResult>(getSendInvoiceEmailUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sendInvoiceEmailInput,)
   }
 );}
 
@@ -26611,8 +26614,8 @@ export const sendInvoiceEmail = async (id: number, options?: RequestInit): Promi
 
 
 export const getSendInvoiceEmailMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number;data: BodyType<SendInvoiceEmailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number;data: BodyType<SendInvoiceEmailInput>}, TContext> => {
 
 const mutationKey = ['sendInvoiceEmail'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -26624,10 +26627,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendInvoiceEmail>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendInvoiceEmail>>, {id: number;data: BodyType<SendInvoiceEmailInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  sendInvoiceEmail(id,requestOptions)
+          return  sendInvoiceEmail(id,data,requestOptions)
         }
 
 
@@ -26638,18 +26641,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SendInvoiceEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendInvoiceEmail>>>
-
+    export type SendInvoiceEmailMutationBody = BodyType<SendInvoiceEmailInput>
     export type SendInvoiceEmailMutationError = ErrorType<void>
 
     /**
  * @summary Send the invoice by email to the customer
  */
 export const useSendInvoiceEmail = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceEmail>>, TError,{id: number;data: BodyType<SendInvoiceEmailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof sendInvoiceEmail>>,
         TError,
-        {id: number},
+        {id: number;data: BodyType<SendInvoiceEmailInput>},
         TContext
       > => {
       return useMutation(getSendInvoiceEmailMutationOptions(options));
@@ -26667,9 +26670,9 @@ export const getAddInvoiceEventUrl = (id: number,) => {
  * @summary Append a custom event to an invoice's event log
  */
 export const addInvoiceEvent = async (id: number,
-    invoiceEventInput: InvoiceEventInput, options?: RequestInit): Promise<OkResult> => {
+    invoiceEventInput: InvoiceEventInput, options?: RequestInit): Promise<Invoice> => {
 
-  return customFetch<OkResult>(getAddInvoiceEventUrl(id),
+  return customFetch<Invoice>(getAddInvoiceEventUrl(id),
   {
     ...options,
     method: 'POST',

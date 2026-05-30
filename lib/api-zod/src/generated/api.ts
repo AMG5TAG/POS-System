@@ -7963,7 +7963,7 @@ export const DisconnectIntegrationParams = zod.object({
 })
 
 export const DisconnectIntegrationResponse = zod.object({
-  "ok": zod.boolean()
+  "status": zod.enum(['connected', 'disconnected'])
 })
 
 
@@ -7979,7 +7979,7 @@ export const ConnectIntegrationBody = zod.object({
 })
 
 export const ConnectIntegrationResponse = zod.object({
-  "ok": zod.boolean()
+  "status": zod.enum(['connected', 'disconnected'])
 })
 
 
@@ -8275,8 +8275,6 @@ export const RecordInvoicePaymentBody = zod.object({
 })
 
 export const RecordInvoicePaymentResponse = zod.object({
-  "ok": zod.boolean(),
-  "invoice": zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
@@ -8319,7 +8317,6 @@ export const RecordInvoicePaymentResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
-})
 
 
 /**
@@ -8327,6 +8324,29 @@ export const RecordInvoicePaymentResponse = zod.object({
  */
 export const SendInvoiceEmailParams = zod.object({
   "id": zod.coerce.number()
+})
+
+export const SendInvoiceEmailBody = zod.object({
+  "email": zod.string().email(),
+  "template": zod.object({
+  "templateId": zod.string().optional(),
+  "subjectLine": zod.string().optional(),
+  "customGreeting": zod.string().optional(),
+  "customMessage": zod.string().optional(),
+  "customSignOff": zod.string().optional(),
+  "footerText": zod.string().optional(),
+  "thankYouMsg": zod.string().optional(),
+  "showGstBreakdown": zod.boolean().optional(),
+  "showWebsite": zod.boolean().optional(),
+  "showSocialLinks": zod.boolean().optional(),
+  "showLogo": zod.boolean().optional(),
+  "brandColor": zod.string().optional(),
+  "logo": zod.string().optional(),
+  "website": zod.string().optional(),
+  "contactEmail": zod.string().optional(),
+  "tagline": zod.string().optional(),
+  "socialLinks": zod.record(zod.string(), zod.string()).optional()
+}).optional().describe('Optional email template overrides')
 })
 
 export const SendInvoiceEmailResponse = zod.object({
@@ -8349,7 +8369,47 @@ export const AddInvoiceEventBody = zod.object({
 })
 
 export const AddInvoiceEventResponse = zod.object({
-  "ok": zod.boolean()
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 
