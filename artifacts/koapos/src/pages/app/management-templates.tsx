@@ -802,13 +802,17 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, paymentTypes, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
   const date = "18/05/2026 10:42 AM";
   const footerMsg = opts.thankYouMsg;
   const footer    = opts.footerText;
+  const resolvedPaymentTypes = (paymentTypes && paymentTypes.length)
+    ? paymentTypes
+    : ["EFTPOS", "Cash", "Visa", "Mastercard"];
+  const paymentLabel = resolvedPaymentTypes[0];
 
   const QrBlock = () => opts.showCustomerQr ? (
     <div className="flex flex-col items-center border-t pt-1.5 mt-1 gap-0.5">
@@ -842,7 +846,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
         {opts.showGstBreakdown && <div className="flex justify-between"><span>GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL</span><span>${subtotal.toFixed(2)}</span></div>
-        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
+        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>{paymentLabel}</span><span>Approved</span></div>}
         <LoyaltyBlock />
         <p className="text-center">─────────────────</p>
         {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
@@ -871,7 +875,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <div className="mt-2 space-y-0.5 text-[10px]">
           {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST incl.</span><span>${gst.toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-sm border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>${subtotal.toFixed(2)}</span></div>
-          {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
+          {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>{paymentLabel}</span><span>Approved</span></div>}
         </div>
         <LoyaltyBlock />
         <div className="text-center text-[10px] text-gray-400 mt-2 space-y-0.5">
@@ -902,7 +906,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
       <div className="border-t mt-1 pt-1 space-y-0.5 text-[10px]">
         {opts.showGstBreakdown && <div className="flex justify-between"><span className="text-gray-500">GST (10%)</span><span>${gst.toFixed(2)}</span></div>}
         <div className="flex justify-between font-bold"><span>TOTAL AUD</span><span>${subtotal.toFixed(2)}</span></div>
-        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>EFTPOS</span><span>Approved</span></div>}
+        {opts.showPaymentMethods && <div className="flex justify-between text-gray-500"><span>{paymentLabel}</span><span>Approved</span></div>}
       </div>
       <LoyaltyBlock />
       <div className="text-center text-[10px] text-gray-400 border-t mt-1 pt-1 space-y-0.5">
