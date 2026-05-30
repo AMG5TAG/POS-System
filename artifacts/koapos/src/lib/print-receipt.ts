@@ -1,4 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
+import { getSocialLabel, getSocialHandle } from "@/lib/social-links";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -165,7 +166,7 @@ export function printReceipt(
 
   const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
   const socialHtml = (tpl.showSocialLinks && socialEntries.length)
-    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${esc(k)}: ${esc(String(v))}</span>`).join("")}</div>`
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span><strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
     : "";
 
   const body = `
@@ -559,7 +560,7 @@ export function printA4Receipt(
 
   const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
   const socialHtml = (tpl.showSocialLinks && socialEntries.length)
-    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${esc(k)}: ${esc(String(v))}</span>`).join("")}</div>`
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span><strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
     : "";
 
   const barcodeHtml = tpl.showBarcode

@@ -46,6 +46,7 @@ import {
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
+import { formatSocialEntries } from "@/lib/social-links";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -814,12 +815,12 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   const date = "18/05/2026 10:42 AM";
   const footerMsg = opts.thankYouMsg;
   const footer    = opts.footerText;
-  const socialEntries = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
+  const socialEntries = formatSocialEntries(socialLinks);
 
   const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
     <div className="flex flex-wrap justify-center gap-2 text-gray-400 mt-0.5">
-      {socialEntries.map(([k, v]) => (
-        <span key={k}>{k}: {String(v)}</span>
+      {socialEntries.map(({ label, handle }) => (
+        <span key={label}><strong>{label}</strong> {handle}</span>
       ))}
     </div>
   ) : null;
@@ -950,7 +951,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const resolvedPaymentTypes = (paymentTypes && paymentTypes.length)
     ? paymentTypes
     : ["EFTPOS", "Cash", "Visa", "Mastercard"];
-  const socialEntries = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
+  const socialEntries = formatSocialEntries(socialLinks);
 
   const HeaderBlock = () => header
     ? <p className="text-[10px] text-gray-600 bg-gray-50 rounded px-2 py-1 leading-relaxed whitespace-pre-wrap mb-1.5">{resolveCode(header, businessName, abn, website, email)}</p>
@@ -1015,8 +1016,8 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
 
   const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
     <div className="flex flex-wrap justify-center gap-3 text-[9px] text-gray-500 mt-1">
-      {socialEntries.map(([k, v]) => (
-        <span key={k}>{k}: {String(v)}</span>
+      {socialEntries.map(({ label, handle }) => (
+        <span key={label}><strong>{label}</strong> {handle}</span>
       ))}
     </div>
   ) : null;
@@ -1256,7 +1257,7 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
 function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
-  const socialEntries = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
+  const socialEntries = formatSocialEntries(socialLinks);
   const jobFontSize = opts.jobNoFontSize?.toLowerCase();
   const jobNoClass = jobFontSize === "xlarge" ? "text-base font-black" : jobFontSize === "large" ? "text-sm font-bold" : "text-[9px] font-normal";
   return (
@@ -1398,8 +1399,8 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
       {/* Social links */}
       {opts.showSocialLinks && socialEntries.length > 0 && (
         <div className={cn("flex flex-wrap justify-center gap-2 text-[8px] text-gray-500", !(opts.warrantyText || opts.footerText) && "border-t pt-1")}>
-          {socialEntries.map(([k, v]) => (
-            <span key={k}>{k}: {String(v)}</span>
+          {socialEntries.map(({ label, handle }) => (
+            <span key={label}><strong>{label}</strong> {handle}</span>
           ))}
         </div>
       )}

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { TplOpts } from "@/pages/app/management-templates";
+import { formatSocialEntries } from "@/lib/social-links";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -141,7 +142,7 @@ export function ServiceJobSheet({
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
   const credentialLines = mergeCredentials(data.accounts, data.logins);
   const photos = (data.photos ?? []).filter(Boolean);
-  const socialEntries = Object.entries(branding.socialLinks ?? {}).filter(([, v]) => v);
+  const socialEntries = formatSocialEntries(branding.socialLinks);
 
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
@@ -371,8 +372,8 @@ export function ServiceJobSheet({
             color: MUTED,
           }}
         >
-          {socialEntries.map(([k, v]) => (
-            <span key={k} style={wrapStyle}>{k}: {String(v)}</span>
+          {socialEntries.map(({ label, handle }) => (
+            <span key={label} style={wrapStyle}><strong>{label}</strong> {handle}</span>
           ))}
         </div>
       )}
