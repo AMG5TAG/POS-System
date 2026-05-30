@@ -264,6 +264,8 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Thank you for your enquiry…", quickCodes: true },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your enquiry!", quickCodes: true },
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
+      { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "socialIconBrandColors",   label: "Social Icon Brand Colors",  type: "toggle", hint: "Renders each platform icon in its official brand color (Facebook blue, Instagram pink, etc.)" },
       { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
     ];

@@ -320,6 +320,11 @@ export function printA4Invoice(
   const footerTxt = tpl.footerText ? esc(tpl.footerText) : "";
   const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
 
+  const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
+  const socialHtml = (tpl.showSocialLinks && socialEntries.length)
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${getSocialIconSvg(k, 11, tpl.socialIconBrandColors ? getSocialBrandColor(k) : null)}<strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
+    : "";
+
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
@@ -365,6 +370,9 @@ export function printA4Invoice(
 
     /* Footer */
     .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.7; }
+    .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 6px; font-size: 10px; color: #6b7280; }
+    .socials span { display: inline-flex; align-items: center; gap: 3px; }
+    .socials svg { flex-shrink: 0; }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -443,6 +451,7 @@ export function printA4Invoice(
     ${thankYou ? `<p>${thankYou}</p>` : ""}
     ${abn ? `<p>ABN ${abn}</p>` : ""}
     ${footerTxt ? `<p>${footerTxt}</p>` : ""}
+    ${socialHtml}
   </div>
 
 </div>
