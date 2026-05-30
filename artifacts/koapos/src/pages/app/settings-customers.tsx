@@ -1,9 +1,18 @@
 import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields, type HeardFromSource, DEFAULT_HEARD_FROM_SOURCES } from "@/lib/customer-settings";
+import {
+  computeHeardFromAnalytics,
+  HEARD_FROM_PERIODS,
+  type HeardFromPeriod,
+  type HeardFromCustomer,
+} from "@/lib/heard-from-analytics";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -25,6 +34,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
+  TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -103,27 +113,14 @@ export default function SettingsCustomersPage() {
   }, {});
   const total = customers.length;
 
-  // ── Heard From breakdown (customer count per referral source) ──────────────
-  const heardFromBreakdown = useMemo(() => {
-    const NOT_RECORDED = "Not recorded";
-    const PALETTE = [
-      "#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444",
-      "#ec4899", "#f97316", "#14b8a6", "#6366f1",
-    ];
-    const counts = new Map<string, number>();
-    for (const c of customers as { heardFrom?: string | null }[]) {
-      const name = (c.heardFrom ?? "").trim() || NOT_RECORDED;
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
-    const entries = Array.from(counts.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-    let colorIdx = 0;
-    return entries.map((e) => ({
-      ...e,
-      fill: e.name === NOT_RECORDED ? "#9ca3af" : PALETTE[colorIdx++ % PALETTE.length],
-    }));
-  }, [customers]);
+  // ── Heard From breakdown (referral source, with time-window trends) ────────
+  const [heardFromPeriod, setHeardFromPeriod] = useState<HeardFromPeriod>("all");
+
+  const heardFromData = useMemo(
+    () => computeHeardFromAnalytics(customers as HeardFromCustomer[], heardFromPeriod),
+    [customers, heardFromPeriod],
+  );
+  const heardFromBreakdown = heardFromData.breakdown;
 
   const openAdd = () => {
     setEditingGroup(null);
@@ -554,78 +551,160 @@ export default function SettingsCustomersPage() {
 
         {/* ── Heard From Breakdown ─────────────────────────────────────────── */}
         <Card id="heard-from-breakdown">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-primary" />
-              Heard From Breakdown
-            </CardTitle>
-            <CardDescription>
-              Which referral channels bring in the most customers, based on {total} customer
-              {total !== 1 ? "s" : ""}.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <PieChartIcon className="w-4 h-4 text-primary" />
+                Heard From Breakdown
+              </CardTitle>
+              <CardDescription>
+                {heardFromPeriod === "all"
+                  ? `Which referral channels bring in the most customers, based on ${total} customer${total !== 1 ? "s" : ""}.`
+                  : `${heardFromData.windowTotal} new customer${heardFromData.windowTotal !== 1 ? "s" : ""} in this window — see which channels are growing or fading.`}
+              </CardDescription>
+            </div>
+            <Select value={heardFromPeriod} onValueChange={(v) => setHeardFromPeriod(v as HeardFromPeriod)}>
+              <SelectTrigger className="w-[150px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HEARD_FROM_PERIODS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             {heardFromBreakdown.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
                 <PieChartIcon className="w-8 h-8 opacity-25" />
-                <p className="text-sm">No customer data yet.</p>
+                <p className="text-sm">
+                  {total === 0 ? "No customer data yet." : "No customers in this time window."}
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={heardFromBreakdown}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={90}
-                        dataKey="value"
-                        nameKey="name"
-                        paddingAngle={2}
-                      >
-                        {heardFromBreakdown.map((entry, i) => (
-                          <Cell key={i} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 8,
-                          fontSize: 12,
-                          border: "1px solid hsl(var(--border))",
-                          background: "hsl(var(--card))",
-                        }}
-                        formatter={(v: number, n) => [
-                          `${v} customer${v !== 1 ? "s" : ""}`,
-                          n,
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-1.5">
-                  {heardFromBreakdown.map((s) => {
-                    const pct = total ? Math.round((s.value / total) * 100) : 0;
-                    return (
-                      <div
-                        key={s.name}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-muted/10"
-                      >
-                        <span
-                          className="w-3 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: s.fill }}
+              <>
+                {/* Distribution within the selected window */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={heardFromBreakdown}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={90}
+                          dataKey="value"
+                          nameKey="name"
+                          paddingAngle={2}
+                        >
+                          {heardFromBreakdown.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: 8,
+                            fontSize: 12,
+                            border: "1px solid hsl(var(--border))",
+                            background: "hsl(var(--card))",
+                          }}
+                          formatter={(v: number, n) => [
+                            `${v} customer${v !== 1 ? "s" : ""}`,
+                            n,
+                          ]}
                         />
-                        <span className="flex-1 text-sm font-medium">{s.name}</span>
-                        <span className="text-sm font-bold tabular-nums">{s.value}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">
-                          {pct}%
-                        </span>
-                      </div>
-                    );
-                  })}
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-1.5">
+                    {heardFromBreakdown.map((s) => {
+                      const denom = heardFromData.windowTotal || 1;
+                      const pct = Math.round((s.value / denom) * 100);
+                      const cmp = heardFromData.comparison?.find((c) => c.name === s.name);
+                      return (
+                        <div
+                          key={s.name}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-muted/10"
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: s.fill }}
+                          />
+                          <span className="flex-1 text-sm font-medium">{s.name}</span>
+                          {cmp && cmp.delta !== 0 && (
+                            <span
+                              className={`flex items-center gap-0.5 text-xs font-semibold tabular-nums ${
+                                cmp.delta > 0 ? "text-emerald-600" : "text-red-500"
+                              }`}
+                              title={`${cmp.previous} in the previous period`}
+                            >
+                              {cmp.delta > 0 ? (
+                                <TrendingUp className="w-3 h-3" />
+                              ) : (
+                                <TrendingDown className="w-3 h-3" />
+                              )}
+                              {cmp.delta > 0 ? "+" : ""}{cmp.delta}
+                            </span>
+                          )}
+                          {cmp && cmp.delta === 0 && cmp.previous > 0 && (
+                            <span className="flex items-center gap-0.5 text-xs text-muted-foreground" title="No change from the previous period">
+                              <Minus className="w-3 h-3" />
+                            </span>
+                          )}
+                          <span className="text-sm font-bold tabular-nums">{s.value}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">
+                            {pct}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {heardFromData.comparison && (
+                      <p className="text-xs text-muted-foreground pt-1.5 px-1">
+                        ▲▼ vs the previous {heardFromPeriod === "30d" ? "30 days" : heardFromPeriod === "90d" ? "90 days" : "12 months"}.
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+
+                {/* Trend over time (stacked bars per source) */}
+                {heardFromData.trend.sources.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
+                      <p className="text-sm font-medium">New customers over time</p>
+                    </div>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={heardFromData.trend.data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+                          <Tooltip
+                            contentStyle={{
+                              borderRadius: 8,
+                              fontSize: 12,
+                              border: "1px solid hsl(var(--border))",
+                              background: "hsl(var(--card))",
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+                          {heardFromData.trend.sources.map((src) => (
+                            <Bar
+                              key={src}
+                              dataKey={src}
+                              stackId="sources"
+                              fill={heardFromData.colorMap[src]}
+                              radius={[0, 0, 0, 0]}
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
