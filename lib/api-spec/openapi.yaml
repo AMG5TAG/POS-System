@@ -5329,6 +5329,67 @@ paths:
         "204":
           description: Deleted
 
+  /staff-notes:
+    get:
+      operationId: listStaffNotes
+      tags: [Staff]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: Staff notes list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffNoteList" }
+    post:
+      operationId: createStaffNote
+      tags: [Staff]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffNoteInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffNoteItem" }
+
+  /staff-notes/{id}:
+    put:
+      operationId: updateStaffNote
+      tags: [Staff]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffNoteInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffNoteItem" }
+    delete:
+      operationId: deleteStaffNote
+      tags: [Staff]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   /pc-compat-rules:
     get:
       operationId: listPcCompatRules
@@ -9584,6 +9645,40 @@ components:
         coolingFactor:         { type: number }
         roundingMode:          { type: string }
         roundingValue:         { type: number }
+
+    StaffNoteItem:
+      type: object
+      required: [id, merchantId, title, content, isImportant, isPinned, visibleTo, createdBy, createdAt, updatedAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        title:       { type: string }
+        content:     { type: string }
+        isImportant: { type: boolean }
+        isPinned:    { type: boolean }
+        visibleTo:   { type: string }
+        createdBy:   { type: string }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    StaffNoteInput:
+      type: object
+      required: [title, content]
+      properties:
+        title:       { type: string }
+        content:     { type: string }
+        isImportant: { type: boolean }
+        isPinned:    { type: boolean }
+        visibleTo:   { type: string }
+        createdBy:   { type: string }
+
+    StaffNoteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffNoteItem" }
 
     BusinessProfile:
       type: object

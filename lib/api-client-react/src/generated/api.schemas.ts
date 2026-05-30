@@ -3077,6 +3077,32 @@ export interface Print3dSettingsInput {
   roundingValue?: number;
 }
 
+export interface StaffNoteItem {
+  id: number;
+  merchantId: number;
+  title: string;
+  content: string;
+  isImportant: boolean;
+  isPinned: boolean;
+  visibleTo: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffNoteInput {
+  title: string;
+  content: string;
+  isImportant?: boolean;
+  isPinned?: boolean;
+  visibleTo?: string;
+  createdBy?: string;
+}
+
+export interface StaffNoteList {
+  items: StaffNoteItem[];
+}
+
 export type BusinessProfileOpeningHours = { [key: string]: unknown };
 
 export type BusinessProfileSocialLinks = { [key: string]: unknown };

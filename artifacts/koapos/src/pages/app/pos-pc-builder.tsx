@@ -6,6 +6,7 @@ import {
   useListProducts, useCreateProduct, useListProductTypes, useCreateProductType,
   useListPcSavedBuilds, useCreatePcSavedBuild, useDeletePcSavedBuild,
   getListPcSavedBuildsQueryKey,
+  useGetPcBuilderSettings, useListPcCompatRules,
   type Product,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import {
   ShoppingCart, Save, RotateCcw, Check, Package, Layers, FolderOpen, Trash2,
 } from "lucide-react";
 import {
-  PC_PART_SLOTS, loadPCCompat, loadPCBuilderSettings,
+  PC_PART_SLOTS,
   type PCCompatMap, type PCBuilderSettings,
 } from "./management-calculators-pc-builder";
 
@@ -218,14 +219,41 @@ export default function POSPCBuilderPage() {
   const deleteSavedBuildMutation = useDeletePcSavedBuild();
   const inv = () => queryClient.invalidateQueries({ queryKey: getListPcSavedBuildsQueryKey() });
 
-  const [compatMap, setCompatMap]       = useState<PCCompatMap>(() => loadPCCompat());
-  const [settings, setSettings]         = useState<PCBuilderSettings>(() => loadPCBuilderSettings());
+  const { data: serverSettings }  = useGetPcBuilderSettings();
+  const { data: compatRulesData } = useListPcCompatRules();
+
+  const settings = useMemo((): PCBuilderSettings => {
+    const DEFAULT_SLOTS = PC_PART_SLOTS.map(s => s.id).filter(id =>
+      ["cpu","motherboard","memory","storage","gpu","case","psu","cooler","os"].includes(id));
+    if (!serverSettings) return {
+      applyDefaultMarkup: false, defaultMarkup: 20, laborRate: 75,
+      assemblyTimeMinutes: 90, includeGST: true, showCompatWarnings: true,
+      enabledSlots: DEFAULT_SLOTS,
+    };
+    let slots: string[] = [];
+    try { const p = JSON.parse(serverSettings.enabledSlots); if (Array.isArray(p)) slots = p; } catch {}
+    if (!slots.length) slots = DEFAULT_SLOTS;
+    return {
+      applyDefaultMarkup:  serverSettings.applyDefaultMarkup === "true",
+      defaultMarkup:       serverSettings.defaultMarkup,
+      laborRate:           serverSettings.laborRate,
+      assemblyTimeMinutes: serverSettings.assemblyTimeMinutes,
+      includeGST:          serverSettings.includeGst === "true",
+      showCompatWarnings:  serverSettings.showCompatWarnings === "true",
+      enabledSlots:        slots,
+    };
+  }, [serverSettings]);
+
+  const compatMap = useMemo((): PCCompatMap => Object.fromEntries(
+    (compatRulesData ?? []).map(r => [r.ruleKey, { partType: r.partType, socket: r.socket, specs: r.specs }])
+  ), [compatRulesData]);
+
   const initialDraft = useRef<DraftBuild | null>(loadDraft());
   const [buildName, setBuildName]       = useState(() => initialDraft.current?.buildName ?? "Custom PC Build");
   const [build, setBuild]               = useState<Build>(() => initialDraft.current?.build ?? {});
   const [showAllSlots, setShowAllSlots] = useState(false);
   const [assemblyHours, setAssemblyHours] = useState(
-    () => initialDraft.current?.assemblyHours ?? Math.round(loadPCBuilderSettings().assemblyTimeMinutes / 60),
+    () => initialDraft.current?.assemblyHours ?? 2,
   );
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState("");
@@ -237,6 +265,16 @@ export default function POSPCBuilderPage() {
     const draft: DraftBuild = { buildName, build, assemblyHours };
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
   }, [buildName, build, assemblyHours]);
+
+  // Sync assemblyHours from server settings on first load when there is no
+  // in-progress draft (draft's own value takes precedence when present).
+  const settingsSynced = useRef(false);
+  useEffect(() => {
+    if (serverSettings && !settingsSynced.current && !initialDraft.current) {
+      settingsSynced.current = true;
+      setAssemblyHours(Math.round(serverSettings.assemblyTimeMinutes / 60));
+    }
+  }, [serverSettings]);
 
   const createProductMutation = useCreateProduct();
   const { data: productTypesData } = useListProductTypes();

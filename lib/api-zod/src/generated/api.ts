@@ -6946,6 +6946,64 @@ export const DeletePcSavedBuildParams = zod.object({
 })
 
 
+export const ListStaffNotesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "isImportant": zod.boolean(),
+  "isPinned": zod.boolean(),
+  "visibleTo": zod.string(),
+  "createdBy": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+export const CreateStaffNoteBody = zod.object({
+  "title": zod.string(),
+  "content": zod.string(),
+  "isImportant": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
+  "visibleTo": zod.string().optional(),
+  "createdBy": zod.string().optional()
+})
+
+
+export const UpdateStaffNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateStaffNoteBody = zod.object({
+  "title": zod.string(),
+  "content": zod.string(),
+  "isImportant": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
+  "visibleTo": zod.string().optional(),
+  "createdBy": zod.string().optional()
+})
+
+export const UpdateStaffNoteResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "isImportant": zod.boolean(),
+  "isPinned": zod.boolean(),
+  "visibleTo": zod.string(),
+  "createdBy": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteStaffNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
 export const ListPcCompatRulesResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),

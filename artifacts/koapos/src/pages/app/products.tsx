@@ -15,6 +15,10 @@ import {
   useGetPosSettings,
   useUpsertPosSettings,
   useListProductTypes,
+  useListPcCompatRules,
+  useUpsertPcCompatRule,
+  useDeletePcCompatRule,
+  getListPcCompatRulesQueryKey,
   Product,
   ProductType,
 } from "@workspace/api-client-react";
@@ -51,7 +55,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
-  loadPCCompat, savePCCompat, PC_PART_SLOTS, type PCPartCompat,
+  PC_PART_SLOTS, type PCPartCompat,
 } from "./management-calculators-pc-builder";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -789,6 +793,10 @@ export default function ProductsPage() {
   const upsertPosSettings = useUpsertPosSettings();
   const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types"] } });
   const productTypesList: ProductType[] = productTypesData?.items ?? [];
+  const { data: compatRules } = useListPcCompatRules();
+  const upsertCompatRuleMutation = useUpsertPcCompatRule();
+  const deleteCompatRuleMutation = useDeletePcCompatRule();
+  const invCompat = () => queryClient.invalidateQueries({ queryKey: getListPcCompatRulesQueryKey() });
   const [skuPrefix, setSkuPrefix]       = useState("KP");
   useEffect(() => {
     if (posSettings?.defaultSkuPrefix) setSkuPrefix(posSettings.defaultSkuPrefix);
@@ -1032,10 +1040,10 @@ export default function ProductsPage() {
     if ((ep.productType ?? "standard") === "digital_code") {
       loadDigitalCodes(p.id);
     }
-    const _c = loadPCCompat()[p.id.toString()] || ({} as PCPartCompat);
-    setPcPartType(_c.partType || "");
-    setPcSocket(_c.socket || "");
-    setPcCompatNotes(_c.specs || "");
+    const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
+    setPcPartType(_c?.partType || "");
+    setPcSocket(_c?.socket || "");
+    setPcCompatNotes(_c?.specs || "");
     setFormTab("details");
     setDialogOpen(true);
   };
@@ -1075,10 +1083,17 @@ export default function ProductsPage() {
     if (editingProduct) {
       updateMutation.mutate({ id: editingProduct.id, data: payload }, {
         onSuccess: () => {
-          const _m = loadPCCompat();
-          if (pcPartType) { _m[editingProduct.id.toString()] = { partType: pcPartType, socket: pcSocket, specs: pcCompatNotes }; }
-          else { delete _m[editingProduct.id.toString()]; }
-          savePCCompat(_m);
+          if (pcPartType) {
+            upsertCompatRuleMutation.mutate(
+              { data: { ruleKey: editingProduct.id.toString(), partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } },
+              { onError: () => toast.error("Failed to save compatibility data"), onSettled: invCompat },
+            );
+          } else {
+            deleteCompatRuleMutation.mutate(
+              { ruleKey: editingProduct.id.toString() },
+              { onSettled: invCompat },
+            );
+          }
           toast.success("Product updated"); setDialogOpen(false); inv();
         },
         onError: () => toast.error("Failed to update product"),
@@ -1087,7 +1102,12 @@ export default function ProductsPage() {
       createMutation.mutate({ data: payload }, {
         onSuccess: (created) => {
           const cid = (created as { id?: number })?.id;
-          if (pcPartType && cid) savePCCompat({ ...loadPCCompat(), [cid.toString()]: { partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } });
+          if (pcPartType && cid) {
+            upsertCompatRuleMutation.mutate(
+              { data: { ruleKey: cid.toString(), partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } },
+              { onError: () => toast.error("Failed to save compatibility data"), onSettled: invCompat },
+            );
+          }
           toast.success("Product created"); setDialogOpen(false); inv();
         },
         onError: () => toast.error("Failed to create product"),

@@ -15,21 +15,22 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListStaffNotes, useCreateStaffNote, useUpdateStaffNote, useDeleteStaffNote,
+  getListStaffNotesQueryKey,
+  type StaffNoteItem, type StaffNoteInput,
+} from "@workspace/api-client-react";
 import {
   Pin, Star, Trash2, Pencil, Plus, StickyNote,
-  ShieldCheck, AlertCircle, Eye, UserSquare2, Clock,
-  CalendarClock, ClipboardList, Coins, Target, Link2,
+  ShieldCheck, AlertCircle, Eye,
 } from "lucide-react";
-
-/* ─── Tabs ───────────────────────────────────────────────────────────────── */
 
 /* ─── Role simulation ────────────────────────────────────────────────────── */
 
 type StaffRole = "owner" | "manager" | "cashier" | "staff";
-const SIM_ROLE_KEY = "koapos_sim_role";
-function getSimRole(): StaffRole {
-  return "manager";
-}
+
+function getSimRole(): StaffRole { return "manager"; }
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   owner:   "Owner",
@@ -38,34 +39,11 @@ const ROLE_LABELS: Record<StaffRole, string> = {
   staff:   "Staff",
 };
 
-/* ─── Note types ─────────────────────────────────────────────────────────── */
+/* ─── Visibility helpers ─────────────────────────────────────────────────── */
 
 type NoteVisibility = "all" | "management" | "owner";
 
-interface StaffNote {
-  id: string;
-  title: string;
-  content: string;
-  isImportant: boolean;
-  isPinned: boolean;
-  visibleTo: NoteVisibility;
-  createdBy: string;
-  createdAt: string;
-}
-
-const NOTES_KEY = "koapos_staff_notes";
-
-function loadNotes(): StaffNote[] {
-  return [];
-}
-
-function saveNotes(_notes: StaffNote[]) {
-  /* no-op */
-}
-
-/* ─── Permissions ────────────────────────────────────────────────────────── */
-
-function canSeeNote(note: StaffNote, role: StaffRole): boolean {
+function canSeeNote(note: StaffNoteItem, role: StaffRole): boolean {
   if (note.visibleTo === "all") return true;
   if (note.visibleTo === "management") return role === "owner" || role === "manager";
   if (note.visibleTo === "owner") return role === "owner";
@@ -75,8 +53,6 @@ function canSeeNote(note: StaffNote, role: StaffRole): boolean {
 function canManageNotes(role: StaffRole) {
   return role === "owner" || role === "manager";
 }
-
-/* ─── Visibility badge colours ───────────────────────────────────────────── */
 
 const VISIBILITY_META: Record<NoteVisibility, { label: string; cls: string }> = {
   all:        { label: "All Staff",  cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"  },
@@ -89,14 +65,14 @@ const VISIBILITY_META: Record<NoteVisibility, { label: string; cls: string }> = 
 function NoteCard({
   note, role, onEdit, onDelete, onTogglePin, onToggleImportant,
 }: {
-  note: StaffNote;
+  note: StaffNoteItem;
   role: StaffRole;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
   onToggleImportant: () => void;
 }) {
-  const vis = VISIBILITY_META[note.visibleTo];
+  const vis = VISIBILITY_META[note.visibleTo as NoteVisibility] ?? VISIBILITY_META.all;
   const canManage = canManageNotes(role);
 
   return (
@@ -162,7 +138,9 @@ function NoteCard({
 
 /* ─── Dialog ─────────────────────────────────────────────────────────────── */
 
-const BLANK: Omit<StaffNote, "id" | "createdAt" | "createdBy"> = {
+type NoteFormValues = Omit<StaffNoteInput, "createdBy">;
+
+const BLANK: NoteFormValues = {
   title: "", content: "", isImportant: false, isPinned: false, visibleTo: "all",
 };
 
@@ -171,16 +149,17 @@ function NoteDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  initial: StaffNote | null;
+  initial: StaffNoteItem | null;
   authorName: string;
-  onSave: (n: Omit<StaffNote, "id" | "createdAt" | "createdBy">) => void;
+  onSave: (n: NoteFormValues) => void;
 }) {
-  const [form, setForm] = useState<Omit<StaffNote, "id" | "createdAt" | "createdBy">>(
-    initial ? { title: initial.title, content: initial.content, isImportant: initial.isImportant, isPinned: initial.isPinned, visibleTo: initial.visibleTo }
-            : { ...BLANK }
+  const [form, setForm] = useState<NoteFormValues>(
+    initial
+      ? { title: initial.title, content: initial.content, isImportant: initial.isImportant, isPinned: initial.isPinned, visibleTo: initial.visibleTo }
+      : { ...BLANK }
   );
 
-  const setField = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm((p) => ({ ...p, [k]: v }));
+  const setField = <K extends keyof NoteFormValues>(k: K, v: NoteFormValues[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSave = () => {
     if (!form.title.trim()) { toast.error("Note title is required"); return; }
@@ -207,7 +186,7 @@ function NoteDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Visible to</Label>
-            <Select value={form.visibleTo} onValueChange={(v) => setField("visibleTo", v as NoteVisibility)}>
+            <Select value={form.visibleTo} onValueChange={(v) => setField("visibleTo", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Staff</SelectItem>
@@ -222,14 +201,14 @@ function NoteDialog({
               <p className="text-sm font-medium">Mark as Important</p>
               <p className="text-xs text-muted-foreground">Highlights the note for attention.</p>
             </div>
-            <Switch checked={form.isImportant} onCheckedChange={(v) => setField("isImportant", v)} />
+            <Switch checked={!!form.isImportant} onCheckedChange={(v) => setField("isImportant", v)} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Pin to Top</p>
               <p className="text-xs text-muted-foreground">Pinned notes always appear first.</p>
             </div>
-            <Switch checked={form.isPinned} onCheckedChange={(v) => setField("isPinned", v)} />
+            <Switch checked={!!form.isPinned} onCheckedChange={(v) => setField("isPinned", v)} />
           </div>
         </div>
         <DialogFooter>
@@ -244,47 +223,75 @@ function NoteDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffNotesPage() {
-  const [notes, setNotes] = useState<StaffNote[]>(loadNotes);
-  const [role, setRole] = useState<StaffRole>(getSimRole);
+  const queryClient = useQueryClient();
+  const { data: notesData, isLoading } = useListStaffNotes();
+  const notes: StaffNoteItem[] = notesData?.items ?? [];
+  const createMutation  = useCreateStaffNote();
+  const updateMutation  = useUpdateStaffNote();
+  const deleteMutation  = useDeleteStaffNote();
+  const inv = () => queryClient.invalidateQueries({ queryKey: getListStaffNotesQueryKey() });
+
+  const [role, setRole]             = useState<StaffRole>(getSimRole);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<StaffNote | null>(null);
+  const [editing, setEditing]       = useState<StaffNoteItem | null>(null);
   const [filterImportant, setFilterImportant] = useState(false);
 
   const canManage = canManageNotes(role);
 
-  const persist = (next: StaffNote[]) => { setNotes(next); saveNotes(next); };
-
-  const handleSave = (data: Omit<StaffNote, "id" | "createdAt" | "createdBy">) => {
+  const handleSave = (data: NoteFormValues) => {
     if (editing) {
-      persist(notes.map((n) => n.id === editing.id ? { ...editing, ...data } : n));
-      toast.success("Note updated");
+      updateMutation.mutate(
+        { id: editing.id, data: { ...data, createdBy: editing.createdBy } },
+        {
+          onSuccess: () => { toast.success("Note updated"); inv(); },
+          onError: () => toast.error("Failed to update note"),
+        },
+      );
     } else {
-      persist([...notes, {
-        id: crypto.randomUUID(), ...data,
-        createdBy: ROLE_LABELS[role], createdAt: new Date().toISOString(),
-      }]);
-      toast.success("Note created");
+      createMutation.mutate(
+        { data: { ...data, createdBy: ROLE_LABELS[role] } },
+        {
+          onSuccess: () => { toast.success("Note created"); inv(); },
+          onError: () => toast.error("Failed to create note"),
+        },
+      );
     }
     setEditing(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     if (!canManage) { toast.error("Only managers and owners can delete notes"); return; }
-    persist(notes.filter((n) => n.id !== id));
-    toast.success("Note deleted");
+    deleteMutation.mutate(
+      { id },
+      {
+        onSuccess: () => { toast.success("Note deleted"); inv(); },
+        onError: () => toast.error("Failed to delete note"),
+      },
+    );
   };
 
-  const togglePin = (id: string) => persist(notes.map((n) => n.id === id ? { ...n, isPinned: !n.isPinned } : n));
-  const toggleImportant = (id: string) => persist(notes.map((n) => n.id === id ? { ...n, isImportant: !n.isImportant } : n));
+  const togglePin = (note: StaffNoteItem) => {
+    updateMutation.mutate(
+      { id: note.id, data: { title: note.title, content: note.content, isImportant: note.isImportant, isPinned: !note.isPinned, visibleTo: note.visibleTo, createdBy: note.createdBy } },
+      { onSuccess: inv, onError: () => toast.error("Failed to update note") },
+    );
+  };
+
+  const toggleImportant = (note: StaffNoteItem) => {
+    updateMutation.mutate(
+      { id: note.id, data: { title: note.title, content: note.content, isImportant: !note.isImportant, isPinned: note.isPinned, visibleTo: note.visibleTo, createdBy: note.createdBy } },
+      { onSuccess: inv, onError: () => toast.error("Failed to update note") },
+    );
+  };
 
   const visible = useMemo(() => {
     let list = notes.filter((n) => canSeeNote(n, role));
     if (filterImportant) list = list.filter((n) => n.isImportant);
     return [
-      ...list.filter((n) => n.isPinned).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      ...list.filter((n) => n.isPinned).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
       ...list.filter((n) => !n.isPinned).sort((a, b) => {
         if (a.isImportant !== b.isImportant) return a.isImportant ? -1 : 1;
-        return b.createdAt.localeCompare(a.createdAt);
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }),
     ];
   }, [notes, role, filterImportant]);
@@ -302,7 +309,7 @@ export default function StaffNotesPage() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Viewing as:</span>
-              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); }}>
+              <Select value={role} onValueChange={(v) => setRole(v as StaffRole)}>
                 <SelectTrigger className="h-6 text-xs border-0 p-0 shadow-none w-24 focus:ring-0">
                   <SelectValue />
                 </SelectTrigger>
@@ -322,7 +329,6 @@ export default function StaffNotesPage() {
           </div>
         </div>
 
-
         <div className="flex items-center gap-3">
           <Button
             variant={filterImportant ? "default" : "outline"}
@@ -333,11 +339,11 @@ export default function StaffNotesPage() {
             Important only
           </Button>
           <span className="text-xs text-muted-foreground ml-auto">
-            {visible.length} note{visible.length !== 1 ? "s" : ""} visible to you
+            {isLoading ? "Loading…" : `${visible.length} note${visible.length !== 1 ? "s" : ""} visible to you`}
           </span>
         </div>
 
-        {visible.length === 0 ? (
+        {!isLoading && visible.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed py-16 text-center text-muted-foreground">
             <StickyNote className="h-8 w-8 mx-auto mb-3 opacity-30" />
             <p className="font-medium text-sm">No notes yet</p>
@@ -352,8 +358,8 @@ export default function StaffNotesPage() {
                 role={role}
                 onEdit={() => { setEditing(note); setDialogOpen(true); }}
                 onDelete={() => handleDelete(note.id)}
-                onTogglePin={() => togglePin(note.id)}
-                onToggleImportant={() => toggleImportant(note.id)}
+                onTogglePin={() => togglePin(note)}
+                onToggleImportant={() => toggleImportant(note)}
               />
             ))}
           </div>

@@ -277,6 +277,9 @@ import type {
   StaffLink,
   StaffLinkInput,
   StaffLinkListResponse,
+  StaffNoteInput,
+  StaffNoteItem,
+  StaffNoteList,
   StaffRosteringSettings,
   StaffRosteringSettingsInput,
   StaffUpdate,
@@ -22281,6 +22284,272 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeletePcSavedBuildMutationOptions(options));
+    }
+
+export const getListStaffNotesUrl = () => {
+
+
+
+
+  return `/api/staff-notes`
+}
+
+export const listStaffNotes = async ( options?: RequestInit): Promise<StaffNoteList> => {
+
+  return customFetch<StaffNoteList>(getListStaffNotesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStaffNotesQueryKey = () => {
+    return [
+    `/api/staff-notes`
+    ] as const;
+    }
+
+
+export const getListStaffNotesQueryOptions = <TData = Awaited<ReturnType<typeof listStaffNotes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStaffNotesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffNotes>>> = ({ signal }) => listStaffNotes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStaffNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStaffNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listStaffNotes>>>
+export type ListStaffNotesQueryError = ErrorType<unknown>
+
+
+
+export function useListStaffNotes<TData = Awaited<ReturnType<typeof listStaffNotes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStaffNotesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateStaffNoteUrl = () => {
+
+
+
+
+  return `/api/staff-notes`
+}
+
+export const createStaffNote = async (staffNoteInput: StaffNoteInput, options?: RequestInit): Promise<StaffNoteItem> => {
+
+  return customFetch<StaffNoteItem>(getCreateStaffNoteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      staffNoteInput,)
+  }
+);}
+
+
+
+
+export const getCreateStaffNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffNote>>, TError,{data: BodyType<StaffNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createStaffNote>>, TError,{data: BodyType<StaffNoteInput>}, TContext> => {
+
+const mutationKey = ['createStaffNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStaffNote>>, {data: BodyType<StaffNoteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createStaffNote(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateStaffNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createStaffNote>>>
+    export type CreateStaffNoteMutationBody = BodyType<StaffNoteInput>
+    export type CreateStaffNoteMutationError = ErrorType<unknown>
+
+    export const useCreateStaffNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffNote>>, TError,{data: BodyType<StaffNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createStaffNote>>,
+        TError,
+        {data: BodyType<StaffNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreateStaffNoteMutationOptions(options));
+    }
+
+export const getUpdateStaffNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/staff-notes/${id}`
+}
+
+export const updateStaffNote = async (id: number,
+    staffNoteInput: StaffNoteInput, options?: RequestInit): Promise<StaffNoteItem> => {
+
+  return customFetch<StaffNoteItem>(getUpdateStaffNoteUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      staffNoteInput,)
+  }
+);}
+
+
+
+
+export const getUpdateStaffNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffNote>>, TError,{id: number;data: BodyType<StaffNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStaffNote>>, TError,{id: number;data: BodyType<StaffNoteInput>}, TContext> => {
+
+const mutationKey = ['updateStaffNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStaffNote>>, {id: number;data: BodyType<StaffNoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateStaffNote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStaffNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateStaffNote>>>
+    export type UpdateStaffNoteMutationBody = BodyType<StaffNoteInput>
+    export type UpdateStaffNoteMutationError = ErrorType<unknown>
+
+    export const useUpdateStaffNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffNote>>, TError,{id: number;data: BodyType<StaffNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStaffNote>>,
+        TError,
+        {id: number;data: BodyType<StaffNoteInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateStaffNoteMutationOptions(options));
+    }
+
+export const getDeleteStaffNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/staff-notes/${id}`
+}
+
+export const deleteStaffNote = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteStaffNoteUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteStaffNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaffNote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteStaffNote>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteStaffNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStaffNote>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteStaffNote(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteStaffNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStaffNote>>>
+
+    export type DeleteStaffNoteMutationError = ErrorType<unknown>
+
+    export const useDeleteStaffNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaffNote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteStaffNote>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteStaffNoteMutationOptions(options));
     }
 
 export const getListPcCompatRulesUrl = () => {
