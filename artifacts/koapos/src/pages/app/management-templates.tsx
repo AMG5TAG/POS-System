@@ -556,9 +556,9 @@ function OptionsPanel({
   };
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+    <div className="rounded-xl border bg-card overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-sm font-semibold">Options</span>
@@ -602,15 +602,15 @@ function OptionsPanel({
         <Switch checked={isDefault} onCheckedChange={setIsDefault} />
       </div>
 
-      {/* Option fields */}
-      <div className="overflow-y-auto flex-1 divide-y">
+      {/* Option fields — two columns */}
+      <div className="p-4 grid grid-cols-2 gap-4">
         {sections.map((section) => {
           const sectionFields = fields.filter((f) => (f.section ?? "General") === section);
           const toggles = sectionFields.filter((f) => f.type === "toggle");
           const texts   = sectionFields.filter((f) => f.type !== "toggle");
 
           return (
-            <div key={section} className="p-4 space-y-3">
+            <div key={section} className="space-y-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{section}</p>
 
               {toggles.length > 0 && (
@@ -682,7 +682,7 @@ function OptionsPanel({
       </div>
 
       {/* Save button */}
-      <div className="px-4 py-3 border-t bg-muted/10 shrink-0">
+      <div className="px-4 py-3 border-t bg-muted/10">
         <Button size="sm" className="w-full gap-2" onClick={onSave} disabled={saving}>
           <Save className="w-3.5 h-3.5" />
           {saving ? "Saving…" : "Save Template"}
@@ -723,8 +723,8 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
   Thermal_Receipt: { label: "Thermal Receipt", icon: Receipt,       color: "text-blue-500"    },
-  Invoice:         { label: "Invoice",          icon: FileText,      color: "text-violet-500"  },
   A4_Receipt:      { label: "A4 Receipt",       icon: FileText,      color: "text-emerald-500" },
+  Invoice:         { label: "Invoice",          icon: FileText,      color: "text-violet-500"  },
   Quote:           { label: "Quote",            icon: FileSearch,    color: "text-amber-500"   },
   Service_Ticket:  { label: "Service Ticket",   icon: ClipboardList, color: "text-cyan-500"    },
 };
@@ -1423,8 +1423,8 @@ function ReceiptPrintSettings() {
 
 const DEFAULT_STYLE: Record<Category, string> = {
   Thermal_Receipt: "r-pro",
-  Invoice:         "i-pro",
   A4_Receipt:      "ar-pro",
+  Invoice:         "i-pro",
   Quote:           "q-pro",
   Service_Ticket:  "ss-standard",
 };
@@ -1520,7 +1520,7 @@ export default function ManagementTemplatesPage() {
           <div className="text-center py-16 text-muted-foreground text-sm">Loading templates…</div>
         ) : (
           <>
-            {/* 3-column layout */}
+            {/* 2-column layout: sidebar | stacked preview + options */}
             <div className="flex gap-4 items-start min-w-0">
 
               {/* Col 1: category + style selector */}
@@ -1575,8 +1575,9 @@ export default function ManagementTemplatesPage() {
                 </div>
               </div>
 
-              {/* Col 2: live preview */}
-              <div className="flex-1 min-w-0 space-y-3">
+              {/* Col 2: preview + options stacked */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {/* Preview header */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -1587,6 +1588,7 @@ export default function ManagementTemplatesPage() {
                   </div>
                 </div>
 
+                {/* Preview box */}
                 <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
                   {activeCategory === "Thermal_Receipt" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
@@ -1599,14 +1601,13 @@ export default function ManagementTemplatesPage() {
                   )}
                 </div>
 
+                {/* Info bar */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
                   <Building2 className="w-3.5 h-3.5 shrink-0" />
                   <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
                 </div>
-              </div>
 
-              {/* Col 3: options + save */}
-              <div className="w-72 shrink-0">
+                {/* Options panel */}
                 <OptionsPanel
                   key={`${activeCategory}-${previewId}`}
                   category={activeCategory}
