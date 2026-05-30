@@ -1567,8 +1567,8 @@ export default function ManagementTemplatesPage() {
               </div>
             </div>
 
-            {/* Options + Preview side by side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Options + Preview side by side — 40/60 split */}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
               {/* Left: Options */}
               <OptionsPanel
                 key={`${activeCategory}-${previewId}`}
