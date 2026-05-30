@@ -16,6 +16,7 @@ import {
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
 import { exportHeardFromCSV, exportHeardFromXLSX, exportHeardFromPDF } from "@/lib/heard-from-export";
+import { exportCustomerGroupsCSV, exportCustomerGroupsXLSX, exportCustomerGroupsPDF } from "@/lib/customer-groups-export";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -335,9 +336,55 @@ export default function SettingsCustomersPage() {
               <CardTitle>Customer Groups</CardTitle>
               <CardDescription>Organise customers for segmentation, pricing, and reporting.</CardDescription>
             </div>
-            <Button size="sm" className="gap-1.5 shrink-0" onClick={openAdd}>
-              <Plus className="w-3.5 h-3.5" /> Add Group
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={settings.groups.length === 0}
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportCustomerGroupsCSV(settings.groups, groupCounts, total)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await exportCustomerGroupsXLSX(settings.groups, groupCounts, total);
+                      } catch {
+                        toast.error("Couldn't generate the Excel file. Please try again.");
+                      }
+                    }}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Excel (XLSX)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await exportCustomerGroupsPDF(settings.groups, groupCounts, total);
+                      } catch {
+                        toast.error("Couldn't generate the PDF. Please try again.");
+                      }
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button size="sm" className="gap-1.5" onClick={openAdd}>
+                <Plus className="w-3.5 h-3.5" /> Add Group
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
