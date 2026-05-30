@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
+import { SocialIcon } from "@/components/printing/SocialIcon";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -372,8 +373,8 @@ export function ServiceJobSheet({
             color: MUTED,
           }}
         >
-          {socialEntries.map(({ label, handle }) => (
-            <span key={label} style={wrapStyle}><strong>{label}</strong> {handle}</span>
+          {socialEntries.map(({ label, handle, key }) => (
+            <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "3px", ...wrapStyle }}><SocialIcon platform={key} size={10} /><strong>{label}</strong> {handle}</span>
           ))}
         </div>
       )}

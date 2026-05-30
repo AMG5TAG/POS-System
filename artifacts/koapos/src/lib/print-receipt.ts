@@ -1,5 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
-import { getSocialLabel, getSocialHandle } from "@/lib/social-links";
+import { getSocialLabel, getSocialHandle, getSocialIconSvg } from "@/lib/social-links";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -166,7 +166,7 @@ export function printReceipt(
 
   const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
   const socialHtml = (tpl.showSocialLinks && socialEntries.length)
-    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span><strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${getSocialIconSvg(k, 10)}<strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
     : "";
 
   const body = `
@@ -227,6 +227,7 @@ export function printReceipt(
     td { padding: 2px 0; }
     .logo-square { width: 20px; height: 20px; border-radius: 2px; margin: 0 auto 4px; }
     .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+    .socials span { display: inline-flex; align-items: center; gap: 3px; }
     @media print {
       body { padding: 0; }
       @page { margin: 8mm; size: 80mm auto; }
@@ -560,7 +561,7 @@ export function printA4Receipt(
 
   const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
   const socialHtml = (tpl.showSocialLinks && socialEntries.length)
-    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span><strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${getSocialIconSvg(k, 11)}<strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
     : "";
 
   const barcodeHtml = tpl.showBarcode
@@ -781,7 +782,8 @@ export function printA4Receipt(
     .ftr { margin-top: 28px; padding-top: 14px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.7; }
     .ftr .thanks { color: ${brandColor}; font-weight: 600; }
     .ftr .msg { background: #f9fafb; border-radius: 4px; padding: 6px 10px; color: #6b7280; margin: 6px 0; }
-    .socials { display: flex; justify-content: center; gap: 14px; margin-top: 6px; color: #6b7280; }
+    .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 6px; color: #6b7280; }
+    .socials span { display: inline-flex; align-items: center; gap: 4px; }
 
     /* modern */
     .modern .band { display: flex; justify-content: space-between; align-items: center; color: #fff; padding: 16px 18px; border-radius: 6px; margin-bottom: 14px; }

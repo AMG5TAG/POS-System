@@ -47,6 +47,7 @@ import {
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
 import { formatSocialEntries } from "@/lib/social-links";
+import { SocialIcon } from "@/components/printing/SocialIcon";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -819,8 +820,8 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
 
   const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
     <div className="flex flex-wrap justify-center gap-2 text-gray-400 mt-0.5">
-      {socialEntries.map(({ label, handle }) => (
-        <span key={label}><strong>{label}</strong> {handle}</span>
+      {socialEntries.map(({ label, handle, key }) => (
+        <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={9} /><strong>{label}</strong> {handle}</span>
       ))}
     </div>
   ) : null;
@@ -1016,8 +1017,8 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
 
   const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
     <div className="flex flex-wrap justify-center gap-3 text-[9px] text-gray-500 mt-1">
-      {socialEntries.map(({ label, handle }) => (
-        <span key={label}><strong>{label}</strong> {handle}</span>
+      {socialEntries.map(({ label, handle, key }) => (
+        <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={10} /><strong>{label}</strong> {handle}</span>
       ))}
     </div>
   ) : null;
@@ -1399,8 +1400,8 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
       {/* Social links */}
       {opts.showSocialLinks && socialEntries.length > 0 && (
         <div className={cn("flex flex-wrap justify-center gap-2 text-[8px] text-gray-500", !(opts.warrantyText || opts.footerText) && "border-t pt-1")}>
-          {socialEntries.map(({ label, handle }) => (
-            <span key={label}><strong>{label}</strong> {handle}</span>
+          {socialEntries.map(({ label, handle, key }) => (
+            <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={8} /><strong>{label}</strong> {handle}</span>
           ))}
         </div>
       )}
