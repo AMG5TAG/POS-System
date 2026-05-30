@@ -131,8 +131,6 @@ export default function DashboardPage() {
       <CloseDayDialog
         open={closeDayOpen}
         onOpenChange={setCloseDayOpen}
-        staffId={undefined}
-        staffName={user?.ownerName || user?.businessName}
       />
 
       {/* Customise Sheet */}

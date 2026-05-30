@@ -1043,8 +1043,6 @@ export type CreateDailyCloseInputBreakdown = {[key: string]: number};
 export interface CreateDailyCloseInput {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   closeDate: string;
-  closedBy?: number;
-  closedByName?: string;
   expectedCash: number;
   countedCash: number;
   notes?: string;

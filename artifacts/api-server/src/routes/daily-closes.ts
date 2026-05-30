@@ -152,8 +152,6 @@ router.get("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res)
 // ── POST /daily-closes ──────────────────────────────────────────────────────
 const CreateDailyCloseBody = z.object({
   closeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  closedBy: z.number().int().optional(),
-  closedByName: z.string().optional(),
   expectedCash: z.number(),
   countedCash: z.number(),
   notes: z.string().optional(),
@@ -168,7 +166,20 @@ router.post("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res
   }
 
   const merchantId = req.session.merchantId!;
-  const { closeDate, closedBy, closedByName, expectedCash, countedCash, notes, breakdown } = parsed.data;
+  // Derive closer identity server-side — never trust client-supplied attribution
+  // for a financial record. staffId is set when a staff member logs in via PIN;
+  // it is absent for the merchant owner themselves.
+  const sessionStaffId = req.session.staffId ?? null;
+
+  // Look up merchant to resolve a display name for the closer
+  const [merchant] = await db
+    .select({ ownerName: merchantsTable.ownerName, businessName: merchantsTable.businessName })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, merchantId))
+    .limit(1);
+  const resolvedName = merchant?.ownerName || merchant?.businessName || null;
+
+  const { closeDate, expectedCash, countedCash, notes, breakdown } = parsed.data;
   const variance = parseFloat((countedCash - expectedCash).toFixed(2));
 
   const [row] = await db
@@ -176,8 +187,8 @@ router.post("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res
     .values({
       merchantId,
       closeDate,
-      closedBy: closedBy ?? null,
-      closedByName: closedByName ?? null,
+      closedBy: sessionStaffId,
+      closedByName: resolvedName,
       expectedCash: String(expectedCash),
       countedCash: String(countedCash),
       variance: String(variance),

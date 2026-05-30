@@ -2634,8 +2634,6 @@ export const createDailyCloseBodyCloseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\
 
 export const CreateDailyCloseBody = zod.object({
   "closeDate": zod.string().regex(createDailyCloseBodyCloseDateRegExp),
-  "closedBy": zod.number().optional(),
-  "closedByName": zod.string().optional(),
   "expectedCash": zod.number(),
   "countedCash": zod.number(),
   "notes": zod.string().optional(),

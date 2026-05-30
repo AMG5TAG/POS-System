@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils";
 import {
   ReceiptText, TrendingDown, TrendingUp, Minus, Banknote,
   CreditCard, Gift, MoreHorizontal, ChevronRight,
-  ShoppingCart, CalendarDays,
+  ShoppingCart, CalendarDays, Printer, Download,
 } from "lucide-react";
+import { printDailyClose, exportDailyClosesCSV } from "@/lib/print-daily-close";
 
 const fmt$ = (n: number) =>
   `$${Math.abs(n).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -163,6 +164,15 @@ function DetailSheet({ row, onClose }: { row: DailyClose; onClose: () => void })
               <p className="text-sm rounded-xl border px-4 py-3 bg-muted/30">{row.notes}</p>
             </div>
           )}
+
+          <Button
+            variant="outline"
+            className="w-full gap-2 mt-2"
+            onClick={() => printDailyClose(row)}
+          >
+            <Printer className="w-4 h-4" />
+            Print Report
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
@@ -189,6 +199,17 @@ export default function ManagementDailyReportsPage() {
               End-of-day cash reconciliation records.
             </p>
           </div>
+          {closes && closes.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 self-start sm:self-auto"
+              onClick={() => exportDailyClosesCSV(closes)}
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          )}
         </div>
 
         {/* KPI strip */}

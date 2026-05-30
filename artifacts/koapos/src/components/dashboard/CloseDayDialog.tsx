@@ -17,20 +17,19 @@ import {
   useGetDailyCloseCurrent,
   useCreateDailyClose,
 } from "@workspace/api-client-react";
-import type { DailyCloseCurrent } from "@workspace/api-client-react";
+import type { DailyClose } from "@workspace/api-client-react";
+import { printDailyClose } from "@/lib/print-daily-close";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2, ChevronRight, CreditCard, Banknote, Gift,
   MoreHorizontal, TrendingDown, TrendingUp, Minus,
-  ShoppingCart, ReceiptText, AlertTriangle,
+  ShoppingCart, ReceiptText, AlertTriangle, Printer,
 } from "lucide-react";
 
 interface CloseDayDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  staffId?: number;
-  staffName?: string;
 }
 
 const fmt$ = (n: number) =>
@@ -92,10 +91,11 @@ function SummaryRow({ label, value, bold, dimmed, className }: {
   );
 }
 
-export function CloseDayDialog({ open, onOpenChange, staffId, staffName }: CloseDayDialogProps) {
+export function CloseDayDialog({ open, onOpenChange }: CloseDayDialogProps) {
   const [step, setStep] = useState<Step>(0);
   const [countedCash, setCountedCash] = useState("");
   const [notes, setNotes] = useState("");
+  const [savedRecord, setSavedRecord] = useState<DailyClose | null>(null);
 
   const { data: summary, isLoading } = useGetDailyCloseCurrent({
     query: { enabled: open, staleTime: 60000, queryKey: ["daily-close-current"] },
@@ -118,6 +118,7 @@ export function CloseDayDialog({ open, onOpenChange, staffId, staffName }: Close
       setStep(0);
       setCountedCash("");
       setNotes("");
+      setSavedRecord(null);
     }, 300);
   }
 
@@ -126,8 +127,6 @@ export function CloseDayDialog({ open, onOpenChange, staffId, staffName }: Close
     createClose({
       data: {
         closeDate: summary.date,
-        closedBy: staffId,
-        closedByName: staffName,
         expectedCash: expected,
         countedCash: counted,
         notes: notes.trim() || undefined,
@@ -144,7 +143,8 @@ export function CloseDayDialog({ open, onOpenChange, staffId, staffName }: Close
         },
       },
     }, {
-      onSuccess: () => {
+      onSuccess: (saved) => {
+        setSavedRecord(saved);
         setStep(3);
       },
       onError: () => {
@@ -184,8 +184,18 @@ export function CloseDayDialog({ open, onOpenChange, staffId, staffName }: Close
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button className="flex-1" onClick={handleClose}>Done</Button>
+              {savedRecord && (
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-1.5"
+                  onClick={() => printDailyClose(savedRecord)}
+                >
+                  <Printer className="w-4 h-4" />
+                  Print
+                </Button>
+              )}
               <Button variant="outline" className="flex-1" onClick={() => { handleClose(); window.location.href = "/management/daily-reports"; }}>
                 View Reports
               </Button>
