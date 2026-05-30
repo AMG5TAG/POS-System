@@ -130,6 +130,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
   const [opts, setOpts] = useState<TplOpts>({ ...DEFAULT_OPTS });
   const [isDefault, setIsDefault] = useState(true);
   const upsert = useUpsertSalesTemplate();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const row = templates.find((t) => t.templateType === category);
@@ -176,12 +177,16 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
           },
         },
         {
-          onSuccess: () => toast.success("Template saved"),
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["sales-templates"] });
+            queryClient.invalidateQueries({ queryKey: ["sales-templates-active"] });
+            toast.success("Template saved");
+          },
           onError: () => toast.error("Failed to save template"),
         },
       );
     },
-    [category, opts, isDefault, upsert],
+    [category, opts, isDefault, upsert, queryClient],
   );
 
   return { opts, update, reset, isDefault, setIsDefault, save, saving: upsert.isPending };
@@ -1727,7 +1732,7 @@ export default function ManagementTemplatesPage() {
                   const previewing    = previewId === tpl.id;
                   const SIcon         = STYLE_ICONS[tpl.style];
                   return (
-                    <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
+                    <div key={tpl.id} onClick={() => { setPreviewId(tpl.id); save(tpl.id); }}
                       className={cn("flex-1 rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
                         previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
                       )}
