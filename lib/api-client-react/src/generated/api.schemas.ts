@@ -3597,6 +3597,412 @@ export interface AppleOAuthCallbackBody {
   error?: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  /** @minLength 8 */
+  newPassword: string;
+}
+
+export interface ChangeEmailInput {
+  currentPassword: string;
+  newEmail: string;
+}
+
+export interface FeedbackAttachment {
+  name: string;
+  /** Base64-encoded file content */
+  data: string;
+  mimeType: string;
+}
+
+export type FeedbackInputType = typeof FeedbackInputType[keyof typeof FeedbackInputType];
+
+
+export const FeedbackInputType = {
+  bug: 'bug',
+  feature: 'feature',
+} as const;
+
+export interface FeedbackInput {
+  type: FeedbackInputType;
+  title: string;
+  description: string;
+  steps?: string;
+  appVersion?: string;
+  attachments?: FeedbackAttachment[];
+}
+
+export interface OkResult {
+  ok: boolean;
+}
+
+export interface VaultStatus {
+  total: number;
+  current: number;
+  pendingRotation: number;
+  invalid: number;
+  hasPreviousKey: boolean;
+}
+
+export interface SignatureSaveInput {
+  /** Base64 image data URL (data:image/...) */
+  signature: string;
+  jobId?: number;
+}
+
+export interface SignatureSaveResult {
+  success: boolean;
+  savedTo: string;
+  jobId?: number | null;
+  id?: string | null;
+}
+
+export type IntegrationStatusAuthType = typeof IntegrationStatusAuthType[keyof typeof IntegrationStatusAuthType];
+
+
+export const IntegrationStatusAuthType = {
+  oauth: 'oauth',
+  credentials: 'credentials',
+} as const;
+
+export interface IntegrationStatus {
+  key: string;
+  label: string;
+  section: string;
+  category: string;
+  description: string;
+  authType: IntegrationStatusAuthType;
+  connected: boolean;
+  enabled: boolean;
+  comingSoon: boolean;
+  connectedAt?: string | null;
+  oauthConfigured?: boolean;
+}
+
+/**
+ * Credential key/value pairs for non-OAuth integrations
+ */
+export type IntegrationConnectInputCredentials = {[key: string]: string};
+
+export interface IntegrationConnectInput {
+  /** Credential key/value pairs for non-OAuth integrations */
+  credentials?: IntegrationConnectInputCredentials;
+}
+
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+}
+
+export type InvoiceDiscountInputType = typeof InvoiceDiscountInputType[keyof typeof InvoiceDiscountInputType];
+
+
+export const InvoiceDiscountInputType = {
+  fixed: 'fixed',
+  percent: 'percent',
+} as const;
+
+export interface InvoiceDiscountInput {
+  type: InvoiceDiscountInputType;
+  value: number;
+}
+
+export interface InvoiceEvent {
+  type: string;
+  timestamp: string;
+  detail?: string | null;
+  method?: string | null;
+  idempotencyKey?: string | null;
+}
+
+export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
+
+
+export const InvoiceStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  partial: 'partial',
+  paid: 'paid',
+  overdue: 'overdue',
+  cancelled: 'cancelled',
+} as const;
+
+export interface Invoice {
+  id: number;
+  merchantId: number;
+  customerId?: number | null;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  amountPaid: number;
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountTotal?: number | null;
+  items: InvoiceLineItem[];
+  events: InvoiceEvent[];
+  notes?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  viewedAt?: string | null;
+  isRecurring: boolean;
+  recurringFrequency?: string | null;
+  recurringOccurrences?: number | null;
+  recurringStartDate?: string | null;
+  nextSendDate?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  customerCompany?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvoiceList {
+  items: Invoice[];
+  total: number;
+}
+
+export type InvoiceRecurringInputFrequency = typeof InvoiceRecurringInputFrequency[keyof typeof InvoiceRecurringInputFrequency];
+
+
+export const InvoiceRecurringInputFrequency = {
+  weekly: 'weekly',
+  fortnightly: 'fortnightly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  annually: 'annually',
+} as const;
+
+export interface InvoiceRecurringInput {
+  frequency: InvoiceRecurringInputFrequency;
+  startDate?: string | null;
+  occurrences?: number;
+}
+
+export interface InvoiceInput {
+  customerId?: number;
+  dueDate?: string;
+  notes?: string;
+  items?: InvoiceLineItem[];
+  discount?: InvoiceDiscountInput;
+  invoicePrefix?: string;
+  invoiceDigits?: number;
+  recurring?: InvoiceRecurringInput;
+}
+
+export interface InvoiceRecurringUpdate {
+  enabled: boolean;
+  frequency?: string;
+  startDate?: string | null;
+  occurrences?: number;
+}
+
+export type InvoiceUpdateStatus = typeof InvoiceUpdateStatus[keyof typeof InvoiceUpdateStatus];
+
+
+export const InvoiceUpdateStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  partial: 'partial',
+  paid: 'paid',
+  overdue: 'overdue',
+  cancelled: 'cancelled',
+} as const;
+
+export interface InvoiceUpdate {
+  status?: InvoiceUpdateStatus;
+  notes?: string;
+  dueDate?: string;
+  customerId?: number | null;
+  items?: InvoiceLineItem[];
+  discount?: InvoiceDiscountInput;
+  recurring?: InvoiceRecurringUpdate;
+}
+
+export interface GiftCardPaymentRef {
+  cardId: number;
+  amount: number;
+}
+
+export interface InvoicePaymentInput {
+  amount: number;
+  method?: string;
+  giftCardPayment?: GiftCardPaymentRef;
+  idempotencyKey?: string;
+}
+
+export interface InvoicePaymentResult {
+  ok: boolean;
+  invoice: Invoice;
+}
+
+export interface InvoiceEventInput {
+  type: string;
+  detail?: string;
+  method?: string;
+  idempotencyKey?: string;
+}
+
+export interface ProductTagItem {
+  name: string;
+  productCount: number;
+}
+
+export interface ProductTagList {
+  items: ProductTagItem[];
+  total: number;
+}
+
+export interface ProductTagRenameInput {
+  oldName: string;
+  newName: string;
+}
+
+export interface ProductTagMergeInput {
+  sourceTags: string[];
+  targetName: string;
+}
+
+export interface ProductTagDeleteInput {
+  name: string;
+}
+
+export interface ProductTagActionResult {
+  updated: number;
+}
+
+export type ProductVariantAttributes = {[key: string]: string};
+
+export interface ProductVariant {
+  id: number;
+  merchantId: number;
+  productId: number;
+  name: string;
+  sku?: string | null;
+  barcode?: string | null;
+  price?: number | null;
+  costPrice?: number | null;
+  stockQuantity: number;
+  attributes?: ProductVariantAttributes;
+  imageUrl?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export type ProductVariantInputAttributes = {[key: string]: string};
+
+export interface ProductVariantInput {
+  name: string;
+  sku?: string;
+  barcode?: string;
+  price?: number;
+  costPrice?: number;
+  stockQuantity?: number;
+  attributes?: ProductVariantInputAttributes;
+  imageUrl?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export type ProductVariantUpdateAttributes = {[key: string]: string};
+
+export interface ProductVariantUpdate {
+  name?: string;
+  sku?: string | null;
+  barcode?: string | null;
+  price?: number | null;
+  costPrice?: number | null;
+  stockQuantity?: number;
+  attributes?: ProductVariantUpdateAttributes;
+  imageUrl?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+/**
+ * Updated campaign record
+ */
+export type EmailCampaignSendResultCampaign = { [key: string]: unknown };
+
+export interface EmailCampaignSendResult {
+  success: boolean;
+  sentAt: string;
+  /** Updated campaign record */
+  campaign?: EmailCampaignSendResultCampaign;
+}
+
+export type XeroStatusMappings = { [key: string]: unknown };
+
+export type XeroStatusSyncSettings = { [key: string]: unknown };
+
+export interface XeroSyncLogEntry {
+  type: string;
+  timestamp: string;
+  synced?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface XeroStatus {
+  connected: boolean;
+  configured: boolean;
+  tenantId?: string | null;
+  tenantName?: string | null;
+  mappings?: XeroStatusMappings;
+  syncSettings?: XeroStatusSyncSettings;
+  syncLog?: XeroSyncLogEntry[];
+  connectedAt?: string | null;
+}
+
+export interface XeroTenant {
+  tenantId: string;
+  tenantName: string;
+  tenantType?: string;
+}
+
+export interface XeroTenantSelectInput {
+  tenantId: string;
+  tenantName: string;
+}
+
+export interface XeroAccount {
+  AccountID: string;
+  Name: string;
+  Code: string;
+  Type: string;
+  Description?: string;
+}
+
+export type XeroMappingsMappings = {[key: string]: string};
+
+export type XeroMappingsSyncSettings = { [key: string]: unknown };
+
+export interface XeroMappings {
+  mappings: XeroMappingsMappings;
+  syncSettings: XeroMappingsSyncSettings;
+}
+
+export type XeroMappingsUpdateMappings = {[key: string]: string};
+
+export type XeroMappingsUpdateSyncSettings = { [key: string]: unknown };
+
+export interface XeroMappingsUpdate {
+  mappings?: XeroMappingsUpdateMappings;
+  syncSettings?: XeroMappingsUpdateSyncSettings;
+}
+
+export interface XeroSyncResult {
+  ok: boolean;
+  synced: number;
+  message: string;
+}
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;
@@ -3934,4 +4340,22 @@ export type ListPcSavedBuilds200 = {
 export type SendReferralDigestNow400 = {
   error: string;
 };
+
+export type ListInvoicesParams = {
+status?: ListInvoicesStatus;
+limit?: number;
+offset?: number;
+};
+
+export type ListInvoicesStatus = typeof ListInvoicesStatus[keyof typeof ListInvoicesStatus];
+
+
+export const ListInvoicesStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  partial: 'partial',
+  paid: 'paid',
+  overdue: 'overdue',
+  cancelled: 'cancelled',
+} as const;
 

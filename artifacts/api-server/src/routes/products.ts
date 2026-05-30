@@ -20,6 +20,11 @@ import {
   CreateDigitalCodeParams,
   CreateDigitalCodeBody,
   DeleteDigitalCodeParams,
+  RenameProductTagBody,
+  MergeProductTagsBody,
+  DeleteProductTagBody,
+  CreateProductVariantBody,
+  UpdateProductVariantBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -240,8 +245,9 @@ router.get("/products/tags", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void> => {
-  const { oldName, newName } = req.body as { oldName?: string; newName?: string };
-  if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
+  const parsed = RenameProductTagBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { oldName, newName } = parsed.data;
   const merchantId = req.session.merchantId!;
 
   const result = await db.execute(sql`
@@ -260,8 +266,10 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
 });
 
 router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void> => {
-  const { sourceTags, targetName } = req.body as { sourceTags?: string[]; targetName?: string };
-  if (!sourceTags?.length || !targetName) { res.status(400).json({ error: "sourceTags and targetName are required" }); return; }
+  const parsed = MergeProductTagsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { sourceTags, targetName } = parsed.data;
+  if (!sourceTags.length) { res.status(400).json({ error: "sourceTags must not be empty" }); return; }
   const merchantId = req.session.merchantId!;
 
   const caseParts = sourceTags.map(t => sql`WHEN elem = ${t} THEN ${targetName}`);
@@ -289,8 +297,9 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
 });
 
 router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void> => {
-  const { name } = req.body as { name?: string };
-  if (!name) { res.status(400).json({ error: "name is required" }); return; }
+  const parsed = DeleteProductTagBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { name } = parsed.data;
   const merchantId = req.session.merchantId!;
 
   // COALESCE to '[]'::jsonb when removing the last tag (jsonb_agg on an empty set returns NULL).
@@ -646,18 +655,19 @@ router.post("/products/:productId/variants", requireAuth, async (req, res): Prom
   const [product] = await db.select().from(productsTable)
     .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
-  const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = req.body as Record<string, unknown>;
-  if (!name || typeof name !== "string") { res.status(400).json({ error: "name is required" }); return; }
+  const bodyParsed = CreateProductVariantBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = bodyParsed.data;
   const [variant] = await db.insert(productVariantsTable).values({
     merchantId: req.session.merchantId!, productId,
-    name, sku: sku as string ?? null, barcode: barcode as string ?? null,
+    name, sku: sku ?? null, barcode: barcode ?? null,
     price: price != null ? String(price) : null,
     costPrice: costPrice != null ? String(costPrice) : null,
-    stockQuantity: typeof stockQuantity === "number" ? stockQuantity : 0,
-    attributes: attributes as Record<string, string> ?? null,
-    imageUrl: imageUrl as string ?? null,
+    stockQuantity: stockQuantity ?? 0,
+    attributes: attributes ?? null,
+    imageUrl: imageUrl ?? null,
     isActive: isActive === false ? "false" : "true",
-    sortOrder: typeof sortOrder === "number" ? sortOrder : 0,
+    sortOrder: sortOrder ?? 0,
   }).returning();
   res.status(201).json(formatVariant(variant));
 });
@@ -666,18 +676,20 @@ router.patch("/products/:productId/variants/:id", requireAuth, async (req, res):
   const productId = parseInt(String(req.params.productId));
   const id = parseInt(String(req.params.id));
   if (isNaN(productId) || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = req.body as Record<string, unknown>;
+  const bodyParsed = UpdateProductVariantBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = bodyParsed.data;
   const update: Partial<typeof productVariantsTable.$inferInsert> = {};
-  if (name !== undefined) update.name = name as string;
-  if (sku !== undefined) update.sku = sku as string | null;
-  if (barcode !== undefined) update.barcode = barcode as string | null;
+  if (name !== undefined) update.name = name;
+  if (sku !== undefined) update.sku = sku ?? null;
+  if (barcode !== undefined) update.barcode = barcode ?? null;
   if (price !== undefined) update.price = price != null ? String(price) : null;
   if (costPrice !== undefined) update.costPrice = costPrice != null ? String(costPrice) : null;
-  if (stockQuantity !== undefined) update.stockQuantity = stockQuantity as number;
-  if (attributes !== undefined) update.attributes = attributes as Record<string, string> | null;
-  if (imageUrl !== undefined) update.imageUrl = imageUrl as string | null;
+  if (stockQuantity !== undefined) update.stockQuantity = stockQuantity;
+  if (attributes !== undefined) update.attributes = attributes ?? null;
+  if (imageUrl !== undefined) update.imageUrl = imageUrl ?? null;
   if (isActive !== undefined) update.isActive = isActive === false ? "false" : "true";
-  if (sortOrder !== undefined) update.sortOrder = sortOrder as number;
+  if (sortOrder !== undefined) update.sortOrder = sortOrder;
   const [updated] = await db.update(productVariantsTable).set(update)
     .where(and(eq(productVariantsTable.id, id), eq(productVariantsTable.merchantId, req.session.merchantId!)))
     .returning();

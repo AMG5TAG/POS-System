@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import { RecordInvoicePaymentBody, AddInvoiceEventBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -435,12 +436,12 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { amount, method, giftCardPayment, idempotencyKey: rawIdempotencyKey } = req.body as {
-    amount?: number;
-    method?: string;
-    giftCardPayment?: { cardId?: number; amount?: number };
-    idempotencyKey?: string;
-  };
+  const bodyParsed = RecordInvoicePaymentBody.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: bodyParsed.error.message });
+    return;
+  }
+  const { amount, method, giftCardPayment, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
@@ -869,8 +870,9 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
 router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
   const merchantId = req.session.merchantId!;
-  const { type, detail } = req.body as { type: string; detail?: string };
-  if (!type) { res.status(400).json({ error: "type is required" }); return; }
+  const bodyParsed = AddInvoiceEventBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { type, detail } = bodyParsed.data;
 
   const [existing] = await db
     .select({ events: invoicesTable.events })

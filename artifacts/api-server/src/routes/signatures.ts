@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/requireAuth";
 import { db, serviceJobsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { SaveSignatureBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -16,16 +17,20 @@ const router: IRouter = Router();
  *   { signature: string (data-url), jobId?: number }
  */
 router.post("/signatures/save", requireAuth, async (req, res): Promise<void> => {
-  const body = req.body as Record<string, unknown>;
+  const parsed = SaveSignatureBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { signature: signatureDataUrl, jobId: rawJobId } = parsed.data;
   const merchantId = req.session.merchantId!;
 
-  if (typeof body.signature !== "string" || !body.signature.startsWith("data:image/")) {
+  if (!signatureDataUrl.startsWith("data:image/")) {
     res.status(400).json({ error: "Invalid signature — must be a base64 image data URL" });
     return;
   }
 
-  const signatureDataUrl: string = body.signature;
-  const jobId = body.jobId != null ? Number(body.jobId) : null;
+  const jobId = rawJobId != null ? rawJobId : null;
 
   req.log.info(
     { merchantId, jobId, signatureBytes: signatureDataUrl.length },

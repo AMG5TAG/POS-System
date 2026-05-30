@@ -7857,3 +7857,799 @@ export const SetDefaultStickerTemplateResponseItem = zod.object({
 export const SetDefaultStickerTemplateResponse = zod.array(SetDefaultStickerTemplateResponseItem)
 
 
+/**
+ * @summary Change the authenticated merchant's password
+ */
+export const changePasswordBodyNewPasswordMin = 8;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string(),
+  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin)
+})
+
+export const ChangePasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Change the authenticated merchant's email address
+ */
+export const ChangeEmailBody = zod.object({
+  "currentPassword": zod.string(),
+  "newEmail": zod.string().email()
+})
+
+export const ChangeEmailResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Submit a bug report or feature request
+ */
+export const SubmitFeedbackBody = zod.object({
+  "type": zod.enum(['bug', 'feature']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "steps": zod.string().optional(),
+  "appVersion": zod.string().optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "data": zod.string().describe('Base64-encoded file content'),
+  "mimeType": zod.string()
+})).optional()
+})
+
+export const SubmitFeedbackResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Get encryption health of this merchant's OAuth token vault
+ */
+export const GetVaultStatusResponse = zod.object({
+  "total": zod.number(),
+  "current": zod.number(),
+  "pendingRotation": zod.number(),
+  "invalid": zod.number(),
+  "hasPreviousKey": zod.boolean()
+})
+
+
+/**
+ * @summary Save a base64 PNG signature, optionally associating it with a service job
+ */
+export const SaveSignatureBody = zod.object({
+  "signature": zod.string().describe('Base64 image data URL (data:image\/...)'),
+  "jobId": zod.number().optional()
+})
+
+export const SaveSignatureResponse = zod.object({
+  "success": zod.boolean(),
+  "savedTo": zod.string(),
+  "jobId": zod.number().nullish(),
+  "id": zod.string().nullish()
+})
+
+
+/**
+ * @summary List all integrations with their connection status for the current merchant
+ */
+export const ListIntegrationsResponseItem = zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "section": zod.string(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "authType": zod.enum(['oauth', 'credentials']),
+  "connected": zod.boolean(),
+  "enabled": zod.boolean(),
+  "comingSoon": zod.boolean(),
+  "connectedAt": zod.coerce.date().nullish(),
+  "oauthConfigured": zod.boolean().optional()
+})
+export const ListIntegrationsResponse = zod.array(ListIntegrationsResponseItem)
+
+
+/**
+ * @summary Disconnect an integration and remove stored credentials
+ */
+export const DisconnectIntegrationParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const DisconnectIntegrationResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Connect (or update credentials for) an integration
+ */
+export const ConnectIntegrationParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const ConnectIntegrationBody = zod.object({
+  "credentials": zod.record(zod.string(), zod.string()).optional().describe('Credential key\/value pairs for non-OAuth integrations')
+})
+
+export const ConnectIntegrationResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List invoices for the current merchant
+ */
+export const listInvoicesQueryLimitDefault = 50;
+export const listInvoicesQueryOffsetDefault = 0;
+
+export const ListInvoicesQueryParams = zod.object({
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']).optional(),
+  "limit": zod.coerce.number().default(listInvoicesQueryLimitDefault),
+  "offset": zod.coerce.number().default(listInvoicesQueryOffsetDefault)
+})
+
+export const ListInvoicesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create a new invoice
+ */
+export const CreateInvoiceBody = zod.object({
+  "customerId": zod.number().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "notes": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})).optional(),
+  "discount": zod.object({
+  "type": zod.enum(['fixed', 'percent']),
+  "value": zod.number()
+}).optional(),
+  "invoicePrefix": zod.string().optional(),
+  "invoiceDigits": zod.number().optional(),
+  "recurring": zod.object({
+  "frequency": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually']),
+  "startDate": zod.coerce.date().nullish(),
+  "occurrences": zod.number().optional()
+}).optional()
+})
+
+
+/**
+ * @summary Get a single invoice
+ */
+export const GetInvoiceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an invoice (status, items, notes, due date, recurring settings)
+ */
+export const UpdateInvoiceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateInvoiceBody = zod.object({
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']).optional(),
+  "notes": zod.string().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "customerId": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})).optional(),
+  "discount": zod.object({
+  "type": zod.enum(['fixed', 'percent']),
+  "value": zod.number()
+}).optional(),
+  "recurring": zod.object({
+  "enabled": zod.boolean(),
+  "frequency": zod.string().optional(),
+  "startDate": zod.string().nullish(),
+  "occurrences": zod.number().optional()
+}).optional()
+})
+
+export const UpdateInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an invoice
+ */
+export const DeleteInvoiceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Mark an invoice as viewed (records viewed timestamp and event)
+ */
+export const MarkInvoiceViewedParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkInvoiceViewedResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Record a payment against an invoice (partial or full)
+ */
+export const RecordInvoicePaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RecordInvoicePaymentBody = zod.object({
+  "amount": zod.number(),
+  "method": zod.string().optional(),
+  "giftCardPayment": zod.object({
+  "cardId": zod.number(),
+  "amount": zod.number()
+}).optional(),
+  "idempotencyKey": zod.string().optional()
+})
+
+export const RecordInvoicePaymentResponse = zod.object({
+  "ok": zod.boolean(),
+  "invoice": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "taxRate": zod.number()
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Send the invoice by email to the customer
+ */
+export const SendInvoiceEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendInvoiceEmailResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Append a custom event to an invoice's event log
+ */
+export const AddInvoiceEventParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddInvoiceEventBody = zod.object({
+  "type": zod.string(),
+  "detail": zod.string().optional(),
+  "method": zod.string().optional(),
+  "idempotencyKey": zod.string().optional()
+})
+
+export const AddInvoiceEventResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List all distinct product tags with product counts
+ */
+export const ListProductTagsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "productCount": zod.number()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Rename a tag across all products
+ */
+export const RenameProductTagBody = zod.object({
+  "oldName": zod.string(),
+  "newName": zod.string()
+})
+
+export const RenameProductTagResponse = zod.object({
+  "updated": zod.number()
+})
+
+
+/**
+ * @summary Merge multiple source tags into a single target tag across all products
+ */
+export const MergeProductTagsBody = zod.object({
+  "sourceTags": zod.array(zod.string()),
+  "targetName": zod.string()
+})
+
+export const MergeProductTagsResponse = zod.object({
+  "updated": zod.number()
+})
+
+
+/**
+ * @summary Remove a tag from all products
+ */
+export const DeleteProductTagBody = zod.object({
+  "name": zod.string()
+})
+
+export const DeleteProductTagResponse = zod.object({
+  "updated": zod.number()
+})
+
+
+/**
+ * @summary List variants for a product
+ */
+export const ListProductVariantsParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const ListProductVariantsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "costPrice": zod.number().nullish(),
+  "stockQuantity": zod.number(),
+  "attributes": zod.record(zod.string(), zod.string()).optional(),
+  "imageUrl": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListProductVariantsResponse = zod.array(ListProductVariantsResponseItem)
+
+
+/**
+ * @summary Create a variant for a product
+ */
+export const CreateProductVariantParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const CreateProductVariantBody = zod.object({
+  "name": zod.string(),
+  "sku": zod.string().optional(),
+  "barcode": zod.string().optional(),
+  "price": zod.number().optional(),
+  "costPrice": zod.number().optional(),
+  "stockQuantity": zod.number().optional(),
+  "attributes": zod.record(zod.string(), zod.string()).optional(),
+  "imageUrl": zod.string().optional(),
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Update a product variant
+ */
+export const UpdateProductVariantParams = zod.object({
+  "productId": zod.coerce.number(),
+  "id": zod.coerce.number()
+})
+
+export const UpdateProductVariantBody = zod.object({
+  "name": zod.string().optional(),
+  "sku": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "costPrice": zod.number().nullish(),
+  "stockQuantity": zod.number().optional(),
+  "attributes": zod.record(zod.string(), zod.string()).optional(),
+  "imageUrl": zod.string().nullish(),
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateProductVariantResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "costPrice": zod.number().nullish(),
+  "stockQuantity": zod.number(),
+  "attributes": zod.record(zod.string(), zod.string()).optional(),
+  "imageUrl": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a product variant
+ */
+export const DeleteProductVariantParams = zod.object({
+  "productId": zod.coerce.number(),
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Send an email campaign to all eligible customers
+ */
+export const SendEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendEmailCampaignResponse = zod.object({
+  "success": zod.boolean(),
+  "sentAt": zod.coerce.date(),
+  "campaign": zod.object({
+
+}).passthrough().optional().describe('Updated campaign record')
+})
+
+
+/**
+ * @summary Get the current Xero integration status and connection details
+ */
+export const GetXeroStatusResponse = zod.object({
+  "connected": zod.boolean(),
+  "configured": zod.boolean(),
+  "tenantId": zod.string().nullish(),
+  "tenantName": zod.string().nullish(),
+  "mappings": zod.object({
+
+}).passthrough().optional(),
+  "syncSettings": zod.object({
+
+}).passthrough().optional(),
+  "syncLog": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "synced": zod.number().optional(),
+  "message": zod.string().optional(),
+  "error": zod.string().optional()
+})).optional(),
+  "connectedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Disconnect the Xero integration and clear stored credentials
+ */
+export const DisconnectXeroResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List available Xero organisations for the connected account
+ */
+export const ListXeroTenantsResponseItem = zod.object({
+  "tenantId": zod.string(),
+  "tenantName": zod.string(),
+  "tenantType": zod.string().optional()
+})
+export const ListXeroTenantsResponse = zod.array(ListXeroTenantsResponseItem)
+
+
+/**
+ * @summary Select the active Xero organisation (tenant) to sync with
+ */
+export const SelectXeroTenantBody = zod.object({
+  "tenantId": zod.string(),
+  "tenantName": zod.string()
+})
+
+export const SelectXeroTenantResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List chart-of-accounts entries from the connected Xero tenant
+ */
+export const ListXeroAccountsResponseItem = zod.object({
+  "AccountID": zod.string(),
+  "Name": zod.string(),
+  "Code": zod.string(),
+  "Type": zod.string(),
+  "Description": zod.string().optional()
+})
+export const ListXeroAccountsResponse = zod.array(ListXeroAccountsResponseItem)
+
+
+/**
+ * @summary Get the current Xero account mappings and sync settings
+ */
+export const GetXeroMappingsResponse = zod.object({
+  "mappings": zod.record(zod.string(), zod.string()),
+  "syncSettings": zod.object({
+
+}).passthrough()
+})
+
+
+/**
+ * @summary Update Xero account mappings and sync settings
+ */
+export const UpdateXeroMappingsBody = zod.object({
+  "mappings": zod.record(zod.string(), zod.string()).optional(),
+  "syncSettings": zod.object({
+
+}).passthrough().optional()
+})
+
+export const UpdateXeroMappingsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Push customer records to Xero as contacts
+ */
+export const SyncXeroContactsResponse = zod.object({
+  "ok": zod.boolean(),
+  "synced": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Push recent sales transactions to Xero as invoices
+ */
+export const SyncXeroTransactionsResponse = zod.object({
+  "ok": zod.boolean(),
+  "synced": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Push purchase orders to Xero
+ */
+export const SyncXeroPurchaseOrdersResponse = zod.object({
+  "ok": zod.boolean(),
+  "synced": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Get the Xero sync history log
+ */
+export const GetXeroSyncLogResponseItem = zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "synced": zod.number().optional(),
+  "message": zod.string().optional(),
+  "error": zod.string().optional()
+})
+export const GetXeroSyncLogResponse = zod.array(GetXeroSyncLogResponseItem)
+
+

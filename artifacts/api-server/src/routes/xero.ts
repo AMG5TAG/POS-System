@@ -1,3 +1,4 @@
+import { SelectXeroTenantBody, UpdateXeroMappingsBody } from "@workspace/api-zod";
 import { Router } from "express";
 import {
   db,
@@ -324,8 +325,10 @@ router.get("/xero/tenants", requireAuth, async (req, res): Promise<void> => {
 /* ── POST /api/xero/tenant ───────────────────────────────────────────────── */
 
 router.post("/xero/tenant", requireAuth, async (req, res): Promise<void> => {
-  const merchantId              = req.session.merchantId!;
-  const { tenantId, tenantName } = req.body as { tenantId: string; tenantName: string };
+  const merchantId = req.session.merchantId!;
+  const parsed = SelectXeroTenantBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { tenantId, tenantName } = parsed.data;
 
   const creds = (await getCreds(merchantId)) ?? {};
   creds.tenantId   = tenantId;
@@ -369,14 +372,13 @@ router.get("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
 
 router.put("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { mappings, syncSettings } = req.body as {
-    mappings: XeroCredentials["mappings"];
-    syncSettings?: XeroCredentials["syncSettings"];
-  };
+  const parsed = UpdateXeroMappingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { mappings, syncSettings } = parsed.data;
 
   const creds = (await getCreds(merchantId)) ?? {};
   creds.mappings = mappings;
-  if (syncSettings) creds.syncSettings = syncSettings;
+  if (syncSettings) creds.syncSettings = syncSettings as XeroCredentials["syncSettings"];
   await saveCreds(merchantId, creds);
 
   res.json({ ok: true });

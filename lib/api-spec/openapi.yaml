@@ -92,6 +92,10 @@ tags:
     description: QR codes, email templates, campaigns, landing pages, and shortlinks
   - name: OnlineStore
     description: Online store, shipping carriers, marketplace connections, and delivery orders
+  - name: invoices
+    description: Invoice management and payment collection
+  - name: xero
+    description: Xero accounting integration
 
 paths:
   /healthz:
@@ -6101,6 +6105,753 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/StickerTemplate" }
 
+  # ── Auth (change credentials) ─────────────────────────────────────────────
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change the authenticated merchant's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Validation error
+        "401":
+          description: Current password incorrect
+
+  /auth/change-email:
+    post:
+      operationId: changeEmail
+      tags: [auth]
+      summary: Change the authenticated merchant's email address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeEmailInput"
+      responses:
+        "200":
+          description: Email changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Validation error
+        "401":
+          description: Current password incorrect
+        "409":
+          description: Email already in use
+
+  # ── Feedback ──────────────────────────────────────────────────────────────
+  /feedback:
+    post:
+      operationId: submitFeedback
+      tags: [auth]
+      summary: Submit a bug report or feature request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "200":
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Validation error
+
+  # ── Vault ─────────────────────────────────────────────────────────────────
+  /vault/status:
+    get:
+      operationId: getVaultStatus
+      tags: [auth]
+      summary: Get encryption health of this merchant's OAuth token vault
+      responses:
+        "200":
+          description: Vault status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultStatus"
+
+  # ── Signatures ────────────────────────────────────────────────────────────
+  /signatures/save:
+    post:
+      operationId: saveSignature
+      tags: [service-jobs]
+      summary: Save a base64 PNG signature, optionally associating it with a service job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignatureSaveInput"
+      responses:
+        "200":
+          description: Signature saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignatureSaveResult"
+        "400":
+          description: Invalid signature
+        "404":
+          description: Service job not found
+
+  # ── Integrations ──────────────────────────────────────────────────────────
+  /integrations:
+    get:
+      operationId: listIntegrations
+      tags: [Settings]
+      summary: List all integrations with their connection status for the current merchant
+      responses:
+        "200":
+          description: List of integrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntegrationStatus"
+
+  /integrations/{key}:
+    delete:
+      operationId: disconnectIntegration
+      tags: [Settings]
+      summary: Disconnect an integration and remove stored credentials
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Integration not found
+
+  /integrations/{key}/connect:
+    post:
+      operationId: connectIntegration
+      tags: [Settings]
+      summary: Connect (or update credentials for) an integration
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntegrationConnectInput"
+      responses:
+        "200":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Validation error
+
+  # ── Invoices ──────────────────────────────────────────────────────────────
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices for the current merchant
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, partial, paid, overdue, cancelled]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceList"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create a new invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get a single invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update an invoice (status, items, notes, due date, recurring settings)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceUpdate"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /invoices/{id}/viewed:
+    patch:
+      operationId: markInvoiceViewed
+      tags: [invoices]
+      summary: Mark an invoice as viewed (records viewed timestamp and event)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+
+  /invoices/{id}/payment:
+    post:
+      operationId: recordInvoicePayment
+      tags: [invoices]
+      summary: Record a payment against an invoice (partial or full)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoicePaymentInput"
+      responses:
+        "200":
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoicePaymentResult"
+        "400":
+          description: Validation error
+        "404":
+          description: Invoice not found
+
+  /invoices/{id}/send-email:
+    post:
+      operationId: sendInvoiceEmail
+      tags: [invoices]
+      summary: Send the invoice by email to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Invoice not found
+
+  /invoices/{id}/event:
+    post:
+      operationId: addInvoiceEvent
+      tags: [invoices]
+      summary: Append a custom event to an invoice's event log
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceEventInput"
+      responses:
+        "200":
+          description: Event appended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Invoice not found
+
+  # ── Product Tags ──────────────────────────────────────────────────────────
+  /products/tags:
+    get:
+      operationId: listProductTags
+      tags: [products]
+      summary: List all distinct product tags with product counts
+      responses:
+        "200":
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTagList"
+
+  /products/tags/rename:
+    post:
+      operationId: renameProductTag
+      tags: [products]
+      summary: Rename a tag across all products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTagRenameInput"
+      responses:
+        "200":
+          description: Rows updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTagActionResult"
+        "400":
+          description: Validation error
+
+  /products/tags/merge:
+    post:
+      operationId: mergeProductTags
+      tags: [products]
+      summary: Merge multiple source tags into a single target tag across all products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTagMergeInput"
+      responses:
+        "200":
+          description: Rows updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTagActionResult"
+        "400":
+          description: Validation error
+
+  /products/tags/delete:
+    post:
+      operationId: deleteProductTag
+      tags: [products]
+      summary: Remove a tag from all products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductTagDeleteInput"
+      responses:
+        "200":
+          description: Rows updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTagActionResult"
+        "400":
+          description: Validation error
+
+  # ── Product Variants ──────────────────────────────────────────────────────
+  /products/{productId}/variants:
+    get:
+      operationId: listProductVariants
+      tags: [products]
+      summary: List variants for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Variant list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductVariant"
+        "404":
+          description: Product not found
+    post:
+      operationId: createProductVariant
+      tags: [products]
+      summary: Create a variant for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductVariantInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductVariant"
+        "404":
+          description: Product not found
+
+  /products/{productId}/variants/{id}:
+    patch:
+      operationId: updateProductVariant
+      tags: [products]
+      summary: Update a product variant
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductVariantUpdate"
+      responses:
+        "200":
+          description: Updated variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductVariant"
+        "404":
+          description: Variant not found
+    delete:
+      operationId: deleteProductVariant
+      tags: [products]
+      summary: Delete a product variant
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Email Campaigns ───────────────────────────────────────────────────────
+  /email-campaigns/{id}/send:
+    post:
+      operationId: sendEmailCampaign
+      tags: [Marketing]
+      summary: Send an email campaign to all eligible customers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCampaignSendResult"
+        "404":
+          description: Campaign not found
+
+  # ── Xero ──────────────────────────────────────────────────────────────────
+  /xero/status:
+    get:
+      operationId: getXeroStatus
+      tags: [xero]
+      summary: Get the current Xero integration status and connection details
+      responses:
+        "200":
+          description: Xero connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroStatus"
+
+  /xero/disconnect:
+    delete:
+      operationId: disconnectXero
+      tags: [xero]
+      summary: Disconnect the Xero integration and clear stored credentials
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /xero/tenants:
+    get:
+      operationId: listXeroTenants
+      tags: [xero]
+      summary: List available Xero organisations for the connected account
+      responses:
+        "200":
+          description: Tenant list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/XeroTenant"
+        "401":
+          description: Not connected
+
+  /xero/tenant:
+    post:
+      operationId: selectXeroTenant
+      tags: [xero]
+      summary: Select the active Xero organisation (tenant) to sync with
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XeroTenantSelectInput"
+      responses:
+        "200":
+          description: Tenant selected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /xero/accounts:
+    get:
+      operationId: listXeroAccounts
+      tags: [xero]
+      summary: List chart-of-accounts entries from the connected Xero tenant
+      responses:
+        "200":
+          description: Xero accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/XeroAccount"
+        "401":
+          description: Not connected or no tenant selected
+
+  /xero/mappings:
+    get:
+      operationId: getXeroMappings
+      tags: [xero]
+      summary: Get the current Xero account mappings and sync settings
+      responses:
+        "200":
+          description: Xero mappings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroMappings"
+    put:
+      operationId: updateXeroMappings
+      tags: [xero]
+      summary: Update Xero account mappings and sync settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XeroMappingsUpdate"
+      responses:
+        "200":
+          description: Mappings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /xero/sync/contacts:
+    post:
+      operationId: syncXeroContacts
+      tags: [xero]
+      summary: Push customer records to Xero as contacts
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSyncResult"
+        "401":
+          description: Not connected
+
+  /xero/sync/transactions:
+    post:
+      operationId: syncXeroTransactions
+      tags: [xero]
+      summary: Push recent sales transactions to Xero as invoices
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSyncResult"
+        "401":
+          description: Not connected
+
+  /xero/sync/purchase-orders:
+    post:
+      operationId: syncXeroPurchaseOrders
+      tags: [xero]
+      summary: Push purchase orders to Xero
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSyncResult"
+        "401":
+          description: Not connected
+
+  /xero/sync/log:
+    get:
+      operationId: getXeroSyncLog
+      tags: [xero]
+      summary: Get the Xero sync history log
+      responses:
+        "200":
+          description: Sync log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/XeroSyncLogEntry"
+
 components:
   schemas:
     CsvImportResult:
@@ -10724,3 +11475,435 @@ components:
         state:    { type: string, description: "Opaque value passed in the start URL; carries the merchantId" }
         user:     { type: string, description: "JSON-encoded name object sent by Apple on the first authorization only" }
         error:    { type: string, description: "Set by Apple when the user cancels or an error occurs" }
+
+    # ── Auth / Credentials ───────────────────────────────────────────────────
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword:     { type: string, minLength: 8 }
+
+    ChangeEmailInput:
+      type: object
+      required: [currentPassword, newEmail]
+      properties:
+        currentPassword: { type: string }
+        newEmail:        { type: string, format: email }
+
+    FeedbackAttachment:
+      type: object
+      required: [name, data, mimeType]
+      properties:
+        name:     { type: string }
+        data:     { type: string, description: Base64-encoded file content }
+        mimeType: { type: string }
+
+    FeedbackInput:
+      type: object
+      required: [type, title, description]
+      properties:
+        type:        { type: string, enum: [bug, feature] }
+        title:       { type: string }
+        description: { type: string }
+        steps:       { type: string }
+        appVersion:  { type: string }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackAttachment"
+
+    OkResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    VaultStatus:
+      type: object
+      required: [total, current, pendingRotation, invalid, hasPreviousKey]
+      properties:
+        total:           { type: integer }
+        current:         { type: integer }
+        pendingRotation: { type: integer }
+        invalid:         { type: integer }
+        hasPreviousKey:  { type: boolean }
+
+    SignatureSaveInput:
+      type: object
+      required: [signature]
+      properties:
+        signature: { type: string, description: "Base64 image data URL (data:image/...)" }
+        jobId:     { type: integer }
+
+    SignatureSaveResult:
+      type: object
+      required: [success, savedTo]
+      properties:
+        success: { type: boolean }
+        savedTo: { type: string }
+        jobId:   { type: integer, nullable: true }
+        id:      { type: string, nullable: true }
+
+    # ── Integrations ─────────────────────────────────────────────────────────
+    IntegrationStatus:
+      type: object
+      required: [key, label, section, category, description, authType, connected, enabled, comingSoon]
+      properties:
+        key:             { type: string }
+        label:           { type: string }
+        section:         { type: string }
+        category:        { type: string }
+        description:     { type: string }
+        authType:        { type: string, enum: [oauth, credentials] }
+        connected:       { type: boolean }
+        enabled:         { type: boolean }
+        comingSoon:      { type: boolean }
+        connectedAt:     { type: string, format: date-time, nullable: true }
+        oauthConfigured: { type: boolean }
+
+    IntegrationConnectInput:
+      type: object
+      properties:
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+          description: Credential key/value pairs for non-OAuth integrations
+
+    # ── Invoices ─────────────────────────────────────────────────────────────
+    InvoiceLineItem:
+      type: object
+      required: [description, quantity, unitPrice, taxRate]
+      properties:
+        description: { type: string }
+        quantity:    { type: number }
+        unitPrice:   { type: number }
+        taxRate:     { type: number }
+
+    InvoiceDiscountInput:
+      type: object
+      required: [type, value]
+      properties:
+        type:  { type: string, enum: [fixed, percent] }
+        value: { type: number }
+
+    InvoiceEvent:
+      type: object
+      required: [type, timestamp]
+      properties:
+        type:           { type: string }
+        timestamp:      { type: string, format: date-time }
+        detail:         { type: string, nullable: true }
+        method:         { type: string, nullable: true }
+        idempotencyKey: { type: string, nullable: true }
+
+    Invoice:
+      type: object
+      required: [id, merchantId, invoiceNumber, status, subtotal, taxTotal, total, amountPaid, items, events, isRecurring, createdAt, updatedAt]
+      properties:
+        id:                   { type: integer }
+        merchantId:           { type: integer }
+        customerId:           { type: integer, nullable: true }
+        invoiceNumber:        { type: string }
+        status:               { type: string, enum: [draft, sent, partial, paid, overdue, cancelled] }
+        subtotal:             { type: number }
+        taxTotal:             { type: number }
+        total:                { type: number }
+        amountPaid:           { type: number }
+        discountType:         { type: string, nullable: true }
+        discountValue:        { type: number, nullable: true }
+        discountTotal:        { type: number, nullable: true }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceLineItem" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceEvent" }
+        notes:                { type: string, nullable: true }
+        dueDate:              { type: string, format: date-time, nullable: true }
+        paidAt:               { type: string, format: date-time, nullable: true }
+        viewedAt:             { type: string, format: date-time, nullable: true }
+        isRecurring:          { type: boolean }
+        recurringFrequency:   { type: string, nullable: true }
+        recurringOccurrences: { type: integer, nullable: true }
+        recurringStartDate:   { type: string, format: date-time, nullable: true }
+        nextSendDate:         { type: string, format: date-time, nullable: true }
+        customerName:         { type: string, nullable: true }
+        customerEmail:        { type: string, nullable: true }
+        customerPhone:        { type: string, nullable: true }
+        customerAddress:      { type: string, nullable: true }
+        customerCompany:      { type: string, nullable: true }
+        createdAt:            { type: string, format: date-time }
+        updatedAt:            { type: string, format: date-time }
+
+    InvoiceList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Invoice" }
+        total: { type: integer }
+
+    InvoiceRecurringInput:
+      type: object
+      required: [frequency]
+      properties:
+        frequency:   { type: string, enum: [weekly, fortnightly, monthly, quarterly, annually] }
+        startDate:   { type: string, format: date-time, nullable: true }
+        occurrences: { type: integer }
+
+    InvoiceInput:
+      type: object
+      properties:
+        customerId:    { type: integer }
+        dueDate:       { type: string, format: date-time }
+        notes:         { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceLineItem" }
+        discount:      { $ref: "#/components/schemas/InvoiceDiscountInput" }
+        invoicePrefix: { type: string }
+        invoiceDigits: { type: integer }
+        recurring:     { $ref: "#/components/schemas/InvoiceRecurringInput" }
+
+    InvoiceRecurringUpdate:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:     { type: boolean }
+        frequency:   { type: string }
+        startDate:   { type: string, nullable: true }
+        occurrences: { type: integer }
+
+    InvoiceUpdate:
+      type: object
+      properties:
+        status:    { type: string, enum: [draft, sent, partial, paid, overdue, cancelled] }
+        notes:     { type: string }
+        dueDate:   { type: string, format: date-time }
+        customerId:
+          type: integer
+          nullable: true
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceLineItem" }
+        discount:  { $ref: "#/components/schemas/InvoiceDiscountInput" }
+        recurring: { $ref: "#/components/schemas/InvoiceRecurringUpdate" }
+
+    GiftCardPaymentRef:
+      type: object
+      required: [cardId, amount]
+      properties:
+        cardId: { type: integer }
+        amount: { type: number }
+
+    InvoicePaymentInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:          { type: number }
+        method:          { type: string }
+        giftCardPayment: { $ref: "#/components/schemas/GiftCardPaymentRef" }
+        idempotencyKey:  { type: string }
+
+    InvoicePaymentResult:
+      type: object
+      required: [ok, invoice]
+      properties:
+        ok:      { type: boolean }
+        invoice: { $ref: "#/components/schemas/Invoice" }
+
+    InvoiceEventInput:
+      type: object
+      required: [type]
+      properties:
+        type:           { type: string }
+        detail:         { type: string }
+        method:         { type: string }
+        idempotencyKey: { type: string }
+
+    # ── Product Tags ──────────────────────────────────────────────────────────
+    ProductTagItem:
+      type: object
+      required: [name, productCount]
+      properties:
+        name:         { type: string }
+        productCount: { type: integer }
+
+    ProductTagList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProductTagItem" }
+        total: { type: integer }
+
+    ProductTagRenameInput:
+      type: object
+      required: [oldName, newName]
+      properties:
+        oldName: { type: string }
+        newName: { type: string }
+
+    ProductTagMergeInput:
+      type: object
+      required: [sourceTags, targetName]
+      properties:
+        sourceTags:
+          type: array
+          items: { type: string }
+        targetName: { type: string }
+
+    ProductTagDeleteInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+
+    ProductTagActionResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer }
+
+    # ── Product Variants ──────────────────────────────────────────────────────
+    ProductVariant:
+      type: object
+      required: [id, merchantId, productId, name, stockQuantity, isActive, sortOrder, createdAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        productId:     { type: integer }
+        name:          { type: string }
+        sku:           { type: string, nullable: true }
+        barcode:       { type: string, nullable: true }
+        price:         { type: number, nullable: true }
+        costPrice:     { type: number, nullable: true }
+        stockQuantity: { type: integer }
+        attributes:
+          type: object
+          additionalProperties: { type: string }
+        imageUrl:      { type: string, nullable: true }
+        isActive:      { type: boolean }
+        sortOrder:     { type: integer }
+        createdAt:     { type: string, format: date-time }
+
+    ProductVariantInput:
+      type: object
+      required: [name]
+      properties:
+        name:          { type: string }
+        sku:           { type: string }
+        barcode:       { type: string }
+        price:         { type: number }
+        costPrice:     { type: number }
+        stockQuantity: { type: integer }
+        attributes:
+          type: object
+          additionalProperties: { type: string }
+        imageUrl:      { type: string }
+        isActive:      { type: boolean }
+        sortOrder:     { type: integer }
+
+    ProductVariantUpdate:
+      type: object
+      properties:
+        name:          { type: string }
+        sku:           { type: string, nullable: true }
+        barcode:       { type: string, nullable: true }
+        price:         { type: number, nullable: true }
+        costPrice:     { type: number, nullable: true }
+        stockQuantity: { type: integer }
+        attributes:
+          type: object
+          additionalProperties: { type: string }
+        imageUrl:      { type: string, nullable: true }
+        isActive:      { type: boolean }
+        sortOrder:     { type: integer }
+
+    # ── Email Campaigns ───────────────────────────────────────────────────────
+    EmailCampaignSendResult:
+      type: object
+      required: [success, sentAt]
+      properties:
+        success:  { type: boolean }
+        sentAt:   { type: string, format: date-time }
+        campaign: { type: object, description: Updated campaign record }
+
+    # ── Xero ──────────────────────────────────────────────────────────────────
+    XeroStatus:
+      type: object
+      required: [connected, configured]
+      properties:
+        connected:    { type: boolean }
+        configured:   { type: boolean }
+        tenantId:     { type: string, nullable: true }
+        tenantName:   { type: string, nullable: true }
+        mappings:     { type: object }
+        syncSettings: { type: object }
+        syncLog:
+          type: array
+          items: { $ref: "#/components/schemas/XeroSyncLogEntry" }
+        connectedAt:  { type: string, format: date-time, nullable: true }
+
+    XeroTenant:
+      type: object
+      required: [tenantId, tenantName]
+      properties:
+        tenantId:   { type: string }
+        tenantName: { type: string }
+        tenantType: { type: string }
+
+    XeroTenantSelectInput:
+      type: object
+      required: [tenantId, tenantName]
+      properties:
+        tenantId:   { type: string }
+        tenantName: { type: string }
+
+    XeroAccount:
+      type: object
+      required: [AccountID, Name, Code, Type]
+      properties:
+        AccountID:   { type: string }
+        Name:        { type: string }
+        Code:        { type: string }
+        Type:        { type: string }
+        Description: { type: string }
+
+    XeroMappings:
+      type: object
+      required: [mappings, syncSettings]
+      properties:
+        mappings:
+          type: object
+          additionalProperties: { type: string }
+        syncSettings: { type: object }
+
+    XeroMappingsUpdate:
+      type: object
+      properties:
+        mappings:
+          type: object
+          additionalProperties: { type: string }
+        syncSettings: { type: object }
+
+    XeroSyncResult:
+      type: object
+      required: [ok, synced, message]
+      properties:
+        ok:      { type: boolean }
+        synced:  { type: integer }
+        message: { type: string }
+
+    XeroSyncLogEntry:
+      type: object
+      required: [type, timestamp]
+      properties:
+        type:      { type: string }
+        timestamp: { type: string, format: date-time }
+        synced:    { type: integer }
+        message:   { type: string }
+        error:     { type: string }

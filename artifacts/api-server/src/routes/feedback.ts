@@ -1,14 +1,19 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { SubmitFeedbackBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
-
-interface Attachment { name: string; data: string; mimeType: string; }
 
 router.post("/feedback", requireAuth, async (req, res) => {
   const merchantId = (req.session as { merchantId?: number }).merchantId!;
   const userEmail  = (req.session as { email?: string }).email ?? "unknown";
+
+  const parsed = SubmitFeedbackBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
 
   const {
     type,
@@ -17,19 +22,7 @@ router.post("/feedback", requireAuth, async (req, res) => {
     steps,
     appVersion,
     attachments,
-  }: {
-    type: string;
-    title: string;
-    description: string;
-    steps?: string;
-    appVersion?: string;
-    attachments?: Attachment[];
-  } = req.body;
-
-  if (!type || !title || !description) {
-    res.status(400).json({ error: "type, title, and description are required" });
-    return;
-  }
+  } = parsed.data;
 
   const timestamp = new Date().toLocaleString("en-AU", { timeZone: "Australia/Sydney" });
   const typeLabel = type === "bug" ? "🐛 Bug Report" : "✨ Feature Request";

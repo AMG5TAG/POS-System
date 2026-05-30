@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
-import { RegisterBody, LoginBody } from "@workspace/api-zod";
+import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const DEFAULT_PRODUCT_TYPES: Array<{ name: string; slug: string; sortOrder: number }> = [
@@ -137,15 +137,12 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 });
 
 router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {
-  const { currentPassword, newPassword } = req.body as Record<string, unknown>;
-  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
-    res.status(400).json({ error: "currentPassword and newPassword are required" });
+  const parsed = ChangePasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters" });
-    return;
-  }
+  const { currentPassword, newPassword } = parsed.data;
   const merchantId = req.session.merchantId!;
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   if (!merchant || !(await verifyPassword(currentPassword, merchant.passwordHash))) {
@@ -159,17 +156,13 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
 
 
 router.post("/auth/change-email", requireAuth, async (req, res): Promise<void> => {
-  const { currentPassword, newEmail } = req.body as Record<string, unknown>;
-  if (typeof currentPassword !== "string" || typeof newEmail !== "string") {
-    res.status(400).json({ error: "currentPassword and newEmail are required" });
+  const parsed = ChangeEmailBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const trimmedEmail = newEmail.trim().toLowerCase();
-  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRe.test(trimmedEmail)) {
-    res.status(400).json({ error: "Invalid email address" });
-    return;
-  }
+  const { currentPassword, newEmail: rawEmail } = parsed.data;
+  const trimmedEmail = rawEmail.trim().toLowerCase();
   const merchantId = req.session.merchantId!;
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   if (!merchant || !(await verifyPassword(currentPassword, merchant.passwordHash))) {
