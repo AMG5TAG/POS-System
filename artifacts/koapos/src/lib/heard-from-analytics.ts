@@ -7,21 +7,39 @@ export const HEARD_FROM_PERIODS: { value: HeardFromPeriod; label: string }[] = [
   { value: "12m", label: "Last 12 months" },
 ];
 
+/** Whether the breakdown is sized by customer count or by revenue (total spent). */
+export type HeardFromMetric = "customers" | "revenue";
+
+export const HEARD_FROM_METRICS: { value: HeardFromMetric; label: string }[] = [
+  { value: "customers", label: "By customers" },
+  { value: "revenue", label: "By revenue" },
+];
+
 export type HeardFromCustomer = {
   heardFrom?: string | null;
   createdAt: string;
+  totalSpent?: number | string | null;
 };
 
 export type HeardFromSlice = {
   name: string;
+  /** Metric-selected value that drives the pie/legend size (count or revenue). */
   value: number;
+  /** Number of customers from this source within the window. */
+  customers: number;
+  /** Total spent (lifetime) by customers from this source within the window. */
+  revenue: number;
+  /** Average spend per customer (revenue / customers; 0 when no customers). */
+  avgSpend: number;
   fill: string;
 };
 
 export type HeardFromComparison = {
   name: string;
   fill: string;
+  /** Metric-selected current value (count or revenue). */
   current: number;
+  /** Metric-selected previous value (count or revenue). */
   previous: number;
   delta: number;
 };
@@ -42,16 +60,20 @@ export type HeardFromHighlight = {
 };
 
 export type HeardFromAnalytics = {
+  /** Which metric the value-bearing fields below are expressed in. */
+  metric: HeardFromMetric;
   /** Distribution within the selected window (drives the pie + legend). */
   breakdown: HeardFromSlice[];
   /** Per-source current vs previous equal-length period (null for "all time"). */
   comparison: HeardFromComparison[] | null;
-  /** Stacked-bar trend data across time buckets. */
+  /** Stacked-bar trend data across time buckets (values in the selected metric). */
   trend: { data: HeardFromTrendPoint[]; sources: string[] };
   /** Stable colour per source, keyed by source name. */
   colorMap: Record<string, string>;
   /** Number of customers counted within the selected window. */
   windowTotal: number;
+  /** Total revenue (total spent) counted within the selected window. */
+  windowRevenue: number;
   /** Plain-language callouts for the biggest gainer/decliner (empty for "all time"). */
   highlights: HeardFromHighlight[];
 };
@@ -67,6 +89,11 @@ const DAY_MS = 86_400_000;
 
 function sourceName(c: HeardFromCustomer): string {
   return (c.heardFrom ?? "").trim() || NOT_RECORDED;
+}
+
+function spendOf(c: HeardFromCustomer): number {
+  const n = typeof c.totalSpent === "string" ? parseFloat(c.totalSpent) : c.totalSpent ?? 0;
+  return Number.isFinite(n) ? (n as number) : 0;
 }
 
 function windowDaysFor(period: HeardFromPeriod): number | null {
@@ -130,15 +157,18 @@ function buildBuckets(period: HeardFromPeriod, earliest: number, now: number): B
 export function computeHeardFromAnalytics(
   customers: HeardFromCustomer[],
   period: HeardFromPeriod,
+  metric: HeardFromMetric = "customers",
 ): HeardFromAnalytics {
   // Parse once; drop records with unparseable dates from time-based views.
   const parsed = customers.map((c) => ({
     source: sourceName(c),
     ts: new Date(c.createdAt).getTime(),
+    spend: spendOf(c),
   }));
   const dated = parsed.filter((c) => !Number.isNaN(c.ts));
 
-  // Stable colour per source, ordered by all-time frequency.
+  // Stable colour per source, ordered by all-time frequency (count, not revenue,
+  // so a source keeps its colour regardless of the active metric).
   const allCounts = new Map<string, number>();
   for (const c of parsed) allCounts.set(c.source, (allCounts.get(c.source) ?? 0) + 1);
   const orderedSources = [...allCounts.entries()]
@@ -156,35 +186,61 @@ export function computeHeardFromAnalytics(
   const prevStart = windowDays === null ? -Infinity : now - 2 * windowDays * DAY_MS;
   const prevEnd = curStart;
 
-  // For "all time" we still want the breakdown to count records with no date.
-  const curCounts = new Map<string, number>();
-  const prevCounts = new Map<string, number>();
+  // Per-source counts AND revenue, for the current and previous windows.
+  const curCount = new Map<string, number>();
+  const curRevenue = new Map<string, number>();
+  const prevCount = new Map<string, number>();
+  const prevRevenue = new Map<string, number>();
+
+  const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+
   if (windowDays === null) {
-    for (const c of parsed) curCounts.set(c.source, (curCounts.get(c.source) ?? 0) + 1);
+    // For "all time" we still want the breakdown to count records with no date.
+    for (const c of parsed) {
+      add(curCount, c.source, 1);
+      add(curRevenue, c.source, c.spend);
+    }
   } else {
     for (const c of dated) {
       if (c.ts >= curStart) {
-        curCounts.set(c.source, (curCounts.get(c.source) ?? 0) + 1);
+        add(curCount, c.source, 1);
+        add(curRevenue, c.source, c.spend);
       } else if (c.ts >= prevStart && c.ts < prevEnd) {
-        prevCounts.set(c.source, (prevCounts.get(c.source) ?? 0) + 1);
+        add(prevCount, c.source, 1);
+        add(prevRevenue, c.source, c.spend);
       }
     }
   }
 
-  const breakdown: HeardFromSlice[] = [...curCounts.entries()]
-    .map(([name, value]) => ({ name, value, fill: colorMap[name] ?? NOT_RECORDED_COLOR }))
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const metricValue = (count: number, revenue: number) => (metric === "revenue" ? revenue : count);
+
+  const breakdown: HeardFromSlice[] = [...curCount.keys()]
+    .map((name) => {
+      const customersN = curCount.get(name) ?? 0;
+      const revenue = round2(curRevenue.get(name) ?? 0);
+      return {
+        name,
+        customers: customersN,
+        revenue,
+        avgSpend: customersN ? round2(revenue / customersN) : 0,
+        value: metric === "revenue" ? revenue : customersN,
+        fill: colorMap[name] ?? NOT_RECORDED_COLOR,
+      };
+    })
     .sort((a, b) => b.value - a.value);
 
-  const windowTotal = breakdown.reduce((sum, s) => sum + s.value, 0);
+  const windowTotal = breakdown.reduce((sum, s) => sum + s.customers, 0);
+  const windowRevenue = round2(breakdown.reduce((sum, s) => sum + s.revenue, 0));
 
   let comparison: HeardFromComparison[] | null = null;
   if (windowDays !== null) {
-    const names = new Set<string>([...curCounts.keys(), ...prevCounts.keys()]);
+    const names = new Set<string>([...curCount.keys(), ...prevCount.keys()]);
     comparison = [...names]
       .map((name) => {
-        const current = curCounts.get(name) ?? 0;
-        const previous = prevCounts.get(name) ?? 0;
-        return { name, current, previous, delta: current - previous, fill: colorMap[name] ?? NOT_RECORDED_COLOR };
+        const current = round2(metricValue(curCount.get(name) ?? 0, curRevenue.get(name) ?? 0));
+        const previous = round2(metricValue(prevCount.get(name) ?? 0, prevRevenue.get(name) ?? 0));
+        return { name, current, previous, delta: round2(current - previous), fill: colorMap[name] ?? NOT_RECORDED_COLOR };
       })
       .sort((a, b) => b.current - a.current || b.delta - a.delta);
   }
@@ -194,11 +250,12 @@ export function computeHeardFromAnalytics(
   const buckets = buildBuckets(period, earliest, now);
 
   // Which sources appear within the charted buckets (cap to keep the chart readable).
+  // Ranked by the active metric so the most relevant channels are charted.
   const windowStart = buckets.length ? buckets[0].start : -Infinity;
   const inWindow = dated.filter((c) => c.ts >= windowStart);
-  const windowSourceCounts = new Map<string, number>();
-  for (const c of inWindow) windowSourceCounts.set(c.source, (windowSourceCounts.get(c.source) ?? 0) + 1);
-  const trendSources = [...windowSourceCounts.entries()]
+  const windowSourceValue = new Map<string, number>();
+  for (const c of inWindow) add(windowSourceValue, c.source, metric === "revenue" ? c.spend : 1);
+  const trendSources = [...windowSourceValue.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([name]) => name);
@@ -213,16 +270,24 @@ export function computeHeardFromAnalytics(
     if (!trendSourceSet.has(c.source)) continue;
     const idx = buckets.findIndex((b) => c.ts >= b.start && c.ts < b.end);
     if (idx >= 0) {
-      trendData[idx][c.source] = (trendData[idx][c.source] as number) + 1;
+      const inc = metric === "revenue" ? c.spend : 1;
+      trendData[idx][c.source] = (trendData[idx][c.source] as number) + inc;
+    }
+  }
+  if (metric === "revenue") {
+    for (const point of trendData) {
+      for (const s of trendSources) point[s] = round2(point[s] as number);
     }
   }
 
   return {
+    metric,
     breakdown,
     comparison,
     trend: { data: trendData, sources: trendSources },
     colorMap,
     windowTotal,
+    windowRevenue,
     highlights: computeHighlights(comparison),
   };
 }

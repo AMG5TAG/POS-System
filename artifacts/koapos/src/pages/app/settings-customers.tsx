@@ -10,7 +10,9 @@ import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields, t
 import {
   computeHeardFromAnalytics,
   HEARD_FROM_PERIODS,
+  HEARD_FROM_METRICS,
   type HeardFromPeriod,
+  type HeardFromMetric,
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
 import { exportHeardFromCSV, exportHeardFromXLSX } from "@/lib/heard-from-export";
@@ -116,12 +118,16 @@ export default function SettingsCustomersPage() {
 
   // ── Heard From breakdown (referral source, with time-window trends) ────────
   const [heardFromPeriod, setHeardFromPeriod] = useState<HeardFromPeriod>("all");
+  const [heardFromMetric, setHeardFromMetric] = useState<HeardFromMetric>("customers");
 
   const heardFromData = useMemo(
-    () => computeHeardFromAnalytics(customers as HeardFromCustomer[], heardFromPeriod),
-    [customers, heardFromPeriod],
+    () => computeHeardFromAnalytics(customers as HeardFromCustomer[], heardFromPeriod, heardFromMetric),
+    [customers, heardFromPeriod, heardFromMetric],
   );
   const heardFromBreakdown = heardFromData.breakdown;
+  const heardFromIsRevenue = heardFromMetric === "revenue";
+  const fmtMoney = (n: number) =>
+    n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: n % 1 === 0 ? 0 : 2 });
 
   const openAdd = () => {
     setEditingGroup(null);
@@ -559,9 +565,13 @@ export default function SettingsCustomersPage() {
                 Heard From Breakdown
               </CardTitle>
               <CardDescription>
-                {heardFromPeriod === "all"
-                  ? `Which referral channels bring in the most customers, based on ${total} customer${total !== 1 ? "s" : ""}.`
-                  : `${heardFromData.windowTotal} new customer${heardFromData.windowTotal !== 1 ? "s" : ""} in this window — see which channels are growing or fading.`}
+                {heardFromIsRevenue
+                  ? heardFromPeriod === "all"
+                    ? `Which referral channels drive the most revenue — ${fmtMoney(heardFromData.windowRevenue)} from ${total} customer${total !== 1 ? "s" : ""}.`
+                    : `${fmtMoney(heardFromData.windowRevenue)} from ${heardFromData.windowTotal} new customer${heardFromData.windowTotal !== 1 ? "s" : ""} in this window — see which channels actually pay off.`
+                  : heardFromPeriod === "all"
+                    ? `Which referral channels bring in the most customers, based on ${total} customer${total !== 1 ? "s" : ""}.`
+                    : `${heardFromData.windowTotal} new customer${heardFromData.windowTotal !== 1 ? "s" : ""} in this window — see which channels are growing or fading.`}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -591,6 +601,22 @@ export default function SettingsCustomersPage() {
                 <FileSpreadsheet className="w-4 h-4" />
                 Export XLSX
               </Button>
+              <div className="inline-flex rounded-md border p-0.5 bg-muted/40 shrink-0">
+                {HEARD_FROM_METRICS.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setHeardFromMetric(m.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      heardFromMetric === m.value
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
               <Select value={heardFromPeriod} onValueChange={(v) => setHeardFromPeriod(v as HeardFromPeriod)}>
                 <SelectTrigger className="w-[150px] shrink-0">
                   <SelectValue />
@@ -640,7 +666,7 @@ export default function SettingsCustomersPage() {
                             background: "hsl(var(--card))",
                           }}
                           formatter={(v: number, n) => [
-                            `${v} customer${v !== 1 ? "s" : ""}`,
+                            heardFromIsRevenue ? fmtMoney(v) : `${v} customer${v !== 1 ? "s" : ""}`,
                             n,
                           ]}
                         />
@@ -649,9 +675,11 @@ export default function SettingsCustomersPage() {
                   </div>
                   <div className="space-y-1.5">
                     {heardFromBreakdown.map((s) => {
-                      const denom = heardFromData.windowTotal || 1;
+                      const denom = (heardFromIsRevenue ? heardFromData.windowRevenue : heardFromData.windowTotal) || 1;
                       const pct = Math.round((s.value / denom) * 100);
                       const cmp = heardFromData.comparison?.find((c) => c.name === s.name);
+                      const fmtDelta = (n: number) =>
+                        heardFromIsRevenue ? fmtMoney(Math.abs(n)) : Math.abs(n);
                       return (
                         <div
                           key={s.name}
@@ -661,20 +689,27 @@ export default function SettingsCustomersPage() {
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: s.fill }}
                           />
-                          <span className="flex-1 text-sm font-medium">{s.name}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium block truncate">{s.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {heardFromIsRevenue
+                                ? `${s.customers} customer${s.customers !== 1 ? "s" : ""} · ${fmtMoney(s.avgSpend)} avg`
+                                : `${fmtMoney(s.revenue)} · ${fmtMoney(s.avgSpend)} avg`}
+                            </span>
+                          </div>
                           {cmp && cmp.delta !== 0 && (
                             <span
                               className={`flex items-center gap-0.5 text-xs font-semibold tabular-nums ${
                                 cmp.delta > 0 ? "text-emerald-600" : "text-red-500"
                               }`}
-                              title={`${cmp.previous} in the previous period`}
+                              title={`${heardFromIsRevenue ? fmtMoney(cmp.previous) : cmp.previous} in the previous period`}
                             >
                               {cmp.delta > 0 ? (
                                 <TrendingUp className="w-3 h-3" />
                               ) : (
                                 <TrendingDown className="w-3 h-3" />
                               )}
-                              {cmp.delta > 0 ? "+" : ""}{cmp.delta}
+                              {cmp.delta > 0 ? "+" : "-"}{fmtDelta(cmp.delta)}
                             </span>
                           )}
                           {cmp && cmp.delta === 0 && cmp.previous > 0 && (
@@ -682,7 +717,9 @@ export default function SettingsCustomersPage() {
                               <Minus className="w-3 h-3" />
                             </span>
                           )}
-                          <span className="text-sm font-bold tabular-nums">{s.value}</span>
+                          <span className="text-sm font-bold tabular-nums">
+                            {heardFromIsRevenue ? fmtMoney(s.value) : s.value}
+                          </span>
                           <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">
                             {pct}%
                           </span>
@@ -707,6 +744,9 @@ export default function SettingsCustomersPage() {
                     <ul className="space-y-1.5">
                       {heardFromData.highlights.map((h) => {
                         const pct = h.pctChange === null ? null : Math.abs(h.pctChange);
+                        const cur = heardFromIsRevenue ? fmtMoney(h.current) : h.current;
+                        const prev = heardFromIsRevenue ? fmtMoney(h.previous) : h.previous;
+                        const absDelta = heardFromIsRevenue ? fmtMoney(Math.abs(h.delta)) : Math.abs(h.delta);
                         return (
                           <li key={h.kind} className="flex items-start gap-2 text-sm">
                             {h.kind === "gainer" ? (
@@ -718,16 +758,18 @@ export default function SettingsCustomersPage() {
                               <span className="font-semibold text-foreground">{h.name}</span>{" "}
                               {h.kind === "gainer" ? (
                                 pct !== null ? (
-                                  <>is your fastest-growing channel, up {pct}% ({h.previous} → {h.current}) vs the previous period.</>
+                                  <>is your fastest-growing channel, up {pct}% ({prev} → {cur}) vs the previous period.</>
+                                ) : heardFromIsRevenue ? (
+                                  <>is your fastest-growing channel, bringing in {cur} this period (none previously).</>
                                 ) : (
                                   <>is your fastest-growing channel, with {h.current} new customer{h.current !== 1 ? "s" : ""} this period (none previously).</>
                                 )
                               ) : h.current === 0 ? (
-                                <>has dropped to zero, down from {h.previous} in the previous period.</>
+                                <>has dropped to zero, down from {prev} in the previous period.</>
                               ) : pct !== null ? (
-                                <>is down {pct}% ({h.previous} → {h.current}) vs the previous period.</>
+                                <>is down {pct}% ({prev} → {cur}) vs the previous period.</>
                               ) : (
-                                <>is down {Math.abs(h.delta)} vs the previous period.</>
+                                <>is down {absDelta} vs the previous period.</>
                               )}
                             </span>
                           </li>
@@ -742,14 +784,23 @@ export default function SettingsCustomersPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
-                      <p className="text-sm font-medium">New customers over time</p>
+                      <p className="text-sm font-medium">
+                        {heardFromIsRevenue ? "Revenue over time" : "New customers over time"}
+                      </p>
                     </div>
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={heardFromData.trend.data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                           <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+                          <YAxis
+                            allowDecimals={false}
+                            tick={{ fontSize: 11 }}
+                            tickLine={false}
+                            axisLine={false}
+                            width={heardFromIsRevenue ? 52 : 32}
+                            tickFormatter={heardFromIsRevenue ? (v: number) => fmtMoney(v) : undefined}
+                          />
                           <Tooltip
                             contentStyle={{
                               borderRadius: 8,
@@ -757,6 +808,7 @@ export default function SettingsCustomersPage() {
                               border: "1px solid hsl(var(--border))",
                               background: "hsl(var(--card))",
                             }}
+                            formatter={heardFromIsRevenue ? (v: number, n) => [fmtMoney(v), n] : undefined}
                           />
                           <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
                           {heardFromData.trend.sources.map((src) => (
