@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useSalesTemplate } from "@/lib/use-sales-template";
+import { useDocumentTemplate } from "@/lib/use-document-template";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
@@ -15,7 +16,7 @@ import {
   useGetMerchant, useListPosRegisters, useListProductTypes,
   useCreateGiftCard, useValidateGiftCard,
   Product, Customer, Staff, ServiceJob, Appointment,
-  TransactionInputPaymentMethod, Transaction,
+  TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -116,6 +117,7 @@ export default function POSPage() {
 
   /* active print template */
   const { opts: thermalOpts, fontCss: thermalFontCss } = useSalesTemplate("Thermal_Receipt");
+  const { printA4Receipt } = useDocumentTemplate();
 
   /* parked sales — API-backed */
   const queryClient = useQueryClient();
@@ -145,7 +147,7 @@ export default function POSPage() {
 
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
-  const [completedTx, setCompletedTx] = useState<Pick<Transaction, "id" | "receiptNumber"> | null>(null);
+  const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
   const [completedTotal, setCompletedTotal] = useState(0);
   const [completedCart, setCompletedCart] = useState<CartItem[]>([]);
   const [completedPaymentMethod, setCompletedPaymentMethod] = useState<string>("card");
@@ -156,7 +158,7 @@ export default function POSPage() {
   const [completedLoyaltyUnit, setCompletedLoyaltyUnit] = useState("");
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
-  const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms">("idle");
+  const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms" | "print">("idle");
 
   /* customer */
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -1389,7 +1391,21 @@ export default function POSPage() {
               : null,
           );
           setCompletedLoyaltyAmount(0);
-          setCompletedTx({ id: inv.invoiceId, receiptNumber: inv.invoiceNumber });
+          setCompletedTx({
+            id: inv.invoiceId,
+            merchantId: merchantData?.id ?? 0,
+            receiptNumber: inv.invoiceNumber,
+            status: "completed" as TransactionStatus,
+            subtotal: amount,
+            taxTotal: 0,
+            total: amount,
+            paymentMethod: (paymentMethod as TransactionPaymentMethod) ?? "other",
+            items: [{ productId: inv.invoiceId, productName: `Invoice ${inv.invoiceNumber} Payment`, quantity: 1, unitPrice: amount, totalPrice: amount }],
+            createdAt: new Date().toISOString(),
+            customer: inv.customerId != null
+              ? { id: inv.customerId, merchantId: merchantData?.id ?? 0, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer
+              : undefined,
+          } as Transaction);
           setCompletedTotal(amount);
           setReceiptEmail("");
           setReceiptPhone("");
@@ -1505,7 +1521,7 @@ export default function POSPage() {
         setCompletedLoyaltyAmount(sendLoyaltyEarned ? loyaltyAmount : 0);
         setCompletedLoyaltyUnit(loyaltyUnit);
         clearCart();
-        setCompletedTx({ id: data.id, receiptNumber: data.receiptNumber });
+        setCompletedTx(data);
         setCompletedTotal(saleTotal);
         setReceiptEmail(selectedCustomer?.email ?? "");
         setReceiptPhone(selectedCustomer?.phone ?? "");
@@ -2685,7 +2701,11 @@ export default function POSPage() {
           {receiptMode === "idle" && (
             <div className="space-y-2 py-1">
               <p className="text-xs font-medium text-center text-muted-foreground mb-3">How would you like to send the receipt?</p>
-              <Button variant="outline" className="w-full justify-start gap-3 h-11" onClick={printPosReceipt}>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-11"
+                onClick={() => { setReceiptMode("print"); }}
+              >
                 <Printer className="w-4 h-4" /> Print Receipt
               </Button>
               <Button
@@ -2702,6 +2722,35 @@ export default function POSPage() {
               >
                 <MessageSquare className="w-4 h-4" /> SMS Receipt
               </Button>
+            </div>
+          )}
+
+          {receiptMode === "print" && (
+            <div className="space-y-3 py-1">
+              <p className="text-xs font-medium text-center text-muted-foreground mb-3">Choose a print format</p>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-11"
+                onClick={() => {
+                  printPosReceipt();
+                }}
+              >
+                <Printer className="w-4 h-4" /> Thermal Receipt (80mm)
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 h-11"
+                onClick={() => {
+                  if (completedTx) {
+                    printA4Receipt(completedTx);
+                  }
+                }}
+              >
+                <FileText className="w-4 h-4" /> A4 Receipt
+              </Button>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setReceiptMode("idle")}>Back</Button>
+              </div>
             </div>
           )}
 
