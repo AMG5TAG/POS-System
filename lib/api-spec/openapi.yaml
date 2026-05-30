@@ -369,6 +369,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/Product"
 
+  /products/bulk:
+    patch:
+      operationId: bulkUpdateProducts
+      tags: [products]
+      summary: Bulk update or delete products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkProductUpdate"
+      responses:
+        "200":
+          description: Bulk update result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkProductResult"
+        "400":
+          description: Validation error
+
   /products/{id}:
     get:
       operationId: getProduct
@@ -6100,6 +6121,41 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    BulkProductUpdate:
+      type: object
+      required: [ids, action]
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+        action:
+          type: string
+          enum: [price_percent, price_flat, set_category, set_track_inventory, delete]
+        value:
+          type: number
+          nullable: true
+          description: For price_percent (e.g. 10 = +10%, -5 = -5%) or price_flat (dollar delta, e.g. 2.50 or -1.00)
+        categoryId:
+          type: integer
+          nullable: true
+          description: Target category ID for set_category action (null to clear)
+        trackInventory:
+          type: boolean
+          nullable: true
+          description: For set_track_inventory action
+
+    BulkProductResult:
+      type: object
+      required: [updated, deleted]
+      properties:
+        updated:
+          type: integer
+        deleted:
+          type: integer
 
     ProductInput:
       type: object

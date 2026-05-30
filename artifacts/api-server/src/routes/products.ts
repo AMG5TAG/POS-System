@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable } from "@workspace/db";
-import { eq, and, ilike, sql, or, desc } from "drizzle-orm";
+import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListProductsQueryParams,
@@ -320,6 +321,86 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
     product.productTypeId ? db.select().from(productTypesTable).where(eq(productTypesTable.id, product.productTypeId)).then(([t]) => t ?? null) : Promise.resolve(null),
   ]);
   res.json(formatProduct(product, category, ptRecord));
+});
+
+// ── Bulk update ────────────────────────────────────────────────────────────────
+// IMPORTANT: must be registered before /products/:id to avoid ":id" matching "bulk"
+
+const BulkProductsBody = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  action: z.enum(["price_percent", "price_flat", "set_category", "set_track_inventory", "delete"]),
+  value: z.number().nullable().optional(),
+  categoryId: z.number().int().positive().nullable().optional(),
+  trackInventory: z.boolean().nullable().optional(),
+});
+
+router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
+  const parsed = BulkProductsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { ids, action, value, categoryId, trackInventory } = parsed.data;
+  const merchantId = req.session.merchantId!;
+
+  // Verify ownership — only operate on IDs that belong to this merchant
+  const owned = await db
+    .select({ id: productsTable.id, price: productsTable.price })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+
+  const validIds = owned.map((p) => p.id);
+  if (validIds.length === 0) { res.json({ updated: 0, deleted: 0 }); return; }
+
+  if (action === "delete") {
+    await db.delete(productsTable)
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    res.json({ updated: 0, deleted: validIds.length });
+    return;
+  }
+
+  if (action === "price_percent") {
+    if (value == null) { res.status(400).json({ error: "value is required for price_percent" }); return; }
+    const idList = sql.join(validIds.map((id) => sql`${id}`), sql`, `);
+    await db.execute(sql`
+      UPDATE products
+      SET price = GREATEST(0, ROUND(price::numeric * (1 + ${value}::numeric / 100.0), 2))
+      WHERE id IN (${idList})
+        AND merchant_id = ${merchantId}
+    `);
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
+  if (action === "price_flat") {
+    if (value == null) { res.status(400).json({ error: "value is required for price_flat" }); return; }
+    const idList = sql.join(validIds.map((id) => sql`${id}`), sql`, `);
+    await db.execute(sql`
+      UPDATE products
+      SET price = GREATEST(0, ROUND(price::numeric + ${value}::numeric, 2))
+      WHERE id IN (${idList})
+        AND merchant_id = ${merchantId}
+    `);
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
+  if (action === "set_category") {
+    await db.update(productsTable)
+      .set({ categoryId: categoryId ?? null })
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
+  if (action === "set_track_inventory") {
+    if (trackInventory == null) { res.status(400).json({ error: "trackInventory is required" }); return; }
+    await db.update(productsTable)
+      .set({ trackInventory: trackInventory ? "true" : "false" })
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
+  res.status(400).json({ error: "Unknown action" });
 });
 
 router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {

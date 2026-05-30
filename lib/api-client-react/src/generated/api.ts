@@ -32,6 +32,8 @@ import type {
   BulkExecuteMergeBody,
   BulkMergePreviewResponse,
   BulkMergeResult,
+  BulkProductResult,
+  BulkProductUpdate,
   BusinessProfile,
   BusinessProfileInput,
   CalendarMonth,
@@ -1522,6 +1524,77 @@ export const useCreateProduct = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateProductMutationOptions(options));
+    }
+
+export const getBulkUpdateProductsUrl = () => {
+
+
+
+
+  return `/api/products/bulk`
+}
+
+/**
+ * @summary Bulk update or delete products
+ */
+export const bulkUpdateProducts = async (bulkProductUpdate: BulkProductUpdate, options?: RequestInit): Promise<BulkProductResult> => {
+
+  return customFetch<BulkProductResult>(getBulkUpdateProductsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkProductUpdate,)
+  }
+);}
+
+
+
+
+export const getBulkUpdateProductsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateProducts>>, TError,{data: BodyType<BulkProductUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateProducts>>, TError,{data: BodyType<BulkProductUpdate>}, TContext> => {
+
+const mutationKey = ['bulkUpdateProducts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkUpdateProducts>>, {data: BodyType<BulkProductUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkUpdateProducts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkUpdateProductsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateProducts>>>
+    export type BulkUpdateProductsMutationBody = BodyType<BulkProductUpdate>
+    export type BulkUpdateProductsMutationError = ErrorType<void>
+
+    /**
+ * @summary Bulk update or delete products
+ */
+export const useBulkUpdateProducts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateProducts>>, TError,{data: BodyType<BulkProductUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkUpdateProducts>>,
+        TError,
+        {data: BodyType<BulkProductUpdate>},
+        TContext
+      > => {
+      return useMutation(getBulkUpdateProductsMutationOptions(options));
     }
 
 export const getGetProductUrl = (id: number,) => {
@@ -4157,6 +4230,85 @@ export function useGetStorageObject<TData = Awaited<ReturnType<typeof getStorage
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetStorageObjectQueryOptions(objectPath,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetInvoicePdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/invoices/${id}/pdf`
+}
+
+/**
+ * Generates a server-side PDF (pdfkit) for the specified invoice, incorporating the merchant's brand colour and logo from their Business Profile. Returns the PDF as an attachment.
+
+ * @summary Download a branded A4 PDF for an invoice
+ */
+export const getInvoicePdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetInvoicePdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoicePdfQueryKey = (id: number,) => {
+    return [
+    `/api/invoices/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetInvoicePdfQueryOptions = <TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoicePdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoicePdf>>> = ({ signal }) => getInvoicePdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInvoicePdfQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoicePdf>>>
+export type GetInvoicePdfQueryError = ErrorType<void>
+
+
+/**
+ * @summary Download a branded A4 PDF for an invoice
+ */
+
+export function useGetInvoicePdf<TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInvoicePdfQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

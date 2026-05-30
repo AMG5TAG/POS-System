@@ -366,6 +366,27 @@ export const CreateProductBody = zod.object({
 
 
 /**
+ * @summary Bulk update or delete products
+ */
+export const bulkUpdateProductsBodyIdsMax = 500;
+
+
+
+export const BulkUpdateProductsBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(bulkUpdateProductsBodyIdsMax),
+  "action": zod.enum(['price_percent', 'price_flat', 'set_category', 'set_track_inventory', 'delete']),
+  "value": zod.number().nullish().describe('For price_percent (e.g. 10 = +10%, -5 = -5%) or price_flat (dollar delta, e.g. 2.50 or -1.00)'),
+  "categoryId": zod.number().nullish().describe('Target category ID for set_category action (null to clear)'),
+  "trackInventory": zod.boolean().nullish().describe('For set_track_inventory action')
+})
+
+export const BulkUpdateProductsResponse = zod.object({
+  "updated": zod.number(),
+  "deleted": zod.number()
+})
+
+
+/**
  * @summary Get a product
  */
 export const GetProductParams = zod.object({
@@ -1379,6 +1400,16 @@ export const GetPublicObjectParams = zod.object({
  */
 export const GetStorageObjectParams = zod.object({
   "objectPath": zod.coerce.string()
+})
+
+
+/**
+ * Generates a server-side PDF (pdfkit) for the specified invoice, incorporating the merchant's brand colour and logo from their Business Profile. Returns the PDF as an attachment.
+
+ * @summary Download a branded A4 PDF for an invoice
+ */
+export const GetInvoicePdfParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

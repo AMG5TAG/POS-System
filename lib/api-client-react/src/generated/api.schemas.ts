@@ -235,6 +235,37 @@ export interface Product {
   createdAt: string;
 }
 
+export type BulkProductUpdateAction = typeof BulkProductUpdateAction[keyof typeof BulkProductUpdateAction];
+
+
+export const BulkProductUpdateAction = {
+  price_percent: 'price_percent',
+  price_flat: 'price_flat',
+  set_category: 'set_category',
+  set_track_inventory: 'set_track_inventory',
+  delete: 'delete',
+} as const;
+
+export interface BulkProductUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  ids: number[];
+  action: BulkProductUpdateAction;
+  /** For price_percent (e.g. 10 = +10%, -5 = -5%) or price_flat (dollar delta, e.g. 2.50 or -1.00) */
+  value?: number | null;
+  /** Target category ID for set_category action (null to clear) */
+  categoryId?: number | null;
+  /** For set_track_inventory action */
+  trackInventory?: boolean | null;
+}
+
+export interface BulkProductResult {
+  updated: number;
+  deleted: number;
+}
+
 export type ProductInputGroupPrices = {[key: string]: number};
 
 export interface ProductInput {

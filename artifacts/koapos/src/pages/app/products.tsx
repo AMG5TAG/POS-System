@@ -65,6 +65,13 @@ type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "inventory" | "settings";
 type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
+type BulkActionPending =
+  | { type: "price_percent"; value: number }
+  | { type: "price_flat"; value: number }
+  | { type: "set_category"; categoryId: number | null; categoryName: string }
+  | { type: "set_track_inventory"; value: boolean }
+  | { type: "delete" };
+
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
   sku: string; barcode: string; categoryId: string; brandId: string;
@@ -820,6 +827,14 @@ export default function ProductsPage() {
   const [codesLoading, setCodesLoading]     = useState(false);
   const [newCodeInput, setNewCodeInput]     = useState("");
   const [bulkMode, setBulkMode]             = useState(false);
+  const [bulkActionPending, setBulkActionPending] = useState<BulkActionPending | null>(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen]     = useState(false);
+  const [bulkSubmitting, setBulkSubmitting]       = useState(false);
+  const [bulkPriceInput, setBulkPriceInput]       = useState("");
+  const [bulkPricePopover, setBulkPricePopover]   = useState<"percent" | "flat" | null>(null);
+  const [bulkCatPopover, setBulkCatPopover]       = useState(false);
+  const [bulkCatInput, setBulkCatInput]           = useState("");
+  const [bulkInvPopover, setBulkInvPopover]       = useState(false);
 
   /* ── Brands state ── */
   const [brandsList, setBrandsList] = useState<{ id: number; name: string }[]>([]);
@@ -1145,6 +1160,79 @@ export default function ProductsPage() {
     toast.success(`${ok} product${ok !== 1 ? "s" : ""} ${isActive ? "activated" : "archived"}`);
   };
 
+  const handleBulkApply = async () => {
+    if (!bulkActionPending) return;
+    setBulkSubmitting(true);
+    try {
+      const body: Record<string, unknown> = { ids: [...checked], action: bulkActionPending.type };
+      if (bulkActionPending.type === "price_percent" || bulkActionPending.type === "price_flat") {
+        body.value = bulkActionPending.value;
+      } else if (bulkActionPending.type === "set_category") {
+        body.categoryId = bulkActionPending.categoryId;
+      } else if (bulkActionPending.type === "set_track_inventory") {
+        body.trackInventory = bulkActionPending.value;
+      }
+      const r = await fetch("/api/products/bulk", {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({})) as { error?: string };
+        toast.error(err.error ?? "Bulk update failed");
+        return;
+      }
+      const result = await r.json() as { updated: number; deleted: number };
+      const n = result.deleted > 0 ? result.deleted : result.updated;
+      const verb = bulkActionPending.type === "delete" ? "deleted" : "updated";
+      toast.success(`${n} product${n !== 1 ? "s" : ""} ${verb}`);
+      setChecked(new Set());
+      setBulkConfirmOpen(false);
+      setBulkActionPending(null);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
+  const applyBulkPricePercent = () => {
+    const pct = parseFloat(bulkPriceInput);
+    if (isNaN(pct)) { toast.error("Enter a valid percentage"); return; }
+    setBulkActionPending({ type: "price_percent", value: pct });
+    setBulkPricePopover(null);
+    setBulkPriceInput("");
+    setBulkConfirmOpen(true);
+  };
+
+  const applyBulkPriceFlat = () => {
+    const delta = parseFloat(bulkPriceInput);
+    if (isNaN(delta)) { toast.error("Enter a valid amount"); return; }
+    setBulkActionPending({ type: "price_flat", value: delta });
+    setBulkPricePopover(null);
+    setBulkPriceInput("");
+    setBulkConfirmOpen(true);
+  };
+
+  const applyBulkCategory = () => {
+    const catId = bulkCatInput ? parseInt(bulkCatInput) : null;
+    const catName = catId ? (categories.find((c) => c.id === catId)?.name ?? "Unknown") : "No Category";
+    setBulkActionPending({ type: "set_category", categoryId: catId, categoryName: catName });
+    setBulkCatPopover(false);
+    setBulkCatInput("");
+    setBulkConfirmOpen(true);
+  };
+
+  const applyBulkTrackInventory = (value: boolean) => {
+    setBulkActionPending({ type: "set_track_inventory", value });
+    setBulkInvPopover(false);
+    setBulkConfirmOpen(true);
+  };
+
+  const openBulkDelete = () => {
+    setBulkActionPending({ type: "delete" });
+    setBulkConfirmOpen(true);
+  };
+
   const handleCreateCategory = () => {
     if (!newCategoryName) return;
     createCategoryMutation.mutate({ data: { name: newCategoryName } }, {
@@ -1381,17 +1469,102 @@ export default function ProductsPage() {
         {/* ── Bulk action bar (shown when rows are selected) ─────────────── */}
         {checked.size > 0 && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-primary/5 border-primary/20 flex-wrap">
-            <span className="text-sm font-medium text-primary">{checked.size} selected</span>
-            <Button size="sm" variant="destructive" className="gap-1.5 h-7" onClick={handleBulkDelete} disabled={deleteMutation.isPending}>
-              <Trash2 className="w-3 h-3" /> Delete
-            </Button>
-            <Button size="sm" variant="outline" className="h-7" onClick={() => handleBulkSetActive(true)} disabled={updateMutation.isPending}>
+            <span className="text-sm font-medium text-primary shrink-0">{checked.size} selected</span>
+            <div className="w-px h-4 bg-border shrink-0" />
+
+            {/* % Price change */}
+            <Popover open={bulkPricePopover === "percent"} onOpenChange={(o) => { setBulkPricePopover(o ? "percent" : null); if (!o) setBulkPriceInput(""); }}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <DollarSign className="w-3 h-3" /> % Price
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-3" align="start">
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Apply % price change</p>
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" placeholder="+10 or -5" value={bulkPriceInput}
+                    onChange={(e) => setBulkPriceInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") applyBulkPricePercent(); }}
+                    className="flex-1 h-8 text-sm" />
+                  <span className="text-sm text-muted-foreground shrink-0">%</span>
+                </div>
+                <Button size="sm" className="w-full mt-2 h-7" onClick={applyBulkPricePercent} disabled={!bulkPriceInput.trim()}>
+                  Preview
+                </Button>
+              </PopoverContent>
+            </Popover>
+
+            {/* Flat price change */}
+            <Popover open={bulkPricePopover === "flat"} onOpenChange={(o) => { setBulkPricePopover(o ? "flat" : null); if (!o) setBulkPriceInput(""); }}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <DollarSign className="w-3 h-3" /> ±$
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-3" align="start">
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Apply flat price change</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-muted-foreground shrink-0">$</span>
+                  <Input type="number" placeholder="+5.00 or -2.00" value={bulkPriceInput}
+                    onChange={(e) => setBulkPriceInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") applyBulkPriceFlat(); }}
+                    className="flex-1 h-8 text-sm" />
+                </div>
+                <Button size="sm" className="w-full mt-2 h-7" onClick={applyBulkPriceFlat} disabled={!bulkPriceInput.trim()}>
+                  Preview
+                </Button>
+              </PopoverContent>
+            </Popover>
+
+            {/* Category change */}
+            <Popover open={bulkCatPopover} onOpenChange={(o) => { setBulkCatPopover(o); if (!o) setBulkCatInput(""); }}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <Tag className="w-3 h-3" /> Category
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-3" align="start">
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Change category</p>
+                <TreeCategorySelect
+                  categories={categories}
+                  value={bulkCatInput}
+                  onChange={setBulkCatInput}
+                  placeholder="No Category (clear)"
+                />
+                <Button size="sm" className="w-full mt-2 h-7" onClick={applyBulkCategory}>
+                  Preview
+                </Button>
+              </PopoverContent>
+            </Popover>
+
+            {/* Track inventory toggle */}
+            <Popover open={bulkInvPopover} onOpenChange={setBulkInvPopover}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <Boxes className="w-3 h-3" /> Inventory
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-3" align="start">
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Inventory tracking</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => applyBulkTrackInventory(true)}>Enable</Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => applyBulkTrackInventory(false)}>Disable</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <div className="w-px h-4 bg-border shrink-0" />
+
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkSetActive(true)} disabled={updateMutation.isPending}>
               Activate
             </Button>
-            <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => handleBulkSetActive(false)} disabled={updateMutation.isPending}>
+            <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => handleBulkSetActive(false)} disabled={updateMutation.isPending}>
               <Archive className="w-3 h-3" /> Archive
             </Button>
-            <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={() => setChecked(new Set())}>
+            <Button size="sm" variant="destructive" className="gap-1 h-7 text-xs" onClick={openBulkDelete}>
+              <Trash2 className="w-3 h-3" /> Delete
+            </Button>
+            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs" onClick={() => setChecked(new Set())}>
               <XIcon className="w-3 h-3 mr-1" /> Clear
             </Button>
           </div>
@@ -1515,6 +1688,113 @@ export default function ProductsPage() {
           </>
         )}
       </div>
+
+      {/* ─── Bulk Confirm Dialog ───────────────────────────────────────────── */}
+      <Dialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!o) { setBulkConfirmOpen(false); setBulkActionPending(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bulkActionPending?.type === "delete" ? "Delete Products" : "Bulk Update — Preview"}
+            </DialogTitle>
+          </DialogHeader>
+          {bulkActionPending && (() => {
+            const selectedProducts = products.filter((p) => checked.has(p.id));
+            const count = checked.size;
+
+            let priceRange: { min: number; max: number } | null = null;
+            if (bulkActionPending.type === "price_percent") {
+              const newPrices = selectedProducts.map((p) =>
+                Math.max(0, Math.round(p.price * (1 + bulkActionPending.value / 100) * 100) / 100)
+              );
+              if (newPrices.length) priceRange = { min: Math.min(...newPrices), max: Math.max(...newPrices) };
+            } else if (bulkActionPending.type === "price_flat") {
+              const newPrices = selectedProducts.map((p) =>
+                Math.max(0, Math.round((p.price + bulkActionPending.value) * 100) / 100)
+              );
+              if (newPrices.length) priceRange = { min: Math.min(...newPrices), max: Math.max(...newPrices) };
+            }
+
+            return (
+              <div className="space-y-4 py-1">
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                  <p className="text-sm font-semibold">
+                    {count} product{count !== 1 ? "s" : ""} will be affected
+                  </p>
+
+                  {bulkActionPending.type === "price_percent" && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Price change:{" "}
+                        <span className={cn("font-medium", bulkActionPending.value >= 0 ? "text-green-600" : "text-red-600")}>
+                          {bulkActionPending.value >= 0 ? "+" : ""}{bulkActionPending.value}%
+                        </span>
+                      </p>
+                      {priceRange && (
+                        <p className="text-sm text-muted-foreground">
+                          New price range:{" "}
+                          <span className="font-medium text-foreground">
+                            {formatCurrency(priceRange.min)}{priceRange.min !== priceRange.max ? ` – ${formatCurrency(priceRange.max)}` : ""}
+                          </span>
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {bulkActionPending.type === "price_flat" && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Price change:{" "}
+                        <span className={cn("font-medium", bulkActionPending.value >= 0 ? "text-green-600" : "text-red-600")}>
+                          {bulkActionPending.value >= 0 ? "+" : "−"}{formatCurrency(Math.abs(bulkActionPending.value))}
+                        </span>
+                      </p>
+                      {priceRange && (
+                        <p className="text-sm text-muted-foreground">
+                          New price range:{" "}
+                          <span className="font-medium text-foreground">
+                            {formatCurrency(priceRange.min)}{priceRange.min !== priceRange.max ? ` – ${formatCurrency(priceRange.max)}` : ""}
+                          </span>
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {bulkActionPending.type === "set_category" && (
+                    <p className="text-sm text-muted-foreground">
+                      New category:{" "}
+                      <span className="font-medium text-foreground">{bulkActionPending.categoryName}</span>
+                    </p>
+                  )}
+
+                  {bulkActionPending.type === "set_track_inventory" && (
+                    <p className="text-sm text-muted-foreground">
+                      Inventory tracking:{" "}
+                      <span className="font-medium text-foreground">{bulkActionPending.value ? "Enabled" : "Disabled"}</span>
+                    </p>
+                  )}
+
+                  {bulkActionPending.type === "delete" && (
+                    <p className="text-sm text-destructive font-medium">This cannot be undone.</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <Button variant="outline" onClick={() => { setBulkConfirmOpen(false); setBulkActionPending(null); }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant={bulkActionPending.type === "delete" ? "destructive" : "default"}
+                    onClick={handleBulkApply}
+                    disabled={bulkSubmitting}
+                  >
+                    {bulkSubmitting ? "Applying…" : bulkActionPending.type === "delete" ? `Delete ${count}` : "Apply Changes"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <ProductDetailDialog
         product={selectedProduct}
