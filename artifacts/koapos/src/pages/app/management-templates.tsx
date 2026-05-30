@@ -1514,7 +1514,11 @@ export default function ManagementTemplatesPage() {
           </div>
         </div>
 
-        <NotificationsPanel />
+        {/* Top settings row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <NotificationsPanel />
+          <ReceiptPrintSettings />
+        </div>
 
         {tplLoading ? (
           <div className="text-center py-16 text-muted-foreground text-sm">Loading templates…</div>
@@ -1633,9 +1637,6 @@ export default function ManagementTemplatesPage() {
             />
           </>
         )}
-
-        {/* Receipt & Print Settings */}
-        <ReceiptPrintSettings />
       </div>
     </AppLayout>
   );
