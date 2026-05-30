@@ -2135,6 +2135,7 @@ export default function CustomersPage() {
   const { settings: customerSettings } = useCustomerSettings();
   const customerGroups = customerSettings.groups.map(g => g.name);
   const [search, setSearch]             = useState("");
+  const [heardFromFilter, setHeardFromFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer]   = useState<Customer | null>(null);
@@ -2168,7 +2169,7 @@ export default function CustomersPage() {
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
 
   const { data: customersData, isLoading } = useListCustomers(
-    { search: search || undefined, limit: 1000 },
+    { search: search || undefined, heardFrom: heardFromFilter === "all" ? undefined : heardFromFilter, limit: 1000 },
   );
 
   const deleteMutation = useDeleteCustomer();
@@ -2210,8 +2211,8 @@ export default function CustomersPage() {
   const safePage    = Math.min(page, totalPages);
   const paginated   = pageSize === "all" ? sorted : sorted.slice((safePage - 1) * (pageSize as number), safePage * (pageSize as number));
 
-  /* Reset to page 1 when search or sort changes */
-  useEffect(() => { setPage(1); }, [search, sortKey, sortDir]);
+  /* Reset to page 1 when search, filter or sort changes */
+  useEffect(() => { setPage(1); }, [search, heardFromFilter, sortKey, sortDir]);
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -2300,14 +2301,28 @@ export default function CustomersPage() {
           </Button>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, email, or phone..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, or phone..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={heardFromFilter} onValueChange={setHeardFromFilter}>
+            <SelectTrigger className="w-full sm:w-56">
+              <Filter className="w-4 h-4 mr-2 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="All sources" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sources</SelectItem>
+              {customerSettings.heardFromSources.map((s) => (
+                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* ── Duplicate detection banner ── */}

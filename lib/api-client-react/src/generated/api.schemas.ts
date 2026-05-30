@@ -3244,6 +3244,7 @@ tag?: string;
 
 export type ListCustomersParams = {
 search?: string;
+heardFrom?: string;
 limit?: number;
 offset?: number;
 };

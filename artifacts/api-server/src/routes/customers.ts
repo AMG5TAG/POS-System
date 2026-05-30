@@ -108,7 +108,7 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
 router.get("/customers", requireAuth, async (req, res): Promise<void> => {
   const queryParams = ListCustomersQueryParams.safeParse(req.query);
   if (!queryParams.success) { res.status(400).json({ error: queryParams.error.message }); return; }
-  const { search, limit = 50, offset = 0 } = queryParams.data;
+  const { search, heardFrom, limit = 50, offset = 0 } = queryParams.data;
   const conditions = [eq(customersTable.merchantId, req.session.merchantId!)];
   if (search) {
     conditions.push(
@@ -119,6 +119,9 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
         ilike(customersTable.phone, `%${search}%`)
       )!
     );
+  }
+  if (heardFrom) {
+    conditions.push(eq(customersTable.heardFrom, heardFrom));
   }
   const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(customersTable).where(and(...conditions));
   const customers = await db.select().from(customersTable).where(and(...conditions)).limit(limit).offset(offset).orderBy(customersTable.createdAt);

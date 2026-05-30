@@ -725,6 +725,7 @@ export const DeleteDigitalCodeParams = zod.object({
  */
 export const ListCustomersQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
+  "heardFrom": zod.coerce.string().optional(),
   "limit": zod.coerce.number().optional(),
   "offset": zod.coerce.number().optional()
 })

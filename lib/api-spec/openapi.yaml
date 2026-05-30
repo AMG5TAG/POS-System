@@ -669,6 +669,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: heardFrom
+          in: query
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
