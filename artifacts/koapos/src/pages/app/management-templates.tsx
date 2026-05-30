@@ -643,7 +643,7 @@ function OptionsPanel({
                         }}
                         onBlur={() => onFieldFocus(null)}
                         placeholder={f.placeholder}
-                        className="text-xs min-h-[64px] resize-y"
+                        className="text-xs min-h-[64px] resize-y placeholder:text-[10px]"
                         rows={3}
                       />
                     ) : (
@@ -657,7 +657,7 @@ function OptionsPanel({
                         }}
                         onBlur={() => onFieldFocus(null)}
                         placeholder={f.placeholder}
-                        className="text-xs h-8"
+                        className="text-xs h-8 placeholder:text-[10px]"
                       />
                     )}
                   </div>
