@@ -1182,7 +1182,7 @@ export default function POSPage() {
         <div class="bdr-t pt small">
           <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
           ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
-          <div class="row bold"><span>TOTAL AUD</span><span>$${total.toFixed(2)}</span></div>
+          <div class="row bold"><span>TOTAL</span><span>$${total.toFixed(2)}</span></div>
           ${opts.showPaymentMethods ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
         </div>
         <div class="center gray small bdr-t pt mt">
