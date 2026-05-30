@@ -569,44 +569,44 @@ function OptionsPanel({
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-sm font-semibold">Options</span>
         </div>
-        <button onClick={reset} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Reset</button>
+        <button onClick={reset} className="text-[11px] text-muted-foreground hover:text-destructive transition-colors">Reset</button>
       </div>
 
       {/* System default toggle */}
-      <div className="px-4 py-3 border-b bg-muted/10 flex items-center justify-between">
+      <div className="px-3 py-2 border-b bg-muted/10 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-3.5 h-3.5 text-primary" />
           <div>
-            <p className="text-xs font-medium leading-tight">Set as System Default</p>
-            <p className="text-[10px] text-muted-foreground">Used by all print and export actions</p>
+            <p className="text-[11px] font-medium leading-tight">Set as System Default</p>
+            <p className="text-[9px] text-muted-foreground">Used by all print and export actions</p>
           </div>
         </div>
         <Switch checked={isDefault} onCheckedChange={setIsDefault} />
       </div>
 
       {/* Option fields — two columns */}
-      <div className="p-4 grid grid-cols-2 gap-4">
+      <div className="p-3 grid grid-cols-2 gap-3">
         {sections.map((section) => {
           const sectionFields = fields.filter((f) => (f.section ?? "General") === section);
           const toggles = sectionFields.filter((f) => f.type === "toggle");
           const texts   = sectionFields.filter((f) => f.type !== "toggle");
 
           return (
-            <div key={section} className="space-y-3">
+            <div key={section} className="space-y-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{section}</p>
 
               {toggles.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {toggles.map((f) => (
                     <div key={f.key} className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <Label className="text-xs cursor-pointer leading-tight">{f.label}</Label>
-                        {f.hint && <p className="text-[10px] text-muted-foreground mt-0.5">{f.hint}</p>}
+                        <Label className="text-[11px] cursor-pointer leading-tight">{f.label}</Label>
+                        {f.hint && <p className="text-[9px] text-muted-foreground leading-none">{f.hint}</p>}
                       </div>
                       <Switch
                         checked={!!opts[f.key]}
@@ -620,13 +620,13 @@ function OptionsPanel({
               {texts.map((f) => {
                 const val = (opts[f.key] as string) ?? "";
                 return (
-                  <div key={f.key} className="space-y-1.5">
-                    <Label className="text-xs">{f.label}</Label>
+                  <div key={f.key} className="space-y-1">
+                    <Label className="text-[11px]">{f.label}</Label>
                     {f.type === "select" && f.options ? (
                       <select
                         value={val || f.options[0]?.value}
                         onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
-                        className="text-xs h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="text-[11px] h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
                       >
                         {f.options.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -643,8 +643,8 @@ function OptionsPanel({
                         }}
                         onBlur={() => onFieldFocus(null)}
                         placeholder={f.placeholder}
-                        className="text-xs min-h-[64px] resize-y font-mono"
-                        rows={3}
+                        className="text-[11px] min-h-[48px] resize-y font-mono"
+                        rows={2}
                       />
                     ) : (
                       <Input
@@ -657,7 +657,7 @@ function OptionsPanel({
                         }}
                         onBlur={() => onFieldFocus(null)}
                         placeholder={f.placeholder}
-                        className="text-xs h-8 font-mono"
+                        className="text-[11px] h-7 font-mono"
                       />
                     )}
                   </div>
@@ -669,8 +669,8 @@ function OptionsPanel({
       </div>
 
       {/* Save button */}
-      <div className="px-4 py-3 border-t bg-muted/10">
-        <Button size="sm" className="w-full gap-2" onClick={onSave} disabled={saving}>
+      <div className="px-3 py-2 border-t bg-muted/10">
+        <Button size="sm" className="w-full gap-2 h-8" onClick={onSave} disabled={saving}>
           <Save className="w-3.5 h-3.5" />
           {saving ? "Saving…" : "Save Template"}
         </Button>
