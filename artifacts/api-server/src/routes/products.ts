@@ -59,7 +59,7 @@ function formatProduct(
     supplier: p.supplier ?? null,
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
-    tags: p.tagsJson ? (() => { try { return JSON.parse(p.tagsJson!); } catch { return []; } })() : [],
+    tags: p.tags ?? [],
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,
     createdAt: p.createdAt.toISOString(),
@@ -141,17 +141,18 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
   const queryParams = ListProductsQueryParams.safeParse(req.query);
   if (!queryParams.success) { res.status(400).json({ error: queryParams.error.message }); return; }
 
-  const { search, categoryId, limit = 50, offset = 0 } = queryParams.data;
+  const { search, categoryId, limit = 50, offset = 0, tag } = queryParams.data;
   const brandIdRaw = req.query.brandId ? parseInt(String(req.query.brandId)) : undefined;
   const conditions = [eq(productsTable.merchantId, req.session.merchantId!)];
   if (search) conditions.push(or(
     ilike(productsTable.name, `%${search}%`),
     ilike(productsTable.sku, `%${search}%`),
     ilike(productsTable.barcode, `%${search}%`),
-    ilike(productsTable.tagsJson, `%${search}%`),
+    sql`${productsTable.tags}::text ilike ${'%' + search + '%'}`,
   )!);
   if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
   if (brandIdRaw && !isNaN(brandIdRaw)) conditions.push(eq(productsTable.brandId, brandIdRaw));
+  if (tag) conditions.push(sql`${productsTable.tags} @> jsonb_build_array(${tag}::text)`);
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
@@ -212,35 +213,26 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
       isEpay: isEpayRaw === true ? "true" : "false",
       groupPrices: groupPrices ? JSON.stringify(groupPrices) : null,
-      tagsJson: tags ? JSON.stringify(tags) : null,
+      tags: tags ?? null,
     })
     .returning();
   res.status(201).json(formatProduct(product, null, ptRecord));
 });
 
-// ── Product Tag Management (operates on tagsJson strings across all products) ──
+// ── Product Tag Management ─────────────────────────────────────────────────────
 
 router.get("/products/tags", requireAuth, async (req, res): Promise<void> => {
-  const products = await db
-    .select({ tagsJson: productsTable.tagsJson })
-    .from(productsTable)
-    .where(eq(productsTable.merchantId, req.session.merchantId!));
-
-  const countMap = new Map<string, number>();
-  for (const p of products) {
-    if (!p.tagsJson) continue;
-    try {
-      const tags = JSON.parse(p.tagsJson) as string[];
-      for (const t of tags) {
-        if (typeof t === "string" && t.trim()) {
-          countMap.set(t, (countMap.get(t) ?? 0) + 1);
-        }
-      }
-    } catch { /* skip malformed */ }
-  }
-  const items = [...countMap.entries()]
-    .map(([name, productCount]) => ({ name, productCount }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const merchantId = req.session.merchantId!;
+  const rows = await db.execute<{ name: string; productCount: number }>(sql`
+    SELECT elem AS name, COUNT(*)::int AS "productCount"
+    FROM products, jsonb_array_elements_text(tags_json) AS t(elem)
+    WHERE merchant_id = ${merchantId}
+      AND tags_json IS NOT NULL
+      AND elem <> ''
+    GROUP BY elem
+    ORDER BY elem
+  `);
+  const items = rows.rows;
   res.json({ items, total: items.length });
 });
 
@@ -249,25 +241,17 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
   if (!oldName || !newName) { res.status(400).json({ error: "oldName and newName are required" }); return; }
   const merchantId = req.session.merchantId!;
 
-  // IS JSON ARRAY (PG 16) fully validates the JSON before the THEN branch runs
-  // the ::jsonb cast — rows with null, non-array, or genuinely malformed JSON
-  // (e.g. '[bad') are excluded, matching the old try/catch per-row skip behaviour.
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = (
       SELECT jsonb_agg(
         CASE WHEN elem = ${oldName} THEN ${newName} ELSE elem END
         ORDER BY ordinality
-      )::text
-      FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+      )
+      FROM jsonb_array_elements_text(tags_json) WITH ORDINALITY AS t(elem, ordinality)
     )
     WHERE merchant_id = ${merchantId}
-      AND (
-        CASE WHEN tags_json IS JSON ARRAY
-          THEN tags_json::jsonb @> jsonb_build_array(${oldName}::text)
-          ELSE FALSE
-        END
-      )
+      AND tags_json @> jsonb_build_array(${oldName}::text)
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
@@ -279,7 +263,7 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
 
   const caseParts = sourceTags.map(t => sql`WHEN elem = ${t} THEN ${targetName}`);
   const caseExpr = sql.join(caseParts, sql` `);
-  const filterParts = sourceTags.map(t => sql`tags_json::jsonb @> jsonb_build_array(${t}::text)`);
+  const filterParts = sourceTags.map(t => sql`tags_json @> jsonb_build_array(${t}::text)`);
   const filterOr = sql.join(filterParts, sql` OR `);
 
   // Inner GROUP BY deduplicates merged tags; MIN(ordinality) preserves
@@ -287,21 +271,16 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = (
-      SELECT jsonb_agg(mapped ORDER BY min_ord)::text
+      SELECT jsonb_agg(mapped ORDER BY min_ord)
       FROM (
         SELECT CASE ${caseExpr} ELSE elem END AS mapped,
                MIN(ordinality) AS min_ord
-        FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+        FROM jsonb_array_elements_text(tags_json) WITH ORDINALITY AS t(elem, ordinality)
         GROUP BY 1
       ) deduped
     )
     WHERE merchant_id = ${merchantId}
-      AND (
-        CASE WHEN tags_json IS JSON ARRAY
-          THEN (${filterOr})
-          ELSE FALSE
-        END
-      )
+      AND (${filterOr})
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
@@ -311,24 +290,19 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
   const merchantId = req.session.merchantId!;
 
-  // COALESCE to '[]' when removing the last tag (jsonb_agg on an empty set returns NULL).
+  // COALESCE to '[]'::jsonb when removing the last tag (jsonb_agg on an empty set returns NULL).
   const result = await db.execute(sql`
     UPDATE products
     SET tags_json = COALESCE(
       (
-        SELECT jsonb_agg(elem ORDER BY ordinality)::text
-        FROM jsonb_array_elements_text(tags_json::jsonb) WITH ORDINALITY AS t(elem, ordinality)
+        SELECT jsonb_agg(elem ORDER BY ordinality)
+        FROM jsonb_array_elements_text(tags_json) WITH ORDINALITY AS t(elem, ordinality)
         WHERE elem <> ${name}
       ),
-      '[]'
+      '[]'::jsonb
     )
     WHERE merchant_id = ${merchantId}
-      AND (
-        CASE WHEN tags_json IS JSON ARRAY
-          THEN tags_json::jsonb @> jsonb_build_array(${name}::text)
-          ELSE FALSE
-        END
-      )
+      AND tags_json @> jsonb_build_array(${name}::text)
   `);
   res.json({ updated: result.rowCount ?? 0 });
 });
@@ -363,7 +337,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = JSON.stringify(groupPrices);
-  if (tags !== undefined) updates.tagsJson = JSON.stringify(tags);
+  if (tags !== undefined) updates.tags = tags;
 
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
   if (productTypeId != null) {

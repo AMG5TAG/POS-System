@@ -3236,6 +3236,10 @@ search?: string;
 categoryId?: number;
 limit?: number;
 offset?: number;
+/**
+ * Filter products that contain this tag (exact match, uses GIN index)
+ */
+tag?: string;
 };
 
 export type ListCustomersParams = {

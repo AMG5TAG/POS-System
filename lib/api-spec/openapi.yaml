@@ -339,6 +339,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: tag
+          in: query
+          description: Filter products that contain this tag (exact match, uses GIN index)
+          schema:
+            type: string
       responses:
         "200":
           description: List of products

@@ -277,7 +277,8 @@ export const ListProductsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "categoryId": zod.coerce.number().optional(),
   "limit": zod.coerce.number().optional(),
-  "offset": zod.coerce.number().optional()
+  "offset": zod.coerce.number().optional(),
+  "tag": zod.coerce.string().optional().describe('Filter products that contain this tag (exact match, uses GIN index)')
 })
 
 export const listProductsResponseItemsItemTagsMax = 5;

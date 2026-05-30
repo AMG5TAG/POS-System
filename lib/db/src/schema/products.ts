@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index, jsonb } from "drizzle-orm/pg-core";
 import { type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -42,7 +42,7 @@ export const productsTable = pgTable("products", {
   supplier:           text("supplier"),
   supplierCode:       text("supplier_code"),
   isEpay:             text("is_epay").notNull().default("false"),
-  tagsJson:           text("tags_json"),
+  tags:               jsonb("tags_json").$type<string[]>(),
   stockLocation:      text("stock_location"),
   overflowLocation:   text("overflow_location"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -52,6 +52,7 @@ export const productsTable = pgTable("products", {
   index("products_merchant_id_category_id_idx").on(t.merchantId, t.categoryId),
   index("products_merchant_id_brand_id_idx").on(t.merchantId, t.brandId),
   index("products_merchant_id_product_type_id_idx").on(t.merchantId, t.productTypeId),
+  index("products_tags_gin_idx").using("gin", t.tags),
 ]);
 
 export const digitalCodesTable = pgTable("digital_codes", {
