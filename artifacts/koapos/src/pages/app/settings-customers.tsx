@@ -15,7 +15,7 @@ import {
   type HeardFromMetric,
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
-import { exportHeardFromCSV, exportHeardFromXLSX } from "@/lib/heard-from-export";
+import { exportHeardFromCSV, exportHeardFromXLSX, exportHeardFromPDF } from "@/lib/heard-from-export";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -37,7 +37,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
-  TrendingUp, TrendingDown, Minus, Download, Sparkles, FileSpreadsheet, Mail,
+  TrendingUp, TrendingDown, Minus, Download, Sparkles, FileSpreadsheet, FileText, Mail,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -600,6 +600,22 @@ export default function SettingsCustomersPage() {
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 Export XLSX
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={heardFromBreakdown.length === 0}
+                onClick={async () => {
+                  try {
+                    await exportHeardFromPDF(heardFromData, heardFromPeriod);
+                  } catch {
+                    toast.error("Couldn't generate the PDF. Please try again.");
+                  }
+                }}
+              >
+                <FileText className="w-4 h-4" />
+                Export PDF
               </Button>
               <div className="inline-flex rounded-md border p-0.5 bg-muted/40 shrink-0">
                 {HEARD_FROM_METRICS.map((m) => (
