@@ -866,7 +866,7 @@ export default function SettingsCustomersPage() {
               The email is sent to your account email address. You need an email provider configured in Management → Email for delivery to work.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Send weekly digest email</p>
@@ -882,6 +882,36 @@ export default function SettingsCustomersPage() {
                 }}
               />
             </div>
+            {settings.weeklyDigestOptIn && (
+              <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Send day</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    The digest will be sent on this day each week.
+                  </p>
+                </div>
+                <Select
+                  value={String(settings.weeklyDigestSendDay)}
+                  onValueChange={(v) => {
+                    save({ weeklyDigestSendDay: Number(v) });
+                    toast.success("Send day updated");
+                  }}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Monday</SelectItem>
+                    <SelectItem value="2">Tuesday</SelectItem>
+                    <SelectItem value="3">Wednesday</SelectItem>
+                    <SelectItem value="4">Thursday</SelectItem>
+                    <SelectItem value="5">Friday</SelectItem>
+                    <SelectItem value="6">Saturday</SelectItem>
+                    <SelectItem value="0">Sunday</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </CardContent>
         </Card>
 

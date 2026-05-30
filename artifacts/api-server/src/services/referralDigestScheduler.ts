@@ -247,12 +247,26 @@ async function runDigestForMerchant(
   }
 }
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// In-memory dedup: tracks which merchants already received the digest on a given date.
+// Key = merchantId, value = ISO date string (YYYY-MM-DD) of the last send.
+const sentOnDate = new Map<number, string>();
+
+function todayDateStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export async function sendReferralDigests(logger: Logger): Promise<void> {
+  const todayDow = new Date().getDay(); // 0 = Sunday … 6 = Saturday
+  const todayKey = todayDateStr();
+
   const optedIn = await db
     .select({
       merchantId: customerSettingsTable.merchantId,
       merchantEmail: merchantsTable.email,
       businessName: merchantsTable.businessName,
+      weeklyDigestSendDay: customerSettingsTable.weeklyDigestSendDay,
     })
     .from(customerSettingsTable)
     .innerJoin(merchantsTable, eq(merchantsTable.id, customerSettingsTable.merchantId))
@@ -263,11 +277,31 @@ export async function sendReferralDigests(logger: Logger): Promise<void> {
     return;
   }
 
-  logger.info({ count: optedIn.length }, "Referral digest: sending to opted-in merchants");
+  const due = optedIn.filter((row) => row.weeklyDigestSendDay === todayDow);
 
-  for (const row of optedIn) {
+  if (due.length === 0) {
+    logger.info(
+      { todayDow, dayName: DAY_NAMES[todayDow] },
+      "Referral digest: no merchants scheduled for today, skipping",
+    );
+    return;
+  }
+
+  logger.info(
+    { count: due.length, dayName: DAY_NAMES[todayDow] },
+    "Referral digest: sending to merchants scheduled for today",
+  );
+
+  for (const row of due) {
+    // Prevent duplicate sends on server restarts within the same calendar day.
+    if (sentOnDate.get(row.merchantId) === todayKey) {
+      logger.info({ merchantId: row.merchantId }, "Referral digest: already sent today, skipping");
+      continue;
+    }
+
     try {
       await runDigestForMerchant(row.merchantId, row.merchantEmail, row.businessName, logger);
+      sentOnDate.set(row.merchantId, todayKey);
     } catch (err) {
       logger.error({ merchantId: row.merchantId, err }, "Referral digest error for merchant");
     }
@@ -275,8 +309,8 @@ export async function sendReferralDigests(logger: Logger): Promise<void> {
 }
 
 export function scheduleReferralDigest(logger: Logger): void {
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  // Run once on startup so digests aren't skipped after a server restart
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  // Run once on startup so a digest isn't skipped if the server restarts on the scheduled day.
   sendReferralDigests(logger).catch((err) =>
     logger.error({ err }, "Referral digest startup run error"),
   );
@@ -285,7 +319,7 @@ export function scheduleReferralDigest(logger: Logger): void {
       sendReferralDigests(logger).catch((err) =>
         logger.error({ err }, "Referral digest scheduled run error"),
       ),
-    SEVEN_DAYS,
+    ONE_DAY,
   );
-  logger.info("Referral digest scheduler started (weekly interval)");
+  logger.info("Referral digest scheduler started (daily day-of-week check)");
 }

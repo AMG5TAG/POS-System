@@ -9540,6 +9540,8 @@ components:
         defaultGroup:            { type: string }
         loyaltyPointsPerDollar:  { type: number }
         enableLoyalty:           { type: boolean }
+        weeklyDigestOptIn:       { type: boolean }
+        weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
         updatedAt:               { type: string, format: date-time }
 
     CustomerSettingsInput:
@@ -9550,6 +9552,8 @@ components:
         defaultGroup:            { type: string }
         loyaltyPointsPerDollar:  { type: number }
         enableLoyalty:           { type: boolean }
+        weeklyDigestOptIn:       { type: boolean }
+        weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
 
     StickerTemplate:
       type: object

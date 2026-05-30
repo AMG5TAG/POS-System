@@ -13,6 +13,7 @@ function fmt(row: typeof customerSettingsTable.$inferSelect) {
     loyaltyPointsPerDollar: row.loyaltyPointsPerDollar,
     enableLoyalty:          row.enableLoyalty === "true",
     weeklyDigestOptIn:      row.weeklyDigestOptIn === "true",
+    weeklyDigestSendDay:    row.weeklyDigestSendDay,
     updatedAt:              row.updatedAt,
   };
 }
@@ -31,6 +32,8 @@ const DEFAULTS = {
   defaultGroup:           "Standard",
   loyaltyPointsPerDollar: 1,
   enableLoyalty:          true,
+  weeklyDigestOptIn:      false,
+  weeklyDigestSendDay:    1,
 };
 
 router.get("/customer-settings", requireAuth, async (req, res): Promise<void> => {
@@ -43,6 +46,9 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 
+  const rawSendDay = Number(body.weeklyDigestSendDay ?? 1);
+  const sendDay = Number.isInteger(rawSendDay) && rawSendDay >= 0 && rawSendDay <= 6 ? rawSendDay : 1;
+
   const data = {
     groups:                 JSON.stringify(body.groups         ?? DEFAULT_GROUPS),
     requiredFields:         JSON.stringify(body.requiredFields ?? {}),
@@ -50,6 +56,7 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
     loyaltyPointsPerDollar: Number(body.loyaltyPointsPerDollar ?? 1),
     enableLoyalty:          String(body.enableLoyalty === false ? "false" : "true"),
     weeklyDigestOptIn:      String(body.weeklyDigestOptIn === true ? "true" : "false"),
+    weeklyDigestSendDay:    sendDay,
   };
 
   const [existing] = await db.select({ id: customerSettingsTable.id }).from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));

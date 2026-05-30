@@ -7105,6 +7105,11 @@ export const UpdateBusinessProfileResponse = zod.object({
 /**
  * @summary Get customer settings for current merchant
  */
+export const getCustomerSettingsResponseWeeklyDigestSendDayMin = 0;
+export const getCustomerSettingsResponseWeeklyDigestSendDayMax = 6;
+
+
+
 export const GetCustomerSettingsResponse = zod.object({
   "groups": zod.array(zod.object({
 
@@ -7115,6 +7120,8 @@ export const GetCustomerSettingsResponse = zod.object({
   "defaultGroup": zod.string().optional(),
   "loyaltyPointsPerDollar": zod.number().optional(),
   "enableLoyalty": zod.boolean().optional(),
+  "weeklyDigestOptIn": zod.boolean().optional(),
+  "weeklyDigestSendDay": zod.number().min(getCustomerSettingsResponseWeeklyDigestSendDayMin).max(getCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
   "updatedAt": zod.coerce.date().optional()
 })
 
@@ -7122,6 +7129,11 @@ export const GetCustomerSettingsResponse = zod.object({
 /**
  * @summary Update customer settings
  */
+export const updateCustomerSettingsBodyWeeklyDigestSendDayMin = 0;
+export const updateCustomerSettingsBodyWeeklyDigestSendDayMax = 6;
+
+
+
 export const UpdateCustomerSettingsBody = zod.object({
   "groups": zod.array(zod.object({
 
@@ -7131,8 +7143,15 @@ export const UpdateCustomerSettingsBody = zod.object({
 }).passthrough().optional(),
   "defaultGroup": zod.string().optional(),
   "loyaltyPointsPerDollar": zod.number().optional(),
-  "enableLoyalty": zod.boolean().optional()
+  "enableLoyalty": zod.boolean().optional(),
+  "weeklyDigestOptIn": zod.boolean().optional(),
+  "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsBodyWeeklyDigestSendDayMin).max(updateCustomerSettingsBodyWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)')
 })
+
+export const updateCustomerSettingsResponseWeeklyDigestSendDayMin = 0;
+export const updateCustomerSettingsResponseWeeklyDigestSendDayMax = 6;
+
+
 
 export const UpdateCustomerSettingsResponse = zod.object({
   "groups": zod.array(zod.object({
@@ -7144,6 +7163,8 @@ export const UpdateCustomerSettingsResponse = zod.object({
   "defaultGroup": zod.string().optional(),
   "loyaltyPointsPerDollar": zod.number().optional(),
   "enableLoyalty": zod.boolean().optional(),
+  "weeklyDigestOptIn": zod.boolean().optional(),
+  "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsResponseWeeklyDigestSendDayMin).max(updateCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
   "updatedAt": zod.coerce.date().optional()
 })
 

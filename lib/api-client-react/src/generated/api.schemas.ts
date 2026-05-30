@@ -3122,6 +3122,13 @@ export interface CustomerSettings {
   defaultGroup?: string;
   loyaltyPointsPerDollar?: number;
   enableLoyalty?: boolean;
+  weeklyDigestOptIn?: boolean;
+  /**
+     * Day of week to send digest (0=Sunday … 6=Saturday)
+     * @minimum 0
+     * @maximum 6
+     */
+  weeklyDigestSendDay?: number;
   updatedAt?: string;
 }
 
@@ -3135,6 +3142,13 @@ export interface CustomerSettingsInput {
   defaultGroup?: string;
   loyaltyPointsPerDollar?: number;
   enableLoyalty?: boolean;
+  weeklyDigestOptIn?: boolean;
+  /**
+     * Day of week to send digest (0=Sunday … 6=Saturday)
+     * @minimum 0
+     * @maximum 6
+     */
+  weeklyDigestSendDay?: number;
 }
 
 export type StickerTemplateFields = { [key: string]: unknown };
