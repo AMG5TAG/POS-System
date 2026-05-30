@@ -188,6 +188,7 @@ interface FieldDef {
   hint?: string;
   quickCodes?: boolean;
   section?: string;
+  rows?: number;
 }
 
 function getOptionsConfig(category: Category): FieldDef[] {
