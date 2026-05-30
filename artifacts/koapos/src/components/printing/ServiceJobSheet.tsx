@@ -23,6 +23,8 @@ export interface ServiceSheetBranding {
   address?: string;
   brandColor: string;
   logo?: string;
+  /** Configured social links (e.g. { facebook: "...", instagram: "..." }). */
+  socialLinks?: Record<string, string>;
 }
 
 export interface ServiceSheetFormFile {
@@ -139,6 +141,7 @@ export function ServiceJobSheet({
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
   const credentialLines = mergeCredentials(data.accounts, data.logins);
   const photos = (data.photos ?? []).filter(Boolean);
+  const socialEntries = Object.entries(branding.socialLinks ?? {}).filter(([, v]) => v);
 
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
@@ -350,6 +353,27 @@ export function ServiceJobSheet({
       {opts.footerText && (
         <div style={{ marginTop: "24px", paddingTop: "12px", borderTop: "1px solid #e5e7eb", textAlign: "center", fontSize: "10px", color: "#999", ...wrapStyle }}>
           {opts.footerText}
+        </div>
+      )}
+
+      {/* ── Social links ───────────────────────────────────────── */}
+      {opts.showSocialLinks && socialEntries.length > 0 && (
+        <div
+          style={{
+            marginTop: opts.footerText ? "8px" : "24px",
+            paddingTop: opts.footerText ? "0" : "12px",
+            borderTop: opts.footerText ? "none" : "1px solid #e5e7eb",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "12px",
+            fontSize: "10px",
+            color: MUTED,
+          }}
+        >
+          {socialEntries.map(([k, v]) => (
+            <span key={k} style={wrapStyle}>{k}: {String(v)}</span>
+          ))}
         </div>
       )}
     </div>

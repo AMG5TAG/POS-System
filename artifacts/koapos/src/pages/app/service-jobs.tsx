@@ -595,6 +595,7 @@ export default function ServiceJobsPage() {
                 address: [(profile as { state?: string }).state, (profile as { postcode?: string }).postcode].filter(Boolean).join(" "),
                 brandColor,
                 logo: (profile as { logo?: string }).logo,
+                socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
               }}
               data={{
                 jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,

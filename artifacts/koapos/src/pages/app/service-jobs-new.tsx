@@ -899,6 +899,7 @@ export default function ServiceJobNewPage() {
         address: [bizProfile?.state, bizProfile?.postcode].filter(Boolean).join(" "),
         brandColor,
         logo: bizProfile?.logo,
+        socialLinks: bizProfile?.socialLinks,
       }}
       data={{
         jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,

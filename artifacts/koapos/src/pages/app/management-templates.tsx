@@ -1248,9 +1248,10 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */
 
-function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, opts }: PreviewProps) {
+function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
+  const socialEntries = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
   const jobFontSize = opts.jobNoFontSize?.toLowerCase();
   const jobNoClass = jobFontSize === "xlarge" ? "text-base font-black" : jobFontSize === "large" ? "text-sm font-bold" : "text-[9px] font-normal";
   return (
@@ -1386,6 +1387,15 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
         <div className="border-t pt-1 space-y-0.5 text-[8px] text-gray-400">
           {opts.warrantyText && <p>{opts.warrantyText}</p>}
           {opts.footerText && <p>{resolveCode(opts.footerText, businessName, abn, website, email)}</p>}
+        </div>
+      )}
+
+      {/* Social links */}
+      {opts.showSocialLinks && socialEntries.length > 0 && (
+        <div className={cn("flex flex-wrap justify-center gap-2 text-[8px] text-gray-500", !(opts.warrantyText || opts.footerText) && "border-t pt-1")}>
+          {socialEntries.map(([k, v]) => (
+            <span key={k}>{k}: {String(v)}</span>
+          ))}
         </div>
       )}
     </div>
