@@ -1616,15 +1616,15 @@ export default function ManagementTemplatesPage() {
                   <Building2 className="w-3.5 h-3.5 shrink-0" />
                   <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
                 </div>
+
+                {/* Quick Codes — sits in blank space below preview */}
+                <QuickCodesBar
+                  groups={quickCodeGroups}
+                  focusedField={focusedFieldLabel}
+                  onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
+                />
               </div>
             </div>
-
-            {/* Full-width Quick Codes bar */}
-            <QuickCodesBar
-              groups={quickCodeGroups}
-              focusedField={focusedFieldLabel}
-              onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
-            />
           </>
         )}
       </div>
