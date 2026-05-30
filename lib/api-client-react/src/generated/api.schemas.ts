@@ -3234,6 +3234,11 @@ export interface BulkMergeResult {
   results: BulkMergeClusterResult[];
 }
 
+export interface ReferralDigestSendResult {
+  sent: boolean;
+  email: string;
+}
+
 export interface AppleOAuthCallbackBody {
   /** Authorization code issued by Apple */
   code?: string;
@@ -3529,5 +3534,9 @@ registerId?: string;
 export type GetProductPerformanceParams = {
 startDate: string;
 endDate: string;
+};
+
+export type SendReferralDigestNow400 = {
+  error: string;
 };
 

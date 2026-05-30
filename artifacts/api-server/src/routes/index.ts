@@ -76,6 +76,7 @@ import pcCompatRulesRouter from "./pc-compat-rules";
 import print3dSettingsRouter from "./print-3d-settings";
 import businessProfileRouter from "./business-profile";
 import customerSettingsRouter from "./customer-settings";
+import referralDigestRouter from "./referral-digest";
 import stickerTemplatesRouter from "./sticker-templates";
 
 const router: IRouter = Router();
@@ -157,6 +158,7 @@ router.use(pcCompatRulesRouter);
 router.use(print3dSettingsRouter);
 router.use(businessProfileRouter);
 router.use(customerSettingsRouter);
+router.use(referralDigestRouter);
 router.use(stickerTemplatesRouter);
 
 export default router;

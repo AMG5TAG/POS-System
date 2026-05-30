@@ -5403,6 +5403,28 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerSettings" }
 
+  # ── Referral Digest ───────────────────────────────────────────────────────
+  /referral-digest/send-now:
+    post:
+      operationId: sendReferralDigestNow
+      tags: [settings]
+      summary: Send a test referral digest email to the merchant immediately
+      responses:
+        "200":
+          description: Digest sent successfully
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferralDigestSendResult" }
+        "400":
+          description: Weekly digest is not enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string }
+
   # ── Sticker Templates ─────────────────────────────────────────────────────
   /sticker-templates:
     get:
@@ -9649,6 +9671,13 @@ components:
         results:
           type: array
           items: { $ref: "#/components/schemas/BulkMergeClusterResult" }
+
+    ReferralDigestSendResult:
+      type: object
+      required: [sent, email]
+      properties:
+        sent:  { type: boolean }
+        email: { type: string }
 
     AppleOAuthCallbackBody:
       type: object

@@ -293,12 +293,14 @@ function buildEmailText(businessName: string, highlights: Highlight[], sparkline
   return lines.join("\n");
 }
 
-async function runDigestForMerchant(
+type DigestSendResult = { success: true } | { success: false; error: string };
+
+export async function runDigestForMerchant(
   merchantId: number,
   merchantEmail: string,
   businessName: string,
   logger: Logger,
-): Promise<void> {
+): Promise<DigestSendResult> {
   const now = Date.now();
   const since = new Date(now - 2 * WINDOW_DAYS * DAY_MS);
 
@@ -328,8 +330,10 @@ async function runDigestForMerchant(
 
   if (result.success) {
     logger.info({ merchantId, highlights: highlights.length }, "Referral digest sent");
+    return { success: true };
   } else {
     logger.warn({ merchantId, error: result.error }, "Referral digest send failed");
+    return { success: false, error: result.error ?? "Email send failed" };
   }
 }
 

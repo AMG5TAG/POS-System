@@ -7170,6 +7170,15 @@ export const UpdateCustomerSettingsResponse = zod.object({
 
 
 /**
+ * @summary Send a test referral digest email to the merchant immediately
+ */
+export const SendReferralDigestNowResponse = zod.object({
+  "sent": zod.boolean(),
+  "email": zod.string()
+})
+
+
+/**
  * @summary List sticker templates for current merchant
  */
 export const ListStickerTemplatesResponseItem = zod.object({

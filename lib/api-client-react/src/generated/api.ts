@@ -235,6 +235,7 @@ import type {
   QrSettings,
   QrSettingsInput,
   ReceiveItemsInput,
+  ReferralDigestSendResult,
   RefundInput,
   RegionalExtSettings,
   RegionalExtSettingsInput,
@@ -249,6 +250,7 @@ import type {
   SendPurchaseOrderEmail200,
   SendPurchaseOrderEmailBody,
   SendReceiptRequest,
+  SendReferralDigestNow400,
   SendServiceJobEmail200,
   SendTransactionReceipt200,
   ServiceJob,
@@ -22708,6 +22710,76 @@ export const useUpdateCustomerSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateCustomerSettingsMutationOptions(options));
+    }
+
+export const getSendReferralDigestNowUrl = () => {
+
+
+
+
+  return `/api/referral-digest/send-now`
+}
+
+/**
+ * @summary Send a test referral digest email to the merchant immediately
+ */
+export const sendReferralDigestNow = async ( options?: RequestInit): Promise<ReferralDigestSendResult> => {
+
+  return customFetch<ReferralDigestSendResult>(getSendReferralDigestNowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSendReferralDigestNowMutationOptions = <TError = ErrorType<SendReferralDigestNow400>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendReferralDigestNow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendReferralDigestNow>>, TError,void, TContext> => {
+
+const mutationKey = ['sendReferralDigestNow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendReferralDigestNow>>, void> = () => {
+
+
+          return  sendReferralDigestNow(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendReferralDigestNowMutationResult = NonNullable<Awaited<ReturnType<typeof sendReferralDigestNow>>>
+
+    export type SendReferralDigestNowMutationError = ErrorType<SendReferralDigestNow400>
+
+    /**
+ * @summary Send a test referral digest email to the merchant immediately
+ */
+export const useSendReferralDigestNow = <TError = ErrorType<SendReferralDigestNow400>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendReferralDigestNow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendReferralDigestNow>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSendReferralDigestNowMutationOptions(options));
     }
 
 export const getListStickerTemplatesUrl = () => {

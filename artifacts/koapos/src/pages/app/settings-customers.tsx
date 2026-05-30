@@ -21,6 +21,7 @@ import {
   getListCustomersQueryKey,
   useBulkMergePreview,
   useBulkExecuteMerge,
+  useSendReferralDigestNow,
 } from "@workspace/api-client-react";
 import type { DuplicateBucket } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -112,8 +113,9 @@ export default function SettingsCustomersPage() {
     total: 0, current: 0, running: false, done: false, failed: 0,
   });
 
-  const scanMutation    = useBulkMergePreview();
-  const executeMutation = useBulkExecuteMerge();
+  const scanMutation         = useBulkMergePreview();
+  const executeMutation      = useBulkExecuteMerge();
+  const sendDigestNowMutation = useSendReferralDigestNow();
 
   const groupCounts = (customers as { customerGroup?: string }[]).reduce<Record<string, number>>((acc, c) => {
     const g = c.customerGroup || "Standard";
@@ -883,34 +885,67 @@ export default function SettingsCustomersPage() {
               />
             </div>
             {settings.weeklyDigestOptIn && (
-              <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Send day</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    The digest will be sent on this day each week.
-                  </p>
+              <>
+                <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Send day</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      The digest will be sent on this day each week.
+                    </p>
+                  </div>
+                  <Select
+                    value={String(settings.weeklyDigestSendDay)}
+                    onValueChange={(v) => {
+                      save({ weeklyDigestSendDay: Number(v) });
+                      toast.success("Send day updated");
+                    }}
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                      <SelectItem value="0">Sunday</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select
-                  value={String(settings.weeklyDigestSendDay)}
-                  onValueChange={(v) => {
-                    save({ weeklyDigestSendDay: Number(v) });
-                    toast.success("Send day updated");
-                  }}
-                >
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Monday</SelectItem>
-                    <SelectItem value="2">Tuesday</SelectItem>
-                    <SelectItem value="3">Wednesday</SelectItem>
-                    <SelectItem value="4">Thursday</SelectItem>
-                    <SelectItem value="5">Friday</SelectItem>
-                    <SelectItem value="6">Saturday</SelectItem>
-                    <SelectItem value="0">Sunday</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Send test digest now</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Sends a digest email to your account address immediately so you can preview the content.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 shrink-0"
+                    disabled={sendDigestNowMutation.isPending}
+                    onClick={() => {
+                      sendDigestNowMutation.mutate(undefined, {
+                        onSuccess: (data) => {
+                          toast.success(`Digest sent to ${data.email}`);
+                        },
+                        onError: (err) => {
+                          const msg = (err as { data?: { error?: string } })?.data?.error;
+                          toast.error(msg ?? "Failed to send digest — check your email settings");
+                        },
+                      });
+                    }}
+                  >
+                    {sendDigestNowMutation.isPending
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Mail className="w-3.5 h-3.5" />
+                    }
+                    {sendDigestNowMutation.isPending ? "Sending…" : "Send now"}
+                  </Button>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
