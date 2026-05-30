@@ -36,6 +36,15 @@ import {
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
   Settings2, ClipboardList, FileSearch, Save, ShieldCheck,
 } from "lucide-react";
+import {
+  printReceipt,
+  printA4Invoice,
+  printA4Receipt,
+  printA4ServiceJob,
+  type ReceiptBusinessInfo,
+  type ReceiptTemplateOpts,
+  type ServiceJobPrintData,
+} from "@/lib/print-receipt";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -533,6 +542,7 @@ function OptionsPanel({
   setIsDefault,
   onSave,
   saving,
+  onPreview,
   onFieldFocus,
   onFieldInsert,
 }: {
@@ -545,6 +555,7 @@ function OptionsPanel({
   setIsDefault: (v: boolean) => void;
   onSave: () => void;
   saving: boolean;
+  onPreview: () => void;
   onFieldFocus: (key: string | null) => void;
   onFieldInsert: (key: string, insert: (code: string) => void) => void;
 }) {
@@ -669,11 +680,15 @@ function OptionsPanel({
         })}
       </div>
 
-      {/* Save button */}
-      <div className="px-4 py-3 border-t bg-muted/10">
+      {/* Save + Preview buttons */}
+      <div className="px-4 py-3 border-t bg-muted/10 space-y-2">
         <Button size="sm" className="w-full gap-2" onClick={onSave} disabled={saving}>
           <Save className="w-3.5 h-3.5" />
           {saving ? "Saving…" : "Save Template"}
+        </Button>
+        <Button size="sm" variant="outline" className="w-full gap-2" onClick={onPreview}>
+          <Printer className="w-3.5 h-3.5" />
+          Print Preview
         </Button>
       </div>
     </div>
@@ -1480,6 +1495,109 @@ export default function ManagementTemplatesPage() {
   const dbRow = templates.find((t) => t.templateType === activeCategory);
   const activeStyle = dbRow?.selectedStyle ?? DEFAULT_STYLE[activeCategory];
 
+  const handlePreview = useCallback(() => {
+    const businessInfo: ReceiptBusinessInfo = {
+      businessName: merchant?.businessName || "Your Business",
+      abn: profile.abn || "",
+      website: profile.website || "",
+      email: profile.contactEmail || merchant?.email || "",
+      brandColor: (profile.brandColors ?? [])[0] || "#efbf04",
+    };
+    const receiptOpts: ReceiptTemplateOpts = {
+      showLogo: opts.showLogo,
+      showAbn: opts.showAbn,
+      showGstBreakdown: opts.showGstBreakdown,
+      showWebsite: opts.showWebsite,
+      showPaymentMethods: opts.showPaymentMethods,
+      showCustomerQr: opts.showCustomerQr,
+      showLoyaltyEarned: opts.showLoyaltyEarned,
+      showBarcode: opts.showBarcode,
+      printCustomerCopy: opts.printCustomerCopy,
+      thankYouMsg: opts.thankYouMsg,
+      footerText: opts.footerText,
+      headerText: opts.headerText,
+      customMessage: opts.customMessage,
+      loyaltyQrText: opts.loyaltyQrText,
+      fontFamily: FONT_OPTIONS.find(f => f.value === opts.fontFamily)?.css ?? FONT_OPTIONS[0].css,
+      showCustomerDetails: opts.showCustomerDetails,
+      showDeviceDetails: opts.showDeviceDetails,
+      showWorkDescription: opts.showWorkDescription,
+      warrantyText: opts.warrantyText,
+    };
+    const baseDate = new Date().toISOString();
+    const demoTx: import("@workspace/api-client-react").Transaction = {
+      id: 999999,
+      merchantId: 1,
+      customerId: 42,
+      customer: {
+        id: 42,
+        merchantId: 1,
+        firstName: "Sarah",
+        lastName: "Johnson",
+        email: "sarah@email.com",
+        phone: "(03) 9000 1111",
+        createdAt: baseDate,
+        updatedAt: baseDate,
+      } as import("@workspace/api-client-react").Customer,
+      receiptNumber: "PREVIEW-001",
+      status: "completed",
+      subtotal: 40.91,
+      taxTotal: 4.09,
+      total: 45.00,
+      paymentMethod: "card",
+      amountTendered: 45.00,
+      changeDue: 0,
+      items: [
+        { productId: 1, productName: "Flat White", quantity: 2, unitPrice: 8.00, totalPrice: 16.00, taxAmount: 1.45, discount: 0 },
+        { productId: 2, productName: "Banana Bread", quantity: 1, unitPrice: 6.50, totalPrice: 6.50, taxAmount: 0.59, discount: 0 },
+        { productId: 3, productName: "Orange Juice", quantity: 1, unitPrice: 5.00, totalPrice: 5.00, taxAmount: 0.45, discount: 0 },
+      ],
+      createdAt: baseDate,
+      notes: null,
+      loyaltyEarned: 19,
+      staffId: null,
+    };
+    const demoJob: ServiceJobPrintData = {
+      id: 999999,
+      jobNumber: "SJ-001",
+      status: "in_progress",
+      bookInDate: "2026-05-18",
+      deviceType: "iPhone",
+      deviceDescription: "iPhone 14 Pro",
+      serialNumber: "ABC123456",
+      condition: "good",
+      workDescription: "Screen replacement",
+      additionalEquipment: "Charging cable",
+      notes: "Customer will pick up tomorrow",
+      estimatedCost: 350.00,
+      isPartnerRepair: false,
+      isCritical: false,
+      isUnderWarranty: false,
+      scheduledAt: "2026-05-20T09:00:00Z",
+      createdAt: baseDate,
+      customerName: "Sarah Johnson",
+      customerEmail: "sarah@email.com",
+      customerPhone: "(03) 9000 1111",
+    };
+    switch (activeCategory) {
+      case "Thermal_Receipt":
+        printReceipt(demoTx, businessInfo, receiptOpts);
+        break;
+      case "Invoice":
+        printA4Invoice(demoTx, businessInfo, receiptOpts);
+        break;
+      case "A4_Receipt":
+        printA4Receipt(demoTx, businessInfo, receiptOpts);
+        break;
+      case "Quote":
+        printA4Invoice(demoTx, businessInfo, receiptOpts);
+        break;
+      case "Service_Ticket":
+        printA4ServiceJob(demoJob, businessInfo, undefined, receiptOpts);
+        break;
+    }
+  }, [activeCategory, opts, merchant, profile]);
+
   const renderPreview = () => {
     switch (activeCategory) {
       case "Thermal_Receipt":  return <ReceiptPreview      {...previewProps} />;
@@ -1588,6 +1706,7 @@ export default function ManagementTemplatesPage() {
                 setIsDefault={setIsDefault}
                 onSave={() => save(previewId)}
                 saving={saving}
+                onPreview={handlePreview}
                 onFieldFocus={(label) => setFocusedFieldLabel(label)}
                 onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
               />
