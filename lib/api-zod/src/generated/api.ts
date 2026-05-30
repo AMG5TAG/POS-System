@@ -6911,6 +6911,41 @@ export const UpdatePcBuilderSettingsResponse = zod.object({
 })
 
 
+export const ListPcSavedBuildsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "build": zod.record(zod.string(), zod.unknown()),
+  "assemblyHours": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+export const CreatePcSavedBuildBody = zod.object({
+  "name": zod.string(),
+  "build": zod.record(zod.string(), zod.unknown()),
+  "assemblyHours": zod.number()
+})
+
+export const CreatePcSavedBuildResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "build": zod.record(zod.string(), zod.unknown()),
+  "assemblyHours": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeletePcSavedBuildParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
 export const ListPcCompatRulesResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),

@@ -1,7 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useCreateProduct, useListProductTypes, useCreateProductType, type Product } from "@workspace/api-client-react";
+import {
+  useListProducts, useCreateProduct, useListProductTypes, useCreateProductType,
+  useListPcSavedBuilds, useCreatePcSavedBuild, useDeletePcSavedBuild,
+  getListPcSavedBuildsQueryKey,
+  type Product,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,28 +37,7 @@ interface CompatWarning {
   message: string;
 }
 
-interface SavedBuild {
-  name: string;
-  build: Build;
-  assemblyHours: number;
-  savedAt: number;
-}
-
-const SAVED_BUILDS_KEY = "koapos_pc_builder_saved";
-const DRAFT_KEY        = "koapos_pc_builder_draft";
-
-function loadSavedBuilds(): SavedBuild[] {
-  try {
-    const raw = localStorage.getItem(SAVED_BUILDS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedBuild[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
-
-function persistSavedBuilds(builds: SavedBuild[]) {
-  try { localStorage.setItem(SAVED_BUILDS_KEY, JSON.stringify(builds)); } catch { /* ignore */ }
-}
+const DRAFT_KEY = "koapos_pc_builder_draft";
 
 interface DraftBuild {
   buildName: string;
@@ -219,12 +204,19 @@ function checkCompatibility(build: Build, products: Product[], compatMap: PCComp
 
 export default function POSPCBuilderPage() {
   const [, navigate] = useLocation();
+  const queryClient  = useQueryClient();
 
   const { data: productsData, isLoading } = useListProducts(
     { limit: 1000 },
     { query: { queryKey: ["products"] } }
   );
   const products = (productsData?.items || []) as Product[];
+
+  const { data: savedBuildsData } = useListPcSavedBuilds();
+  const savedBuilds = savedBuildsData?.items ?? [];
+  const createSavedBuildMutation = useCreatePcSavedBuild();
+  const deleteSavedBuildMutation = useDeletePcSavedBuild();
+  const inv = () => queryClient.invalidateQueries({ queryKey: getListPcSavedBuildsQueryKey() });
 
   const [compatMap, setCompatMap]       = useState<PCCompatMap>(() => loadPCCompat());
   const [settings, setSettings]         = useState<PCBuilderSettings>(() => loadPCBuilderSettings());
@@ -237,7 +229,6 @@ export default function POSPCBuilderPage() {
   );
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState("");
-  const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>(() => loadSavedBuilds());
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
 
   // Auto-persist the current configuration as a draft so a browser refresh
@@ -298,36 +289,33 @@ export default function POSPCBuilderPage() {
     const trimmed = buildName.trim();
     if (!trimmed) { toast.error("Build name is required"); return; }
     if (componentCount === 0) { toast.error("Select at least one component before saving"); return; }
-    const entry: SavedBuild = {
-      name: trimmed,
-      build: { ...build },
-      assemblyHours,
-      savedAt: Date.now(),
-    };
-    const next = [
-      entry,
-      ...savedBuilds.filter((b) => b.name !== trimmed),
-    ];
-    setSavedBuilds(next);
-    persistSavedBuilds(next);
-    toast.success(`Build "${trimmed}" saved`);
+    createSavedBuildMutation.mutate(
+      { data: { name: trimmed, build: { ...build } as Record<string, number | null>, assemblyHours } },
+      {
+        onSuccess: () => { inv(); toast.success(`Build "${trimmed}" saved`); },
+        onError: () => toast.error("Failed to save build"),
+      }
+    );
   };
 
-  const handleLoadBuild = (name: string) => {
-    const entry = savedBuilds.find((b) => b.name === name);
+  const handleLoadBuild = (id: number) => {
+    const entry = savedBuilds.find((b) => b.id === id);
     if (!entry) { toast.error("Build not found"); return; }
     setBuildName(entry.name);
-    setBuild({ ...entry.build });
+    setBuild({ ...(entry.build as Build) });
     setAssemblyHours(entry.assemblyHours);
     setLoadDialogOpen(false);
     toast.success(`Loaded "${entry.name}"`);
   };
 
-  const handleDeleteSavedBuild = (name: string) => {
-    const next = savedBuilds.filter((b) => b.name !== name);
-    setSavedBuilds(next);
-    persistSavedBuilds(next);
-    toast.success(`Deleted "${name}"`);
+  const handleDeleteSavedBuild = (id: number) => {
+    deleteSavedBuildMutation.mutate(
+      { id },
+      {
+        onSuccess: () => { inv(); toast.success("Build deleted"); },
+        onError: () => toast.error("Failed to delete build"),
+      }
+    );
   };
 
   const handleAddToCart = () => {
@@ -730,21 +718,22 @@ export default function POSPCBuilderPage() {
               </p>
             ) : (
               savedBuilds.map((b) => {
-                const partCount = Object.values(b.build).filter((id) => id !== null).length;
+                const buildRecord = (b.build ?? {}) as Build;
+                const partCount = Object.values(buildRecord).filter((id) => id !== null).length;
                 return (
                   <div
-                    key={b.name}
+                    key={b.id}
                     className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-accent/50"
                   >
                     <button
                       type="button"
-                      onClick={() => handleLoadBuild(b.name)}
+                      onClick={() => handleLoadBuild(b.id)}
                       className="flex-1 min-w-0 text-left"
                     >
                       <div className="font-medium text-sm truncate">{b.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {partCount} part{partCount !== 1 ? "s" : ""} ·{" "}
-                        {new Date(b.savedAt).toLocaleDateString("en-AU", {
+                        {new Date(b.updatedAt).toLocaleDateString("en-AU", {
                           day: "numeric", month: "short", year: "numeric",
                         })}
                       </div>
@@ -753,7 +742,8 @@ export default function POSPCBuilderPage() {
                       variant="ghost"
                       size="icon"
                       className="text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => handleDeleteSavedBuild(b.name)}
+                      onClick={() => handleDeleteSavedBuild(b.id)}
+                      disabled={deleteSavedBuildMutation.isPending}
                       aria-label={`Delete ${b.name}`}
                     >
                       <Trash2 className="w-4 h-4" />

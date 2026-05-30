@@ -135,6 +135,7 @@ import type {
   ListInventoryParams,
   ListLaybys200,
   ListLaybysParams,
+  ListPcSavedBuilds200,
   ListPosRegisterSessionsParams,
   ListPosStaffSessionsParams,
   ListProductPreOrdersParams,
@@ -175,6 +176,8 @@ import type {
   PcBuilderSettingsInput,
   PcCompatRule,
   PcCompatRuleInput,
+  PcSavedBuild,
+  PcSavedBuildInput,
   Plan,
   PosCodePrefixes,
   PosCodePrefixesInput,
@@ -22078,6 +22081,206 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdatePcBuilderSettingsMutationOptions(options));
+    }
+
+export const getListPcSavedBuildsUrl = () => {
+
+
+
+
+  return `/api/pc-saved-builds`
+}
+
+export const listPcSavedBuilds = async ( options?: RequestInit): Promise<ListPcSavedBuilds200> => {
+
+  return customFetch<ListPcSavedBuilds200>(getListPcSavedBuildsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPcSavedBuildsQueryKey = () => {
+    return [
+    `/api/pc-saved-builds`
+    ] as const;
+    }
+
+
+export const getListPcSavedBuildsQueryOptions = <TData = Awaited<ReturnType<typeof listPcSavedBuilds>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPcSavedBuilds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPcSavedBuildsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPcSavedBuilds>>> = ({ signal }) => listPcSavedBuilds({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPcSavedBuilds>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPcSavedBuildsQueryResult = NonNullable<Awaited<ReturnType<typeof listPcSavedBuilds>>>
+export type ListPcSavedBuildsQueryError = ErrorType<unknown>
+
+
+
+export function useListPcSavedBuilds<TData = Awaited<ReturnType<typeof listPcSavedBuilds>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPcSavedBuilds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPcSavedBuildsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreatePcSavedBuildUrl = () => {
+
+
+
+
+  return `/api/pc-saved-builds`
+}
+
+export const createPcSavedBuild = async (pcSavedBuildInput: PcSavedBuildInput, options?: RequestInit): Promise<PcSavedBuild> => {
+
+  return customFetch<PcSavedBuild>(getCreatePcSavedBuildUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pcSavedBuildInput,)
+  }
+);}
+
+
+
+
+export const getCreatePcSavedBuildMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPcSavedBuild>>, TError,{data: BodyType<PcSavedBuildInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPcSavedBuild>>, TError,{data: BodyType<PcSavedBuildInput>}, TContext> => {
+
+const mutationKey = ['createPcSavedBuild'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPcSavedBuild>>, {data: BodyType<PcSavedBuildInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPcSavedBuild(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePcSavedBuildMutationResult = NonNullable<Awaited<ReturnType<typeof createPcSavedBuild>>>
+    export type CreatePcSavedBuildMutationBody = BodyType<PcSavedBuildInput>
+    export type CreatePcSavedBuildMutationError = ErrorType<unknown>
+
+    export const useCreatePcSavedBuild = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPcSavedBuild>>, TError,{data: BodyType<PcSavedBuildInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPcSavedBuild>>,
+        TError,
+        {data: BodyType<PcSavedBuildInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePcSavedBuildMutationOptions(options));
+    }
+
+export const getDeletePcSavedBuildUrl = (id: number,) => {
+
+
+
+
+  return `/api/pc-saved-builds/${id}`
+}
+
+export const deletePcSavedBuild = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePcSavedBuildUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeletePcSavedBuildMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePcSavedBuild>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePcSavedBuild>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deletePcSavedBuild'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePcSavedBuild>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePcSavedBuild(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePcSavedBuildMutationResult = NonNullable<Awaited<ReturnType<typeof deletePcSavedBuild>>>
+
+    export type DeletePcSavedBuildMutationError = ErrorType<unknown>
+
+    export const useDeletePcSavedBuild = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePcSavedBuild>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePcSavedBuild>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeletePcSavedBuildMutationOptions(options));
     }
 
 export const getListPcCompatRulesUrl = () => {

@@ -5277,6 +5277,58 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PcBuilderSettings" }
 
+  /pc-saved-builds:
+    get:
+      operationId: listPcSavedBuilds
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: List of saved PC builds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PcSavedBuild" }
+    post:
+      operationId: createPcSavedBuild
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PcSavedBuildInput" }
+      responses:
+        "200":
+          description: Updated existing saved build (name matched)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PcSavedBuild" }
+        "201":
+          description: Created new saved build
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PcSavedBuild" }
+
+  /pc-saved-builds/{id}:
+    delete:
+      operationId: deletePcSavedBuild
+      tags: [Settings]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   /pc-compat-rules:
     get:
       operationId: listPcCompatRules
@@ -9417,6 +9469,30 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ProductPerformanceItem" }
+
+    PcSavedBuild:
+      type: object
+      required: [id, merchantId, name, build, assemblyHours, createdAt, updatedAt]
+      properties:
+        id:            { type: integer }
+        merchantId:    { type: integer }
+        name:          { type: string }
+        build:
+          type: object
+          additionalProperties: true
+        assemblyHours: { type: number }
+        createdAt:     { type: string, format: date-time }
+        updatedAt:     { type: string, format: date-time }
+
+    PcSavedBuildInput:
+      type: object
+      required: [name, build, assemblyHours]
+      properties:
+        name:          { type: string }
+        build:
+          type: object
+          additionalProperties: true
+        assemblyHours: { type: number }
 
     PcBuilderSettings:
       type: object

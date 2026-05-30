@@ -2976,6 +2976,26 @@ export interface ProductPerformanceReport {
   items: ProductPerformanceItem[];
 }
 
+export type PcSavedBuildBuild = { [key: string]: unknown };
+
+export interface PcSavedBuild {
+  id: number;
+  merchantId: number;
+  name: string;
+  build: PcSavedBuildBuild;
+  assemblyHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PcSavedBuildInputBuild = { [key: string]: unknown };
+
+export interface PcSavedBuildInput {
+  name: string;
+  build: PcSavedBuildInputBuild;
+  assemblyHours: number;
+}
+
 export interface PcBuilderSettings {
   id: number;
   merchantId: number;
@@ -3534,6 +3554,10 @@ registerId?: string;
 export type GetProductPerformanceParams = {
 startDate: string;
 endDate: string;
+};
+
+export type ListPcSavedBuilds200 = {
+  items: PcSavedBuild[];
 };
 
 export type SendReferralDigestNow400 = {

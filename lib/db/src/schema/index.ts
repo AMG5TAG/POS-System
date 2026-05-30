@@ -76,5 +76,6 @@ export * from "./business-profile";
 export * from "./customer-settings";
 export * from "./sticker-templates";
 export * from "./pc-builder-settings";
+export * from "./pc-saved-builds";
 export * from "./pc-compat-rules";
 export * from "./print-3d-settings";
