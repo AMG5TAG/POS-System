@@ -13,7 +13,7 @@ import {
   type HeardFromPeriod,
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
-import { exportHeardFromCSV } from "@/lib/heard-from-export";
+import { exportHeardFromCSV, exportHeardFromXLSX } from "@/lib/heard-from-export";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -35,7 +35,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
-  TrendingUp, TrendingDown, Minus, Download, Sparkles,
+  TrendingUp, TrendingDown, Minus, Download, Sparkles, FileSpreadsheet,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -574,6 +574,22 @@ export default function SettingsCustomersPage() {
               >
                 <Download className="w-4 h-4" />
                 Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={heardFromBreakdown.length === 0}
+                onClick={async () => {
+                  try {
+                    await exportHeardFromXLSX(heardFromData, heardFromPeriod);
+                  } catch {
+                    toast.error("Couldn't generate the Excel file. Please try again.");
+                  }
+                }}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Export XLSX
               </Button>
               <Select value={heardFromPeriod} onValueChange={(v) => setHeardFromPeriod(v as HeardFromPeriod)}>
                 <SelectTrigger className="w-[150px] shrink-0">

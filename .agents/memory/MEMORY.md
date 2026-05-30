@@ -1,1 +1,2 @@
 - [Service job sheet print template](service-print-template.md) — one shared ServiceJobSheet component for both new-service print and reprint; both read useSalesTemplate("Service_Ticket"), never hardcoded opts.
+- [Styled XLSX exports](xlsx-styled-exports.md) — use exceljs (not the bundled SheetJS `xlsx`) when an export needs cell styling; SheetJS community ignores styles on write.
