@@ -11687,7 +11687,10 @@ components:
       properties:
         status:    { type: string, enum: [draft, sent, partial, paid, overdue, cancelled] }
         notes:     { type: string }
-        dueDate:   { type: string, format: date-time }
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
         customerId:
           type: integer
           nullable: true
@@ -11695,7 +11698,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/InvoiceLineItem" }
         discount:  { $ref: "#/components/schemas/InvoiceDiscountInput" }
-        recurring: { $ref: "#/components/schemas/InvoiceRecurringUpdate" }
+        recurring:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/InvoiceRecurringUpdate"
 
     GiftCardPaymentRef:
       type: object

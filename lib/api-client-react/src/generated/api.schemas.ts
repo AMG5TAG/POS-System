@@ -3817,11 +3817,11 @@ export const InvoiceUpdateStatus = {
 export interface InvoiceUpdate {
   status?: InvoiceUpdateStatus;
   notes?: string;
-  dueDate?: string;
+  dueDate?: string | null;
   customerId?: number | null;
   items?: InvoiceLineItem[];
   discount?: InvoiceDiscountInput;
-  recurring?: InvoiceRecurringUpdate;
+  recurring?: InvoiceRecurringUpdate | null;
 }
 
 export interface GiftCardPaymentRef {

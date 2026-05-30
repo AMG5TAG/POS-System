@@ -5,7 +5,14 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
-import { RecordInvoicePaymentBody, AddInvoiceEventBody, SendInvoiceEmailBody } from "@workspace/api-zod";
+import {
+  RecordInvoicePaymentBody,
+  AddInvoiceEventBody,
+  SendInvoiceEmailBody,
+  ListInvoicesQueryParams,
+  CreateInvoiceBody,
+  UpdateInvoiceBody,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -151,7 +158,9 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
 
 // GET /invoices
 router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
-  const { status, limit = 50, offset = 0 } = req.query as Record<string, string>;
+  const qParsed = ListInvoicesQueryParams.safeParse(req.query);
+  if (!qParsed.success) { res.status(400).json({ error: qParsed.error.message }); return; }
+  const { status, limit, offset } = qParsed.data;
   const merchantId = req.session.merchantId!;
   const conditions = [eq(invoicesTable.merchantId, merchantId)];
   if (status) conditions.push(eq(invoicesTable.status, status));
@@ -179,8 +188,8 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(...conditions))
     .orderBy(asc(invoicesTable.dueDate), desc(invoicesTable.createdAt))
-    .limit(parseInt(String(limit)))
-    .offset(parseInt(String(offset)));
+    .limit(limit)
+    .offset(offset);
 
   res.json({
     items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName, r.customerEmail, r.customerPhone, r.customerAddress, r.customerCompany, r.customerBillingStreet, r.customerBillingCity, r.customerBillingState, r.customerBillingPostcode)),
@@ -217,6 +226,8 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 
 // POST /invoices
 router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
+  const bodyParsed = CreateInvoiceBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const {
     customerId,
     dueDate,
@@ -225,19 +236,11 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     invoicePrefix,
     invoiceDigits,
     recurring,
-  } = req.body as {
-    customerId?: number;
-    dueDate?: string;
-    notes?: string;
-    items?: LineItem[];
-    invoicePrefix?: string;
-    invoiceDigits?: number;
-    recurring?: { frequency: string; startDate?: string | null; occurrences?: number };
-  };
+    discount: discountInput,
+  } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
-  const lines: LineItem[] = lineItems ?? [];
-  const discountInput = (req.body as { discount?: Discount | null }).discount ?? null;
+  const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
   const [countRow] = await db
@@ -261,12 +264,12 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     discountValue: discountInput?.value != null ? String(discountInput.value) : null,
     discountTotal: discountAmount > 0 ? String(discountAmount) : null,
     items: lines.length ? lines : null,
-    dueDate: dueDate ? new Date(dueDate) : null,
+    dueDate: dueDate ?? null,
     notes: notes ?? null,
     isRecurring: recurring ? "true" : "false",
     recurringFrequency: recurring?.frequency ?? null,
     recurringOccurrences: recurring?.occurrences ?? null,
-    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
+    recurringStartDate: recurring?.startDate ?? null,
   }).returning();
 
   // Fetch with full customer details
@@ -335,12 +338,9 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
 // PATCH /invoices/:id
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
-  const { status, notes, dueDate, customerId, items, recurring, discount } = req.body as {
-    status?: string; notes?: string; dueDate?: string;
-    customerId?: number | null; items?: LineItem[];
-    discount?: Discount | null;
-    recurring?: { enabled: boolean; frequency?: string; startDate?: string | null; occurrences?: number } | null;
-  };
+  const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { status, notes, dueDate, customerId, items, recurring, discount } = bodyParsed.data;
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -353,7 +353,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
   if (notes !== undefined) updates.notes = notes;
-  if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
+  if (dueDate !== undefined) updates.dueDate = dueDate ?? null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
   if (items !== undefined || discount !== undefined) {
     // Fetch existing items/discount if only one was sent

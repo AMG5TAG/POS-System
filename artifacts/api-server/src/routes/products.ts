@@ -25,6 +25,10 @@ import {
   DeleteProductTagBody,
   CreateProductVariantBody,
   UpdateProductVariantBody,
+  ListProductVariantsParams,
+  CreateProductVariantParams,
+  UpdateProductVariantParams,
+  DeleteProductVariantParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -638,8 +642,9 @@ function formatVariant(v: typeof productVariantsTable.$inferSelect) {
 }
 
 router.get("/products/:productId/variants", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(String(req.params.productId));
-  if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }
+  const paramsParsed = ListProductVariantsParams.safeParse(req.params);
+  if (!paramsParsed.success) { res.status(400).json({ error: paramsParsed.error.message }); return; }
+  const { productId } = paramsParsed.data;
   const [product] = await db.select().from(productsTable)
     .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
@@ -650,8 +655,9 @@ router.get("/products/:productId/variants", requireAuth, async (req, res): Promi
 });
 
 router.post("/products/:productId/variants", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(String(req.params.productId));
-  if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }
+  const paramsParsed = CreateProductVariantParams.safeParse(req.params);
+  if (!paramsParsed.success) { res.status(400).json({ error: paramsParsed.error.message }); return; }
+  const { productId } = paramsParsed.data;
   const [product] = await db.select().from(productsTable)
     .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
@@ -673,9 +679,9 @@ router.post("/products/:productId/variants", requireAuth, async (req, res): Prom
 });
 
 router.patch("/products/:productId/variants/:id", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(String(req.params.productId));
-  const id = parseInt(String(req.params.id));
-  if (isNaN(productId) || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsParsed = UpdateProductVariantParams.safeParse(req.params);
+  if (!paramsParsed.success) { res.status(400).json({ error: paramsParsed.error.message }); return; }
+  const { productId, id } = paramsParsed.data;
   const bodyParsed = UpdateProductVariantBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { name, sku, barcode, price, costPrice, stockQuantity, attributes, imageUrl, isActive, sortOrder } = bodyParsed.data;
@@ -698,9 +704,9 @@ router.patch("/products/:productId/variants/:id", requireAuth, async (req, res):
 });
 
 router.delete("/products/:productId/variants/:id", requireAuth, async (req, res): Promise<void> => {
-  const productId = parseInt(String(req.params.productId));
-  const id = parseInt(String(req.params.id));
-  if (isNaN(productId) || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsParsed = DeleteProductVariantParams.safeParse(req.params);
+  if (!paramsParsed.success) { res.status(400).json({ error: paramsParsed.error.message }); return; }
+  const { productId, id } = paramsParsed.data;
   await db.delete(productVariantsTable)
     .where(and(eq(productVariantsTable.id, id), eq(productVariantsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);

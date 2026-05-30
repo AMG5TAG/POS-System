@@ -8132,7 +8132,7 @@ export const UpdateInvoiceParams = zod.object({
 export const UpdateInvoiceBody = zod.object({
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']).optional(),
   "notes": zod.string().optional(),
-  "dueDate": zod.coerce.date().optional(),
+  "dueDate": zod.coerce.date().nullish(),
   "customerId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
@@ -8149,7 +8149,7 @@ export const UpdateInvoiceBody = zod.object({
   "frequency": zod.string().optional(),
   "startDate": zod.string().nullish(),
   "occurrences": zod.number().optional()
-}).optional()
+}).nullish()
 })
 
 export const UpdateInvoiceResponse = zod.object({
