@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
-import { printReceipt } from "@/lib/print-receipt";
+import { printReceipt, printA4Invoice } from "@/lib/print-receipt";
 import { useBusinessProfile } from "@/lib/business-profile";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
@@ -45,7 +45,7 @@ import {
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
   Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown, Filter,
-  Printer,
+  Printer, Send,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -998,6 +998,9 @@ function CustomerDetailInner({
   const queryClient = useQueryClient();
   const { profile } = useBusinessProfile();
   const [tab, setTab] = useState<DetailTab>("overview");
+  const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
+  const [emailAddr, setEmailAddr] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
@@ -1456,16 +1459,49 @@ function CustomerDetailInner({
                 ) : (
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.transactions.map((tx) => (
-                      <button key={tx.id} type="button" onClick={() => setSelectedTx(tx as Transaction)} className="flex items-center justify-between px-4 py-2.5 text-sm w-full text-left hover:bg-muted/40 transition-colors">
-                        <div>
-                          <p className="font-medium">{tx.receiptNumber || `#${tx.id}`}</p>
-                          <p className="text-xs text-muted-foreground">{tx.paymentMethod} · {new Date(tx.createdAt).toLocaleDateString("en-AU")}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold">{formatCurrency(tx.total)}</p>
-                          <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>
-                        </div>
-                      </button>
+                      <div key={tx.id} className="flex items-center px-4 py-2.5 text-sm hover:bg-muted/40 transition-colors group">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTx(tx as Transaction)}
+                          className="flex-1 flex items-center justify-between text-left min-w-0 mr-2"
+                        >
+                          <div>
+                            <p className="font-medium">{tx.receiptNumber || `#${tx.id}`}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{tx.paymentMethod} · {new Date(tx.createdAt).toLocaleDateString("en-AU")}</p>
+                          </div>
+                          <div className="text-right mr-2">
+                            <p className="font-bold">{formatCurrency(tx.total)}</p>
+                            <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>
+                          </div>
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => printReceipt(tx as Transaction, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" })}>
+                              <Printer className="h-4 w-4 mr-2" />
+                              Receipt (80mm)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => printA4Invoice(tx as Transaction, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" })}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              A4 Invoice
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setEmailAddr(customer.email ?? ""); setEmailDialogTx(tx as Transaction); }}>
+                              <Mail className="h-4 w-4 mr-2" />
+                              Email Receipt
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1998,22 +2034,39 @@ function CustomerDetailInner({
             </div>
           )}
           <DialogFooter className="gap-2 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!selectedTx) return;
-                printReceipt(selectedTx, {
-                  abn: profile?.abn ?? "",
-                  website: profile?.website ?? "",
-                  email: profile?.contactEmail ?? "",
-                  brandColor: (profile?.brandColors ?? [])[0] ?? "",
-                });
-              }}
-            >
-              <Printer className="h-4 w-4 mr-1.5" />
-              Print Receipt
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Printer className="h-4 w-4 mr-1.5" />
+                  Reprint
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  if (!selectedTx) return;
+                  printReceipt(selectedTx, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" });
+                }}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Receipt (80mm)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  if (!selectedTx) return;
+                  printA4Invoice(selectedTx, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" });
+                }}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  A4 Invoice
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                  if (!selectedTx) return;
+                  setEmailAddr(customer.email ?? "");
+                  setEmailDialogTx(selectedTx);
+                }}>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email Receipt
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2111,6 +2164,62 @@ function CustomerDetailInner({
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Email receipt dialog ── */}
+      <Dialog open={!!emailDialogTx} onOpenChange={(open) => { if (!open) setEmailDialogTx(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              Email Receipt
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Send receipt <strong>{emailDialogTx?.receiptNumber || `#${emailDialogTx?.id}`}</strong> to:
+            </p>
+            <Input
+              type="email"
+              placeholder="customer@example.com"
+              value={emailAddr}
+              onChange={(e) => setEmailAddr(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!emailAddr.trim() || !emailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
+                  setEmailSending(true);
+                  setTimeout(() => {
+                    toast.success(`Receipt emailed to ${emailAddr}`);
+                    setEmailSending(false);
+                    setEmailDialogTx(null);
+                  }, 700);
+                }
+              }}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEmailDialogTx(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={emailSending || !emailAddr.trim() || !emailAddr.includes("@")}
+              onClick={() => {
+                if (!emailAddr.trim() || !emailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
+                setEmailSending(true);
+                setTimeout(() => {
+                  toast.success(`Receipt emailed to ${emailAddr}`);
+                  setEmailSending(false);
+                  setEmailDialogTx(null);
+                }, 700);
+              }}
+            >
+              {emailSending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              Send
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

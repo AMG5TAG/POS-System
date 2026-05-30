@@ -1,0 +1,25 @@
+### Role & Context
+You are an expert full-stack developer. I need you to implement a feature in our application that allows users to print or email service records directly from the **Customer Service Job History** tab.
+
+### Objective
+Add a "Print/Send" action to each job record in the Customer Service Job History view. When clicked, it must give the user two distinct options: **A4** (Standard full-page service report/invoice) or **Email to Customer**.
+
+### High-Level Requirements
+
+1. **UI Updates (Service Job History Tab):**
+   * Next to each completed or past service job row, add an action button (e.g., a "Share", "Print", or dropdown icon).
+   * Clicking this should open a clean dropdown menu or modal with two options:
+     * 📄 **Print A4:** Formatted as a professional, full-page standard A4 service sheet or invoice.
+     * ✉️ **Email to Customer:** Triggers a digital copy to be sent directly to the client.
+
+2. **Functional Logic:**
+   * **Print A4 Option:** Fetch the specific job details (parts used, labor, technician notes, totals), apply the A4 print template/CSS layout, and trigger the browser's native print dialog (`window.print()`). 
+   * **Email to Customer Option:** Open a confirmation modal. Pre-fill the customer's email address if it exists in their profile. Allow the user to modify the email address if needed, then click "Send" to trigger the backend email service (which should attach the service job report as a PDF or clean HTML email).
+
+3. **Technical Specs & Edge Cases:**
+   * Match the application's existing design system and components.
+   * Include clear loading states while fetching job data or waiting for the email API response.
+   * Ensure the A4 print CSS includes proper page-break logic so multi-page service histories, long technician notes, or extensive parts lists don't cut off awkwardly.
+
+### Instructions
+Please analyze the project structure, locate the file handling the Customer Service Job History tab, and implement the necessary frontend UI changes, A4 print templates, and event handlers. Let me know which files you need to modify.
