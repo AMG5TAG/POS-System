@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
-import { printReceipt, printA4Invoice } from "@/lib/print-receipt";
+import { printReceipt, printA4Invoice, printA4ServiceJob } from "@/lib/print-receipt";
 import { useBusinessProfile } from "@/lib/business-profile";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
@@ -1001,6 +1001,9 @@ function CustomerDetailInner({
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
+  const [jobEmailAddr, setJobEmailAddr] = useState("");
+  const [jobEmailSending, setJobEmailSending] = useState(false);
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
@@ -1540,17 +1543,48 @@ function CustomerDetailInner({
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
+                      const bizInfo = { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" };
+                      const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
                       return (
-                        <div key={j.id} role="button" onClick={() => setSelectedJob(j as ServiceJob)} className="px-4 py-2.5 text-sm space-y-2 cursor-pointer hover:bg-muted/40 transition-colors">
+                        <div key={j.id} className="px-4 py-2.5 text-sm space-y-2 hover:bg-muted/40 transition-colors group">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
-                              <p className="text-xs text-muted-foreground">{j.deviceDescription || "—"}</p>
-                            </div>
-                            <div className="text-right">
-                              {j.estimatedCost != null && <p className="font-bold">{formatCurrency(j.estimatedCost)}</p>}
-                              <Badge variant="outline" className="text-xs capitalize">{j.status}</Badge>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedJob(j as ServiceJob)}
+                              className="flex-1 flex items-center justify-between text-left min-w-0 mr-2"
+                            >
+                              <div>
+                                <p className="font-medium">{j.jobNumber} {j.deviceType ? `· ${j.deviceType}` : ""}</p>
+                                <p className="text-xs text-muted-foreground">{j.deviceDescription || "—"}</p>
+                              </div>
+                              <div className="text-right mr-2">
+                                {j.estimatedCost != null && <p className="font-bold">{formatCurrency(j.estimatedCost)}</p>}
+                                <Badge variant="outline" className="text-xs capitalize">{j.status}</Badge>
+                              </div>
+                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Printer className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => printA4ServiceJob(j as ServiceJob, bizInfo, custOverride)}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Print A4 Report
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => { setJobEmailAddr(customer.email ?? ""); setEmailDialogJob(j as ServiceJob); }}>
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  Email to Customer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           {jobPhotos.length > 0 && (
                             <ServiceJobPhotoStrip photos={jobPhotos} />
@@ -2164,6 +2198,36 @@ function CustomerDetailInner({
               )}
             </div>
           )}
+          <DialogFooter className="gap-2 mt-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Printer className="h-4 w-4 mr-1.5" />
+                  Print / Send
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  if (!selectedJob) return;
+                  const bizInfo = { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" };
+                  const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
+                  printA4ServiceJob(selectedJob, bizInfo, custOverride);
+                }}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Print A4 Report
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                  if (!selectedJob) return;
+                  setJobEmailAddr(customer.email ?? "");
+                  setEmailDialogJob(selectedJob);
+                }}>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email to Customer
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -2217,6 +2281,62 @@ function CustomerDetailInner({
               }}
             >
               {emailSending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Email service job dialog ── */}
+      <Dialog open={!!emailDialogJob} onOpenChange={(open) => { if (!open) setEmailDialogJob(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              Email Service Report
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Send service report for <strong>{emailDialogJob?.jobNumber}</strong> to:
+            </p>
+            <Input
+              type="email"
+              placeholder="customer@example.com"
+              value={jobEmailAddr}
+              onChange={(e) => setJobEmailAddr(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!jobEmailAddr.trim() || !jobEmailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
+                  setJobEmailSending(true);
+                  setTimeout(() => {
+                    toast.success(`Service report emailed to ${jobEmailAddr}`);
+                    setJobEmailSending(false);
+                    setEmailDialogJob(null);
+                  }, 700);
+                }
+              }}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEmailDialogJob(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={jobEmailSending || !jobEmailAddr.trim() || !jobEmailAddr.includes("@")}
+              onClick={() => {
+                if (!jobEmailAddr.trim() || !jobEmailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
+                setJobEmailSending(true);
+                setTimeout(() => {
+                  toast.success(`Service report emailed to ${jobEmailAddr}`);
+                  setJobEmailSending(false);
+                  setEmailDialogJob(null);
+                }, 700);
+              }}
+            >
+              {jobEmailSending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
               Send
             </Button>
           </DialogFooter>

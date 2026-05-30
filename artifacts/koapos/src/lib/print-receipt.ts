@@ -401,3 +401,219 @@ export function printA4Invoice(
 
   openPrintWindow(html, `Invoice ${escReceiptNum}`);
 }
+
+/* ─── A4 service job report ─────────────────────────────────────────────── */
+
+export interface ServiceJobPrintData {
+  id: number;
+  jobNumber: string;
+  status: string;
+  bookInDate: string;
+  deviceType?: string | null;
+  deviceDescription?: string | null;
+  serialNumber?: string | null;
+  condition?: string | null;
+  workDescription?: string | null;
+  additionalEquipment?: string | null;
+  notes?: string | null;
+  /** Accepts numeric value (API) or string representation (DB) */
+  estimatedCost?: number | string | null;
+  /** Accepts boolean (API) or "true"/"false" string (DB) */
+  isPartnerRepair?: boolean | string | null;
+  /** Accepts boolean (API) or "true"/"false" string (DB) */
+  isCritical?: boolean | string | null;
+  /** Accepts boolean (API) or "true"/"false" string (DB) */
+  isUnderWarranty?: boolean | string | null;
+  scheduledAt?: string | Date | null;
+  createdAt: string | Date;
+  /** Flattened customer fields from API responses */
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+}
+
+export function printA4ServiceJob(
+  job: ServiceJobPrintData,
+  businessInfo?: ReceiptBusinessInfo,
+  customerOverride?: { name?: string; email?: string; phone?: string },
+): void {
+  const rawBusinessName = businessInfo?.businessName ?? "Your Store";
+  const rawAbn = businessInfo?.abn ?? "";
+  const rawWebsite = businessInfo?.website ?? "";
+  const rawEmail = businessInfo?.email ?? "";
+  const rawBrandColor = businessInfo?.brandColor ?? "#374151";
+  const businessName = esc(rawBusinessName);
+  const abn = esc(rawAbn);
+  const website = esc(rawWebsite);
+  const contactEmail = esc(rawEmail);
+  const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
+
+  const escJobNum = esc(job.jobNumber);
+  const createdDate = new Date(job.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
+  const bookInDateStr = job.bookInDate ? esc(job.bookInDate) : "—";
+  const scheduledStr = job.scheduledAt
+    ? new Date(job.scheduledAt).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })
+    : null;
+
+  const custName = customerOverride?.name ?? job.customerName ?? "";
+  const custEmail = customerOverride?.email ?? job.customerEmail ?? "";
+  const custPhone = customerOverride?.phone ?? job.customerPhone ?? "";
+
+  const statusLabel = (job.status ?? "pending").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const isWarranty = job.isUnderWarranty === true || job.isUnderWarranty === "true";
+  const isCritical = job.isCritical === true || job.isCritical === "true";
+  const isPartner  = job.isPartnerRepair === true || job.isPartnerRepair === "true";
+  const estimatedCost = job.estimatedCost != null ? parseFloat(String(job.estimatedCost)) : null;
+
+  function row(label: string, value: string | null | undefined, wide = false) {
+    if (!value) return "";
+    return `<tr><td class="cell-label">${esc(label)}</td><td class="${wide ? "cell-value-wide" : "cell-value"}">${esc(value)}</td></tr>`;
+  }
+
+  const badgeRow = [
+    isWarranty  ? `<span class="badge badge-blue">Under Warranty</span>` : "",
+    isCritical  ? `<span class="badge badge-red">Critical</span>` : "",
+    isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
+  ].filter(Boolean).join(" ");
+
+  const css = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1f2937; background: #fff; }
+    .page { max-width: 780px; margin: 0 auto; padding: 40px; }
+
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; padding-bottom: 24px; border-bottom: 3px solid ${brandColor}; }
+    .biz-name { font-size: 22px; font-weight: 700; color: ${brandColor}; }
+    .biz-meta { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.7; }
+    .report-label { text-align: right; }
+    .report-label h1 { font-size: 26px; font-weight: 800; color: ${brandColor}; text-transform: uppercase; letter-spacing: 1px; }
+    .report-label .job-num { font-size: 14px; color: #374151; font-weight: 600; margin-top: 4px; }
+    .report-label .job-date { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    .two-col { display: flex; gap: 24px; margin-bottom: 28px; }
+    .two-col > div { flex: 1; }
+    .section { margin-bottom: 24px; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; background: ${brandColor}; padding: 5px 10px; margin-bottom: 0; }
+
+    table.detail { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
+    .cell-label { width: 160px; padding: 7px 10px; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; background: #f9fafb; border-right: 1px solid #e5e7eb; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .cell-value { padding: 7px 10px; font-size: 13px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .cell-value-wide { padding: 7px 10px; font-size: 13px; border-bottom: 1px solid #f3f4f6; vertical-align: top; white-space: pre-wrap; line-height: 1.6; }
+
+    .text-block { border: 1px solid #e5e7eb; border-top: none; padding: 14px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #374151; min-height: 48px; }
+
+    .cost-box { border: 2px solid ${brandColor}; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .cost-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; }
+    .cost-value { font-size: 24px; font-weight: 800; color: ${brandColor}; }
+
+    .badges { margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; }
+    .badge-blue   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-red    { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge-purple { background: #faf5ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+
+    .status-pill { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.8; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: A4; margin: 15mm 18mm; }
+      .page { padding: 0; max-width: 100%; }
+      .section { page-break-inside: avoid; }
+      .text-block { page-break-inside: auto; }
+    }
+  `;
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Service Report ${escJobNum}</title>
+<style>${css}</style>
+</head><body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <div class="biz-name">${businessName}</div>
+      <div class="biz-meta">
+        ${abn ? `ABN ${abn}<br>` : ""}
+        ${contactEmail ? `${contactEmail}<br>` : ""}
+        ${website ? `${website}` : ""}
+      </div>
+    </div>
+    <div class="report-label">
+      <h1>Service Report</h1>
+      <div class="job-num">Job ${escJobNum}</div>
+      <div class="job-date">Issued ${esc(createdDate)}</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    ${custName || custEmail || custPhone ? `
+    <div class="section">
+      <div class="section-title">Customer</div>
+      <table class="detail">
+        ${row("Name", custName)}
+        ${row("Email", custEmail)}
+        ${row("Phone", custPhone)}
+      </table>
+    </div>` : ""}
+
+    <div class="section">
+      <div class="section-title">Job Details</div>
+      <table class="detail">
+        <tr><td class="cell-label">Status</td><td class="cell-value"><span class="status-pill">${esc(statusLabel)}</span></td></tr>
+        ${row("Book-In Date", bookInDateStr)}
+        ${scheduledStr ? row("Scheduled", scheduledStr) : ""}
+        ${estimatedCost != null ? `<tr><td class="cell-label">Est. Cost</td><td class="cell-value" style="font-weight:700;color:${brandColor}">$${estimatedCost.toFixed(2)}</td></tr>` : ""}
+      </table>
+      ${badgeRow ? `<div class="badges">${badgeRow}</div>` : ""}
+    </div>
+  </div>
+
+  ${job.deviceType || job.deviceDescription || job.serialNumber || job.condition ? `
+  <div class="section">
+    <div class="section-title">Device Information</div>
+    <table class="detail">
+      ${row("Device Type", job.deviceType)}
+      ${row("Description", job.deviceDescription)}
+      ${row("Serial Number", job.serialNumber)}
+      ${row("Condition", job.condition)}
+    </table>
+  </div>` : ""}
+
+  ${job.workDescription ? `
+  <div class="section">
+    <div class="section-title">Work Description</div>
+    <div class="text-block">${esc(job.workDescription)}</div>
+  </div>` : ""}
+
+  ${job.additionalEquipment ? `
+  <div class="section">
+    <div class="section-title">Additional Equipment / Parts</div>
+    <div class="text-block">${esc(job.additionalEquipment)}</div>
+  </div>` : ""}
+
+  ${job.notes ? `
+  <div class="section">
+    <div class="section-title">Technician Notes</div>
+    <div class="text-block">${esc(job.notes)}</div>
+  </div>` : ""}
+
+  ${estimatedCost != null ? `
+  <div class="cost-box">
+    <div class="cost-label">Estimated Cost (inc. GST)</div>
+    <div class="cost-value">$${estimatedCost.toFixed(2)}</div>
+  </div>` : ""}
+
+  <div class="footer">
+    <p>Thank you for choosing ${businessName}.</p>
+    ${abn ? `<p>ABN ${abn}</p>` : ""}
+    ${website ? `<p>${esc(website)}</p>` : ""}
+  </div>
+
+</div>
+</body></html>`;
+
+  openPrintWindow(html, `Service Report ${escJobNum}`);
+}
