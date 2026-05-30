@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields, type HeardFromSource, DEFAULT_HEARD_FROM_SOURCES } from "@/lib/customer-settings";
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
-  ChevronUp, ChevronDown, Radio,
+  ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -101,6 +102,28 @@ export default function SettingsCustomersPage() {
     return acc;
   }, {});
   const total = customers.length;
+
+  // ── Heard From breakdown (customer count per referral source) ──────────────
+  const heardFromBreakdown = useMemo(() => {
+    const NOT_RECORDED = "Not recorded";
+    const PALETTE = [
+      "#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444",
+      "#ec4899", "#f97316", "#14b8a6", "#6366f1",
+    ];
+    const counts = new Map<string, number>();
+    for (const c of customers as { heardFrom?: string | null }[]) {
+      const name = (c.heardFrom ?? "").trim() || NOT_RECORDED;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const entries = Array.from(counts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+    let colorIdx = 0;
+    return entries.map((e) => ({
+      ...e,
+      fill: e.name === NOT_RECORDED ? "#9ca3af" : PALETTE[colorIdx++ % PALETTE.length],
+    }));
+  }, [customers]);
 
   const openAdd = () => {
     setEditingGroup(null);
@@ -523,6 +546,84 @@ export default function SettingsCustomersPage() {
                   >
                     Reset to defaults
                   </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Heard From Breakdown ─────────────────────────────────────────── */}
+        <Card id="heard-from-breakdown">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4 text-primary" />
+              Heard From Breakdown
+            </CardTitle>
+            <CardDescription>
+              Which referral channels bring in the most customers, based on {total} customer
+              {total !== 1 ? "s" : ""}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {heardFromBreakdown.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
+                <PieChartIcon className="w-8 h-8 opacity-25" />
+                <p className="text-sm">No customer data yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={heardFromBreakdown}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={90}
+                        dataKey="value"
+                        nameKey="name"
+                        paddingAngle={2}
+                      >
+                        {heardFromBreakdown.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 8,
+                          fontSize: 12,
+                          border: "1px solid hsl(var(--border))",
+                          background: "hsl(var(--card))",
+                        }}
+                        formatter={(v: number, n) => [
+                          `${v} customer${v !== 1 ? "s" : ""}`,
+                          n,
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-1.5">
+                  {heardFromBreakdown.map((s) => {
+                    const pct = total ? Math.round((s.value / total) * 100) : 0;
+                    return (
+                      <div
+                        key={s.name}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-muted/10"
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: s.fill }}
+                        />
+                        <span className="flex-1 text-sm font-medium">{s.name}</span>
+                        <span className="text-sm font-bold tabular-nums">{s.value}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">
+                          {pct}%
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
