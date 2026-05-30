@@ -15,6 +15,8 @@ export interface SalesTemplateResult {
   opts: TplOpts;
   fontFamily: string;
   fontCss: string;
+  /** Stored layout selection (e.g. `ar-pro`, `ar-modern`, `ar-minimal`, or legacy `professional`). */
+  selectedStyle: string;
   isLoading: boolean;
 }
 
@@ -30,6 +32,7 @@ export function useSalesTemplate(type: SalesTemplateType): SalesTemplateResult {
       opts: { ...DEFAULT_OPTS },
       fontFamily: "inter",
       fontCss: FONT_CSS.inter,
+      selectedStyle: "professional",
       isLoading,
     };
   }
@@ -49,6 +52,7 @@ export function useSalesTemplate(type: SalesTemplateType): SalesTemplateResult {
     opts,
     fontFamily,
     fontCss: FONT_CSS[fontFamily] ?? FONT_CSS.inter,
+    selectedStyle: row.selectedStyle || "professional",
     isLoading,
   };
 }

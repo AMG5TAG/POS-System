@@ -7,18 +7,27 @@ import {
   printA4Invoice as rawPrintA4Invoice,
   printA4Receipt as rawPrintA4Receipt,
   printA4ServiceJob as rawPrintA4ServiceJob,
+  normalizeReceiptStyle,
   type ReceiptBusinessInfo,
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
 import type { TplOpts } from "@/pages/app/management-templates";
 
+/** Business-level extras (style + chips/socials) layered onto the template opts. */
+interface ReceiptOptsExtra {
+  styleVariant?: ReceiptTemplateOpts["styleVariant"];
+  socialLinks?: Record<string, string>;
+  paymentTypes?: string[];
+}
+
 /**
  * Maps a saved Sales Template (`TplOpts`) onto the subset of options the
  * print utilities understand (`ReceiptTemplateOpts`). `fontCss` is the
- * resolved CSS font-family string from `useSalesTemplate`.
+ * resolved CSS font-family string from `useSalesTemplate`. `extra` carries
+ * the resolved layout style and business-level chips/socials.
  */
-function toReceiptOpts(opts: TplOpts, fontCss: string): ReceiptTemplateOpts {
+function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra): ReceiptTemplateOpts {
   return {
     showLogo: opts.showLogo,
     showAbn: opts.showAbn,
@@ -35,6 +44,17 @@ function toReceiptOpts(opts: TplOpts, fontCss: string): ReceiptTemplateOpts {
     customMessage: opts.customMessage,
     loyaltyQrText: opts.loyaltyQrText,
     fontFamily: fontCss,
+    // A4 Receipt / Invoice layout + extended toggles
+    showTagline: opts.showTagline,
+    showAllCustomerDetails: opts.showAllCustomerDetails,
+    showSocialLinks: opts.showSocialLinks,
+    paymentTerms: opts.paymentTerms,
+    invoiceNotes: opts.invoiceNotes,
+    bankDetails: opts.bankDetails,
+    paymentSectionHeading: opts.paymentSectionHeading,
+    styleVariant: extra?.styleVariant,
+    socialLinks: extra?.socialLinks,
+    paymentTypes: extra?.paymentTypes,
     // Service Ticket field-visibility toggles
     showCustomerDetails: opts.showCustomerDetails,
     showDeviceDetails: opts.showDeviceDetails,
@@ -85,6 +105,8 @@ export function useDocumentTemplate(): DocumentTemplateController {
     website: profile?.website ?? "",
     email: profile?.contactEmail ?? "",
     brandColor: (profile?.brandColors ?? [])[0] ?? "",
+    tagline: profile?.tagline ?? "",
+    logo: profile?.logo ?? "",
   };
 
   const isLoading =
@@ -103,7 +125,15 @@ export function useDocumentTemplate(): DocumentTemplateController {
     printInvoice: (tx) =>
       rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss)),
     printA4Receipt: (tx) =>
-      rawPrintA4Receipt(tx, businessInfo, toReceiptOpts(a4Receipt.opts, a4Receipt.fontCss)),
+      rawPrintA4Receipt(
+        tx,
+        businessInfo,
+        toReceiptOpts(a4Receipt.opts, a4Receipt.fontCss, {
+          styleVariant: normalizeReceiptStyle(a4Receipt.selectedStyle),
+          socialLinks: profile?.socialLinks,
+          paymentTypes: profile?.paymentTypes,
+        }),
+      ),
     printServiceJob: (job, customerOverride) =>
       rawPrintA4ServiceJob(
         job,

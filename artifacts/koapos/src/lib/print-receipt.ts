@@ -6,6 +6,25 @@ export interface ReceiptBusinessInfo {
   website?: string;
   email?: string;
   brandColor?: string;
+  tagline?: string;
+  logo?: string;
+}
+
+/** Normalized layout family shared by the Management preview and the printers. */
+export type ReceiptStyleVariant = "professional" | "modern" | "minimal";
+
+/**
+ * Maps a stored `selectedStyle` value onto a normalized layout family.
+ * Accepts both the template-card ids (`ar-pro`, `ar-modern`, `ar-minimal`,
+ * `i-modern`, `q-minimal`, …) and the legacy plain values
+ * (`professional`/`modern`/`minimal`). Anything unknown falls back to
+ * `professional`.
+ */
+export function normalizeReceiptStyle(style?: string): ReceiptStyleVariant {
+  const s = (style ?? "").toLowerCase();
+  if (s.endsWith("minimal")) return "minimal";
+  if (s.endsWith("modern") || s.endsWith("bold")) return "modern";
+  return "professional";
 }
 
 export interface ReceiptTemplateOpts {
@@ -24,6 +43,17 @@ export interface ReceiptTemplateOpts {
   customMessage?: string;
   loyaltyQrText?: string;
   fontFamily?: string;
+  /* ─── A4 Receipt / Invoice layout + extended toggles ─── */
+  styleVariant?: ReceiptStyleVariant;
+  showTagline?: boolean;
+  showAllCustomerDetails?: boolean;
+  showSocialLinks?: boolean;
+  paymentTerms?: string;
+  invoiceNotes?: string;
+  bankDetails?: string;
+  paymentSectionHeading?: string;
+  socialLinks?: Record<string, string>;
+  paymentTypes?: string[];
   /* ─── Service Ticket field-visibility toggles ─── */
   showCustomerDetails?: boolean;
   showDeviceDetails?: boolean;
@@ -421,20 +451,27 @@ export function printA4Receipt(
   const rawWebsite = businessInfo?.website ?? "";
   const rawEmail = businessInfo?.email ?? "";
   const rawBrandColor = businessInfo?.brandColor ?? "#374151";
+  const rawTagline = businessInfo?.tagline ?? "";
+  const rawLogo = businessInfo?.logo ?? "";
   const businessName = esc(rawBusinessName);
   const abn = esc(rawAbn);
   const website = esc(rawWebsite);
   const contactEmail = esc(rawEmail);
+  const tagline = esc(rawTagline);
   const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
+  const logoUrl = /^(https?:|data:image\/|\/)/.test(rawLogo) ? rawLogo : "";
 
   const tpl: ReceiptTemplateOpts = {
+    showLogo: true,
     showAbn: true,
     showGstBreakdown: true,
     showWebsite: true,
+    showPaymentMethods: true,
     thankYouMsg: "Thank you for your purchase.",
     footerText: "",
     ...opts,
   };
+  const variant = normalizeReceiptStyle(tpl.styleVariant);
 
   const receiptNum = tx.receiptNumber ? tx.receiptNumber : `${tx.id}`;
   const escReceiptNum = esc(receiptNum);
@@ -446,71 +483,319 @@ export function printA4Receipt(
     ? esc([customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "")
     : "";
   const customerEmail = customer ? esc(customer.email ?? "") : "";
+  const customerPhone = customer ? esc((customer as { phone?: string }).phone ?? "") : "";
 
   const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number }>;
-
-  const itemRows = items.map((item, i) => {
-    const name = esc(item.productName ?? "Item");
-    const qty = item.quantity ?? 1;
-    const unit = item.unitPrice ?? 0;
-    const lineTotal = item.totalPrice ?? unit * qty;
-    const bg = i % 2 === 0 ? "#f9fafb" : "#ffffff";
-    return `
-      <tr style="background:${bg}">
-        <td class="td-name">${name}</td>
-        <td class="td-center">${qty}</td>
-        <td class="td-right">${fmtAUD(unit)}</td>
-        <td class="td-right">${fmtAUD(lineTotal)}</td>
-      </tr>`;
-  }).join("");
 
   const subtotal = tx.subtotal ?? 0;
   const taxTotal = tx.taxTotal ?? 0;
   const discountTotal = tx.discountTotal ?? 0;
   const total = tx.total ?? 0;
-
-  const thankYou = tpl.thankYouMsg ? esc(tpl.thankYouMsg) : "";
-  const footerTxt = tpl.footerText ? esc(tpl.footerText) : "";
+  const exGst = subtotal - taxTotal;
+  const loyaltyEarned = Number((tx as { loyaltyEarned?: number }).loyaltyEarned ?? 0);
   const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
+
+  const resolveStr = (text?: string) => {
+    if (!text) return "";
+    return esc(
+      text
+        .replace(/\{\{business\.name\}\}/g, rawBusinessName)
+        .replace(/\{\{business\.abn\}\}/g, rawAbn)
+        .replace(/\{\{business\.email\}\}/g, rawEmail)
+        .replace(/\{\{business\.website\}\}/g, rawWebsite)
+        .replace(/\{\{business\.tagline\}\}/g, rawTagline)
+        .replace(/\{\{transaction\.total\}\}/g, fmtAUD(total))
+        .replace(/\{\{transaction\.number\}\}/g, receiptNum)
+        .replace(/\{\{transaction\.date\}\}/g, dateStr)
+        .replace(/\{\{[^}]+\}\}/g, ""),
+    );
+  };
+
+  const header = resolveStr(tpl.headerText);
+  const footerTxt = resolveStr(tpl.footerText);
+  const thankYou = resolveStr(tpl.thankYouMsg);
+  const customMsg = resolveStr(tpl.customMessage);
+  const terms = resolveStr(tpl.paymentTerms);
+  const notesHtml = tpl.invoiceNotes ? `<p>${resolveStr(tpl.invoiceNotes).replace(/\n/g, "<br>")}</p>` : "";
+
+  /* ─── shared, option-gated building blocks ─────────────────────────── */
+  const customerHtml = tpl.showAllCustomerDetails
+    ? `<p class="muted-label">Customer</p>
+       <p class="strong">${customerName || "—"}</p>
+       ${customerEmail ? `<p class="muted">${customerEmail}</p>` : ""}
+       ${customerPhone ? `<p class="muted">${customerPhone}</p>` : ""}`
+    : (customerName ? `<p class="strong">${customerName}</p>` : "");
+
+  const qrHtml = tpl.showCustomerQr
+    ? `<div class="qr">
+         <div class="qr-cap">Customer Profile</div>
+         <div class="qr-img"></div>
+         ${tpl.loyaltyQrText ? `<div class="qr-sub">${esc(tpl.loyaltyQrText)}</div>` : ""}
+       </div>`
+    : "";
+
+  const loyaltyHtml = (tpl.showLoyaltyEarned && loyaltyEarned > 0)
+    ? `<div class="loyalty"><span>★ Loyalty Earned</span><span>+${loyaltyEarned} pts</span></div>`
+    : "";
+
+  const paymentTypes = (tpl.paymentTypes && tpl.paymentTypes.length)
+    ? tpl.paymentTypes
+    : ["EFTPOS", "Cash", "Visa", "Mastercard"];
+  const chipsHtml = paymentTypes.map((m) => `<span class="chip">${esc(m)}</span>`).join("");
+  const paymentHtml = (tpl.showPaymentMethods || tpl.bankDetails)
+    ? `<div class="paybox">
+         ${tpl.paymentSectionHeading ? `<p class="muted-label">${esc(tpl.paymentSectionHeading)}</p>` : ""}
+         ${tpl.showPaymentMethods ? `<div class="chips">${chipsHtml}</div>` : ""}
+         ${tpl.bankDetails ? `<p class="bank">${esc(tpl.bankDetails)}</p>` : ""}
+       </div>`
+    : "";
+
+  const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
+  const socialHtml = (tpl.showSocialLinks && socialEntries.length)
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${esc(k)}: ${esc(String(v))}</span>`).join("")}</div>`
+    : "";
+
+  const barcodeHtml = tpl.showBarcode
+    ? `<div class="barcode"><div class="bars"></div><div class="bars-cap">${escReceiptNum}</div></div>`
+    : "";
+
+  const paidBadge = `<span class="paid">✓ Paid — ${esc(pmLabel) || "Payment received"}</span>`;
+
+  const footerBlock = `
+    <div class="ftr">
+      ${terms ? `<p>${terms}</p>` : ""}
+      ${notesHtml}
+      ${customMsg ? `<p class="msg">${customMsg}</p>` : ""}
+      ${thankYou ? `<p class="thanks">${thankYou}</p>` : ""}
+      ${tpl.showWebsite && website ? `<p>${website}</p>` : ""}
+      ${footerTxt ? `<p>${footerTxt}</p>` : ""}
+      ${socialHtml}
+    </div>`;
+
+  /* ─── per-style item rows ──────────────────────────────────────────── */
+  const itemRowsPro = items.map((item) => {
+    const name = esc(item.productName ?? "Item");
+    const qty = item.quantity ?? 1;
+    const unit = item.unitPrice ?? 0;
+    const line = item.totalPrice ?? unit * qty;
+    return `<tr><td>${name}</td><td class="c">${qty}</td><td class="r">${fmtAUD(unit)}</td><td class="r">${fmtAUD(line)}</td></tr>`;
+  }).join("");
+  const emptyRow4 = `<tr><td colspan="4" class="empty">No items</td></tr>`;
+
+  const itemRowsModern = items.map((item) => {
+    const name = esc(item.productName ?? "Item");
+    const qty = item.quantity ?? 1;
+    const unit = item.unitPrice ?? 0;
+    const line = item.totalPrice ?? unit * qty;
+    return `<tr><td>${name} <span class="muted">×${qty}</span></td><td class="r">${fmtAUD(line)}</td></tr>`;
+  }).join("");
+  const emptyRow2 = `<tr><td colspan="2" class="empty">No items</td></tr>`;
+
+  const itemLinesMinimal = items.map((item) => {
+    const name = esc(item.productName ?? "Item");
+    const qty = item.quantity ?? 1;
+    const unit = item.unitPrice ?? 0;
+    const line = item.totalPrice ?? unit * qty;
+    return `<div class="min-item"><span class="min-name">${name}</span><span class="min-qty">${qty}</span><span class="min-amt">${fmtAUD(line)}</span></div>`;
+  }).join("");
+
+  /* ─── per-style body ───────────────────────────────────────────────── */
+  const logoHtml = tpl.showLogo
+    ? (logoUrl ? `<img class="logo" src="${esc(logoUrl)}" alt="logo">` : `<div class="logo-sq"></div>`)
+    : "";
+
+  const professionalBody = `
+    <div class="page professional">
+      <div class="hdr">
+        <div class="hdr-left">
+          ${logoHtml}
+          <div class="biz">${businessName}</div>
+          ${tpl.showTagline && tagline ? `<div class="tagline">${tagline}</div>` : ""}
+          <div class="biz-meta">
+            ${tpl.showAbn && abn ? `ABN ${abn}<br>` : ""}
+            ${contactEmail ? `${contactEmail}<br>` : ""}
+            ${tpl.showWebsite && website ? `${website}` : ""}
+          </div>
+        </div>
+        <div class="hdr-right">
+          <div class="doc-title">RECEIPT</div>
+          <div class="doc-num">${escReceiptNum}</div>
+          <div class="doc-date">${dateStr}</div>
+        </div>
+      </div>
+      ${header ? `<p class="custom-header">${header}</p>` : ""}
+      <div class="cust-row">
+        <div class="cust">${customerHtml}</div>
+        ${qrHtml}
+      </div>
+      <table class="items">
+        <thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Rate</th><th class="r">Total</th></tr></thead>
+        <tbody>${itemRowsPro || emptyRow4}</tbody>
+      </table>
+      <div class="totals">
+        <div class="trow"><span class="lbl">Subtotal (ex. GST)</span><span>${fmtAUD(exGst)}</span></div>
+        ${tpl.showGstBreakdown ? `<div class="trow"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
+        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+        <div class="ttotal"><span>Total (AUD)</span><span>${fmtAUD(total)}</span></div>
+      </div>
+      <div class="badge-row">${paidBadge}</div>
+      ${loyaltyHtml}
+      ${paymentHtml}
+      ${barcodeHtml}
+      ${footerBlock}
+    </div>`;
+
+  const modernBody = `
+    <div class="page modern">
+      ${logoHtml}
+      <div class="band" style="background:${brandColor}">
+        <span class="band-biz">${businessName}</span>
+        <span class="band-doc">RECEIPT ${escReceiptNum}</span>
+      </div>
+      ${tpl.showTagline && tagline ? `<div class="tagline">${tagline}</div>` : ""}
+      ${header ? `<p class="custom-header">${header}</p>` : ""}
+      <div class="grid2">
+        <div>
+          <div class="muted-label">From</div>
+          <div class="strong">${businessName}</div>
+          ${tpl.showAbn && abn ? `<div class="muted">ABN ${abn}</div>` : ""}
+          ${contactEmail ? `<div class="muted">${contactEmail}</div>` : ""}
+          <div class="muted">${dateStr}</div>
+        </div>
+        <div class="grid2-right">
+          <div class="billto">
+            <div class="muted-label">Bill To</div>
+            ${customerHtml || `<div class="muted">Walk-in</div>`}
+          </div>
+          ${qrHtml}
+        </div>
+      </div>
+      <table class="items modern-items">
+        <thead><tr><th>Description</th><th class="r">Total</th></tr></thead>
+        <tbody>${itemRowsModern || emptyRow2}</tbody>
+      </table>
+      <div class="modern-totals">
+        ${tpl.showGstBreakdown ? `<div class="trow"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
+        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+        <div class="modern-total" style="color:${brandColor}"><span>Total Due (AUD)</span><span>${fmtAUD(total)}</span></div>
+      </div>
+      <div class="badge-row">${paidBadge}</div>
+      ${loyaltyHtml}
+      ${paymentHtml}
+      ${barcodeHtml}
+      ${footerBlock}
+    </div>`;
+
+  const minimalBody = `
+    <div class="page minimal">
+      ${logoHtml}
+      <div class="min-hdr"><span class="strong">${businessName}</span><span class="strong">RECEIPT ${escReceiptNum}</span></div>
+      ${tpl.showAbn && abn ? `<div class="muted">ABN: ${abn}</div>` : ""}
+      <div class="muted">Date: ${dateStr}</div>
+      ${header ? `<p class="custom-header">${header}</p>` : ""}
+      <div class="sep"></div>
+      <div class="cust-row">
+        <div class="cust">${customerHtml}</div>
+        ${qrHtml}
+      </div>
+      <div class="sep"></div>
+      ${itemLinesMinimal || `<div class="muted">No items</div>`}
+      <div class="sep"></div>
+      <div class="min-row"><span>Subtotal (ex. GST)</span><span>${fmtAUD(exGst)}</span></div>
+      ${tpl.showGstBreakdown ? `<div class="min-row"><span>GST 10%</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
+      ${discountTotal > 0 ? `<div class="min-row"><span>Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+      <div class="min-row strong"><span>TOTAL (AUD)</span><span>${fmtAUD(total)}</span></div>
+      <div class="min-paid">${paidBadge}</div>
+      ${loyaltyHtml}
+      ${paymentHtml}
+      ${footerBlock}
+      ${barcodeHtml}
+    </div>`;
+
+  const body = variant === "minimal" ? minimalBody : variant === "modern" ? modernBody : professionalBody;
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
     .page { max-width: 780px; margin: 0 auto; padding: 40px; }
+    .muted { color: #6b7280; }
+    .muted-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 2px; }
+    .strong { font-weight: 700; }
+    .r { text-align: right; } .c { text-align: center; }
+    .empty { font-style: italic; color: #9ca3af; padding: 14px 12px; }
+    .custom-header { font-size: 12px; color: #374151; margin: 4px 0 12px; }
 
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid ${brandColor}; }
-    .biz-name { font-size: 22px; font-weight: 700; color: ${brandColor}; letter-spacing: -0.3px; }
-    .biz-meta { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.6; }
-    .doc-label { text-align: right; }
-    .doc-label h1 { font-size: 28px; font-weight: 800; color: ${brandColor}; letter-spacing: 1px; text-transform: uppercase; }
-    .doc-label .doc-num { font-size: 14px; color: #374151; font-weight: 600; margin-top: 4px; }
-    .doc-label .doc-date { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    /* professional */
+    .professional .hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${brandColor}; padding-bottom: 20px; margin-bottom: 24px; }
+    .logo { max-height: 46px; max-width: 140px; object-fit: contain; margin-bottom: 8px; display: block; }
+    .logo-sq { width: 28px; height: 28px; border-radius: 4px; background: ${brandColor}; margin-bottom: 8px; }
+    .biz { font-size: 22px; font-weight: 700; color: ${brandColor}; letter-spacing: -0.3px; }
+    .tagline { font-size: 12px; color: #9ca3af; font-style: italic; margin-top: 2px; }
+    .biz-meta { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.6; }
+    .hdr-right { text-align: right; }
+    .doc-title { font-size: 26px; font-weight: 800; color: ${brandColor}; letter-spacing: 1px; }
+    .doc-num { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; }
+    .doc-date { font-size: 12px; color: #6b7280; margin-top: 2px; }
 
-    .meta-row { display: flex; gap: 32px; margin-bottom: 32px; }
-    .meta-block { flex: 1; }
-    .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 4px; }
-    .meta-value { font-size: 13px; color: #1f2937; }
-    .meta-value.bold { font-weight: 600; }
+    .cust-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 20px; }
+    .cust { flex: 1; min-width: 0; }
 
-    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-    thead tr { background: ${brandColor}; }
-    thead th { padding: 10px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; text-align: left; }
-    thead th.right { text-align: right; }
-    thead th.center { text-align: center; }
-    .td-name { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; }
-    .td-center { padding: 9px 12px; text-align: center; border-bottom: 1px solid #f3f4f6; }
-    .td-right { padding: 9px 12px; text-align: right; border-bottom: 1px solid #f3f4f6; }
-    .td-empty { font-style: italic; color: #9ca3af; padding: 16px 12px; }
+    table.items { width: 100%; border-collapse: collapse; }
+    .items thead tr { background: ${brandColor}; }
+    .items thead th { padding: 9px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #fff; text-align: left; }
+    .items thead th.r { text-align: right; } .items thead th.c { text-align: center; }
+    .items tbody td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
+    .items tbody td.r { text-align: right; } .items tbody td.c { text-align: center; }
 
-    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 0; }
-    .totals { width: 280px; border: 1px solid #e5e7eb; border-top: none; }
-    .totals-row { display: flex; justify-content: space-between; padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #f3f4f6; }
-    .totals-row .lbl { color: #6b7280; }
-    .totals-total { display: flex; justify-content: space-between; padding: 10px 12px; font-size: 14px; font-weight: 700; background: ${brandColor}; color: #fff; }
+    .totals { width: 300px; margin-left: auto; margin-top: 14px; border: 1px solid #e5e7eb; }
+    .trow { display: flex; justify-content: space-between; padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #f3f4f6; }
+    .trow .lbl { color: #6b7280; } .trow.disc { color: #dc2626; }
+    .ttotal { display: flex; justify-content: space-between; padding: 10px 12px; font-size: 14px; font-weight: 700; background: ${brandColor}; color: #fff; }
 
-    .payment-badge { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-top: 20px; }
+    .badge-row { margin-top: 18px; }
+    .paid { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 99px; }
+    .loyalty { display: flex; justify-content: space-between; max-width: 300px; margin-top: 12px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; }
 
-    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.7; }
+    .paybox { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .chip { border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 8px; font-size: 10px; color: #6b7280; }
+    .bank { white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #6b7280; margin-top: 6px; }
+
+    .qr { text-align: center; flex-shrink: 0; }
+    .qr-cap { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 4px; }
+    .qr-img { width: 64px; height: 64px; margin: 0 auto; border: 1px solid #e5e7eb; background: repeating-conic-gradient(#111827 0% 25%, #fff 0% 50%) 0 0 / 12px 12px; }
+    .qr-sub { font-size: 8px; color: #9ca3af; margin-top: 4px; max-width: 84px; }
+
+    .barcode { text-align: center; margin-top: 18px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+    .bars { height: 42px; width: 220px; margin: 0 auto; background: repeating-linear-gradient(90deg, #111827 0 2px, #fff 2px 4px, #111827 4px 5px, #fff 5px 9px); }
+    .bars-cap { font-family: monospace; font-size: 11px; letter-spacing: 2px; margin-top: 4px; color: #374151; }
+
+    .ftr { margin-top: 28px; padding-top: 14px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.7; }
+    .ftr .thanks { color: ${brandColor}; font-weight: 600; }
+    .ftr .msg { background: #f9fafb; border-radius: 4px; padding: 6px 10px; color: #6b7280; margin: 6px 0; }
+    .socials { display: flex; justify-content: center; gap: 14px; margin-top: 6px; color: #6b7280; }
+
+    /* modern */
+    .modern .band { display: flex; justify-content: space-between; align-items: center; color: #fff; padding: 16px 18px; border-radius: 6px; margin-bottom: 14px; }
+    .band-biz { font-size: 20px; font-weight: 700; }
+    .band-doc { font-size: 12px; opacity: 0.85; }
+    .modern .tagline { text-align: left; margin: 0 0 10px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .grid2-right { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .modern-totals { margin-top: 10px; }
+    .modern-totals .trow { border: none; justify-content: flex-end; gap: 24px; padding: 2px 0; }
+    .modern-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-top: 4px; }
+
+    /* minimal */
+    .minimal { font-family: 'Courier New', monospace; font-size: 12px; color: #374151; }
+    .min-hdr { display: flex; justify-content: space-between; font-weight: 700; font-size: 13px; }
+    .sep { border-top: 1px dashed #d1d5db; margin: 8px 0; }
+    .min-item { display: flex; justify-content: space-between; gap: 8px; }
+    .min-name { flex: 1; } .min-qty { width: 30px; text-align: right; } .min-amt { width: 76px; text-align: right; }
+    .min-row { display: flex; justify-content: space-between; }
+    .min-paid { margin-top: 8px; }
+    .minimal .qr-img { width: 48px; height: 48px; }
+    .minimal .ftr { text-align: left; }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -525,73 +810,7 @@ export function printA4Receipt(
 <title>Sales Receipt ${escReceiptNum}</title>
 <style>${css}</style>
 </head><body>
-<div class="page">
-
-  <div class="header">
-    <div>
-      <div class="biz-name">${businessName}</div>
-      <div class="biz-meta">
-        ${abn ? `ABN ${abn}<br>` : ""}
-        ${contactEmail ? `${contactEmail}<br>` : ""}
-        ${website ? `${website}` : ""}
-      </div>
-    </div>
-    <div class="doc-label">
-      <h1>Sales Receipt</h1>
-      <div class="doc-num">${escReceiptNum}</div>
-      <div class="doc-date">${dateStr}</div>
-    </div>
-  </div>
-
-  <div class="meta-row">
-    ${customerName ? `
-    <div class="meta-block">
-      <div class="meta-label">Customer</div>
-      <div class="meta-value bold">${customerName}</div>
-      ${customerEmail ? `<div class="meta-value" style="color:#6b7280;font-size:12px">${customerEmail}</div>` : ""}
-    </div>` : ""}
-    <div class="meta-block">
-      <div class="meta-label">Payment Method</div>
-      <div class="meta-value">${esc(pmLabel) || "—"}</div>
-    </div>
-    <div class="meta-block">
-      <div class="meta-label">Status</div>
-      <div class="meta-value bold" style="text-transform:capitalize">${esc(tx.status ?? "completed")}</div>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width:50%">Description</th>
-        <th class="center" style="width:10%">Qty</th>
-        <th class="right" style="width:20%">Unit Price</th>
-        <th class="right" style="width:20%">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemRows || `<tr><td class="td-name td-empty" colspan="4">No items</td></tr>`}
-    </tbody>
-  </table>
-
-  <div class="totals-wrap">
-    <div class="totals">
-      <div class="totals-row"><span class="lbl">Subtotal (ex. GST)</span><span>${fmtAUD(subtotal - taxTotal)}</span></div>
-      ${tpl.showGstBreakdown ? `<div class="totals-row"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
-      ${discountTotal > 0 ? `<div class="totals-row" style="color:#dc2626"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
-      <div class="totals-total"><span>Total AUD</span><span>${fmtAUD(total)}</span></div>
-    </div>
-  </div>
-
-  <div><span class="payment-badge">✓ Paid — ${esc(pmLabel) || "Payment received"}</span></div>
-
-  <div class="footer">
-    ${thankYou ? `<p>${thankYou}</p>` : ""}
-    ${abn ? `<p>ABN ${abn}</p>` : ""}
-    ${footerTxt ? `<p>${footerTxt}</p>` : ""}
-  </div>
-
-</div>
+${body}
 </body></html>`;
 
   openPrintWindow(html, `Receipt ${escReceiptNum}`);

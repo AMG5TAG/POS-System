@@ -41,6 +41,7 @@ import {
   printA4Invoice,
   printA4Receipt,
   printA4ServiceJob,
+  normalizeReceiptStyle,
   type ReceiptBusinessInfo,
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
@@ -1001,7 +1002,13 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     </div>
   ) : null;
 
-  if (templateId === "i-minimal") {
+  const variant = templateId.endsWith("minimal")
+    ? "minimal"
+    : templateId.endsWith("modern") || templateId.endsWith("bold")
+      ? "modern"
+      : "professional";
+
+  if (variant === "minimal") {
     return (
       <div className="text-[10px] font-mono text-gray-800 space-y-1.5">
         <div className="flex justify-between font-bold text-xs"><span>{businessName}</span><span>INVOICE #1042</span></div>
@@ -1028,7 +1035,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
       </div>
     );
   }
-  if (templateId === "i-modern") {
+  if (variant === "modern") {
     return (
       <div className="text-[10px] text-gray-800">
         <div className="p-2 rounded-t text-white text-xs font-bold flex justify-between items-center mb-2" style={{ background: brandColor }}>
@@ -1502,6 +1509,8 @@ export default function ManagementTemplatesPage() {
       website: profile.website || "",
       email: profile.contactEmail || merchant?.email || "",
       brandColor: (profile.brandColors ?? [])[0] || "#efbf04",
+      tagline: profile.tagline || "",
+      logo: profile.logo || "",
     };
     const receiptOpts: ReceiptTemplateOpts = {
       showLogo: opts.showLogo,
@@ -1519,6 +1528,16 @@ export default function ManagementTemplatesPage() {
       customMessage: opts.customMessage,
       loyaltyQrText: opts.loyaltyQrText,
       fontFamily: FONT_OPTIONS.find(f => f.value === opts.fontFamily)?.css ?? FONT_OPTIONS[0].css,
+      styleVariant: normalizeReceiptStyle(previewId),
+      showTagline: opts.showTagline,
+      showAllCustomerDetails: opts.showAllCustomerDetails,
+      showSocialLinks: opts.showSocialLinks,
+      paymentTerms: opts.paymentTerms,
+      invoiceNotes: opts.invoiceNotes,
+      bankDetails: opts.bankDetails,
+      paymentSectionHeading: opts.paymentSectionHeading,
+      socialLinks: profile.socialLinks,
+      paymentTypes: profile.paymentTypes,
       showCustomerDetails: opts.showCustomerDetails,
       showDeviceDetails: opts.showDeviceDetails,
       showWorkDescription: opts.showWorkDescription,
@@ -1596,7 +1615,7 @@ export default function ManagementTemplatesPage() {
         printA4ServiceJob(demoJob, businessInfo, undefined, receiptOpts);
         break;
     }
-  }, [activeCategory, opts, merchant, profile]);
+  }, [activeCategory, opts, merchant, profile, previewId]);
 
   const renderPreview = () => {
     switch (activeCategory) {
