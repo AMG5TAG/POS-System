@@ -2046,9 +2046,9 @@ export default function POSPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
-                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
+                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
                           <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
+                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <div className="w-14 text-right">

@@ -210,6 +210,13 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
       return;
     }
+    // A gift card issue line must always have quantity 1 — each unit is a unique card
+    // with its own generated number, so selling qty>1 would require multiple distinct
+    // numbers, which the current dialog doesn't support.
+    if (i.giftCardIssue && i.quantity !== 1) {
+      res.status(400).json({ error: "Gift card issue items must have quantity 1. Add each card as a separate line." });
+      return;
+    }
     let unitPrice: number;
     let taxRatePct: number;
     let itemName: string;
@@ -551,7 +558,11 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     // on the items JSONB and returned consistently even on idempotency retries.
     for (const item of computedItems) {
       if (!item.giftCardIssue || !item.giftCardNumber) continue;
-      const cardValue = round2(item.unitPrice); // value per card (always qty=1 from the dialog)
+      // Card balance = what the customer actually paid (totalPrice after any discounts).
+      // unitPrice is the face value; totalPrice is the amount charged — these differ
+      // when a cart-level or item-level discount touches the line. Issuing at unitPrice
+      // would let the customer receive more value than they paid for.
+      const cardValue = round2(item.totalPrice); // qty is enforced to be 1 (see validation above)
       const [issuedCard] = await tx
         .insert(giftCardsTable)
         .values({
