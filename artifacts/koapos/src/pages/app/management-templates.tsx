@@ -589,8 +589,8 @@ function OptionsPanel({
         <Switch checked={isDefault} onCheckedChange={setIsDefault} />
       </div>
 
-      {/* Option fields — two columns */}
-      <div className="p-3 grid grid-cols-2 gap-3">
+      {/* Option fields — single column */}
+      <div className="p-3 grid grid-cols-1 gap-3">
         {sections.map((section) => {
           const sectionFields = fields.filter((f) => (f.section ?? "General") === section);
           const toggles = sectionFields.filter((f) => f.type === "toggle");
@@ -1567,8 +1567,9 @@ export default function ManagementTemplatesPage() {
               </div>
             </div>
 
-            {/* Options above preview */}
-            <div className="space-y-4">
+            {/* Options + Preview side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Left: Options */}
               <OptionsPanel
                 key={`${activeCategory}-${previewId}`}
                 category={activeCategory}
@@ -1584,34 +1585,37 @@ export default function ManagementTemplatesPage() {
                 onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
               />
 
-              {/* Preview header */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="font-semibold text-sm truncate">
-                    {currentTemplates.find(t => t.id === previewId)?.name} Preview
-                  </span>
-                  <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+              {/* Right: Preview */}
+              <div className="space-y-3">
+                {/* Preview header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-semibold text-sm truncate">
+                      {currentTemplates.find(t => t.id === previewId)?.name} Preview
+                    </span>
+                    <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+                  </div>
                 </div>
-              </div>
 
-              {/* Preview box */}
-              <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
-                {activeCategory === "Thermal_Receipt" && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
-                )}
-                {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
-                )}
-                {activeCategory === "Service_Ticket" && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
-                )}
-              </div>
+                {/* Preview box */}
+                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
+                  {activeCategory === "Thermal_Receipt" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
+                  )}
+                  {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
+                  )}
+                  {activeCategory === "Service_Ticket" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                  )}
+                </div>
 
-              {/* Info bar */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
-                <Building2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
+                {/* Info bar */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
+                </div>
               </div>
             </div>
 
