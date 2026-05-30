@@ -72,6 +72,9 @@ const DEVICE_TYPES = [
   "Other",
 ];
 
+/** Device types that don't need tech-specific fields (description, serial, damage, logins, photos). */
+const MEDIA_DEVICE_TYPES = new Set(["VHS Tape", "DVD", "Cassette Tape", "Pictures"]);
+
 function todayISO() {
   return new Date().toISOString().split("T")[0];
 }
@@ -390,13 +393,15 @@ export default function ServiceJobNewPage() {
               />
             </div>
           </div>
-          <ToggleCard
-            icon={<FileText className="w-4 h-4" />}
-            label="Partner Repair"
-            description="Partner Repair"
-            checked={isPartnerRepair}
-            onChange={setIsPartnerRepair}
-          />
+          {!MEDIA_DEVICE_TYPES.has(deviceType) && (
+            <ToggleCard
+              icon={<FileText className="w-4 h-4" />}
+              label="Partner Repair"
+              description="Partner Repair"
+              checked={isPartnerRepair}
+              onChange={setIsPartnerRepair}
+            />
+          )}
         </div>
 
         {/* Critical + Under Warranty */}
@@ -489,43 +494,45 @@ export default function ServiceJobNewPage() {
             </div>
           </div>
 
-          {/* Device detail fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Device Description (Brand / Colour)</Label>
-              <Input
-                placeholder="e.g. Apple MacBook Pro, Space Grey..."
-                value={deviceDescription}
-                onChange={(e) => setDeviceDescription(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Serial Number</Label>
-              <Input
-                placeholder="e.g. C02XG2JHJGH7 or scan barcode..."
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Known Damage</Label>
-              <Input
-                placeholder="e.g. Cracked screen, water damage..."
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-              />
-            </div>
-            {isPartnerRepair && (
+          {/* Device detail fields — hidden for media-only items */}
+          {!MEDIA_DEVICE_TYPES.has(deviceType) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Partner Repair Code</Label>
+                <Label>Device Description (Brand / Colour)</Label>
                 <Input
-                  placeholder="e.g. PR-00123..."
-                  value={partnerRepairCode}
-                  onChange={(e) => setPartnerRepairCode(e.target.value)}
+                  placeholder="e.g. Apple MacBook Pro, Space Grey..."
+                  value={deviceDescription}
+                  onChange={(e) => setDeviceDescription(e.target.value)}
                 />
               </div>
-            )}
-          </div>
+              <div className="space-y-1.5">
+                <Label>Serial Number</Label>
+                <Input
+                  placeholder="e.g. C02XG2JHJGH7 or scan barcode..."
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Known Damage</Label>
+                <Input
+                  placeholder="e.g. Cracked screen, water damage..."
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                />
+              </div>
+              {isPartnerRepair && (
+                <div className="space-y-1.5">
+                  <Label>Partner Repair Code</Label>
+                  <Input
+                    placeholder="e.g. PR-00123..."
+                    value={partnerRepairCode}
+                    onChange={(e) => setPartnerRepairCode(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Work Details */}
@@ -557,29 +564,32 @@ export default function ServiceJobNewPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Logins / Accounts</Label>
-            {credentials.map((cred, i) => (
-              <div key={i} className="flex gap-0">
-                <Input
-                  placeholder="Account (e.g. Steam, Google)"
-                  value={cred.accounts}
-                  onChange={(e) => updateCredential(i, "accounts", e.target.value)}
-                  className="rounded-r-none border-r-0 flex-1"
-                />
-                <Input
-                  placeholder="Password / PIN"
-                  value={cred.passwordOrPin}
-                  onChange={(e) => updateCredential(i, "passwordOrPin", e.target.value)}
-                  className="rounded-l-none flex-1"
-                />
-              </div>
-            ))}
-          </div>
+          {!MEDIA_DEVICE_TYPES.has(deviceType) && (
+            <div className="space-y-2">
+              <Label>Logins / Accounts</Label>
+              {credentials.map((cred, i) => (
+                <div key={i} className="flex gap-0">
+                  <Input
+                    placeholder="Account (e.g. Steam, Google)"
+                    value={cred.accounts}
+                    onChange={(e) => updateCredential(i, "accounts", e.target.value)}
+                    className="rounded-r-none border-r-0 flex-1"
+                  />
+                  <Input
+                    placeholder="Password / PIN"
+                    value={cred.passwordOrPin}
+                    onChange={(e) => updateCredential(i, "passwordOrPin", e.target.value)}
+                    className="rounded-l-none flex-1"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Photos / Media */}
-        <div className="border rounded-xl p-5 space-y-3">
+        {/* Photos / Media — hidden for media-only items */}
+        {!MEDIA_DEVICE_TYPES.has(deviceType) && (
+          <div className="border rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-sm">Photos &amp; Media</h2>
             {totalPhotoBytes > 0 && (
@@ -625,6 +635,7 @@ export default function ServiceJobNewPage() {
           )}
           <p className="text-[11px] text-muted-foreground/60">Images: warn above 2 MB · Video: warn above 5 MB</p>
         </div>
+        )}
 
         {/* Customer Signature */}
         <div className="space-y-2">
