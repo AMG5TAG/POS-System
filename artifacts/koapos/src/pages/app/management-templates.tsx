@@ -225,13 +225,13 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",     type: "toggle", hint: "Shows methods enabled in POS Registers" },
       { section: "Payment",  key: "paymentSectionHeading",   label: "Payment Heading",           type: "text",     placeholder: "PAYMENT DETAILS" },
       { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",     type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
-      { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
-      { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",             type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
       { section: "Footer",   key: "thankYouMsg",             label: "Thank You Message",         type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
       { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
+      { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
+      { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",             type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
     ];
     case "Quote": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
@@ -241,11 +241,11 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
-      { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
-      { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Thank you for your enquiry…", quickCodes: true },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your enquiry!", quickCodes: true },
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
+      { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
+      { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
     ];
     case "Service_Ticket": return [
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
