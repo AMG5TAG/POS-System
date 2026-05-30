@@ -1,0 +1,1 @@
+- [Service job sheet print template](service-print-template.md) — one shared ServiceJobSheet component for both new-service print and reprint; both read useSalesTemplate("Service_Ticket"), never hardcoded opts.

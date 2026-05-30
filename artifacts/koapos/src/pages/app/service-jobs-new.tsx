@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useSalesTemplate } from "@/lib/use-sales-template";
+import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -991,152 +992,43 @@ export default function ServiceJobNewPage() {
       }`
     }} />
 
-    {/* ── Job Sheet print area ─────────────────────────────────────── */}
-    <div id="svc-job-sheet-print-area" style={{ width: "800px", background: "white", padding: "40px", boxSizing: "border-box", fontFamily: svcFontCss, fontSize: "12px", color: "#111", lineHeight: "1.6" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `2px solid ${brandColor}`, paddingBottom: "14px", marginBottom: "22px" }}>
-        <div>
-          {svcOpts.showLogo
-            ? <div style={{ width: "30px", height: "30px", borderRadius: "5px", background: brandColor, marginBottom: "6px" }} />
-            : null}
-          <div style={{ fontSize: "18px", fontWeight: "bold" }}>{merchant?.businessName ?? "Service Centre"}</div>
-          {svcOpts.showAbn && bizProfile?.abn && <div style={{ color: "#666", fontSize: "11px" }}>ABN {bizProfile.abn}</div>}
-          {(bizProfile?.state || bizProfile?.postcode) && (
-            <div style={{ color: "#666", fontSize: "11px" }}>{[bizProfile.state, bizProfile.postcode].filter(Boolean).join(" ")}</div>
-          )}
-          {(bizProfile?.contactEmail ?? merchant?.email) && (
-            <div style={{ color: "#666", fontSize: "11px" }}>{bizProfile?.contactEmail ?? merchant?.email}</div>
-          )}
-          {svcOpts.showWebsite && bizProfile?.website && <div style={{ color: "#666", fontSize: "11px" }}>{bizProfile.website}</div>}
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "20px", fontWeight: "bold", textTransform: "uppercase", color: brandColor, letterSpacing: "1px" }}>
-            {svcOpts.headerText || "Service Job Sheet"}
-          </div>
-          <div style={{ marginTop: "6px" }}>Job No: <strong>{successJob?.jobNumber ?? `SVC-${successJob?.id}`}</strong></div>
-          <div>Date: <strong>{new Date(bookInDate || Date.now()).toLocaleDateString("en-AU")}</strong></div>
-          <div>Status: <strong style={{ textTransform: "capitalize" }}>{status}</strong></div>
-          <div style={{ marginTop: "6px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
-            {isCritical && <span style={{ background: "#fee2e2", color: "#b91c1c", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>CRITICAL</span>}
-            {isUnderWarranty && <span style={{ background: "#d1fae5", color: "#065f46", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>WARRANTY</span>}
-            {isPartnerRepair && <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>PARTNER REPAIR{partnerRepairCode ? ` · ${partnerRepairCode}` : ""}</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* Customer + Device 2-col */}
-      {(svcOpts.showCustomerDetails || svcOpts.showDeviceDetails) && (
-        <div style={{ display: "grid", gridTemplateColumns: svcOpts.showCustomerDetails && svcOpts.showDeviceDetails ? "1fr 1fr" : "1fr", gap: "16px", marginBottom: "16px" }}>
-          {svcOpts.showCustomerDetails && (
-            <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
-              <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Customer Details</div>
-              <div><strong>Name:</strong> {selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in")}</div>
-              {selectedCustomer?.phone && <div><strong>Phone:</strong> {selectedCustomer.phone}</div>}
-              {selectedCustomer?.email && <div><strong>Email:</strong> {selectedCustomer.email}</div>}
-            </div>
-          )}
-          {svcOpts.showDeviceDetails && (
-            <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px" }}>
-              <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Device Details</div>
-              {deviceType && <div><strong>Type:</strong> {deviceType}</div>}
-              {deviceDescription && <div><strong>Model:</strong> {deviceDescription}</div>}
-              {serialNumber && <div><strong>Serial:</strong> {serialNumber}</div>}
-              {condition && <div><strong>Condition:</strong> {condition}</div>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Work description */}
-      {svcOpts.showWorkDescription && (
-        <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Fault / Work Required</div>
-          <div style={{ minHeight: "48px", whiteSpace: "pre-wrap" }}>{workDescription || "—"}</div>
-        </div>
-      )}
-
-      {/* Additional equipment */}
-      {additionalEquipment && (
-        <div style={{ border: "1px solid #ddd", borderRadius: "6px", padding: "12px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Equipment / Accessories Received</div>
-          <div style={{ whiteSpace: "pre-wrap" }}>{additionalEquipment}</div>
-        </div>
-      )}
-
-      {/* Partner repair */}
-      {isPartnerRepair && partnerRepairCode && (
-        <div style={{ border: "1px solid #bfdbfe", borderRadius: "6px", padding: "12px", marginBottom: "16px", background: "#eff6ff" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Partner Repair</div>
-          <div>Code: <strong>{partnerRepairCode}</strong></div>
-        </div>
-      )}
-
-      {/* Warranty notice */}
-      {svcOpts.warrantyText && (
-        <div style={{ border: "1px solid #d1fae5", borderRadius: "6px", padding: "12px", marginBottom: "16px", background: "#f0fdf4", color: "#065f46", fontSize: "11px" }}>
-          {svcOpts.warrantyText}
-        </div>
-      )}
-
-      {/* Photos */}
-      {svcOpts.showPhotos && photos.some(Boolean) && (
-        <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Device Photos</div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {photos.filter(Boolean).map((p, i) => (
-              <img key={i} src={p} style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "4px", border: "1px solid #ddd" }} alt={`photo ${i + 1}`} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Signature (captured) */}
-      {svcOpts.showSignature && signature && (
-        <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Customer Signature (captured on device)</div>
-          <div style={{ border: "1px solid #ddd", borderRadius: "4px", padding: "4px", display: "inline-block" }}>
-            <img src={signature} style={{ maxHeight: "70px", maxWidth: "320px", display: "block" }} alt="customer signature" />
-          </div>
-        </div>
-      )}
-
-      {/* Call History table */}
-      {svcOpts.showCallHistory && (
-      <div style={{ marginBottom: "20px" }}>
-        <div style={{ fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", color: "#888", letterSpacing: "0.5px", marginBottom: "8px" }}>Call History</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #ccc" }}>
-              <th style={{ textAlign: "left", padding: "6px 10px", width: "110px", fontWeight: "bold" }}>Date</th>
-              <th style={{ textAlign: "left", padding: "6px 10px", width: "130px", fontWeight: "bold" }}>Staff</th>
-              <th style={{ textAlign: "left", padding: "6px 10px", fontWeight: "bold" }}>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: Math.max(2, Math.min(10, parseInt(svcOpts.callHistoryRows || "6", 10))) }).map((_, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "16px 10px" }}> </td>
-                <td style={{ padding: "16px 10px" }}> </td>
-                <td style={{ padding: "16px 10px" }}> </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      )}
-
-      {/* Signature row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "32px" }}>
-        <div style={{ borderTop: "1px solid #aaa", paddingTop: "6px" }}>
-          <div style={{ fontSize: "10px", color: "#666" }}>Customer Signature</div>
-          {!signature && <div style={{ marginTop: "36px" }}> </div>}
-        </div>
-        <div style={{ borderTop: "1px solid #aaa", paddingTop: "6px" }}>
-          <div style={{ fontSize: "10px", color: "#666" }}>Technician / Staff</div>
-          <div style={{ marginTop: "36px" }}> </div>
-        </div>
-      </div>
-    </div>
+    {/* ── Job Sheet print area (unified template) ──────────────────── */}
+    <ServiceJobSheet
+      id="svc-job-sheet-print-area"
+      opts={svcOpts}
+      fontCss={svcFontCss}
+      branding={{
+        businessName: merchant?.businessName ?? "Service Centre",
+        abn: bizProfile?.abn,
+        website: bizProfile?.website,
+        email: bizProfile?.contactEmail ?? merchant?.email ?? undefined,
+        address: [bizProfile?.state, bizProfile?.postcode].filter(Boolean).join(" "),
+        brandColor,
+        logo: bizProfile?.logo,
+      }}
+      data={{
+        jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
+        date: bookInDate || Date.now(),
+        status,
+        customerName: selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in"),
+        customerPhone: selectedCustomer?.phone ?? undefined,
+        customerEmail: selectedCustomer?.email ?? undefined,
+        deviceType,
+        deviceModel: deviceDescription,
+        serialNumber,
+        condition,
+        workDescription,
+        additionalEquipment,
+        accounts: credentials.map((c) => c.accounts.trim()).join("\n"),
+        logins: credentials.map((c) => c.passwordOrPin.trim()).join("\n"),
+        photos,
+        signature: signature || undefined,
+        isCritical,
+        isUnderWarranty,
+        isPartnerRepair,
+        partnerRepairCode,
+      }}
+    />
 
     {/* ── Sticker print area ───────────────────────────────────────── */}
     <div id="svc-sticker-print-area">
