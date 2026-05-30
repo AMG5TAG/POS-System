@@ -12,6 +12,15 @@ interface PlatformMeta {
   brandHex: string;
 }
 
+/**
+ * All supported social platform keys, in display order.
+ * Use this to render a preview strip of every known platform icon.
+ */
+export const KNOWN_SOCIAL_PLATFORMS = [
+  "facebook", "instagram", "twitter", "x", "linkedin", "youtube",
+  "tiktok", "pinterest", "snapchat", "threads", "reddit", "whatsapp", "wechat",
+] as const;
+
 const PLATFORM_META: Record<string, PlatformMeta> = {
   facebook:  { label: "Facebook",  brandHex: "#1877F2" },
   instagram: { label: "Instagram", brandHex: "#E4405F" },

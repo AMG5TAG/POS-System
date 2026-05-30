@@ -46,7 +46,7 @@ import {
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
-import { formatSocialEntries } from "@/lib/social-links";
+import { formatSocialEntries, KNOWN_SOCIAL_PLATFORMS, getSocialBrandColor } from "@/lib/social-links";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -447,6 +447,51 @@ function QuickCodesBar({
   );
 }
 
+/* ─── Social Icon Brand Color Preview Strip ──────────────────────────────── */
+
+/**
+ * Shows all 13 known social platform icons in a compact before/after strip so
+ * merchants can see what "Social Icon Brand Colors" looks like before saving,
+ * even if they haven't configured any social links yet.
+ */
+function SocialIconPreviewStrip({ useBrandColor }: { useBrandColor: boolean }) {
+  return (
+    <div className="mt-1.5 rounded-md border bg-muted/30 px-2.5 py-2 space-y-1.5">
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider leading-none">
+        Icon color preview
+      </p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {KNOWN_SOCIAL_PLATFORMS.map((platform) => {
+          const brandHex = getSocialBrandColor(platform);
+          return (
+            <span
+              key={platform}
+              title={platform.charAt(0).toUpperCase() + platform.slice(1)}
+              className="flex items-center justify-center"
+            >
+              <SocialIcon
+                platform={platform}
+                size={14}
+                useBrandColor={useBrandColor}
+                style={
+                  useBrandColor
+                    ? { color: brandHex ?? undefined }
+                    : { color: undefined, opacity: 0.35 }
+                }
+              />
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-muted-foreground leading-tight">
+        {useBrandColor
+          ? "Each icon renders in its official platform color"
+          : "Icons inherit the document text color (monochrome)"}
+      </p>
+    </div>
+  );
+}
+
 /* ─── Template Options Panel ─────────────────────────────────────────────── */
 
 function NotificationsPanel() {
@@ -627,15 +672,20 @@ function OptionsPanel({
               {toggles.length > 0 && (
                 <div className="space-y-2">
                   {toggles.map((f) => (
-                    <div key={f.key} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <Label className="text-xs cursor-pointer leading-tight">{f.label}</Label>
-                        {f.hint && <p className="text-[10px] text-muted-foreground mt-0.5">{f.hint}</p>}
+                    <div key={f.key}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <Label className="text-xs cursor-pointer leading-tight">{f.label}</Label>
+                          {f.hint && <p className="text-[10px] text-muted-foreground mt-0.5">{f.hint}</p>}
+                        </div>
+                        <Switch
+                          checked={!!opts[f.key]}
+                          onCheckedChange={(v) => update(f.key, v as TplOpts[typeof f.key])}
+                        />
                       </div>
-                      <Switch
-                        checked={!!opts[f.key]}
-                        onCheckedChange={(v) => update(f.key, v as TplOpts[typeof f.key])}
-                      />
+                      {f.key === "socialIconBrandColors" && (
+                        <SocialIconPreviewStrip useBrandColor={!!opts.socialIconBrandColors} />
+                      )}
                     </div>
                   ))}
                 </div>
