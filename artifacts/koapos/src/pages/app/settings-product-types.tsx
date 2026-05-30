@@ -212,7 +212,11 @@ export default function SettingsProductTypesPage() {
       )
     : localOrder;
 
-  const inv = () => queryClient.invalidateQueries({ queryKey: ["/api/product-types"] });
+  const inv = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/product-types"] });
+    queryClient.invalidateQueries({ queryKey: ["product-types"] });
+    queryClient.invalidateQueries({ queryKey: ["product-types-pos"] });
+  };
 
   const persistOrder = (ordered: ProductType[]) => {
     reorderProductTypes.mutate(

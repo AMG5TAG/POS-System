@@ -299,6 +299,19 @@ function MergeWizardModal({
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* ── Manual merge warning ───────────────────────────────────────── */}
+          {pair.reason === "manual" && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 px-4 py-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">These profiles were not automatically flagged as duplicates</p>
+                <p className="text-amber-700 dark:text-amber-400 mt-0.5">
+                  Please confirm they belong to the same person before continuing — merging permanently deletes the secondary profile and cannot be undone.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* ── Step 1: Role assignment ─────────────────────────────────────── */}
           <div className="rounded-lg border overflow-hidden">
             <div className="px-4 py-2.5 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
