@@ -995,7 +995,7 @@ function CustomerDetailInner({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   const queryClient = useQueryClient();
-  const { printReceipt, printInvoice, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
+  const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
@@ -1492,9 +1492,9 @@ function CustomerDetailInner({
                               <Printer className="h-4 w-4 mr-2" />
                               {tplLoading ? "Loading template…" : "Receipt (80mm)"}
                             </DropdownMenuItem>
-                            <DropdownMenuItem disabled={tplLoading} onClick={() => printInvoice(tx as Transaction)}>
+                            <DropdownMenuItem disabled={tplLoading} onClick={() => printA4Receipt(tx as Transaction)}>
                               <FileText className="h-4 w-4 mr-2" />
-                              A4 Invoice
+                              {tplLoading ? "Loading template…" : "A4 Receipt"}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => { setEmailAddr(customer.email ?? ""); setEmailDialogTx(tx as Transaction); }}>
@@ -2083,10 +2083,10 @@ function CustomerDetailInner({
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={tplLoading} onClick={() => {
                   if (!selectedTx) return;
-                  printInvoice(selectedTx);
+                  printA4Receipt(selectedTx);
                 }}>
                   <FileText className="h-4 w-4 mr-2" />
-                  A4 Invoice
+                  {tplLoading ? "Loading template…" : "A4 Receipt"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => {

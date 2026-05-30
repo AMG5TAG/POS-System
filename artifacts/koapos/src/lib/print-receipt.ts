@@ -275,10 +275,11 @@ export function printA4Invoice(
 
   const thankYou = tpl.thankYouMsg ? esc(tpl.thankYouMsg) : "";
   const footerTxt = tpl.footerText ? esc(tpl.footerText) : "";
+  const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1f2937; background: #fff; }
+    body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
     .page { max-width: 780px; margin: 0 auto; padding: 40px; }
 
     /* Header */
@@ -324,7 +325,7 @@ export function printA4Invoice(
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      @page { size: A4; margin: 15mm 18mm; }
+      @page { size: A4 portrait; margin: 15mm; }
       .page { padding: 0; max-width: 100%; }
     }
   `;
@@ -470,10 +471,11 @@ export function printA4Receipt(
 
   const thankYou = tpl.thankYouMsg ? esc(tpl.thankYouMsg) : "";
   const footerTxt = tpl.footerText ? esc(tpl.footerText) : "";
+  const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1f2937; background: #fff; }
+    body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
     .page { max-width: 780px; margin: 0 auto; padding: 40px; }
 
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid ${brandColor}; }
@@ -512,7 +514,7 @@ export function printA4Receipt(
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      @page { size: A4; margin: 15mm 18mm; }
+      @page { size: A4 portrait; margin: 15mm; }
       .page { padding: 0; max-width: 100%; }
     }
   `;
@@ -740,7 +742,7 @@ export function printA4ServiceJob(
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      @page { size: A4; margin: 15mm 18mm; }
+      @page { size: A4 portrait; margin: 15mm; }
       .page { padding: 0; max-width: 100%; }
       .section { page-break-inside: avoid; }
       .text-block { page-break-inside: auto; }

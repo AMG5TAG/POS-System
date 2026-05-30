@@ -1,0 +1,23 @@
+Fix the template mismatch, update the user interface terminology, and run a visual layout verification test:
+
+1. Locate and Rename the UI Action:
+   - Open the Customer History sales ledger component file (likely located at 'artifacts/koapos/src/pages/app/customers-history.tsx' or a sub-component like 'customer-sales-tab.tsx').
+   - Find the printing action button or dropdown item. Change its display text from "A4 Invoice" to "A4 Receipt" so it matches the naming standard in management settings.
+
+2. Source the Dynamic Configuration Template:
+   - Identify where the system stores the active master templates configured in 'Management > Sales Templates > A4 Receipts' (typically inside a database table like 'sales_templates', a global context provider like 'TemplateContext', or local storage configuration keys).
+   - Refactor the newly renamed "Print > A4 Receipt" handler inside Customer History to explicitly fetch this active layout template instead of rendering a hardcoded, unstyled HTML layout fallback.
+
+3. Map the Historical Ledger Data:
+   - Ensure the customer's historical transaction record payload (including Invoice Number, Completed Date, Itemized Product/Service rows, Tax Rates, Subtotals, and payment methods) is mapped precisely to the tokens or component properties required by the active Management template.
+   - Parse all business-specific variables (such as brand details, local terms & conditions, or promotional layout footers) cleanly onto the A4 print canvas.
+
+4. Enforce Unified CSS & Print Box Rules:
+   - Wrap the printable output inside a standardized A4 print wrapper container that applies proper margin containment rules for desktop printers:
+     @media print { size: A4 portrait; margin: 15mm; }
+
+5. FORCE AN AUTOMATED VISUAL LAYOUT VERIFICATION TEST:
+   - Simulate a user navigating the application path: Go to 'Customers' -> Click a sample customer profile -> Open the 'History' tab -> Select 'Sales' -> Click the updated 'Print > A4 Receipt' action.
+   - Intercept and inspect the generated DOM rendering tree and CSS payload for this specific print execution hook.
+   - Cross-check this generated layout directly against the active template payload defined under 'Management > Sales Templates > A4 Receipts'. 
+   - Visually confirm that the layout structures, CSS print constraints, brand blocks, and margin rules align perfectly. Do not mark this task complete until you have programmatic or log confirmation that the output identically mirrors the master template. Run 'pnpm run typecheck' to certify a clean build.
