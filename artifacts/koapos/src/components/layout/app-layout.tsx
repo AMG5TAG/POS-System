@@ -17,7 +17,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
-  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain,
+  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import {
@@ -296,6 +296,7 @@ const SEARCH_INDEX = [
   { label: "Reports · Register Closures", href: "/management/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
   { label: "Reports · BAS / GST",         href: "/management/reports/bas",                        icon: Receipt,       group: "Reports"    },
   { label: "Reports · Margin & Profit",   href: "/management/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Daily Closes",      href: "/management/daily-reports",                        icon: ReceiptText,   group: "Reports"    },
   { label: "Reports · Customer Insights", href: "/management/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
   { label: "Reports · GST / BAS",         href: "/management/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
   { label: "Reports · Cash Movements",    href: "/management/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },

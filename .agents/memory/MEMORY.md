@@ -1,4 +1,3 @@
 - [Service job sheet print template](service-print-template.md) — one shared ServiceJobSheet component for both new-service print and reprint; both read useSalesTemplate("Service_Ticket"), never hardcoded opts.
-- [Document print/email hook](document-template-hook.md) — customer-doc print/email (receipt/invoice/service report) must go through useDocumentTemplate, never the print-receipt utils directly.
 - [Styled XLSX exports](xlsx-styled-exports.md) — use exceljs (not the bundled SheetJS `xlsx`) when an export needs cell styling; SheetJS community ignores styles on write.
-- [Sales template cache](sales-template-cache.md) — saving a template style must invalidate both `["sales-templates"]` and `["sales-templates-active"]` or real prints keep the stale (generic) layout.
+- [Orval hook query options](orval-query-options.md) — all useXxx query hooks require queryKey in the query options object; omitting it causes TS2741.

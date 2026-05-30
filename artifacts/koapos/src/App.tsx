@@ -118,6 +118,7 @@ import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 import PosEodPage from "@/pages/app/pos-eod";
 import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
 import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
+import ManagementDailyReportsPage from "@/pages/app/management-daily-reports";
 
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
 import NotFound from "@/pages/not-found";
@@ -377,6 +378,9 @@ function Router() {
       </Route>
       <Route path="/management/reports/margin">
         <ManagementProtectedRoute component={ManagementReportsMarginPage} />
+      </Route>
+      <Route path="/management/daily-reports">
+        <ManagementProtectedRoute component={ManagementDailyReportsPage} />
       </Route>
       <Route path="/management/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />

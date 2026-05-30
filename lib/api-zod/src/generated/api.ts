@@ -2587,6 +2587,63 @@ export const UpsertDashboardConfigResponse = zod.object({
 
 
 /**
+ * @summary Get today's calculated breakdown for pre-filling the Close Day dialog
+ */
+export const GetDailyCloseCurrentResponse = zod.object({
+  "date": zod.string().describe('YYYY-MM-DD in merchant\'s local timezone'),
+  "grossSales": zod.number(),
+  "netSales": zod.number(),
+  "taxTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "refundTotal": zod.number(),
+  "transactionCount": zod.number(),
+  "byPaymentMethod": zod.record(zod.string(), zod.number()),
+  "expectedCash": zod.number()
+})
+
+
+/**
+ * @summary List saved daily close records (manager/owner only)
+ */
+export const ListDailyClosesQueryParams = zod.object({
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListDailyClosesResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "closeDate": zod.string(),
+  "closedBy": zod.number().nullish(),
+  "closedByName": zod.string().nullish(),
+  "expectedCash": zod.number(),
+  "countedCash": zod.number(),
+  "variance": zod.number(),
+  "notes": zod.string().nullish(),
+  "breakdown": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date()
+})
+export const ListDailyClosesResponse = zod.array(ListDailyClosesResponseItem)
+
+
+/**
+ * @summary Save a daily close / cash reconciliation record
+ */
+export const createDailyCloseBodyCloseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateDailyCloseBody = zod.object({
+  "closeDate": zod.string().regex(createDailyCloseBodyCloseDateRegExp),
+  "closedBy": zod.number().optional(),
+  "closedByName": zod.string().optional(),
+  "expectedCash": zod.number(),
+  "countedCash": zod.number(),
+  "notes": zod.string().optional(),
+  "breakdown": zod.record(zod.string(), zod.number()).optional()
+})
+
+
+/**
  * @summary List cash drawer entries
  */
 export const ListCashDrawerEntriesQueryParams = zod.object({

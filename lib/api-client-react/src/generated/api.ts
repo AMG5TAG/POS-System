@@ -49,6 +49,7 @@ import type {
   Category,
   CategoryInput,
   CategoryUpdate,
+  CreateDailyCloseInput,
   CreateLaybyBody,
   CsvImportResult,
   Customer,
@@ -62,6 +63,8 @@ import type {
   CustomerSettings,
   CustomerSettingsInput,
   CustomerUpdate,
+  DailyClose,
+  DailyCloseCurrent,
   DashboardActivity,
   DashboardConfigResponse,
   DashboardSummary,
@@ -140,6 +143,7 @@ import type {
   ListCameraSnapshotsParams,
   ListCashDrawerEntriesParams,
   ListCustomersParams,
+  ListDailyClosesParams,
   ListGiftCardsParams,
   ListInventoryParams,
   ListLaybys200,
@@ -6900,6 +6904,238 @@ export const useUpsertDashboardConfig = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertDashboardConfigMutationOptions(options));
+    }
+
+export const getGetDailyCloseCurrentUrl = () => {
+
+
+
+
+  return `/api/daily-closes/current`
+}
+
+/**
+ * @summary Get today's calculated breakdown for pre-filling the Close Day dialog
+ */
+export const getDailyCloseCurrent = async ( options?: RequestInit): Promise<DailyCloseCurrent> => {
+
+  return customFetch<DailyCloseCurrent>(getGetDailyCloseCurrentUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDailyCloseCurrentQueryKey = () => {
+    return [
+    `/api/daily-closes/current`
+    ] as const;
+    }
+
+
+export const getGetDailyCloseCurrentQueryOptions = <TData = Awaited<ReturnType<typeof getDailyCloseCurrent>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDailyCloseCurrent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDailyCloseCurrentQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDailyCloseCurrent>>> = ({ signal }) => getDailyCloseCurrent({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDailyCloseCurrent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDailyCloseCurrentQueryResult = NonNullable<Awaited<ReturnType<typeof getDailyCloseCurrent>>>
+export type GetDailyCloseCurrentQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get today's calculated breakdown for pre-filling the Close Day dialog
+ */
+
+export function useGetDailyCloseCurrent<TData = Awaited<ReturnType<typeof getDailyCloseCurrent>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDailyCloseCurrent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDailyCloseCurrentQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListDailyClosesUrl = (params?: ListDailyClosesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/daily-closes?${stringifiedParams}` : `/api/daily-closes`
+}
+
+/**
+ * @summary List saved daily close records (manager/owner only)
+ */
+export const listDailyCloses = async (params?: ListDailyClosesParams, options?: RequestInit): Promise<DailyClose[]> => {
+
+  return customFetch<DailyClose[]>(getListDailyClosesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDailyClosesQueryKey = (params?: ListDailyClosesParams,) => {
+    return [
+    `/api/daily-closes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListDailyClosesQueryOptions = <TData = Awaited<ReturnType<typeof listDailyCloses>>, TError = ErrorType<void>>(params?: ListDailyClosesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDailyCloses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDailyClosesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDailyCloses>>> = ({ signal }) => listDailyCloses(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDailyCloses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDailyClosesQueryResult = NonNullable<Awaited<ReturnType<typeof listDailyCloses>>>
+export type ListDailyClosesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List saved daily close records (manager/owner only)
+ */
+
+export function useListDailyCloses<TData = Awaited<ReturnType<typeof listDailyCloses>>, TError = ErrorType<void>>(
+ params?: ListDailyClosesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDailyCloses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDailyClosesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateDailyCloseUrl = () => {
+
+
+
+
+  return `/api/daily-closes`
+}
+
+/**
+ * @summary Save a daily close / cash reconciliation record
+ */
+export const createDailyClose = async (createDailyCloseInput: CreateDailyCloseInput, options?: RequestInit): Promise<DailyClose> => {
+
+  return customFetch<DailyClose>(getCreateDailyCloseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createDailyCloseInput,)
+  }
+);}
+
+
+
+
+export const getCreateDailyCloseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDailyClose>>, TError,{data: BodyType<CreateDailyCloseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDailyClose>>, TError,{data: BodyType<CreateDailyCloseInput>}, TContext> => {
+
+const mutationKey = ['createDailyClose'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDailyClose>>, {data: BodyType<CreateDailyCloseInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDailyClose(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDailyCloseMutationResult = NonNullable<Awaited<ReturnType<typeof createDailyClose>>>
+    export type CreateDailyCloseMutationBody = BodyType<CreateDailyCloseInput>
+    export type CreateDailyCloseMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a daily close / cash reconciliation record
+ */
+export const useCreateDailyClose = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDailyClose>>, TError,{data: BodyType<CreateDailyCloseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDailyClose>>,
+        TError,
+        {data: BodyType<CreateDailyCloseInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDailyCloseMutationOptions(options));
     }
 
 export const getListCashDrawerEntriesUrl = (params?: ListCashDrawerEntriesParams,) => {

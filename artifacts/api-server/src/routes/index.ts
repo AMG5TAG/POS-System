@@ -83,6 +83,7 @@ import referralDigestRouter from "./referral-digest";
 import stickerTemplatesRouter from "./sticker-templates";
 import signaturesRouter from "./signatures";
 import vaultRouter from "./vault";
+import dailyClosesRouter from "./daily-closes";
 
 const router: IRouter = Router();
 
@@ -170,5 +171,6 @@ router.use(referralDigestRouter);
 router.use(stickerTemplatesRouter);
 router.use(signaturesRouter);
 router.use(vaultRouter);
+router.use(dailyClosesRouter);
 
 export default router;

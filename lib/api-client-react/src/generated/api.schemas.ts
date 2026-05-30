@@ -1004,6 +1004,53 @@ export interface UpsertDashboardConfigBody {
   showReferralRevenue?: boolean;
 }
 
+export type DailyCloseCurrentByPaymentMethod = {[key: string]: number};
+
+export interface DailyCloseCurrent {
+  /** YYYY-MM-DD in merchant's local timezone */
+  date: string;
+  grossSales: number;
+  netSales: number;
+  taxTotal: number;
+  discountTotal: number;
+  refundTotal: number;
+  transactionCount: number;
+  byPaymentMethod: DailyCloseCurrentByPaymentMethod;
+  expectedCash: number;
+}
+
+export type DailyCloseBreakdown = {[key: string]: number};
+
+export interface DailyClose {
+  id: number;
+  merchantId: number;
+  closeDate: string;
+  /** @nullable */
+  closedBy?: number | null;
+  /** @nullable */
+  closedByName?: string | null;
+  expectedCash: number;
+  countedCash: number;
+  variance: number;
+  /** @nullable */
+  notes?: string | null;
+  breakdown: DailyCloseBreakdown;
+  createdAt: string;
+}
+
+export type CreateDailyCloseInputBreakdown = {[key: string]: number};
+
+export interface CreateDailyCloseInput {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  closeDate: string;
+  closedBy?: number;
+  closedByName?: string;
+  expectedCash: number;
+  countedCash: number;
+  notes?: string;
+  breakdown?: CreateDailyCloseInputBreakdown;
+}
+
 export interface DashboardSummary {
   totalSales: number;
   posSales?: number;
@@ -3536,6 +3583,11 @@ year: number;
  * @maximum 12
  */
 month: number;
+};
+
+export type ListDailyClosesParams = {
+limit?: number;
+offset?: number;
 };
 
 export type ListCashDrawerEntriesParams = {

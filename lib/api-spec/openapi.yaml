@@ -1844,6 +1844,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardConfigResponse"
 
+  # ── Daily Closes ─────────────────────────────────────────────────────────────
+  /daily-closes/current:
+    get:
+      operationId: getDailyCloseCurrent
+      tags: [dashboard]
+      summary: Get today's calculated breakdown for pre-filling the Close Day dialog
+      responses:
+        "200":
+          description: Today's breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyCloseCurrent"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /daily-closes:
+    get:
+      operationId: listDailyCloses
+      tags: [dashboard]
+      summary: List saved daily close records (manager/owner only)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of daily close records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyClose"
+        "401":
+          description: Unauthorized
+    post:
+      operationId: createDailyClose
+      tags: [dashboard]
+      summary: Save a daily close / cash reconciliation record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDailyCloseInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyClose"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
   # ── Cash Drawer ──────────────────────────────────────────────────────────────
   /cash-drawer:
     get:
@@ -7248,6 +7313,84 @@ components:
           type: boolean
         showReferralRevenue:
           type: boolean
+
+    DailyCloseCurrent:
+      type: object
+      required: [date, grossSales, netSales, taxTotal, discountTotal, refundTotal, transactionCount, byPaymentMethod, expectedCash]
+      properties:
+        date:
+          type: string
+          description: YYYY-MM-DD in merchant's local timezone
+        grossSales:
+          type: number
+        netSales:
+          type: number
+        taxTotal:
+          type: number
+        discountTotal:
+          type: number
+        refundTotal:
+          type: number
+        transactionCount:
+          type: integer
+        byPaymentMethod:
+          type: object
+          additionalProperties:
+            type: number
+        expectedCash:
+          type: number
+
+    DailyClose:
+      type: object
+      required: [id, merchantId, closeDate, expectedCash, countedCash, variance, breakdown, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+        closeDate:
+          type: string
+        closedBy:
+          type: ["integer", "null"]
+        closedByName:
+          type: ["string", "null"]
+        expectedCash:
+          type: number
+        countedCash:
+          type: number
+        variance:
+          type: number
+        notes:
+          type: ["string", "null"]
+        breakdown:
+          type: object
+          additionalProperties:
+            type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDailyCloseInput:
+      type: object
+      required: [closeDate, expectedCash, countedCash]
+      properties:
+        closeDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        closedBy:
+          type: integer
+        closedByName:
+          type: string
+        expectedCash:
+          type: number
+        countedCash:
+          type: number
+        notes:
+          type: string
+        breakdown:
+          type: object
+          additionalProperties:
+            type: number
 
     DashboardSummary:
       type: object
