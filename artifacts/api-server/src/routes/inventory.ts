@@ -78,6 +78,12 @@ router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<voi
   const updates: Record<string, unknown> = { stockQuantity: parsed.data.stockQuantity };
   if (parsed.data.lowStockThreshold !== undefined) updates.lowStockThreshold = parsed.data.lowStockThreshold;
 
+  // Read old stock before updating so we can detect threshold crossings for alerts.
+  const [before] = await db
+    .select({ stockQuantity: productsTable.stockQuantity })
+    .from(productsTable)
+    .where(and(eq(productsTable.id, params.data.productId), eq(productsTable.merchantId, req.session.merchantId!)));
+
   const [product] = await db
     .update(productsTable)
     .set(updates)
@@ -98,7 +104,7 @@ router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<voi
     stockQuantity: product.stockQuantity,
     lowStockThreshold: product.lowStockThreshold ?? null,
     trackInventory: product.trackInventory,
-  }).catch(() => { /* non-blocking */ });
+  }, before?.stockQuantity ?? product.stockQuantity).catch(() => { /* non-blocking */ });
 
   res.json({
     productId: product.id,

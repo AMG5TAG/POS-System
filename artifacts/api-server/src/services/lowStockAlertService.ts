@@ -11,6 +11,12 @@ export interface LowStockItem {
   threshold: number;
 }
 
+function getInventoryUrl(): string {
+  const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim();
+  if (domain) return `https://${domain}/app/inventory`;
+  return "/app/inventory";
+}
+
 function buildEmailHtml(items: LowStockItem[], merchantName: string): string {
   const rows = items.map((item) => `
     <tr>
@@ -45,7 +51,7 @@ function buildEmailHtml(items: LowStockItem[], merchantName: string): string {
         <tbody>${rows}</tbody>
       </table>
       <div style="margin-top:24px;">
-        <a href="/app/inventory" style="display:inline-block;background:#efbf04;color:#1a1a1a;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;font-size:14px;">View Inventory</a>
+        <a href="${getInventoryUrl()}" style="display:inline-block;background:#efbf04;color:#1a1a1a;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;font-size:14px;">View Inventory</a>
       </div>
     </div>
     <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f0f0f0;">
@@ -95,7 +101,11 @@ export async function sendLowStockAlert(merchantId: number, items: LowStockItem[
   await logAlert(merchantId, mode, items, emailAddresses);
 }
 
-export async function maybeQueueImmediateAlert(merchantId: number, product: { id: number; name: string; sku: string | null; stockQuantity: number; lowStockThreshold: number | null; trackInventory: string }): Promise<void> {
+export async function maybeQueueImmediateAlert(
+  merchantId: number,
+  product: { id: number; name: string; sku: string | null; stockQuantity: number; lowStockThreshold: number | null; trackInventory: string },
+  previousStockQuantity: number,
+): Promise<void> {
   if (product.trackInventory !== "true") return;
 
   const [settings] = await db.select()
@@ -108,7 +118,12 @@ export async function maybeQueueImmediateAlert(merchantId: number, product: { id
   if (!emailAddresses.length) return;
 
   const threshold = product.lowStockThreshold ?? settings.globalThreshold ?? 5;
-  if (product.stockQuantity > threshold) return;
+
+  // Only alert when stock crosses from above the threshold to at-or-below (newly low).
+  // Skip if it was already at or below threshold before this update.
+  const wasAlreadyLow = previousStockQuantity <= threshold;
+  const isNowLow = product.stockQuantity <= threshold;
+  if (!isNowLow || wasAlreadyLow) return;
 
   await sendLowStockAlert(merchantId, [{
     productId: product.id,

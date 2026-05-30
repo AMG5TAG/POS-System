@@ -504,7 +504,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // entity completion) commit together or roll back together. Prevents
   // partial commits where a sale is recorded but stock/customer state drift.
   let transaction: typeof transactionsTable.$inferSelect;
-  const updatedStockItems: Array<{ id: number; name: string; sku: string | null; stockQuantity: number; lowStockThreshold: number | null; trackInventory: string }> = [];
+  const updatedStockItems: Array<{ id: number; name: string; sku: string | null; stockQuantity: number; previousStockQuantity: number; lowStockThreshold: number | null; trackInventory: string }> = [];
   try {
     transaction = await db.transaction(async (tx) => {
     const [row] = await tx
@@ -609,7 +609,8 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .update(productsTable)
           .set({ stockQuantity: newQty })
           .where(eq(productsTable.id, productId));
-        updatedStockItems.push({ id: product.id, name: product.name, sku: product.sku ?? null, stockQuantity: newQty, lowStockThreshold: product.lowStockThreshold ?? null, trackInventory: product.trackInventory });
+        // product.stockQuantity is the pre-sale value; newQty is post-sale.
+        updatedStockItems.push({ id: product.id, name: product.name, sku: product.sku ?? null, stockQuantity: newQty, previousStockQuantity: product.stockQuantity, lowStockThreshold: product.lowStockThreshold ?? null, trackInventory: product.trackInventory });
       }
     }
 
@@ -685,7 +686,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
 
   if (updatedStockItems.length) {
     const merchantId = req.session.merchantId!;
-    Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p)))
+    Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p, p.previousStockQuantity)))
       .catch(() => { /* non-blocking */ });
   }
 
