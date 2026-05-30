@@ -14,7 +14,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters, useListProductTypes,
-  useCreateGiftCard, useValidateGiftCard,
+  useValidateGiftCard,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse,
@@ -417,7 +417,6 @@ export default function POSPage() {
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
   const createTransactionMutation  = useCreateTransaction();
-  const createGiftCardMutation     = useCreateGiftCard();
   const validateGiftCardMutation   = useValidateGiftCard();
 
   const allProducts = productsData?.items || [];

@@ -27,7 +27,10 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
   const rawItems = Array.isArray(t.items) ? t.items as Array<Record<string, unknown>> : [];
   const issuedGiftCards = rawItems
     .filter(i => i.giftCardIssue === true && typeof i.giftCardNumber === "string")
-    .map(i => ({ cardNumber: i.giftCardNumber as string, balance: Number(i.unitPrice ?? 0) }));
+    // Use totalPrice (the actual charged amount after discounts) so the displayed
+    // balance always matches what was loaded onto the card. unitPrice is the face
+    // value and diverges when any discount is applied to the gift-card line.
+    .map(i => ({ cardNumber: i.giftCardNumber as string, balance: Number(i.totalPrice ?? i.unitPrice ?? 0) }));
 
   return {
     id: t.id,
