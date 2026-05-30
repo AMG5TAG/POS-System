@@ -1524,117 +1524,110 @@ export default function ManagementTemplatesPage() {
           <div className="text-center py-16 text-muted-foreground text-sm">Loading templates…</div>
         ) : (
           <>
-            {/* 2-column layout: sidebar | stacked preview + options */}
-            <div className="flex gap-4 items-start min-w-0">
-
-              {/* Col 1: category + style selector */}
-              <div className="w-56 shrink-0 space-y-3">
-                <div className="rounded-xl border bg-card overflow-hidden">
-                  {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
-                    const { label, icon: Icon, color } = CATEGORY_META[cat];
-                    const active = cat === activeCategory;
-                    const catRow = templates.find((t) => t.templateType === cat);
-                    const saved  = !!catRow;
-                    return (
-                      <button key={cat} onClick={() => setActiveCategory(cat)}
-                        className={cn("w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-b last:border-b-0",
-                          active ? "bg-primary/5 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
-                        )}
-                      >
-                        <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : color)} />
-                        <span className="flex-1 text-left">{label}</span>
-                        {saved && <Check className="w-3 h-3 text-green-500 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Styles</p>
-                  {currentTemplates.map((tpl) => {
-                    const isActiveStyle = activeStyle === tpl.id;
-                    const previewing    = previewId === tpl.id;
-                    const SIcon         = STYLE_ICONS[tpl.style];
-                    return (
-                      <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
-                        className={cn("rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
-                          previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-xs">{tpl.name}</span>
-                          {isActiveStyle && (
-                            <Badge variant="default" className="text-[9px] h-3.5 px-1 gap-0.5">
-                              <Check className="w-2 h-2" /> Saved
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground leading-snug">{tpl.description}</p>
-                        <span className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
-                          <SIcon className="w-2 h-2" />{tpl.style}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Col 2: preview + options stacked */}
-              <div className="flex-1 min-w-0 space-y-4">
-                {/* Preview header */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="font-semibold text-sm truncate">
-                      {currentTemplates.find(t => t.id === previewId)?.name} Preview
-                    </span>
-                    <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
-                  </div>
-                </div>
-
-                {/* Preview box */}
-                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
-                  {activeCategory === "Thermal_Receipt" && (
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
-                  )}
-                  {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
-                  )}
-                  {activeCategory === "Service_Ticket" && (
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
-                  )}
-                </div>
-
-                {/* Info bar */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
-                  <Building2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
-                </div>
-
-                {/* Options panel */}
-                <OptionsPanel
-                  key={`${activeCategory}-${previewId}`}
-                  category={activeCategory}
-                  templateId={previewId}
-                  opts={opts}
-                  update={update}
-                  reset={reset}
-                  isDefault={isDefault}
-                  setIsDefault={setIsDefault}
-                  onSave={() => save(previewId)}
-                  saving={saving}
-                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
-                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
-                />
+            {/* Full-width category bar */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex divide-x">
+                {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
+                  const { label, icon: Icon, color } = CATEGORY_META[cat];
+                  const active = cat === activeCategory;
+                  const catRow = templates.find((t) => t.templateType === cat);
+                  const saved  = !!catRow;
+                  return (
+                    <button key={cat} onClick={() => setActiveCategory(cat)}
+                      className={cn("flex-1 flex items-center justify-center gap-2 px-3 py-3 text-sm transition-colors",
+                        active ? "bg-primary/5 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
+                      )}
+                    >
+                      <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : color)} />
+                      <span className="hidden sm:inline">{label}</span>
+                      <span className="sm:hidden">{label.split(' ')[0]}</span>
+                      {saved && <Check className="w-3 h-3 text-green-500 shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Full-width Quick Codes bar */}
-            <QuickCodesBar
-              groups={quickCodeGroups}
-              focusedField={focusedFieldLabel}
-              onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
-            />
+            {/* Full-width styles row */}
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Styles</p>
+              <div className="flex gap-3">
+                {currentTemplates.map((tpl) => {
+                  const isActiveStyle = activeStyle === tpl.id;
+                  const previewing    = previewId === tpl.id;
+                  const SIcon         = STYLE_ICONS[tpl.style];
+                  return (
+                    <div key={tpl.id} onClick={() => setPreviewId(tpl.id)}
+                      className={cn("flex-1 rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
+                        previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-xs">{tpl.name}</span>
+                        {isActiveStyle && (
+                          <Badge variant="default" className="text-[9px] h-3.5 px-1 gap-0.5">
+                            <Check className="w-2 h-2" /> Saved
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-snug">{tpl.description}</p>
+                      <span className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border font-medium", STYLE_COLORS[tpl.style])}>
+                        <SIcon className="w-2 h-2" />{tpl.style}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Preview + options stacked */}
+            <div className="space-y-4">
+              {/* Preview header */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="font-semibold text-sm truncate">
+                    {currentTemplates.find(t => t.id === previewId)?.name} Preview
+                  </span>
+                  <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+                </div>
+              </div>
+
+              {/* Preview box */}
+              <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
+                {activeCategory === "Thermal_Receipt" && (
+                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
+                )}
+                {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
+                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
+                )}
+                {activeCategory === "Service_Ticket" && (
+                  <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                )}
+              </div>
+
+              {/* Info bar */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
+              </div>
+
+              {/* Options panel */}
+              <OptionsPanel
+                key={`${activeCategory}-${previewId}`}
+                category={activeCategory}
+                templateId={previewId}
+                opts={opts}
+                update={update}
+                reset={reset}
+                isDefault={isDefault}
+                setIsDefault={setIsDefault}
+                onSave={() => save(previewId)}
+                saving={saving}
+                onFieldFocus={(label) => setFocusedFieldLabel(label)}
+                onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+              />
+            </div>
           </>
         )}
       </div>
