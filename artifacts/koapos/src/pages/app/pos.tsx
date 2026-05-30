@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
+import QRCode from "qrcode";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -1105,7 +1106,7 @@ export default function POSPage() {
     idempotencyKeyRef.current = null;
   };
 
-  const printPosReceipt = () => {
+  const printPosReceipt = async () => {
     const esc = (s: string) => String(s ?? "").replace(/[&<>"']/g, (c) => (
       c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;"
     ));
@@ -1242,9 +1243,21 @@ export default function POSPage() {
     const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt && earnedAmt > 0)
       ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>${earnedDisplay}</span></div>`
       : "";
-    const qrHtml = (opts.showCustomerQr && customerForReceipt)
-      ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888">CUS-${esc(String(customerForReceipt.id))}</div></div>${opts.loyaltyQrText ? `<p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText)}</p>` : ""}</div>`
+
+    /* Generate actual scannable QR code image (same as invoice template) */
+    let qrDataUrl = "";
+    if (opts.showCustomerQr && customerForReceipt) {
+      try {
+        qrDataUrl = await QRCode.toDataURL(
+          `CUS-${customerForReceipt.id}`,
+          { width: 80, margin: 1 }
+        );
+      } catch { /* ignore QR generation errors */ }
+    }
+    const qrHtml = (qrDataUrl && customerForReceipt)
+      ? `<div class="center mt"><div style="display:inline-block;border:1px solid #e5e7eb;padding:6px;border-radius:4px"><img src="${qrDataUrl}" style="width:72px;height:72px" alt="QR"><div style="font-family:monospace;font-size:9px;letter-spacing:1px;color:#888;margin-top:2px">CUS-${esc(String(customerForReceipt.id))}</div></div>${opts.loyaltyQrText ? `<p class="center gray small" style="margin-top:2px">${esc(opts.loyaltyQrText)}</p>` : ""}</div>`
       : "";
+
     const customMsgHtml = opts.customMessage
       ? `<p class="center small gray mt" style="line-height:1.5">${resolveStr(opts.customMessage).replace(/\n/g, "<br>")}</p>`
       : "";
