@@ -149,6 +149,7 @@ export default function POSInvoicesPage() {
   const [saving, setSaving] = useState(false);
   const [emailDialog, setEmailDialog] = useState<{ open: boolean; invoiceId: number | null }>({ open: false, invoiceId: null });
   const [emailAddr, setEmailAddr] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -491,7 +492,7 @@ export default function POSInvoicesPage() {
   const getEmailTemplatePayload = () => {
     return {
       templateId: "e-pro",
-      subjectLine:        invoiceOpts.subjectLine,
+      subjectLine:        emailSubject.trim() || invoiceOpts.subjectLine,
       customGreeting:     invoiceOpts.customGreeting,
       customMessage:      invoiceOpts.customMessage,
       customSignOff:      invoiceOpts.customSignOff,
@@ -525,6 +526,7 @@ export default function POSInvoicesPage() {
       toast.success("Invoice emailed");
       setEmailDialog({ open: false, invoiceId: null });
       setEmailAddr("");
+      setEmailSubject("");
       // Refresh the invoice so the activity log updates
       const refreshRes = await fetch(`${API}/${invId}`, { credentials: "include" });
       if (refreshRes.ok) {
@@ -1599,7 +1601,12 @@ export default function POSInvoicesPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { setEmailDialog({ open: true, invoiceId: detailInvoice.id }); setEmailAddr(detailInvoice.customerEmail ?? ""); }}>
+                      onClick={() => {
+                        const bizName = merchant?.businessName ?? "Your Business";
+                        setEmailDialog({ open: true, invoiceId: detailInvoice.id });
+                        setEmailAddr(detailInvoice.customerEmail ?? "");
+                        setEmailSubject(`Invoice ${detailInvoice.invoiceNumber} from ${bizName}`);
+                      }}>
                       <Mail className="w-3.5 h-3.5" /> Email
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
@@ -1801,12 +1808,21 @@ export default function POSInvoicesPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Recipient Email</Label>
+              <Label>To</Label>
               <Input
                 type="email"
                 placeholder="customer@example.com"
                 value={emailAddr}
                 onChange={(e) => setEmailAddr(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                type="text"
+                placeholder="Invoice subject…"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
               />
             </div>

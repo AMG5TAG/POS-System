@@ -627,7 +627,8 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     || row.customerAddress
     || null;
 
-  const bpBrandColors: string[] = JSON.parse(bp?.brandColors || "[]");
+  let bpBrandColors: string[] = [];
+  try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* use default */ }
   const pdfBuffer = await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",

@@ -49,8 +49,41 @@ const fmtDate = (iso: string) => {
   catch { return iso; }
 };
 
-/** Fetch a logo URL as a Buffer, returning null on any error. */
+/** Private / reserved IP ranges and hostnames that must never be fetched (SSRF prevention). */
+const BLOCKED_HOSTS = [
+  /^localhost$/i,
+  /^127\./,                        // loopback
+  /^10\./,                         // RFC-1918
+  /^172\.(1[6-9]|2\d|3[01])\./,   // RFC-1918
+  /^192\.168\./,                   // RFC-1918
+  /^169\.254\./,                   // link-local / cloud metadata (AWS, GCP, etc.)
+  /^100\.64\./,                    // CGNAT
+  /^0\./,                          // "this" network
+  /^::1$/,                         // IPv6 loopback
+  /^fc[0-9a-f]{2}:/i,              // IPv6 ULA
+  /^fd[0-9a-f]{2}:/i,              // IPv6 ULA
+  /\.local$/i,                     // mDNS / internal
+  /\.internal$/i,
+  /\.corp$/i,
+  /metadata\.google\.internal/i,   // GCP metadata server
+];
+
+function isSafeLogoUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    // Only HTTPS
+    if (u.protocol !== "https:") return false;
+    const hostname = u.hostname.toLowerCase();
+    if (BLOCKED_HOSTS.some((p) => p.test(hostname))) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Fetch a logo URL as a Buffer, returning null on any error or unsafe URL. */
 async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
+  if (!isSafeLogoUrl(url)) return null;
   try {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 5000);
@@ -58,9 +91,12 @@ async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
     clearTimeout(timeout);
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") ?? "";
-    // pdfkit supports JPEG and PNG
+    // pdfkit supports JPEG and PNG only
     if (!ct.includes("jpeg") && !ct.includes("jpg") && !ct.includes("png")) return null;
-    return Buffer.from(await res.arrayBuffer());
+    // Cap logo download at 2 MB
+    const raw = await res.arrayBuffer();
+    if (raw.byteLength > 2 * 1024 * 1024) return null;
+    return Buffer.from(raw);
   } catch {
     return null;
   }
