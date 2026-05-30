@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useListCustomers } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/use-auth";
 import {
   computeHeardFromAnalytics,
   HEARD_FROM_PERIODS,
@@ -16,7 +17,12 @@ import { TrendingUp, TrendingDown, Minus, Radio, ExternalLink } from "lucide-rea
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: n % 1 === 0 ? 0 : 2 });
 
+function isManagementRole(role?: string | null) {
+  return role === "owner" || role === "manager";
+}
+
 export function ReferralRevenueWidget() {
+  const { user } = useAuth();
   const [period, setPeriod] = useState<HeardFromPeriod>("30d");
   const { data: customersData, isLoading } = useListCustomers(
     { limit: 1000 },
@@ -58,12 +64,14 @@ export function ReferralRevenueWidget() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-muted-foreground" asChild>
-              <Link href="/settings/customers#heard-from-breakdown">
-                <ExternalLink className="w-3 h-3" />
-                Full report
-              </Link>
-            </Button>
+            {isManagementRole(user?.staffRole) && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-muted-foreground" asChild>
+                <Link href="/settings/customers#heard-from-breakdown">
+                  <ExternalLink className="w-3 h-3" />
+                  Full report
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>

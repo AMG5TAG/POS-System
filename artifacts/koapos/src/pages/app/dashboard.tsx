@@ -114,9 +114,9 @@ export default function DashboardPage() {
               />
             )}
 
-            {config.showReferralRevenue && <ReferralRevenueWidget />}
-
             {config.showCalendar && <DashboardCalendar />}
+
+            {config.showReferralRevenue && <ReferralRevenueWidget />}
           </>
         )}
       </div>
