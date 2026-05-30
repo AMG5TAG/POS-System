@@ -379,47 +379,53 @@ export default function ServiceJobNewPage() {
           </div>
         </div>
 
-        {/* Book-In Date + Partner Repair */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 border rounded-xl px-4 py-3 bg-background">
-            <FileText className="w-4 h-4 text-blue-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">Book-In Date</p>
-              <input
-                type="date"
-                value={bookInDate}
-                onChange={(e) => setBookInDate(e.target.value)}
-                className="text-sm font-medium bg-transparent border-none outline-none w-full cursor-pointer"
-              />
-            </div>
+        {/* Important flags */}
+        <div className="border rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold text-sm">Important</h2>
           </div>
-          {!MEDIA_DEVICE_TYPES.has(deviceType) && (
-            <ToggleCard
-              icon={<FileText className="w-4 h-4" />}
-              label="Partner Repair"
-              description="Partner Repair"
-              checked={isPartnerRepair}
-              onChange={setIsPartnerRepair}
-            />
-          )}
-        </div>
 
-        {/* Critical + Under Warranty */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ToggleCard
-            icon={<AlertCircle className="w-4 h-4" />}
-            label="Critical"
-            description="High priority job"
-            checked={isCritical}
-            onChange={setIsCritical}
-          />
-          <ToggleCard
-            icon={<Check className="w-4 h-4" />}
-            label="Under Warranty"
-            description="Manufacturer warranty"
-            checked={isUnderWarranty}
-            onChange={setIsUnderWarranty}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3 border rounded-xl px-4 py-3 bg-background">
+              <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-muted-foreground mb-0.5">Book-In Date</p>
+                <input
+                  type="date"
+                  value={bookInDate}
+                  onChange={(e) => setBookInDate(e.target.value)}
+                  className="text-sm font-medium bg-transparent border-none outline-none w-full cursor-pointer"
+                />
+              </div>
+            </div>
+            {!MEDIA_DEVICE_TYPES.has(deviceType) && (
+              <ToggleCard
+                icon={<FileText className="w-4 h-4" />}
+                label="Partner Repair"
+                description="Partner Repair"
+                checked={isPartnerRepair}
+                onChange={setIsPartnerRepair}
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ToggleCard
+              icon={<AlertCircle className="w-4 h-4" />}
+              label="Critical"
+              description="High priority job"
+              checked={isCritical}
+              onChange={setIsCritical}
+            />
+            <ToggleCard
+              icon={<Check className="w-4 h-4" />}
+              label="Under Warranty"
+              description="Manufacturer warranty"
+              checked={isUnderWarranty}
+              onChange={setIsUnderWarranty}
+            />
+          </div>
         </div>
 
         {/* Heard From */}
