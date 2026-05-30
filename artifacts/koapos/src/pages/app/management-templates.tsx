@@ -197,6 +197,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
       { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
       { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. Welcome to {{business.name}}", quickCodes: true },
+      { section: "Body",   key: "fontFamily",         label: "Font Family",         type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
       { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
       { section: "Body",   key: "showPaymentMethods", label: "Show Payment Method", type: "toggle" },
       { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
@@ -217,6 +218,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
+      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
       { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",         type: "toggle", hint: "Scannable barcode to retrieve this sale" },
@@ -237,6 +239,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
+      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
@@ -248,6 +251,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
       { section: "Header",   key: "headerText",           label: "Custom Header HTML",       type: "textarea", placeholder: "SERVICE JOB SHEET" },
+      { section: "Body",     key: "fontFamily",           label: "Font Family",              type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
       { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "select",   options: [{ value: "normal", label: "Normal" }, { value: "large", label: "Large" }, { value: "xlarge", label: "X-Large" }] },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
       { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
@@ -571,29 +575,6 @@ function OptionsPanel({
           <span className="text-sm font-semibold">Options</span>
         </div>
         <button onClick={reset} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Reset</button>
-      </div>
-
-      {/* Font Family dropdown */}
-      <div className="px-4 py-3 border-b space-y-2">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Font Family</p>
-        <Select
-          value={opts.fontFamily || "inter"}
-          onValueChange={(v) => update("fontFamily", v)}
-        >
-          <SelectTrigger className="h-9 text-sm w-full">
-            <SelectValue placeholder="Select font" />
-          </SelectTrigger>
-          <SelectContent>
-            {FONT_OPTIONS.map((f) => (
-              <SelectItem key={f.value} value={f.value} style={{ fontFamily: f.css }}>
-                <span className="flex items-center gap-2">
-                  <span className="text-base leading-none">Aa</span>
-                  {f.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* System default toggle */}
