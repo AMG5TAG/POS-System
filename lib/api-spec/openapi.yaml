@@ -1116,6 +1116,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  # ── Invoices (PDF) ────────────────────────────────────────────────────────
+  /invoices/{id}/pdf:
+    get:
+      operationId: getInvoicePdf
+      tags: [invoices]
+      summary: Download a branded A4 PDF for an invoice
+      description: >
+        Generates a server-side PDF (pdfkit) for the specified invoice,
+        incorporating the merchant's brand colour and logo from their
+        Business Profile. Returns the PDF as an attachment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Not authenticated
+        "404":
+          description: Invoice not found
+
   # ── Transactions ──────────────────────────────────────────────────────────
   /transactions:
     get:

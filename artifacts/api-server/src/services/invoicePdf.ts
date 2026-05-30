@@ -29,13 +29,17 @@ export interface InvoicePdfData {
   businessAbn: string | null;
   businessWebsite: string | null;
   businessEmail: string | null;
+  /** Hex brand colour, e.g. "#4f46e5". Falls back to indigo if not provided. */
+  brandColor?: string | null;
+  /** Absolute URL for the merchant logo. Fetched and embedded if reachable. */
+  logoUrl?: string | null;
 }
 
-const BRAND   = "#4f46e5";
-const GRAY    = "#6b7280";
-const LGRAY   = "#f3f4f6";
-const BLACK   = "#111827";
-const DARK    = "#374151";
+const FALLBACK_BRAND = "#4f46e5";
+const GRAY  = "#6b7280";
+const LGRAY = "#f3f4f6";
+const BLACK = "#111827";
+const DARK  = "#374151";
 
 const fmtCurrency = (n: number) =>
   new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
@@ -45,7 +49,32 @@ const fmtDate = (iso: string) => {
   catch { return iso; }
 };
 
-export function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
+/** Fetch a logo URL as a Buffer, returning null on any error. */
+async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const ct = res.headers.get("content-type") ?? "";
+    // pdfkit supports JPEG and PNG
+    if (!ct.includes("jpeg") && !ct.includes("jpg") && !ct.includes("png")) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
+  const BRAND = data.brandColor?.trim() || FALLBACK_BRAND;
+
+  // Pre-fetch logo (if provided) before opening the PDFDocument so we can
+  // skip the logo section cleanly rather than stalling mid-render.
+  const logoBuf: Buffer | null = data.logoUrl?.startsWith("http")
+    ? await fetchLogoBuffer(data.logoUrl)
+    : null;
+
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
 
@@ -63,16 +92,27 @@ export function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     const PW = doc.page.width - ML * 2;
 
     // ── Header ────────────────────────────────────────────────────────────
-    doc.font("Helvetica-Bold").fontSize(22).fillColor(BLACK).text(data.businessName, ML, 50);
+    let leftY = 50;
 
-    let leftY = 82;
+    if (logoBuf) {
+      try {
+        doc.image(logoBuf, ML, leftY, { height: 44, fit: [180, 44] });
+        leftY += 52;
+      } catch {
+        // unsupported format — skip logo silently
+      }
+    }
+
+    doc.font("Helvetica-Bold").fontSize(22).fillColor(BLACK).text(data.businessName, ML, leftY);
+    leftY += 28;
+
     const addrParts = [data.businessAddress, data.businessCity].filter(Boolean).join(", ");
     doc.font("Helvetica").fontSize(9).fillColor(GRAY);
-    if (addrParts)          { doc.text(addrParts,               ML, leftY); leftY += 13; }
-    if (data.businessPhone) { doc.text(data.businessPhone,      ML, leftY); leftY += 13; }
-    if (data.businessEmail) { doc.text(data.businessEmail,      ML, leftY); leftY += 13; }
-    if (data.businessAbn)   { doc.text(`ABN: ${data.businessAbn}`, ML, leftY); leftY += 13; }
-    if (data.businessWebsite){ doc.text(data.businessWebsite,   ML, leftY); leftY += 13; }
+    if (addrParts)           { doc.text(addrParts,                ML, leftY); leftY += 13; }
+    if (data.businessPhone)  { doc.text(data.businessPhone,       ML, leftY); leftY += 13; }
+    if (data.businessEmail)  { doc.text(data.businessEmail,       ML, leftY); leftY += 13; }
+    if (data.businessAbn)    { doc.text(`ABN: ${data.businessAbn}`, ML, leftY); leftY += 13; }
+    if (data.businessWebsite){ doc.text(data.businessWebsite,     ML, leftY); leftY += 13; }
 
     // Right column – INVOICE label + meta
     const RX = ML + PW - 200;

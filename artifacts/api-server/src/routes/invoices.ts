@@ -627,6 +627,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     || row.customerAddress
     || null;
 
+  const bpBrandColors: string[] = JSON.parse(bp?.brandColors || "[]");
   const pdfBuffer = await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
@@ -654,6 +655,8 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     businessAbn:     bp?.abn || null,
     businessWebsite: bp?.website || null,
     businessEmail:   bp?.contactEmail || null,
+    brandColor:      bpBrandColors[0] || null,
+    logoUrl:         bp?.logo || null,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -832,6 +835,8 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     businessAbn:     bp?.abn || null,
     businessWebsite: bp?.website || null,
     businessEmail:   bp?.contactEmail || null,
+    brandColor:      tpl.brandColor || (() => { try { return (JSON.parse(bp?.brandColors || "[]") as string[])[0] || null; } catch { return null; } })(),
+    logoUrl:         tpl.logo || bp?.logo || null,
   });
 
   const result = await sendEmail(merchantId, {
