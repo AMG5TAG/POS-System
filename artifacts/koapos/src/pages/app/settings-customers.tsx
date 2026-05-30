@@ -35,7 +35,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
-  TrendingUp, TrendingDown, Minus, Download,
+  TrendingUp, TrendingDown, Minus, Download, Sparkles,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -680,6 +680,46 @@ export default function SettingsCustomersPage() {
                     )}
                   </div>
                 </div>
+
+                {/* At-a-glance highlights: biggest gainer / decliner */}
+                {heardFromData.highlights.length > 0 && (
+                  <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      <p className="text-sm font-medium">What's moving</p>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {heardFromData.highlights.map((h) => {
+                        const pct = h.pctChange === null ? null : Math.abs(h.pctChange);
+                        return (
+                          <li key={h.kind} className="flex items-start gap-2 text-sm">
+                            {h.kind === "gainer" ? (
+                              <TrendingUp className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
+                            ) : (
+                              <TrendingDown className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+                            )}
+                            <span className="text-muted-foreground">
+                              <span className="font-semibold text-foreground">{h.name}</span>{" "}
+                              {h.kind === "gainer" ? (
+                                pct !== null ? (
+                                  <>is your fastest-growing channel, up {pct}% ({h.previous} → {h.current}) vs the previous period.</>
+                                ) : (
+                                  <>is your fastest-growing channel, with {h.current} new customer{h.current !== 1 ? "s" : ""} this period (none previously).</>
+                                )
+                              ) : h.current === 0 ? (
+                                <>has dropped to zero, down from {h.previous} in the previous period.</>
+                              ) : pct !== null ? (
+                                <>is down {pct}% ({h.previous} → {h.current}) vs the previous period.</>
+                              ) : (
+                                <>is down {Math.abs(h.delta)} vs the previous period.</>
+                              )}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Trend over time (stacked bars per source) */}
                 {heardFromData.trend.sources.length > 0 && (

@@ -30,6 +30,17 @@ export type HeardFromTrendPoint = {
   label: string;
 } & Record<string, number | string>;
 
+export type HeardFromHighlight = {
+  kind: "gainer" | "decliner";
+  name: string;
+  current: number;
+  previous: number;
+  delta: number;
+  /** Percent change vs the previous period; null when there was nothing previously. */
+  pctChange: number | null;
+  fill: string;
+};
+
 export type HeardFromAnalytics = {
   /** Distribution within the selected window (drives the pie + legend). */
   breakdown: HeardFromSlice[];
@@ -41,6 +52,8 @@ export type HeardFromAnalytics = {
   colorMap: Record<string, string>;
   /** Number of customers counted within the selected window. */
   windowTotal: number;
+  /** Plain-language callouts for the biggest gainer/decliner (empty for "all time"). */
+  highlights: HeardFromHighlight[];
 };
 
 const NOT_RECORDED = "Not recorded";
@@ -210,5 +223,55 @@ export function computeHeardFromAnalytics(
     trend: { data: trendData, sources: trendSources },
     colorMap,
     windowTotal,
+    highlights: computeHighlights(comparison),
   };
+}
+
+/**
+ * Pick the standout gainer and decliner from the per-source comparison so a
+ * merchant can spot fading channels without scanning the list. Returns an empty
+ * array for "all time" (no previous period) or when nothing is moving.
+ * "Not recorded" is excluded — it isn't a real referral channel.
+ */
+function computeHighlights(comparison: HeardFromComparison[] | null): HeardFromHighlight[] {
+  if (!comparison) return [];
+
+  const real = comparison.filter((c) => c.name !== NOT_RECORDED);
+  const highlights: HeardFromHighlight[] = [];
+
+  const pctChange = (c: HeardFromComparison): number | null =>
+    c.previous > 0 ? Math.round((c.delta / c.previous) * 100) : null;
+
+  const gainers = real.filter((c) => c.delta > 0).sort((a, b) => b.delta - a.delta);
+  if (gainers.length) {
+    const g = gainers[0];
+    highlights.push({
+      kind: "gainer",
+      name: g.name,
+      current: g.current,
+      previous: g.previous,
+      delta: g.delta,
+      pctChange: pctChange(g),
+      fill: g.fill,
+    });
+  }
+
+  const decliners = real.filter((c) => c.delta < 0).sort((a, b) => a.delta - b.delta);
+  if (decliners.length) {
+    const d = decliners[0];
+    // Avoid pointing at the same channel twice in the rare single-source case.
+    if (d.name !== highlights[0]?.name) {
+      highlights.push({
+        kind: "decliner",
+        name: d.name,
+        current: d.current,
+        previous: d.previous,
+        delta: d.delta,
+        pctChange: pctChange(d),
+        fill: d.fill,
+      });
+    }
+  }
+
+  return highlights;
 }
