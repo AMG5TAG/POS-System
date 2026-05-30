@@ -424,6 +424,39 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
   res.json(result);
 });
 
+/**
+ * Compute the period start timestamp anchored to local midnight in the
+ * merchant's timezone. Uses rolling windows matching the existing API contract
+ * (week = last 7 days, month = last 30 days, year = last 365 days) but starts
+ * those windows from the correct local midnight rather than UTC midnight.
+ */
+function getPeriodStartInTz(period: string, tz: string): Date {
+  const now = new Date();
+  // Current date in merchant timezone
+  const localDateStr = now.toLocaleDateString("en-CA", { timeZone: tz }); // "YYYY-MM-DD"
+  const [y, m, d] = localDateStr.split("-").map(Number);
+
+  // UTC offset in minutes: compare what UTC noon looks like in the local timezone
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const noonLocal = new Intl.DateTimeFormat("en-AU", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(noonUtc); // e.g. "22:00" (AEST) or "21:30" (ACST)
+  const [lh, lm2] = noonLocal.split(":").map(Number);
+  const offsetMin = (lh * 60 + lm2) - 12 * 60; // e.g. 600 for AEST (+10 h)
+
+  // UTC timestamp that represents 00:00:00 in the merchant's local timezone today
+  const todayMidnightUtc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetMin * 60_000);
+
+  switch (period) {
+    case "today":     return todayMidnightUtc;
+    case "yesterday": return new Date(todayMidnightUtc.getTime() - 86_400_000);
+    case "week":      return new Date(todayMidnightUtc.getTime() - 7   * 86_400_000);
+    case "month":     return new Date(todayMidnightUtc.getTime() - 30  * 86_400_000);
+    case "year":      return new Date(todayMidnightUtc.getTime() - 365 * 86_400_000);
+    default:          return todayMidnightUtc;
+  }
+}
+
 router.get("/dashboard/top-products", requireAuth, async (req, res): Promise<void> => {
   const queryParams = GetTopProductsQueryParams.safeParse(req.query);
   if (!queryParams.success) {
@@ -431,45 +464,37 @@ router.get("/dashboard/top-products", requireAuth, async (req, res): Promise<voi
     return;
   }
 
-  const limit = queryParams.data.limit ?? 5;
-  const period = queryParams.data.period ?? "month";
-  const periodStart = getPeriodStart(period);
+  const limit   = queryParams.data.limit  ?? 5;
+  const period  = queryParams.data.period ?? "month";
+  const merchantId = req.session.merchantId!;
 
-  const transactions = await db
-    .select()
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.merchantId, req.session.merchantId!),
-        gte(transactionsTable.createdAt, periodStart),
-        eq(transactionsTable.status, "completed")
-      )
-    );
+  // Resolve merchant timezone for correct period boundary
+  const [merchantRow] = await db
+    .select({ timezone: merchantsTable.timezone })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, merchantId))
+    .limit(1);
+  const tz = merchantRow?.timezone ?? "Australia/Sydney";
+  const periodStart = getPeriodStartInTz(period, tz);
 
-  const productStats: Record<number, { productId: number; productName: string; quantitySold: number; revenue: number }> = {};
+  // Aggregate directly in the database — no JS loop over all transactions
+  const rows = (await db.execute(sql`
+    SELECT
+      (item->>'productId')::int                                              AS "productId",
+      item->>'productName'                                                    AS "productName",
+      COALESCE(SUM((item->>'quantity')::numeric), 0)::int                    AS "quantitySold",
+      ROUND(COALESCE(SUM((item->>'totalPrice')::numeric), 0)::numeric, 2)    AS "revenue"
+    FROM transactions,
+      jsonb_array_elements(items) AS item
+    WHERE merchant_id = ${merchantId}
+      AND created_at  >= ${periodStart}
+      AND status      = 'completed'
+    GROUP BY 1, 2
+    ORDER BY "revenue" DESC
+    LIMIT ${limit}
+  `)).rows as { productId: number; productName: string; quantitySold: number; revenue: number }[];
 
-  for (const t of transactions) {
-    const items = Array.isArray(t.items) ? t.items : [];
-    for (const item of items as { productId: number; productName: string; quantity: number; totalPrice: number }[]) {
-      if (!productStats[item.productId]) {
-        productStats[item.productId] = {
-          productId: item.productId,
-          productName: item.productName,
-          quantitySold: 0,
-          revenue: 0,
-        };
-      }
-      productStats[item.productId].quantitySold += item.quantity;
-      productStats[item.productId].revenue += item.totalPrice;
-    }
-  }
-
-  const sorted = Object.values(productStats)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit)
-    .map((p) => ({ ...p, revenue: Math.round(p.revenue * 100) / 100 }));
-
-  res.json(sorted);
+  res.json(rows.map(r => ({ ...r, revenue: parseFloat(String(r.revenue)) })));
 });
 
 router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> => {

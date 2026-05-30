@@ -362,3 +362,66 @@ export async function deleteVault(merchantId: number, provider: string): Promise
     eq(oauthTokenVaultTable.provider, provider),
   ));
 }
+
+/* ── Vault health status ───────────────────────────────────────────────────── */
+
+export interface VaultStatus {
+  /** Total vault rows with at least one encrypted token field. */
+  total: number;
+  /** Rows successfully decryptable with the current key. */
+  current: number;
+  /**
+   * Rows decryptable only with the previous key (VAULT_ENCRYPTION_KEY_PREVIOUS).
+   * These will be migrated on next server restart via reEncryptVaultEntries.
+   */
+  pendingRotation: number;
+  /** Rows that cannot be decrypted with either key — require reconnection. */
+  invalid: number;
+  /** Whether VAULT_ENCRYPTION_KEY_PREVIOUS is currently set. */
+  hasPreviousKey: boolean;
+}
+
+/**
+ * Returns a per-merchant snapshot of vault health: how many token rows are
+ * readable with the current key, how many need rotation, and how many are
+ * unreadable. Used by the management integrations page to surface key-rotation
+ * status to owners.
+ */
+export async function getVaultStatus(merchantId: number): Promise<VaultStatus> {
+  const rows = await db
+    .select({
+      id:                    oauthTokenVaultTable.id,
+      encryptedAccessToken:  oauthTokenVaultTable.encryptedAccessToken,
+      encryptedRefreshToken: oauthTokenVaultTable.encryptedRefreshToken,
+    })
+    .from(oauthTokenVaultTable)
+    .where(and(
+      eq(oauthTokenVaultTable.merchantId, merchantId),
+      or(
+        isNotNull(oauthTokenVaultTable.encryptedAccessToken),
+        isNotNull(oauthTokenVaultTable.encryptedRefreshToken),
+      ),
+    ));
+
+  const curKey  = deriveKey(currentSecret());
+  const prev    = previousSecret();
+  const prevKey = prev ? deriveKey(prev) : null;
+
+  let current = 0, pendingRotation = 0, invalid = 0;
+
+  for (const row of rows) {
+    const ct = row.encryptedAccessToken ?? row.encryptedRefreshToken;
+    if (!ct) { invalid++; continue; }
+
+    let readable = false;
+    try { decryptWithKey(curKey, ct); readable = true; current++; } catch { /* try prev */ }
+
+    if (!readable && prevKey) {
+      try { decryptWithKey(prevKey, ct); readable = true; pendingRotation++; } catch { /* invalid */ }
+    }
+
+    if (!readable) invalid++;
+  }
+
+  return { total: rows.length, current, pendingRotation, invalid, hasPreviousKey: !!prev };
+}

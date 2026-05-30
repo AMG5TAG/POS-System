@@ -443,12 +443,21 @@ const ALL_SECTIONS = [
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+interface VaultStatus {
+  total: number;
+  current: number;
+  pendingRotation: number;
+  invalid: number;
+  hasPreviousKey: boolean;
+}
+
 export default function ManagementIntegrationsPage() {
   const [location, setLocation] = useLocation();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
+  const [vaultStatus, setVaultStatus]   = useState<VaultStatus | null>(null);
 
   const fetchIntegrations = async () => {
     try {
@@ -457,7 +466,13 @@ export default function ManagementIntegrationsPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchIntegrations(); }, []);
+  useEffect(() => {
+    fetchIntegrations();
+    fetch("/api/vault/status", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setVaultStatus(data as VaultStatus); })
+      .catch(() => { /* vault status is non-critical */ });
+  }, []);
 
   useEffect(() => {
     const params  = new URLSearchParams(window.location.search);
@@ -526,6 +541,34 @@ export default function ManagementIntegrationsPage() {
               <Badge className="gap-1.5 bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800 px-3 py-1.5 text-sm">
                 <KeyRound className="w-4 h-4" /> {reconnectList.length} needs reconnect
               </Badge>
+            )}
+            {vaultStatus && vaultStatus.invalid > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge className="gap-1.5 bg-red-100 text-red-700 border border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800 px-3 py-1.5 text-sm cursor-default">
+                      <ShieldCheck className="w-4 h-4" /> {vaultStatus.invalid} vault error{vaultStatus.invalid !== 1 ? "s" : ""}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    {vaultStatus.invalid} token{vaultStatus.invalid !== 1 ? "s" : ""} could not be decrypted — the integration{vaultStatus.invalid !== 1 ? "s" : ""} will need to be reconnected.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {vaultStatus && vaultStatus.pendingRotation > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge className="gap-1.5 bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800 px-3 py-1.5 text-sm cursor-default">
+                      <RefreshCw className="w-4 h-4" /> key rotation pending
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    {vaultStatus.pendingRotation} token{vaultStatus.pendingRotation !== 1 ? "s are" : " is"} encrypted under the previous vault key and will be migrated automatically on the next server restart.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
         </div>

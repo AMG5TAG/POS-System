@@ -1688,12 +1688,13 @@ function CustomerDetailInner({
                               <span className="text-xs text-foreground text-right">{parsed.loyaltyLine}</span>
                             </div>
                           )}
-                          {parsed.mergedBy && (
-                            <div className="flex items-center justify-between px-3 py-2 gap-2">
-                              <span className="text-muted-foreground text-xs shrink-0">Merged by</span>
-                              <span className="text-xs text-foreground text-right">{parsed.mergedBy}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-between px-3 py-2 gap-2">
+                            <span className="text-muted-foreground text-xs shrink-0">Merged by</span>
+                            {parsed.mergedBy
+                              ? <span className="text-xs text-foreground text-right">{parsed.mergedBy}</span>
+                              : <span className="text-xs text-muted-foreground italic text-right">Staff unknown</span>
+                            }
+                          </div>
                           {parsed.reason && (
                             <div className="flex items-start justify-between px-3 py-2 gap-2">
                               <span className="text-muted-foreground text-xs shrink-0">Reason</span>

@@ -188,15 +188,36 @@ function ManagementProtectedRoute({ component: Component }: { component: React.C
   );
 }
 
+function PublicRoute({ component: Component }: { component: React.ComponentType }) {
+  const [path] = useLocation();
+  return (
+    <ManagementErrorBoundary key={path}>
+      <Component />
+    </ManagementErrorBoundary>
+  );
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPage} />
-      <Route path="/pricing" component={PricingPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
-      <Route path="/customer-display" component={CustomerDisplayPage} />
-      <Route path="/b/:businessUsername/c/:token" component={PortalPage} />
+      <Route path="/">
+        <PublicRoute component={LandingPage} />
+      </Route>
+      <Route path="/pricing">
+        <PublicRoute component={PricingPage} />
+      </Route>
+      <Route path="/login">
+        <PublicRoute component={LoginPage} />
+      </Route>
+      <Route path="/register">
+        <PublicRoute component={RegisterPage} />
+      </Route>
+      <Route path="/customer-display">
+        <PublicRoute component={CustomerDisplayPage} />
+      </Route>
+      <Route path="/b/:businessUsername/c/:token">
+        <PublicRoute component={PortalPage} />
+      </Route>
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
