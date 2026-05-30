@@ -1580,9 +1580,27 @@ export default function ManagementTemplatesPage() {
               </div>
             </div>
 
-            {/* Preview + options side by side */}
+            {/* Options + preview side by side */}
             <div className="flex gap-4 items-start min-w-0">
-              {/* Col 1: preview */}
+              {/* Col 1: options */}
+              <div className="w-80 shrink-0">
+                <OptionsPanel
+                  key={`${activeCategory}-${previewId}`}
+                  category={activeCategory}
+                  templateId={previewId}
+                  opts={opts}
+                  update={update}
+                  reset={reset}
+                  isDefault={isDefault}
+                  setIsDefault={setIsDefault}
+                  onSave={() => save(previewId)}
+                  saving={saving}
+                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
+                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+                />
+              </div>
+
+              {/* Col 2: preview */}
               <div className="flex-1 min-w-0 space-y-4">
                 {/* Preview header */}
                 <div className="flex items-center justify-between gap-2">
@@ -1613,24 +1631,6 @@ export default function ManagementTemplatesPage() {
                   <Building2 className="w-3.5 h-3.5 shrink-0" />
                   <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
                 </div>
-              </div>
-
-              {/* Col 2: options */}
-              <div className="w-80 shrink-0">
-                <OptionsPanel
-                  key={`${activeCategory}-${previewId}`}
-                  category={activeCategory}
-                  templateId={previewId}
-                  opts={opts}
-                  update={update}
-                  reset={reset}
-                  isDefault={isDefault}
-                  setIsDefault={setIsDefault}
-                  onSave={() => save(previewId)}
-                  saving={saving}
-                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
-                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
-                />
               </div>
             </div>
 
