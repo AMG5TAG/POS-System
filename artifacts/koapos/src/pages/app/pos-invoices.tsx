@@ -605,7 +605,7 @@ export default function POSInvoicesPage() {
 
     /* QR + barcode block (next to customer or after) */
     const qrBlock = qrDataUrl ? `
-      <div style="display:inline-block;text-align:center;margin-left:16px;vertical-align:top;padding-top:4px">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f7f7f7;border-radius:6px;padding:12px 16px;margin-left:16px;font-size:13px;text-align:center">
         <p style="font-size:9px;color:#999;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.6px">Customer Profile</p>
         <img src="${qrDataUrl}" style="width:72px;height:72px">
       </div>` : "";
@@ -616,9 +616,10 @@ export default function POSInvoicesPage() {
         <p style="font-size:9px;color:#aaa;margin:2px 0 0">INVOICE BARCODE</p>
       </div>` : "";
 
-    /* Customer + QR combined row */
+    /* Customer + QR combined row — both blocks share the same background
+       and stretch to equal height via flex align-items:stretch */
     const customerQrRow = (hasCustomer || qrDataUrl) ? `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:20px">
         ${customerBlock}
         ${qrDataUrl ? qrBlock : ""}
       </div>` : "";
