@@ -1580,53 +1580,58 @@ export default function ManagementTemplatesPage() {
               </div>
             </div>
 
-            {/* Preview + options stacked */}
-            <div className="space-y-4">
-              {/* Preview header */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="font-semibold text-sm truncate">
-                    {currentTemplates.find(t => t.id === previewId)?.name} Preview
-                  </span>
-                  <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+            {/* Preview + options side by side */}
+            <div className="flex gap-4 items-start min-w-0">
+              {/* Col 1: preview */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {/* Preview header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StyleIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-semibold text-sm truncate">
+                      {currentTemplates.find(t => t.id === previewId)?.name} Preview
+                    </span>
+                    <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
+                  </div>
+                </div>
+
+                {/* Preview box */}
+                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
+                  {activeCategory === "Thermal_Receipt" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
+                  )}
+                  {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
+                  )}
+                  {activeCategory === "Service_Ticket" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                  )}
+                </div>
+
+                {/* Info bar */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
                 </div>
               </div>
 
-              {/* Preview box */}
-              <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
-                {activeCategory === "Thermal_Receipt" && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
-                )}
-                {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
-                )}
-                {activeCategory === "Service_Ticket" && (
-                  <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
-                )}
+              {/* Col 2: options */}
+              <div className="w-80 shrink-0">
+                <OptionsPanel
+                  key={`${activeCategory}-${previewId}`}
+                  category={activeCategory}
+                  templateId={previewId}
+                  opts={opts}
+                  update={update}
+                  reset={reset}
+                  isDefault={isDefault}
+                  setIsDefault={setIsDefault}
+                  onSave={() => save(previewId)}
+                  saving={saving}
+                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
+                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+                />
               </div>
-
-              {/* Info bar */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-4 py-2">
-                <Building2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Live preview — edits update instantly. Business details come from <strong>Management → Business Details</strong>. Press <strong>Save Template</strong> to persist to database.</span>
-              </div>
-
-              {/* Options panel */}
-              <OptionsPanel
-                key={`${activeCategory}-${previewId}`}
-                category={activeCategory}
-                templateId={previewId}
-                opts={opts}
-                update={update}
-                reset={reset}
-                isDefault={isDefault}
-                setIsDefault={setIsDefault}
-                onSave={() => save(previewId)}
-                saving={saving}
-                onFieldFocus={(label) => setFocusedFieldLabel(label)}
-                onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
-              />
             </div>
 
             {/* Full-width Quick Codes bar */}
