@@ -464,12 +464,15 @@ function DrillDownDialog({
   from: string;
   to: string;
 }) {
+  const DRILL_LIMIT = 500;
   const enabled = open && staffId !== null;
   const { data, isLoading } = useListTransactions(
-    { staffId: staffId ?? undefined, from, to, limit: 200 },
+    { staffId: staffId ?? undefined, from, to, limit: DRILL_LIMIT },
     { query: { queryKey: ["transactions", "staff-drill", staffId, from, to], enabled } },
   );
   const transactions = data?.items ?? [];
+  const totalCount = data?.total ?? 0;
+  const isTruncated = totalCount > DRILL_LIMIT;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -481,7 +484,12 @@ function DrillDownDialog({
           </DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">
             {from} to {to}
-            {!isLoading && <span className="ml-2">· {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}</span>}
+            {!isLoading && (
+              <span className="ml-2">
+                · {totalCount} transaction{totalCount !== 1 ? "s" : ""}
+                {isTruncated && ` (showing first ${DRILL_LIMIT})`}
+              </span>
+            )}
           </p>
         </DialogHeader>
 

@@ -100,13 +100,11 @@ router.get("/staff/sales-report", requireAuth, async (req, res): Promise<void> =
       ),
     );
 
-  // Fetch all staff members for the merchant (for name/role lookup)
+  // Fetch all staff members for the merchant
   const staffMembers = await db
     .select()
     .from(staffTable)
     .where(eq(staffTable.merchantId, req.session.merchantId!));
-
-  const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
   // Aggregate per staffId (null = unassigned)
   type Agg = {
@@ -120,16 +118,30 @@ router.get("/staff/sales-report", requireAuth, async (req, res): Promise<void> =
     productQty: Map<string, number>;
   };
 
+  // Pre-seed every known staff member so zero-transaction staff appear in results
   const aggMap = new Map<string, Agg>();
+  for (const s of staffMembers) {
+    aggMap.set(String(s.id), {
+      staffId: s.id,
+      staffName: s.name,
+      role: s.role,
+      transactionCount: 0,
+      grossRevenue: 0,
+      refundCount: 0,
+      refundAmount: 0,
+      productQty: new Map(),
+    });
+  }
 
   for (const tx of transactions) {
     const key = tx.staffId === null ? "unassigned" : String(tx.staffId);
     if (!aggMap.has(key)) {
-      const staff = tx.staffId !== null ? staffMap.get(tx.staffId) : null;
+      // Transaction assigned to a staff member no longer in the staff table,
+      // or genuinely unassigned (null staffId)
       aggMap.set(key, {
         staffId: tx.staffId,
-        staffName: staff ? staff.name : "Unassigned",
-        role: staff ? staff.role : null,
+        staffName: tx.staffId === null ? "Unassigned" : `Staff #${tx.staffId}`,
+        role: null,
         transactionCount: 0,
         grossRevenue: 0,
         refundCount: 0,
@@ -140,7 +152,13 @@ router.get("/staff/sales-report", requireAuth, async (req, res): Promise<void> =
     const agg = aggMap.get(key)!;
     const total = parseFloat(tx.total);
 
-    if (tx.status === "refunded" || tx.status === "partial_refund") {
+    if (tx.status === "refunded") {
+      // Full refund — entire transaction total was refunded
+      agg.refundCount += 1;
+      agg.refundAmount += total;
+    } else if (tx.status === "partial_refund") {
+      // Partial refund — only part of the original sale was refunded;
+      // total on a partial_refund row represents the refunded portion
       agg.refundCount += 1;
       agg.refundAmount += total;
     } else if (tx.status !== "voided") {
