@@ -163,6 +163,75 @@ router.post("/customers/generate-referral-codes", requireAuth, async (req, res):
   res.json({ updated });
 });
 
+/* ── CSV Import ──────────────────────────────────────────────────────────────── */
+
+router.post("/customers/import", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const rows = req.body?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows must be a non-empty array" }); return;
+  }
+
+  const existingEmailRows = await db
+    .select({ email: customersTable.email })
+    .from(customersTable)
+    .where(eq(customersTable.merchantId, merchantId));
+  const existingEmails = new Set(
+    existingEmailRows.map((r) => r.email?.toLowerCase().trim()).filter(Boolean) as string[],
+  );
+
+  let imported = 0;
+  let skipped  = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row       = rows[i] as Record<string, unknown>;
+    const rowNum    = i + 1;
+    const firstName = String(row.firstName ?? "").trim();
+    const lastName  = String(row.lastName  ?? "").trim();
+    const email     = String(row.email     ?? "").trim().toLowerCase();
+    const phone     = String(row.phone     ?? "").trim();
+    const address   = String(row.address   ?? "").trim();
+    const notes     = String(row.notes     ?? "").trim();
+    const customerGroup  = String(row.customerGroup ?? "Standard").trim() || "Standard";
+    const loyaltyPoints  = Math.max(0, parseInt(String(row.loyaltyPoints ?? "0")) || 0);
+
+    if (!firstName && !lastName && !email && !phone) {
+      errors.push({ row: rowNum, message: "At least one of first name, last name, email, or phone is required" });
+      skipped++; continue;
+    }
+    if (email && existingEmails.has(email)) {
+      errors.push({ row: rowNum, message: `Email already exists: ${email}` });
+      skipped++; continue;
+    }
+
+    try {
+      const code = await uniqueReferralCode(merchantId, firstName || null, lastName || null);
+      await db.insert(customersTable).values({
+        merchantId,
+        firstName:    firstName || null,
+        lastName:     lastName  || null,
+        email:        email     || null,
+        phone:        phone     || null,
+        address:      address   || null,
+        notes:        notes     || null,
+        customerGroup,
+        loyaltyPoints,
+        portalToken:  crypto.randomUUID(),
+        referralCode: code,
+      });
+      if (email) existingEmails.add(email);
+      imported++;
+    } catch (err) {
+      req.log.error({ err, rowNum }, "Customer CSV import row failed");
+      errors.push({ row: rowNum, message: "Database error inserting row" });
+      skipped++;
+    }
+  }
+
+  res.json({ imported, skipped, errors });
+});
+
 router.get("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetCustomerParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }

@@ -308,6 +308,111 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
   res.json({ updated: result.rowCount ?? 0 });
 });
 
+/* ── CSV Import ──────────────────────────────────────────────────────────────── */
+
+// IMPORTANT: registered before /products/:id so "import" is not captured as :id param
+router.post("/products/import", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const rows = req.body?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows must be a non-empty array" }); return;
+  }
+
+  const [standardType] = await db
+    .select()
+    .from(productTypesTable)
+    .where(and(eq(productTypesTable.slug, "standard"), eq(productTypesTable.merchantId, merchantId)));
+  if (!standardType) {
+    res.status(400).json({ error: "Standard product type not found — set up product types first" }); return;
+  }
+
+  const existingSkuRows = await db
+    .select({ sku: productsTable.sku })
+    .from(productsTable)
+    .where(eq(productsTable.merchantId, merchantId));
+  const existingSkus = new Set(
+    existingSkuRows.map((r) => r.sku?.toLowerCase().trim()).filter(Boolean) as string[],
+  );
+
+  const catRows = await db
+    .select()
+    .from(categoriesTable)
+    .where(eq(categoriesTable.merchantId, merchantId));
+  const catByName = new Map(catRows.map((c) => [c.name.toLowerCase().trim(), c]));
+
+  let imported = 0;
+  let skipped  = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row          = rows[i] as Record<string, unknown>;
+    const rowNum       = i + 1;
+    const name         = String(row.name         ?? "").trim();
+    const categoryName = String(row.category     ?? "").trim();
+    const priceRaw     = parseFloat(String(row.price ?? ""));
+    const costStr      = String(row.costPrice ?? "").trim();
+    const costRaw      = costStr !== "" ? parseFloat(costStr) : NaN;
+    const sku          = String(row.sku      ?? "").trim();
+    const barcode      = String(row.barcode  ?? "").trim();
+    const stockQty     = Math.max(0, parseInt(String(row.stockQuantity ?? "0")) || 0);
+    const trackStr     = String(row.trackInventory ?? "true").toLowerCase().trim();
+    const trackInv     = !["false", "no", "0"].includes(trackStr);
+
+    if (!name) {
+      errors.push({ row: rowNum, message: "Product name is required" });
+      skipped++; continue;
+    }
+    if (isNaN(priceRaw) || priceRaw < 0) {
+      errors.push({ row: rowNum, message: "Price must be a valid number ≥ 0" });
+      skipped++; continue;
+    }
+    if (sku && existingSkus.has(sku.toLowerCase())) {
+      errors.push({ row: rowNum, message: `SKU already exists: ${sku}` });
+      skipped++; continue;
+    }
+
+    let categoryId: number | null = null;
+    if (categoryName) {
+      const existing = catByName.get(categoryName.toLowerCase());
+      if (existing) {
+        categoryId = existing.id;
+      } else {
+        try {
+          const [newCat] = await db.insert(categoriesTable).values({ merchantId, name: categoryName }).returning();
+          catByName.set(categoryName.toLowerCase(), newCat);
+          categoryId = newCat.id;
+        } catch {
+          /* ignore — product will be imported without category */
+        }
+      }
+    }
+
+    try {
+      await db.insert(productsTable).values({
+        merchantId,
+        name,
+        price:          priceRaw.toString(),
+        costPrice:      !isNaN(costRaw) ? costRaw.toString() : null,
+        sku:            sku     || null,
+        barcode:        barcode || null,
+        categoryId,
+        stockQuantity:  stockQty,
+        trackInventory: trackInv ? "true" : "false",
+        isActive:       "true",
+        productTypeId:  standardType.id,
+      });
+      if (sku) existingSkus.add(sku.toLowerCase());
+      imported++;
+    } catch (err) {
+      req.log.error({ err, rowNum }, "Product CSV import row failed");
+      errors.push({ row: rowNum, message: "Database error inserting row" });
+      skipped++;
+    }
+  }
+
+  res.json({ imported, skipped, errors });
+});
+
 router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetProductParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }

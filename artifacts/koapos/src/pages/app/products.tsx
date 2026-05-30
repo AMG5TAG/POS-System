@@ -49,8 +49,9 @@ import {
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon,
+  Archive, X as XIcon, Upload,
 } from "lucide-react";
+import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -830,6 +831,7 @@ export default function ProductsPage() {
   const [bulkActionPending, setBulkActionPending] = useState<BulkActionPending | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen]     = useState(false);
   const [bulkSubmitting, setBulkSubmitting]       = useState(false);
+  const [csvImportOpen, setCsvImportOpen]         = useState(false);
   const [bulkPriceInput, setBulkPriceInput]       = useState("");
   const [bulkPricePopover, setBulkPricePopover]   = useState<"percent" | "flat" | null>(null);
   const [bulkCatPopover, setBulkCatPopover]       = useState(false);
@@ -1429,6 +1431,12 @@ export default function ProductsPage() {
               {hideCosts ? "Show Costs" : "Hide Costs"}
             </Button>
           )}
+
+          {/* CSV Import */}
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCsvImportOpen(true)}>
+            <Upload className="w-4 h-4" />
+            Import CSV
+          </Button>
 
           {/* CSV Export */}
           <Button variant="outline" size="sm" className="gap-1.5" onClick={exportProductsCsv} title="Export current product list to CSV">
@@ -2844,6 +2852,14 @@ export default function ProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── CSV Import ────────────────────────────────────────────────────── */}
+      <CsvImportDialog
+        entity="product"
+        open={csvImportOpen}
+        onOpenChange={setCsvImportOpen}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["products"] })}
+      />
 
       {/* ─── Category manager ──────────────────────────────────────────────── */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
