@@ -234,7 +234,12 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
 
   const transactions = txRows.map((t) => ({
     id: t.id, receiptNumber: t.receiptNumber, status: t.status,
-    total: parseFloat(t.total), paymentMethod: t.paymentMethod,
+    subtotal: parseFloat(t.subtotal),
+    taxTotal: parseFloat(t.taxTotal),
+    discountTotal: parseFloat(t.discountTotal),
+    total: parseFloat(t.total),
+    paymentMethod: t.paymentMethod,
+    notes: t.notes ?? null,
     items: Array.isArray(t.items) ? t.items : [],
     createdAt: t.createdAt.toISOString(),
   }));
