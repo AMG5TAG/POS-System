@@ -944,6 +944,7 @@ export interface DashboardConfigResponse {
   showNotifications: boolean;
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
+  showReferralRevenue: boolean;
   updatedAt: string;
 }
 
@@ -954,6 +955,7 @@ export interface UpsertDashboardConfigBody {
   showNotifications?: boolean;
   showServiceJobsPanel?: boolean;
   showCalendar?: boolean;
+  showReferralRevenue?: boolean;
 }
 
 export interface DashboardSummary {

@@ -10,6 +10,7 @@ export const dashboardConfigTable = pgTable("dashboard_config", {
   showNotifications: boolean("show_notifications").notNull().default(true),
   showServiceJobsPanel: boolean("show_service_jobs_panel").notNull().default(true),
   showCalendar: boolean("show_calendar").notNull().default(true),
+  showReferralRevenue: boolean("show_referral_revenue").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 });
 

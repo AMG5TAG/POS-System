@@ -6818,7 +6818,7 @@ components:
 
     DashboardConfigResponse:
       type: object
-      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, updatedAt]
+      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, updatedAt]
       properties:
         id:
           type: integer
@@ -6835,6 +6835,8 @@ components:
         showServiceJobsPanel:
           type: boolean
         showCalendar:
+          type: boolean
+        showReferralRevenue:
           type: boolean
         updatedAt:
           type: string
@@ -6853,6 +6855,8 @@ components:
         showServiceJobsPanel:
           type: boolean
         showCalendar:
+          type: boolean
+        showReferralRevenue:
           type: boolean
 
     DashboardSummary:

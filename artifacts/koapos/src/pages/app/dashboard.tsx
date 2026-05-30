@@ -18,8 +18,9 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { ReferralRevenueWidget } from "@/components/dashboard/ReferralRevenueWidget";
 import {
-  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw,
+  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio,
 } from "lucide-react";
 
 const WIDGETS: {
@@ -64,6 +65,12 @@ const WIDGETS: {
     description: "Monthly calendar with sales, appointments, birthdays and public holidays",
     icon: CalendarDays,
   },
+  {
+    key: "showReferralRevenue",
+    label: "Top Channels by Revenue",
+    description: "Which referral sources bring in the highest-paying customers",
+    icon: Radio,
+  },
 ];
 
 export default function DashboardPage() {
@@ -106,6 +113,8 @@ export default function DashboardPage() {
                 showServiceJobsPanel={config.showServiceJobsPanel}
               />
             )}
+
+            {config.showReferralRevenue && <ReferralRevenueWidget />}
 
             {config.showCalendar && <DashboardCalendar />}
           </>

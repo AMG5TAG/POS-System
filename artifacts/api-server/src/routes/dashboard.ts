@@ -680,6 +680,7 @@ router.put("/dashboard/config", requireAuth, async (req, res): Promise<void> => 
     ...(body.showNotifications !== undefined && { showNotifications: body.showNotifications }),
     ...(body.showServiceJobsPanel !== undefined && { showServiceJobsPanel: body.showServiceJobsPanel }),
     ...(body.showCalendar !== undefined && { showCalendar: body.showCalendar }),
+    ...(body.showReferralRevenue !== undefined && { showReferralRevenue: body.showReferralRevenue }),
   };
 
   const [existing] = await db

@@ -2488,6 +2488,7 @@ export const GetDashboardConfigResponse = zod.object({
   "showNotifications": zod.boolean(),
   "showServiceJobsPanel": zod.boolean(),
   "showCalendar": zod.boolean(),
+  "showReferralRevenue": zod.boolean(),
   "updatedAt": zod.string()
 })
 
@@ -2501,7 +2502,8 @@ export const UpsertDashboardConfigBody = zod.object({
   "showOverdueBanner": zod.boolean().optional(),
   "showNotifications": zod.boolean().optional(),
   "showServiceJobsPanel": zod.boolean().optional(),
-  "showCalendar": zod.boolean().optional()
+  "showCalendar": zod.boolean().optional(),
+  "showReferralRevenue": zod.boolean().optional()
 })
 
 export const UpsertDashboardConfigResponse = zod.object({
@@ -2513,6 +2515,7 @@ export const UpsertDashboardConfigResponse = zod.object({
   "showNotifications": zod.boolean(),
   "showServiceJobsPanel": zod.boolean(),
   "showCalendar": zod.boolean(),
+  "showReferralRevenue": zod.boolean(),
   "updatedAt": zod.string()
 })
 
