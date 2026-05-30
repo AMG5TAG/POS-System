@@ -1,5 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
-import { getSocialLabel, getSocialHandle, getSocialIconSvg } from "@/lib/social-links";
+import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -55,6 +55,10 @@ export interface ReceiptTemplateOpts {
   paymentSectionHeading?: string;
   socialLinks?: Record<string, string>;
   paymentTypes?: string[];
+  /** When true, social icons in A4/color documents render in each platform's
+   *  official brand color instead of the surrounding muted text color.
+   *  Has no effect on thermal/monochrome receipts. */
+  socialIconBrandColors?: boolean;
   /* ─── Service Ticket field-visibility toggles ─── */
   showCustomerDetails?: boolean;
   showDeviceDetails?: boolean;
@@ -561,7 +565,7 @@ export function printA4Receipt(
 
   const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
   const socialHtml = (tpl.showSocialLinks && socialEntries.length)
-    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${getSocialIconSvg(k, 11)}<strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${getSocialIconSvg(k, 11, tpl.socialIconBrandColors ? getSocialBrandColor(k) : null)}<strong>${esc(getSocialLabel(k))}</strong> ${esc(getSocialHandle(String(v)))}</span>`).join("")}</div>`
     : "";
 
   const barcodeHtml = tpl.showBarcode

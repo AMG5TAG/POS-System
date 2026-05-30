@@ -6,22 +6,26 @@
 
 interface PlatformMeta {
   label: string;
+  /** Official brand hex (Simple Icons / brand guidelines). Instagram uses a
+   *  single representative color as its true gradient can't be expressed as a
+   *  plain fill. */
+  brandHex: string;
 }
 
 const PLATFORM_META: Record<string, PlatformMeta> = {
-  facebook:  { label: "Facebook" },
-  instagram: { label: "Instagram" },
-  twitter:   { label: "Twitter" },
-  x:         { label: "X" },
-  linkedin:  { label: "LinkedIn" },
-  youtube:   { label: "YouTube" },
-  tiktok:    { label: "TikTok" },
-  pinterest: { label: "Pinterest" },
-  snapchat:  { label: "Snapchat" },
-  threads:   { label: "Threads" },
-  reddit:    { label: "Reddit" },
-  whatsapp:  { label: "WhatsApp" },
-  wechat:    { label: "WeChat" },
+  facebook:  { label: "Facebook",  brandHex: "#1877F2" },
+  instagram: { label: "Instagram", brandHex: "#E4405F" },
+  twitter:   { label: "Twitter",   brandHex: "#1DA1F2" },
+  x:         { label: "X",         brandHex: "#000000" },
+  linkedin:  { label: "LinkedIn",  brandHex: "#0A66C2" },
+  youtube:   { label: "YouTube",   brandHex: "#FF0000" },
+  tiktok:    { label: "TikTok",    brandHex: "#000000" },
+  pinterest: { label: "Pinterest", brandHex: "#BD081C" },
+  snapchat:  { label: "Snapchat",  brandHex: "#FFFC00" },
+  threads:   { label: "Threads",   brandHex: "#000000" },
+  reddit:    { label: "Reddit",    brandHex: "#FF4500" },
+  whatsapp:  { label: "WhatsApp",  brandHex: "#25D366" },
+  wechat:    { label: "WeChat",    brandHex: "#07C160" },
 };
 
 /**
@@ -71,6 +75,15 @@ export function getSocialLabel(key: string): string {
 }
 
 /**
+ * Returns the official brand hex color for a platform key, or null when the
+ * platform is unknown. Use this to opt in to brand-color icon rendering on
+ * color A4/PDF documents; keep `currentColor` for thermal/monochrome paths.
+ */
+export function getSocialBrandColor(key: string): string | null {
+  return PLATFORM_META[key.toLowerCase()]?.brandHex ?? null;
+}
+
+/**
  * Extracts a short display handle from a social URL or raw string.
  * - "https://instagram.com/mystore"   → "@mystore"
  * - "https://facebook.com/yourstore"  → "@yourstore"
@@ -110,15 +123,21 @@ export function getSocialIconPath(key: string): string | null {
 /**
  * Returns a compact, self-contained inline `<svg>` string for a platform key,
  * suitable for embedding in HTML-string print renderers. The icon inherits the
- * surrounding text colour via `fill="currentColor"` and is sized in px.
+ * surrounding text colour via `fill="currentColor"` by default.
+ *
+ * Pass `color` to override the fill — e.g. pass `getSocialBrandColor(key)` on
+ * color A4/PDF documents to render each icon in its official brand color.
+ * Keep the default `undefined` (→ currentColor) for thermal/monochrome paths.
+ *
  * Returns an empty string when no icon is known.
  */
-export function getSocialIconSvg(key: string, size = 11): string {
+export function getSocialIconSvg(key: string, size = 11, color?: string | null): string {
   const path = getSocialIconPath(key);
   if (!path) return "";
+  const fill = color ?? "currentColor";
   return (
     `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ` +
-    `fill="currentColor" aria-hidden="true" focusable="false" ` +
+    `fill="${fill}" aria-hidden="true" focusable="false" ` +
     `style="display:inline-block;vertical-align:-0.125em;flex-shrink:0">` +
     `<path d="${path}"/></svg>`
   );

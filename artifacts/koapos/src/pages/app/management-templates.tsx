@@ -85,6 +85,7 @@ export interface TplOpts {
   showPaymentMethods:   boolean;
   showGstBreakdown:     boolean;
   showSocialLinks:      boolean;
+  socialIconBrandColors: boolean;
   showLoyaltyEarned:    boolean;
   showCustomerQr:       boolean;
   showAllCustomerDetails: boolean;
@@ -118,7 +119,7 @@ export const DEFAULT_OPTS: TplOpts = {
   paymentSectionHeading: "",
   loyaltyQrText: "",
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
-  showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false,
+  showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false, socialIconBrandColors: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
@@ -246,6 +247,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "thankYouMsg",             label: "Thank You Message",         type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
       { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "socialIconBrandColors",   label: "Social Icon Brand Colors",  type: "toggle", hint: "Renders each platform icon in its official brand color (Facebook blue, Instagram pink, etc.)" },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
       { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
@@ -280,6 +282,8 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "callHistoryRows",      label: "Call History Rows",        type: "text",     placeholder: "6", hint: "Number of blank rows for manual notes" },
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
+      { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
     ];
@@ -1018,7 +1022,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
     <div className="flex flex-wrap justify-center gap-3 text-[9px] text-gray-500 mt-1">
       {socialEntries.map(({ label, handle, key }) => (
-        <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={10} /><strong>{label}</strong> {handle}</span>
+        <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={10} useBrandColor={opts.socialIconBrandColors} /><strong>{label}</strong> {handle}</span>
       ))}
     </div>
   ) : null;
@@ -1401,7 +1405,7 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
       {opts.showSocialLinks && socialEntries.length > 0 && (
         <div className={cn("flex flex-wrap justify-center gap-2 text-[8px] text-gray-500", !(opts.warrantyText || opts.footerText) && "border-t pt-1")}>
           {socialEntries.map(({ label, handle, key }) => (
-            <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={8} /><strong>{label}</strong> {handle}</span>
+            <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={8} useBrandColor={opts.socialIconBrandColors} /><strong>{label}</strong> {handle}</span>
           ))}
         </div>
       )}
@@ -1578,6 +1582,7 @@ export default function ManagementTemplatesPage() {
       showTagline: opts.showTagline,
       showAllCustomerDetails: opts.showAllCustomerDetails,
       showSocialLinks: opts.showSocialLinks,
+      socialIconBrandColors: opts.socialIconBrandColors,
       paymentTerms: opts.paymentTerms,
       invoiceNotes: opts.invoiceNotes,
       bankDetails: opts.bankDetails,
