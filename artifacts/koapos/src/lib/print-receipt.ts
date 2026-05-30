@@ -163,6 +163,11 @@ export function printReceipt(
   const customMsg = resolveStr(tpl.customMessage);
   const escReceiptNum = esc(receiptNum);
 
+  const socialEntries = Object.entries(tpl.socialLinks ?? {}).filter(([, v]) => v);
+  const socialHtml = (tpl.showSocialLinks && socialEntries.length)
+    ? `<div class="socials">${socialEntries.map(([k, v]) => `<span>${esc(k)}: ${esc(String(v))}</span>`).join("")}</div>`
+    : "";
+
   const body = `
     <div class="receipt">
       <div class="center bdr-b pb mb">
@@ -191,6 +196,7 @@ export function printReceipt(
         ${thankYou ? `<p>${thankYou}</p>` : ""}
         ${footer ? `<p>${footer}</p>` : ""}
         ${customMsg ? `<p style="line-height:1.5;margin-top:4px">${customMsg}</p>` : ""}
+        ${socialHtml}
       </div>
     </div>`;
 
@@ -219,6 +225,7 @@ export function printReceipt(
     th { font-weight: 500; padding-bottom: 2px; font-size: 10px; color: #6b7280; }
     td { padding: 2px 0; }
     .logo-square { width: 20px; height: 20px; border-radius: 2px; margin: 0 auto 4px; }
+    .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
     @media print {
       body { padding: 0; }
       @page { margin: 8mm; size: 80mm auto; }

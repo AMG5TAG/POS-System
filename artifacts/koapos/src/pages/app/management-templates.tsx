@@ -802,13 +802,22 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, paymentTypes, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, socialLinks, paymentTypes, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
   const date = "18/05/2026 10:42 AM";
   const footerMsg = opts.thankYouMsg;
   const footer    = opts.footerText;
+  const socialEntries = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
+
+  const SocialsBlock = () => (opts.showSocialLinks && socialEntries.length) ? (
+    <div className="flex flex-wrap justify-center gap-2 text-gray-400 mt-0.5">
+      {socialEntries.map(([k, v]) => (
+        <span key={k}>{k}: {String(v)}</span>
+      ))}
+    </div>
+  ) : null;
   const resolvedPaymentTypes = (paymentTypes && paymentTypes.length)
     ? paymentTypes
     : ["EFTPOS", "Cash", "Visa", "Mastercard"];
@@ -852,6 +861,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footerMsg && <p className="text-center">{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
+        <SocialsBlock />
         <BarcodeBlock />
       </div>
     );
@@ -882,6 +892,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
           {footer    && <p className="text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
           {opts.showWebsite && website && <p className="text-blue-500">{website}</p>}
+          <SocialsBlock />
         </div>
         <BarcodeBlock />
       </div>
@@ -913,6 +924,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footerMsg && <p>{resolveCode(footerMsg, businessName, abn, website, email)}</p>}
         {footer    && <p>{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p>{website}</p>}
+        <SocialsBlock />
       </div>
       <BarcodeBlock />
     </div>
