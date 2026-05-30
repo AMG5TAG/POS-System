@@ -55,7 +55,7 @@ function formatProduct(
     taxRate: p.taxRate ? parseFloat(p.taxRate) : null,
     isActive: p.isActive === "true",
     excludeFromLoyalty: p.excludeFromLoyalty === "true",
-    groupPrices: p.groupPrices ? (() => { try { return JSON.parse(p.groupPrices!); } catch { return {}; } })() : {},
+    groupPrices: p.groupPrices ?? {},
     supplier: p.supplier ?? null,
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
@@ -212,7 +212,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       isActive: isActive === false ? "false" : "true",
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
       isEpay: isEpayRaw === true ? "true" : "false",
-      groupPrices: groupPrices ? JSON.stringify(groupPrices) : null,
+      groupPrices: groupPrices ?? null,
       tags: tags ?? null,
     })
     .returning();
@@ -336,7 +336,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
-  if (groupPrices !== undefined) updates.groupPrices = JSON.stringify(groupPrices);
+  if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
 
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
@@ -389,7 +389,7 @@ function formatVariant(v: typeof productVariantsTable.$inferSelect) {
     price: v.price ? parseFloat(v.price) : null,
     costPrice: v.costPrice ? parseFloat(v.costPrice) : null,
     stockQuantity: v.stockQuantity,
-    attributes: v.attributes ? (() => { try { return JSON.parse(v.attributes!); } catch { return {}; } })() : {},
+    attributes: v.attributes ?? {},
     imageUrl: v.imageUrl ?? null,
     isActive: v.isActive === "true",
     sortOrder: v.sortOrder,
@@ -423,7 +423,7 @@ router.post("/products/:productId/variants", requireAuth, async (req, res): Prom
     price: price != null ? String(price) : null,
     costPrice: costPrice != null ? String(costPrice) : null,
     stockQuantity: typeof stockQuantity === "number" ? stockQuantity : 0,
-    attributes: attributes ? JSON.stringify(attributes) : null,
+    attributes: attributes as Record<string, string> ?? null,
     imageUrl: imageUrl as string ?? null,
     isActive: isActive === false ? "false" : "true",
     sortOrder: typeof sortOrder === "number" ? sortOrder : 0,
@@ -443,7 +443,7 @@ router.patch("/products/:productId/variants/:id", requireAuth, async (req, res):
   if (price !== undefined) update.price = price != null ? String(price) : null;
   if (costPrice !== undefined) update.costPrice = costPrice != null ? String(costPrice) : null;
   if (stockQuantity !== undefined) update.stockQuantity = stockQuantity as number;
-  if (attributes !== undefined) update.attributes = attributes ? JSON.stringify(attributes) : null;
+  if (attributes !== undefined) update.attributes = attributes as Record<string, string> | null;
   if (imageUrl !== undefined) update.imageUrl = imageUrl as string | null;
   if (isActive !== undefined) update.isActive = isActive === false ? "false" : "true";
   if (sortOrder !== undefined) update.sortOrder = sortOrder as number;
