@@ -37,8 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
-import { printReceipt, printA4Invoice, printA4ServiceJob } from "@/lib/print-receipt";
-import { useBusinessProfile } from "@/lib/business-profile";
+import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
@@ -996,7 +995,7 @@ function CustomerDetailInner({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   const queryClient = useQueryClient();
-  const { profile } = useBusinessProfile();
+  const { printReceipt, printInvoice, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
@@ -1489,11 +1488,11 @@ function CustomerDetailInner({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => printReceipt(tx as Transaction, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" })}>
+                            <DropdownMenuItem disabled={tplLoading} onClick={() => printReceipt(tx as Transaction)}>
                               <Printer className="h-4 w-4 mr-2" />
-                              Receipt (80mm)
+                              {tplLoading ? "Loading template…" : "Receipt (80mm)"}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => printA4Invoice(tx as Transaction, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" })}>
+                            <DropdownMenuItem disabled={tplLoading} onClick={() => printInvoice(tx as Transaction)}>
                               <FileText className="h-4 w-4 mr-2" />
                               A4 Invoice
                             </DropdownMenuItem>
@@ -1543,7 +1542,6 @@ function CustomerDetailInner({
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
-                      const bizInfo = { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" };
                       const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
                       return (
                         <div key={j.id} className="px-4 py-2.5 text-sm space-y-2 hover:bg-muted/40 transition-colors group">
@@ -1574,9 +1572,9 @@ function CustomerDetailInner({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => printA4ServiceJob(j as ServiceJob, bizInfo, custOverride)}>
+                                <DropdownMenuItem disabled={tplLoading} onClick={() => printServiceJob(j as ServiceJob, custOverride)}>
                                   <FileText className="h-4 w-4 mr-2" />
-                                  Print A4 Report
+                                  {tplLoading ? "Loading template…" : "Print A4 Report"}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => { setJobEmailAddr(customer.email ?? ""); setEmailDialogJob(j as ServiceJob); }}>
@@ -2076,16 +2074,16 @@ function CustomerDetailInner({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => {
+                <DropdownMenuItem disabled={tplLoading} onClick={() => {
                   if (!selectedTx) return;
-                  printReceipt(selectedTx, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" });
+                  printReceipt(selectedTx);
                 }}>
                   <Printer className="h-4 w-4 mr-2" />
-                  Receipt (80mm)
+                  {tplLoading ? "Loading template…" : "Receipt (80mm)"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
+                <DropdownMenuItem disabled={tplLoading} onClick={() => {
                   if (!selectedTx) return;
-                  printA4Invoice(selectedTx, { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" });
+                  printInvoice(selectedTx);
                 }}>
                   <FileText className="h-4 w-4 mr-2" />
                   A4 Invoice
@@ -2207,14 +2205,13 @@ function CustomerDetailInner({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => {
+                <DropdownMenuItem disabled={tplLoading} onClick={() => {
                   if (!selectedJob) return;
-                  const bizInfo = { abn: profile?.abn ?? "", website: profile?.website ?? "", email: profile?.contactEmail ?? "", brandColor: (profile?.brandColors ?? [])[0] ?? "" };
                   const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
-                  printA4ServiceJob(selectedJob, bizInfo, custOverride);
+                  printServiceJob(selectedJob, custOverride);
                 }}>
                   <FileText className="h-4 w-4 mr-2" />
-                  Print A4 Report
+                  {tplLoading ? "Loading template…" : "Print A4 Report"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => {

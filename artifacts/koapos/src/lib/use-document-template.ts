@@ -1,0 +1,108 @@
+import { useGetMerchant } from "@workspace/api-client-react";
+import type { Transaction } from "@workspace/api-client-react";
+import { useSalesTemplate } from "@/lib/use-sales-template";
+import { useBusinessProfile } from "@/lib/business-profile";
+import {
+  printReceipt as rawPrintReceipt,
+  printA4Invoice as rawPrintA4Invoice,
+  printA4ServiceJob as rawPrintA4ServiceJob,
+  type ReceiptBusinessInfo,
+  type ReceiptTemplateOpts,
+  type ServiceJobPrintData,
+} from "@/lib/print-receipt";
+import type { TplOpts } from "@/pages/app/management-templates";
+
+/**
+ * Maps a saved Sales Template (`TplOpts`) onto the subset of options the
+ * print utilities understand (`ReceiptTemplateOpts`). `fontCss` is the
+ * resolved CSS font-family string from `useSalesTemplate`.
+ */
+function toReceiptOpts(opts: TplOpts, fontCss: string): ReceiptTemplateOpts {
+  return {
+    showLogo: opts.showLogo,
+    showAbn: opts.showAbn,
+    showGstBreakdown: opts.showGstBreakdown,
+    showWebsite: opts.showWebsite,
+    showPaymentMethods: opts.showPaymentMethods,
+    showCustomerQr: opts.showCustomerQr,
+    showLoyaltyEarned: opts.showLoyaltyEarned,
+    showBarcode: opts.showBarcode,
+    printCustomerCopy: opts.printCustomerCopy,
+    thankYouMsg: opts.thankYouMsg,
+    footerText: opts.footerText,
+    headerText: opts.headerText,
+    customMessage: opts.customMessage,
+    loyaltyQrText: opts.loyaltyQrText,
+    fontFamily: fontCss,
+    // Service Ticket field-visibility toggles
+    showCustomerDetails: opts.showCustomerDetails,
+    showDeviceDetails: opts.showDeviceDetails,
+    showWorkDescription: opts.showWorkDescription,
+    warrantyText: opts.warrantyText,
+  };
+}
+
+export interface DocumentTemplateController {
+  /** True while any of the underlying template / profile / merchant queries are loading. */
+  isLoading: boolean;
+  /** Business identity (name, ABN, website, email, brand colour) shared by every document. */
+  businessInfo: ReceiptBusinessInfo;
+  /** Print an 80mm thermal receipt using the saved Thermal_Receipt template. */
+  printReceipt: (tx: Transaction) => void;
+  /** Print an A4 tax invoice using the saved Invoice template. */
+  printInvoice: (tx: Transaction) => void;
+  /** Print an A4 service report using the saved Service_Ticket template. */
+  printServiceJob: (
+    job: ServiceJobPrintData,
+    customerOverride?: { name?: string; email?: string; phone?: string },
+  ) => void;
+}
+
+/**
+ * Centralized print/email controller. Any module that needs to print or send a
+ * customer document should use this hook instead of calling the low-level
+ * `print-receipt` utilities directly — it guarantees the active Sales Template
+ * (Management > Sales Templates) layout, fonts and field-visibility toggles are
+ * applied, with clean fallbacks when a template hasn't been configured yet.
+ *
+ * Future document types should be added here (and to `useSalesTemplate`) so the
+ * whole app stays wired to the centralized template system from one place.
+ */
+export function useDocumentTemplate(): DocumentTemplateController {
+  const receipt = useSalesTemplate("Thermal_Receipt");
+  const invoice = useSalesTemplate("Invoice");
+  const service = useSalesTemplate("Service_Ticket");
+  const { profile, isLoading: profileLoading } = useBusinessProfile();
+  const { data: merchant, isLoading: merchantLoading } = useGetMerchant();
+
+  const businessInfo: ReceiptBusinessInfo = {
+    businessName: merchant?.businessName ?? "Your Business",
+    abn: profile?.abn ?? "",
+    website: profile?.website ?? "",
+    email: profile?.contactEmail ?? "",
+    brandColor: (profile?.brandColors ?? [])[0] ?? "",
+  };
+
+  const isLoading =
+    receipt.isLoading ||
+    invoice.isLoading ||
+    service.isLoading ||
+    profileLoading ||
+    merchantLoading;
+
+  return {
+    isLoading,
+    businessInfo,
+    printReceipt: (tx) =>
+      rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss)),
+    printInvoice: (tx) =>
+      rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss)),
+    printServiceJob: (job, customerOverride) =>
+      rawPrintA4ServiceJob(
+        job,
+        businessInfo,
+        customerOverride,
+        toReceiptOpts(service.opts, service.fontCss),
+      ),
+  };
+}

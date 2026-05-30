@@ -24,6 +24,11 @@ export interface ReceiptTemplateOpts {
   customMessage?: string;
   loyaltyQrText?: string;
   fontFamily?: string;
+  /* ─── Service Ticket field-visibility toggles ─── */
+  showCustomerDetails?: boolean;
+  showDeviceDetails?: boolean;
+  showWorkDescription?: boolean;
+  warrantyText?: string;
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
@@ -436,6 +441,7 @@ export function printA4ServiceJob(
   job: ServiceJobPrintData,
   businessInfo?: ReceiptBusinessInfo,
   customerOverride?: { name?: string; email?: string; phone?: string },
+  opts?: ReceiptTemplateOpts,
 ): void {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
@@ -447,6 +453,33 @@ export function printA4ServiceJob(
   const website = esc(rawWebsite);
   const contactEmail = esc(rawEmail);
   const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
+
+  // Service ticket template options — clean defaults so the report is never blank.
+  const tpl: ReceiptTemplateOpts = {
+    showCustomerDetails: true,
+    showDeviceDetails: true,
+    showWorkDescription: true,
+    showAbn: true,
+    showWebsite: true,
+    footerText: "",
+    headerText: "",
+    warrantyText: "",
+    fontFamily: "'Helvetica Neue', Arial, sans-serif",
+    ...opts,
+  };
+  const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
+
+  const resolveStr = (text?: string) =>
+    (text ?? "")
+      .replace(/\{\{business\.name\}\}/g, rawBusinessName)
+      .replace(/\{\{business\.abn\}\}/g, rawAbn)
+      .replace(/\{\{business\.email\}\}/g, rawEmail)
+      .replace(/\{\{business\.website\}\}/g, rawWebsite)
+      .replace(/\{\{[^}]+\}\}/g, "")
+      .trim();
+  const headerText = resolveStr(tpl.headerText);
+  const footerText = resolveStr(tpl.footerText);
+  const warrantyText = resolveStr(tpl.warrantyText);
 
   const escJobNum = esc(job.jobNumber);
   const createdDate = new Date(job.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
@@ -478,9 +511,11 @@ export function printA4ServiceJob(
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1f2937; background: #fff; }
+    body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
     .page { max-width: 780px; margin: 0 auto; padding: 40px; }
 
+    .header-note { background: #f9fafb; border: 1px solid #e5e7eb; padding: 10px 14px; margin-bottom: 24px; font-size: 12px; color: #374151; line-height: 1.6; white-space: pre-wrap; text-align: center; }
+    .warranty-note { border: 1px dashed ${brandColor}; padding: 12px 14px; margin-bottom: 24px; font-size: 11px; color: #6b7280; line-height: 1.6; white-space: pre-wrap; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; padding-bottom: 24px; border-bottom: 3px solid ${brandColor}; }
     .biz-name { font-size: 22px; font-weight: 700; color: ${brandColor}; }
     .biz-meta { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.7; }
@@ -548,8 +583,10 @@ export function printA4ServiceJob(
     </div>
   </div>
 
+  ${headerText ? `<div class="header-note">${esc(headerText)}</div>` : ""}
+
   <div class="two-col">
-    ${custName || custEmail || custPhone ? `
+    ${tpl.showCustomerDetails && (custName || custEmail || custPhone) ? `
     <div class="section">
       <div class="section-title">Customer</div>
       <table class="detail">
@@ -571,7 +608,7 @@ export function printA4ServiceJob(
     </div>
   </div>
 
-  ${job.deviceType || job.deviceDescription || job.serialNumber || job.condition ? `
+  ${tpl.showDeviceDetails && (job.deviceType || job.deviceDescription || job.serialNumber || job.condition) ? `
   <div class="section">
     <div class="section-title">Device Information</div>
     <table class="detail">
@@ -582,7 +619,7 @@ export function printA4ServiceJob(
     </table>
   </div>` : ""}
 
-  ${job.workDescription ? `
+  ${tpl.showWorkDescription && job.workDescription ? `
   <div class="section">
     <div class="section-title">Work Description</div>
     <div class="text-block">${esc(job.workDescription)}</div>
@@ -606,10 +643,12 @@ export function printA4ServiceJob(
     <div class="cost-value">$${estimatedCost.toFixed(2)}</div>
   </div>` : ""}
 
+  ${warrantyText ? `<div class="warranty-note">${esc(warrantyText)}</div>` : ""}
+
   <div class="footer">
-    <p>Thank you for choosing ${businessName}.</p>
-    ${abn ? `<p>ABN ${abn}</p>` : ""}
-    ${website ? `<p>${esc(website)}</p>` : ""}
+    ${footerText ? `<p>${esc(footerText)}</p>` : `<p>Thank you for choosing ${businessName}.</p>`}
+    ${tpl.showAbn && abn ? `<p>ABN ${abn}</p>` : ""}
+    ${tpl.showWebsite && website ? `<p>${esc(website)}</p>` : ""}
   </div>
 
 </div>

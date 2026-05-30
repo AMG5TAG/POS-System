@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { printReceipt } from "@/lib/print-receipt";
+import { useDocumentTemplate } from "@/lib/use-document-template";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   completed: "default",
@@ -54,6 +54,7 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
   const [phone, setPhone] = useState("");
   const [sent, setSent] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
 
   if (!tx) return null;
 
@@ -67,6 +68,7 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
 
   function handleReprint() {
     if (!tx) return;
+    if (tplLoading) { toast.info("Loading receipt template…"); return; }
     printReceipt(tx);
     toast.success("Receipt sent to printer");
     setSent(true);
