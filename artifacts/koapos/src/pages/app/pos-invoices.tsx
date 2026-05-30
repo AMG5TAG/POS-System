@@ -29,7 +29,7 @@ import { useSalesTemplate } from "@/lib/use-sales-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList,
+  Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1809,6 +1809,10 @@ export default function POSInvoicesPage() {
                 onChange={(e) => setEmailAddr(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
               />
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
+              <Paperclip className="w-3 h-3 shrink-0" />
+              <span>A PDF copy of the invoice will be attached</span>
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setEmailDialog({ open: false, invoiceId: null })}>Cancel</Button>

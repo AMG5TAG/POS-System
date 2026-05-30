@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 
 const router: IRouter = Router();
@@ -587,6 +588,80 @@ router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// GET /invoices/:id/pdf — stream a branded A4 PDF for this invoice
+router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id));
+  const merchantId = req.session.merchantId!;
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const [bp]       = await db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId));
+
+  const inv = fmt(
+    row.invoice,
+    row.customerFirstName, row.customerLastName, row.customerEmail,
+    row.customerPhone, row.customerAddress, row.customerCompany,
+    row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode,
+  );
+
+  const billingAddr = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
+    || row.customerAddress
+    || null;
+
+  const pdfBuffer = await buildInvoicePdf({
+    invoiceNumber: inv.invoiceNumber,
+    status:        inv.status ?? "draft",
+    createdAt:     inv.createdAt,
+    dueDate:       inv.dueDate,
+    paidAt:        inv.paidAt,
+    items:         (inv.items as LineItem[]) ?? [],
+    subtotal:      inv.subtotal,
+    taxTotal:      inv.taxTotal,
+    total:         inv.total,
+    amountPaid:    inv.amountPaid,
+    discountTotal: inv.discountTotal,
+    discountType:  inv.discountType,
+    discountValue: inv.discountValue,
+    notes:         inv.notes,
+    customerName:  inv.customerName,
+    customerEmail: inv.customerEmail,
+    customerPhone: inv.customerPhone,
+    customerAddress: billingAddr,
+    customerCompany: inv.customerCompany,
+    businessName:    merchant?.businessName ?? "Your Business",
+    businessPhone:   merchant?.phone ?? null,
+    businessAddress: merchant?.address ?? null,
+    businessCity:    merchant?.city ?? null,
+    businessAbn:     bp?.abn || null,
+    businessWebsite: bp?.website || null,
+    businessEmail:   bp?.contactEmail || null,
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${inv.invoiceNumber}.pdf"`);
+  res.setHeader("Content-Length", pdfBuffer.length);
+  res.send(pdfBuffer);
+});
+
 // POST /invoices/:id/send-email
 router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id));
@@ -620,6 +695,14 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
       invoice: invoicesTable,
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
@@ -627,7 +710,10 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const [merchant, bp] = await Promise.all([
+    db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)).then((r) => r[0]),
+    db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
+  ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
   const cName = customerName(row.customerFirstName, row.customerLastName);
@@ -715,11 +801,45 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
       ${footer ? `<p style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">${footer}</p>` : ""}
     </div>`;
 
+  // Generate PDF to attach
+  const billingAddrForPdf = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
+    || row.customerAddress
+    || null;
+  const pdfBuffer = await buildInvoicePdf({
+    invoiceNumber: inv.invoiceNumber,
+    status:        inv.status ?? "draft",
+    createdAt:     inv.createdAt.toISOString(),
+    dueDate:       inv.dueDate?.toISOString() ?? null,
+    paidAt:        inv.paidAt?.toISOString() ?? null,
+    items:         (inv.items as LineItem[]) ?? [],
+    subtotal:      parseFloat(inv.subtotal),
+    taxTotal:      parseFloat(inv.taxTotal),
+    total:         parseFloat(inv.total),
+    amountPaid:    parseFloat(inv.amountPaid ?? "0"),
+    discountTotal: inv.discountTotal ? parseFloat(inv.discountTotal) : null,
+    discountType:  inv.discountType ?? null,
+    discountValue: inv.discountValue ? parseFloat(inv.discountValue) : null,
+    notes:         inv.notes ?? null,
+    customerName:  cName || null,
+    customerEmail: row.customerEmail ?? null,
+    customerPhone: row.customerPhone ?? null,
+    customerAddress: billingAddrForPdf,
+    customerCompany: row.customerCompany ?? null,
+    businessName:    bizName,
+    businessPhone:   merchant?.phone ?? null,
+    businessAddress: merchant?.address ?? null,
+    businessCity:    merchant?.city ?? null,
+    businessAbn:     bp?.abn || null,
+    businessWebsite: bp?.website || null,
+    businessEmail:   bp?.contactEmail || null,
+  });
+
   const result = await sendEmail(merchantId, {
     to: email,
     subject,
     html,
     text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
+    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
   });
 
   if (!result.success) {

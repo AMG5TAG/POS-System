@@ -2,11 +2,18 @@ import nodemailer from "nodemailer";
 import { db, emailSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface SendResult {
@@ -48,6 +55,11 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
       subject: message.subject,
       html: message.html,
       text: message.text,
+      attachments: message.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     return { success: true, provider: "smtp" };
   }
@@ -65,6 +77,12 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
         subject: message.subject,
         html: message.html,
         text: message.text,
+        ...(message.attachments?.length ? {
+          attachments: message.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content.toString("base64"),
+          })),
+        } : {}),
       }),
     });
     if (!res.ok) {
@@ -89,6 +107,14 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
           { type: "text/html", value: message.html },
           ...(message.text ? [{ type: "text/plain", value: message.text }] : []),
         ],
+        ...(message.attachments?.length ? {
+          attachments: message.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content.toString("base64"),
+            type: a.contentType,
+            disposition: "attachment",
+          })),
+        } : {}),
       }),
     });
     if (!res.ok) {
