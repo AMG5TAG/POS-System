@@ -449,14 +449,14 @@ function NotificationsPanel() {
   }
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Mail className="w-4 h-4" /> Email & SMS Receipts
         </CardTitle>
         <CardDescription>Send receipts automatically to customers after a sale</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 flex-1">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
             <Mail className="w-4 h-4 text-muted-foreground mt-0.5" />
@@ -1380,7 +1380,7 @@ function ReceiptPrintSettings() {
   };
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Printer className="h-5 w-5 text-primary" />
@@ -1390,7 +1390,7 @@ function ReceiptPrintSettings() {
           Choose the default paper size for receipts and printed documents.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-5 flex-1">
         <div className="grid grid-cols-3 gap-3 text-center">
           {sizes.map(p => (
             <div
@@ -1515,7 +1515,7 @@ export default function ManagementTemplatesPage() {
         </div>
 
         {/* Top settings row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
           <NotificationsPanel />
           <ReceiptPrintSettings />
         </div>
@@ -1628,6 +1628,13 @@ export default function ManagementTemplatesPage() {
                 onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
               />
             </div>
+
+            {/* Full-width Quick Codes bar */}
+            <QuickCodesBar
+              groups={quickCodeGroups}
+              focusedField={focusedFieldLabel}
+              onInsert={(_fieldKey, code) => { insertFnRef.current?.(code); }}
+            />
           </>
         )}
       </div>
