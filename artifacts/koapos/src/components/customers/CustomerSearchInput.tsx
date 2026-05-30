@@ -96,7 +96,7 @@ export function CustomerSearchInput({
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       {selected ? (
-        <div className="flex items-center gap-2 border rounded-lg px-2.5 py-2 bg-muted/40">
+        <div className="flex items-center gap-2 border border-primary rounded-lg px-2.5 py-2 bg-primary/5">
           <div className={cn(
             "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
             selected.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"
