@@ -147,7 +147,12 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         eq(transactionsTable.idempotencyKey, idempotencyKey),
       ));
     if (existing) {
-      res.status(201).json(formatTransaction(existing));
+      let cust: typeof customersTable.$inferSelect | null = null;
+      if (existing.customerId) {
+        const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+        cust = c ?? null;
+      }
+      res.status(201).json(formatTransaction(existing, cust));
       return;
     }
   }
@@ -589,14 +594,19 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           eq(transactionsTable.idempotencyKey, idempotencyKey),
         ));
       if (existing) {
-        res.status(201).json(formatTransaction(existing));
+        let cust: typeof customersTable.$inferSelect | null = null;
+        if (existing.customerId) {
+          const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+          cust = c ?? null;
+        }
+        res.status(201).json(formatTransaction(existing, cust));
         return;
       }
     }
     throw err;
   }
 
-  res.status(201).json(formatTransaction(transaction));
+  res.status(201).json(formatTransaction(transaction, scopedCustomer));
 });
 
 router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
@@ -649,7 +659,12 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
     .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)))
     .returning();
 
-  res.json(formatTransaction(updated));
+  let cust: typeof customersTable.$inferSelect | null = null;
+  if (updated.customerId) {
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+    cust = c ?? null;
+  }
+  res.json(formatTransaction(updated, cust));
 });
 
 router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
