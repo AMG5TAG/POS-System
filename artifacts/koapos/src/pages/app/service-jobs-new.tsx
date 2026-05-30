@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Badge } from "@/components/ui/badge";
+import { SignaturePad } from "@/components/ui/signature-pad";
 import {
   Dialog,
   DialogContent,
@@ -273,112 +274,8 @@ export default function ServiceJobNewPage() {
     });
   }
 
-  const [signatureSaved, setSignatureSaved] = useState(false);
   const [signature, setSignature] = useState("");
   const [selectedFormIds, setSelectedFormIds] = useState<number[]>([]);
-
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isDrawing = useRef(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }, []);
-
-  function getCanvasPos(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    if ("touches" in e) {
-      return {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY,
-      };
-    }
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
-  }
-
-  const startDraw = useCallback((e: MouseEvent | TouchEvent) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    isDrawing.current = true;
-    lastPos.current = getCanvasPos(e, canvas);
-    setSignatureSaved(false);
-    setSignature("");
-  }, []);
-
-  const draw = useCallback((e: MouseEvent | TouchEvent) => {
-    e.preventDefault();
-    if (!isDrawing.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const pos = getCanvasPos(e, canvas);
-    ctx.beginPath();
-    if (lastPos.current) {
-      ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    }
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastPos.current = pos;
-  }, []);
-
-  const endDraw = useCallback(() => {
-    isDrawing.current = false;
-    lastPos.current = null;
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener("mousedown", startDraw);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", endDraw);
-    canvas.addEventListener("mouseleave", endDraw);
-    canvas.addEventListener("touchstart", startDraw, { passive: false });
-    canvas.addEventListener("touchmove", draw, { passive: false });
-    canvas.addEventListener("touchend", endDraw);
-    return () => {
-      canvas.removeEventListener("mousedown", startDraw);
-      canvas.removeEventListener("mousemove", draw);
-      canvas.removeEventListener("mouseup", endDraw);
-      canvas.removeEventListener("mouseleave", endDraw);
-      canvas.removeEventListener("touchstart", startDraw);
-      canvas.removeEventListener("touchmove", draw);
-      canvas.removeEventListener("touchend", endDraw);
-    };
-  }, [startDraw, draw, endDraw]);
-
-  function clearSignature() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setSignatureSaved(false);
-    setSignature("");
-  }
-
-  function saveSignature() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const data = canvas.toDataURL("image/png");
-    setSignature(data);
-    setSignatureSaved(true);
-    toast.success("Signature saved");
-  }
 
   function updatePhoto(idx: number, value: string) {
     setPhotos((prev) => {
@@ -730,39 +627,19 @@ export default function ServiceJobNewPage() {
         </div>
 
         {/* Customer Signature */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div>
             <Label className="text-sm font-semibold">Customer Signature</Label>
             <span className="ml-2 text-xs text-muted-foreground">(optional — can be captured now or sent via email)</span>
           </div>
-          <div className="border rounded-xl overflow-hidden">
-            <canvas
-              ref={canvasRef}
-              width={800}
-              height={200}
-              className="w-full h-36 cursor-crosshair bg-white block"
-              style={{ touchAction: "none" }}
-            />
-            <div className="flex items-center gap-3 p-3 border-t bg-muted/10">
-              <p className="text-xs text-muted-foreground flex-1 italic text-center">
-                Sign here using mouse or finger
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={clearSignature}>
-              Clear
-            </Button>
-            <Button
-              size="sm"
-              variant={signatureSaved ? "secondary" : "default"}
-              className="flex-1 gap-1.5"
-              onClick={saveSignature}
-            >
-              {signatureSaved ? <Check className="w-4 h-4" /> : null}
-              {signatureSaved ? "Signature Saved" : "Save Signature"}
-            </Button>
-          </div>
+          <SignaturePad
+            height={180}
+            onSave={(dataUrl) => {
+              setSignature(dataUrl);
+              toast.success("Signature saved");
+            }}
+            onClear={() => setSignature("")}
+          />
         </div>
 
         {/* Form Selector */}

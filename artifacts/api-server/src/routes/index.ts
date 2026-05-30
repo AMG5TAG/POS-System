@@ -78,6 +78,7 @@ import businessProfileRouter from "./business-profile";
 import customerSettingsRouter from "./customer-settings";
 import referralDigestRouter from "./referral-digest";
 import stickerTemplatesRouter from "./sticker-templates";
+import signaturesRouter from "./signatures";
 
 const router: IRouter = Router();
 
@@ -160,5 +161,6 @@ router.use(businessProfileRouter);
 router.use(customerSettingsRouter);
 router.use(referralDigestRouter);
 router.use(stickerTemplatesRouter);
+router.use(signaturesRouter);
 
 export default router;
