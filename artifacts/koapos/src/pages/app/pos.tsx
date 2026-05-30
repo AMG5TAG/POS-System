@@ -156,6 +156,7 @@ export default function POSPage() {
   const [completedCustomer, setCompletedCustomer] = useState<Customer | null>(null);
   const [completedLoyaltyAmount, setCompletedLoyaltyAmount] = useState(0);
   const [completedLoyaltyUnit, setCompletedLoyaltyUnit] = useState("");
+  const [completedIssuedGiftCards, setCompletedIssuedGiftCards] = useState<{ cardNumber: string; balance: number }[]>([]);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms" | "print">("idle");
@@ -1264,7 +1265,19 @@ export default function POSPage() {
       ? `<p class="center small gray mt" style="line-height:1.5">${resolveStr(opts.customMessage).replace(/\n/g, "<br>")}</p>`
       : "";
     /* Inject extras at the dedicated sentinel (one per template). Falls back to append if missing. */
-    const extras = `${loyaltyHtml}${customMsgHtml}${qrHtml}`;
+    const gcPrintHtml = completedTx?.issuedGiftCards?.length
+      ? `<div class="bdr-t pt mt">
+          <p class="small bold upper mb" style="color:#5b21b6">Gift Card${completedTx.issuedGiftCards.length > 1 ? "s" : ""} Issued</p>
+          ${completedTx.issuedGiftCards.map(gc =>
+            `<div class="row" style="margin-bottom:4px">
+              <span class="mono bold" style="letter-spacing:2px;font-size:11px">${esc(gc.cardNumber)}</span>
+              <span class="bold">$${gc.balance.toFixed(2)}</span>
+            </div>`
+          ).join("")}
+          <p class="gray small" style="margin-top:2px">Keep this receipt to retrieve your card number.</p>
+        </div>`
+      : "";
+    const extras = `${gcPrintHtml}${loyaltyHtml}${customMsgHtml}${qrHtml}`;
     body = body.includes("<!--EXTRAS-->")
       ? body.replace("<!--EXTRAS-->", extras)
       : `${body}${extras}`;
@@ -1446,13 +1459,16 @@ export default function POSPage() {
       const lineTotal = Math.round((lineGross - totalDiscount) * 100) / 100;
       const taxRate = i.product.taxRate ?? 10;
       return {
-        productId: i.product.id,
+        // Gift card items must use productId:0 (custom item path on server) so
+        // the server doesn't attempt a DB lookup for the synthetic product ID.
+        productId: i.giftCardNumber ? 0 : i.product.id,
         productName: i.product.name,
         quantity: i.quantity,
         unitPrice: i.customPrice ?? i.product.price,
         totalPrice: lineTotal,
         taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
         discount: totalDiscount > 0 ? totalDiscount : undefined,
+        ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
       };
     });
     const notesParts = [
@@ -1506,14 +1522,10 @@ export default function POSPage() {
         // Capture total + cart before clearing
         const saleTotal = total;
         setCompletedCart([...cart]);
-        // Issue any gift cards purchased in this sale
-        cart.filter(i => i.giftCardNumber).forEach(item => {
-          createGiftCardMutation.mutate({
-            data: { cardNumber: item.giftCardNumber!, initialValue: item.customPrice ?? item.product.price },
-          }, {
-            onError: () => toast.error(`Failed to activate gift card ${item.giftCardNumber} — check Management > Gift Cards`),
-          });
-        });
+        // Gift cards are now issued atomically by the server inside the same DB
+        // transaction — no separate createGiftCard call needed. The response
+        // contains issuedGiftCards so the cashier can hand the code to the customer.
+        setCompletedIssuedGiftCards(data.issuedGiftCards ?? []);
         setCompletedPaymentMethod(paymentMethod);
         setCompletedSubtotal(subtotal);
         setCompletedTaxTotal(taxTotal);
@@ -2683,7 +2695,7 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── Receipt dialog ─── */}
-      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+      <Dialog open={receiptOpen} onOpenChange={(open) => { setReceiptOpen(open); if (!open) setCompletedIssuedGiftCards([]); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 mx-auto mb-2 mt-1">
@@ -2697,6 +2709,21 @@ export default function POSPage() {
               </p>
             )}
           </DialogHeader>
+
+          {completedIssuedGiftCards.length > 0 && (
+            <div className="rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 p-3 space-y-2">
+              <p className="text-xs font-semibold text-violet-800 dark:text-violet-200 flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5" />
+                {completedIssuedGiftCards.length === 1 ? "Gift Card Issued" : "Gift Cards Issued"} — Give to customer
+              </p>
+              {completedIssuedGiftCards.map(gc => (
+                <div key={gc.cardNumber} className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold tracking-widest text-violet-900 dark:text-violet-100">{gc.cardNumber}</span>
+                  <span className="text-sm font-semibold text-violet-700 dark:text-violet-300 tabular-nums">{formatCurrency(gc.balance)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {receiptMode === "idle" && (
             <div className="space-y-2 py-1">

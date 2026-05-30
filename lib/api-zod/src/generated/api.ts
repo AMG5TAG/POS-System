@@ -1116,8 +1116,14 @@ export const GetCustomerHistoryResponse = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
 })),
   "appointments": zod.array(zod.object({
@@ -1517,8 +1523,14 @@ export const ListTransactionsResponse = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -1538,7 +1550,9 @@ export const CreateTransactionBody = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty']),
   "subtotal": zod.number(),
@@ -1625,8 +1639,14 @@ export const GetTransactionResponse = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -1711,8 +1731,14 @@ export const RefundTransactionResponse = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -2219,8 +2245,14 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "unitPrice": zod.number(),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
-  "discount": zod.number().optional()
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
 })),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
 })
 export const GetRecentTransactionsResponse = zod.array(GetRecentTransactionsResponseItem)

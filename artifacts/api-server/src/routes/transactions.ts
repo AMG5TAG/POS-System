@@ -24,6 +24,11 @@ class HttpError extends Error {
 }
 
 function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: typeof customersTable.$inferSelect | null) {
+  const rawItems = Array.isArray(t.items) ? t.items as Array<Record<string, unknown>> : [];
+  const issuedGiftCards = rawItems
+    .filter(i => i.giftCardIssue === true && typeof i.giftCardNumber === "string")
+    .map(i => ({ cardNumber: i.giftCardNumber as string, balance: Number(i.unitPrice ?? 0) }));
+
   return {
     id: t.id,
     merchantId: t.merchantId,
@@ -56,7 +61,8 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     changeDue: t.changeDue ? parseFloat(t.changeDue) : null,
     notes: t.notes ?? null,
     loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
-    items: Array.isArray(t.items) ? t.items : [],
+    items: rawItems,
+    ...(issuedGiftCards.length > 0 ? { issuedGiftCards } : {}),
     createdAt: t.createdAt.toISOString(),
   };
 }
@@ -197,6 +203,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     productId: number; productName: string; quantity: number;
     unitPrice: number; totalPrice: number; taxAmount: number;
     discount?: number;
+    giftCardIssue?: boolean; giftCardNumber?: string;
   }[] = [];
   for (const i of clientItems) {
     if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
@@ -207,10 +214,10 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     let taxRatePct: number;
     let itemName: string;
     if (i.productId === 0) {
-      // Custom item: trust client-supplied values, no DB product required
+      // Custom item or gift card issue: trust client-supplied values, no DB product required
       unitPrice  = Math.max(0, i.unitPrice ?? 0);
       taxRatePct = 10; // standard Australian GST
-      itemName   = (i.productName || "Custom Item").slice(0, 200);
+      itemName   = (i.productName || (i.giftCardIssue ? "Gift Card" : "Custom Item")).slice(0, 200);
     } else {
       const product = productMap.get(i.productId)!;
       unitPrice  = parseFloat(product.price);
@@ -230,7 +237,19 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       totalPrice,
       taxAmount,
       discount: discount > 0 ? discount : undefined,
+      giftCardIssue: i.giftCardIssue || undefined,
+      // Preserve client-provided number; server will fill in blanks before the DB write
+      giftCardNumber: (i.giftCardIssue && i.giftCardNumber) ? i.giftCardNumber.trim().toUpperCase() : undefined,
     });
+  }
+
+  // Ensure every gift card issue item has a card number before entering the DB
+  // transaction (so it gets stored on the items JSONB and is idempotent on retry).
+  for (const item of computedItems) {
+    if (item.giftCardIssue && !item.giftCardNumber) {
+      const rand = Math.random().toString(36).slice(2, 10).toUpperCase();
+      item.giftCardNumber = `GC-${rand}`;
+    }
   }
 
   // Server-authoritative totals. Convention used throughout the app:
@@ -522,6 +541,34 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         amount: (-applied).toString(),
         balanceAfter: newBalance.toString(),
         note: `Redeemed on sale ${receiptNumber}`,
+        transactionId: row.id,
+      });
+    }
+
+    // Atomic gift card issuance — create and activate each gift card inside the
+    // same DB transaction that records the sale, so neither can land without the
+    // other. The card number was pre-generated before this block so it is stored
+    // on the items JSONB and returned consistently even on idempotency retries.
+    for (const item of computedItems) {
+      if (!item.giftCardIssue || !item.giftCardNumber) continue;
+      const cardValue = round2(item.unitPrice); // value per card (always qty=1 from the dialog)
+      const [issuedCard] = await tx
+        .insert(giftCardsTable)
+        .values({
+          merchantId: req.session.merchantId!,
+          cardNumber: item.giftCardNumber,
+          initialValue:   cardValue.toString(),
+          currentBalance: cardValue.toString(),
+          status: "active",
+        })
+        .returning();
+      await tx.insert(giftCardLedgerTable).values({
+        merchantId:   req.session.merchantId!,
+        giftCardId:  issuedCard.id,
+        type:        "issue",
+        amount:      cardValue.toString(),
+        balanceAfter: cardValue.toString(),
+        note:        `Issued on receipt ${receiptNumber}`,
         transactionId: row.id,
       });
     }

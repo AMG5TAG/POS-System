@@ -6731,6 +6731,18 @@ components:
           type: number
         discount:
           type: number
+        giftCardIssue:
+          type: boolean
+          description: >-
+            When true, this item represents a gift card being sold. The server
+            creates and activates the card atomically inside the same DB
+            transaction as the sale.
+        giftCardNumber:
+          type: string
+          description: >-
+            Card number for the issued gift card. The client may provide a
+            pre-generated code; if omitted or blank, the server generates one.
+            Populated in the response for every giftCardIssue item.
 
     Transaction:
       type: object
@@ -6774,6 +6786,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionItem"
+        issuedGiftCards:
+          type: array
+          description: >-
+            Gift cards activated as part of this transaction.
+            Present when the sale included one or more giftCardIssue line items.
+          items:
+            type: object
+            required: [cardNumber, balance]
+            properties:
+              cardNumber:
+                type: string
+              balance:
+                type: number
         createdAt:
           type: string
           format: date-time

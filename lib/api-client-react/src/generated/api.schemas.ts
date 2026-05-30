@@ -527,6 +527,10 @@ export interface TransactionItem {
   totalPrice: number;
   taxAmount?: number;
   discount?: number;
+  /** When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale. */
+  giftCardIssue?: boolean;
+  /** Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item. */
+  giftCardNumber?: string;
 }
 
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
@@ -555,6 +559,11 @@ export const TransactionPaymentMethod = {
   loyalty: 'loyalty',
 } as const;
 
+export type TransactionIssuedGiftCardsItem = {
+  cardNumber: string;
+  balance: number;
+};
+
 export interface Transaction {
   id: number;
   merchantId: number;
@@ -579,6 +588,8 @@ export interface Transaction {
   /** @nullable */
   loyaltyEarned?: number | null;
   items: TransactionItem[];
+  /** Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items. */
+  issuedGiftCards?: TransactionIssuedGiftCardsItem[];
   createdAt: string;
 }
 
