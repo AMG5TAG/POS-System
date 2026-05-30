@@ -6728,7 +6728,7 @@ export const GetActiveSalesTemplatesResponse = zod.object({
  * @summary Create or update config for a specific template type
  */
 export const UpsertSalesTemplateParams = zod.object({
-  "templateType": zod.enum(['Invoice', 'Thermal_Receipt', 'Quote', 'Service_Ticket'])
+  "templateType": zod.enum(['Invoice', 'Thermal_Receipt', 'Quote', 'Service_Ticket', 'A4_Receipt'])
 })
 
 export const UpsertSalesTemplateBody = zod.object({

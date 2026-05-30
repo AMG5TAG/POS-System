@@ -21543,7 +21543,7 @@ export function useGetActiveSalesTemplates<TData = Awaited<ReturnType<typeof get
 
 
 
-export const getUpsertSalesTemplateUrl = (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket',) => {
+export const getUpsertSalesTemplateUrl = (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt',) => {
 
 
 
@@ -21554,7 +21554,7 @@ export const getUpsertSalesTemplateUrl = (templateType: 'Invoice' | 'Thermal_Rec
 /**
  * @summary Create or update config for a specific template type
  */
-export const upsertSalesTemplate = async (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket',
+export const upsertSalesTemplate = async (templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt',
     salesTemplateInput: SalesTemplateInput, options?: RequestInit): Promise<SalesTemplate> => {
 
   return customFetch<SalesTemplate>(getUpsertSalesTemplateUrl(templateType),
@@ -21571,8 +21571,8 @@ export const upsertSalesTemplate = async (templateType: 'Invoice' | 'Thermal_Rec
 
 
 export const getUpsertSalesTemplateMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt';data: BodyType<SalesTemplateInput>}, TContext> => {
 
 const mutationKey = ['upsertSalesTemplate'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -21584,7 +21584,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertSalesTemplate>>, {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertSalesTemplate>>, {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt';data: BodyType<SalesTemplateInput>}> = (props) => {
           const {templateType,data} = props ?? {};
 
           return  upsertSalesTemplate(templateType,data,requestOptions)
@@ -21605,11 +21605,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Create or update config for a specific template type
  */
 export const useUpsertSalesTemplate = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSalesTemplate>>, TError,{templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt';data: BodyType<SalesTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof upsertSalesTemplate>>,
         TError,
-        {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket';data: BodyType<SalesTemplateInput>},
+        {templateType: 'Invoice' | 'Thermal_Receipt' | 'Quote' | 'Service_Ticket' | 'A4_Receipt';data: BodyType<SalesTemplateInput>},
         TContext
       > => {
       return useMutation(getUpsertSalesTemplateMutationOptions(options));

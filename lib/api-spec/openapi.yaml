@@ -5131,7 +5131,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket]
+            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket, A4_Receipt]
       requestBody:
         required: true
         content:

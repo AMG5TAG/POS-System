@@ -1,0 +1,24 @@
+### Role & Context
+You are an expert full-stack developer. I need you to expand our centralized template system in the **Management > Sales Templates** section by adding a new "A4 Receipt" template type and enforcing it globally across the application.
+
+### Objective
+1. Create a new template option called **"A4 Receipt"** that inherits and clones the exact same data fields and layout configurations as the standard **"Invoice"** template.
+2. Systematically map this new template so it is used as the global default layout whenever an A4 receipt is printed or emailed anywhere in the application.
+
+### High-Level Requirements
+
+1. **Database / Schema Updates:**
+   * Register "A4 Receipt" as a new valid template type in the database or config schema.
+   * Ensure it maps to the exact same schema/fields as the existing "Invoice" template (e.g., logo placement, business details, customer info, line items, totals, header/footer text).
+   * Pre-populate or clone the current active settings of the "Invoice" template into this new layout upon initialization.
+
+2. **UI Updates (Management > Sales Templates):**
+   * Add "A4 Receipt" to the selection menu, sidebar, or tab list alongside current options (Thermal Receipt, Invoice, Quote, etc.).
+   * Allow users to customize and save changes to the "A4 Receipt" template independently without affecting the original "Invoice" template.
+
+3. **System-Wide Alignment (Setting the Default):**
+   * Locate all frontend components, print views, handlers, and backend email/PDF generators that process an A4 receipt (such as the Sales History tab or post-checkout actions).
+   * Refactor those components to explicitly fetch and render using the newly created **"A4 Receipt" template data** instead of falling back to a generic invoice layout or hardcoded design.
+
+### Instructions
+Please analyze the project structure, locate the files managing the template configurations (frontend views, schema definitions, and saving endpoints), as well as the sales/receipt printing modules. Implement the new template type and wire it up as the system-wide default for A4 receipts. Let me know which files you modify.

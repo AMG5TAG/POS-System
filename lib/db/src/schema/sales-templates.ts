@@ -1,7 +1,7 @@
 import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, unique } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
-export const SALES_TEMPLATE_TYPES = ["Invoice", "Thermal_Receipt", "Quote", "Service_Ticket"] as const;
+export const SALES_TEMPLATE_TYPES = ["Invoice", "Thermal_Receipt", "Quote", "Service_Ticket", "A4_Receipt"] as const;
 export type SalesTemplateType = (typeof SALES_TEMPLATE_TYPES)[number];
 
 export const salesTemplatesTable = pgTable(

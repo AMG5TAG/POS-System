@@ -32,7 +32,7 @@ import {
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "Thermal_Receipt" | "Invoice" | "Quote" | "Service_Ticket";
+type Category = "Thermal_Receipt" | "Invoice" | "A4_Receipt" | "Quote" | "Service_Ticket";
 
 interface TemplateOption {
   id: string;
@@ -147,7 +147,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
       const { headerText, footerText, showLogo, fontFamily, ...rest } = opts;
       upsert.mutate(
         {
-          templateType: category as "Invoice" | "Thermal_Receipt" | "Quote" | "Service_Ticket",
+          templateType: category as "Invoice" | "Thermal_Receipt" | "A4_Receipt" | "Quote" | "Service_Ticket",
           data: {
             headerHtml: headerText,
             footerHtml: footerText,
@@ -201,6 +201,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
       { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
     ];
+    case "A4_Receipt":
     case "Invoice": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
       { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
@@ -704,6 +705,11 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "i-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column layout"               },
     { id: "i-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 business invoice"               },
   ],
+  A4_Receipt: [
+    { id: "ar-pro",     name: "Professional", style: "professional", description: "Logo, itemised table, full receipt layout"           },
+    { id: "ar-modern",  name: "Modern",       style: "bold",         description: "Bold colour header, two-column receipt"              },
+    { id: "ar-minimal", name: "Minimal",      style: "minimal",      description: "No frills, plain A4 sales receipt"                  },
+  ],
   Quote: [
     { id: "q-pro",     name: "Professional", style: "professional", description: "Logo, validity period, itemised quote table"         },
     { id: "q-modern",  name: "Modern",       style: "bold",         description: "Bold accent header, two-column quote layout"         },
@@ -718,6 +724,7 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
   Thermal_Receipt: { label: "Thermal Receipt", icon: Receipt,       color: "text-blue-500"    },
   Invoice:         { label: "Invoice",          icon: FileText,      color: "text-violet-500"  },
+  A4_Receipt:      { label: "A4 Receipt",       icon: FileText,      color: "text-emerald-500" },
   Quote:           { label: "Quote",            icon: FileSearch,    color: "text-amber-500"   },
   Service_Ticket:  { label: "Service Ticket",   icon: ClipboardList, color: "text-cyan-500"    },
 };
@@ -1417,6 +1424,7 @@ function ReceiptPrintSettings() {
 const DEFAULT_STYLE: Record<Category, string> = {
   Thermal_Receipt: "r-pro",
   Invoice:         "i-pro",
+  A4_Receipt:      "ar-pro",
   Quote:           "q-pro",
   Service_Ticket:  "ss-standard",
 };
@@ -1481,7 +1489,8 @@ export default function ManagementTemplatesPage() {
   const renderPreview = () => {
     switch (activeCategory) {
       case "Thermal_Receipt":  return <ReceiptPreview      {...previewProps} />;
-      case "Invoice":          return <InvoicePreview      {...previewProps} />;
+      case "Invoice":
+      case "A4_Receipt":       return <InvoicePreview      {...previewProps} />;
       case "Quote":            return <InvoicePreview      {...previewProps} />;
       case "Service_Ticket":   return <ServiceSheetPreview {...previewProps} />;
     }
@@ -1582,7 +1591,7 @@ export default function ManagementTemplatesPage() {
                   {activeCategory === "Thermal_Receipt" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
                   )}
-                  {(activeCategory === "Invoice" || activeCategory === "Quote") && (
+                  {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
                   )}
                   {activeCategory === "Service_Ticket" && (

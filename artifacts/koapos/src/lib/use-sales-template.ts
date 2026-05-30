@@ -1,7 +1,7 @@
 import { useGetActiveSalesTemplates } from "@workspace/api-client-react";
 import { DEFAULT_OPTS, type TplOpts } from "@/pages/app/management-templates";
 
-export type SalesTemplateType = "Thermal_Receipt" | "Invoice" | "Quote" | "Service_Ticket";
+export type SalesTemplateType = "Thermal_Receipt" | "Invoice" | "Quote" | "Service_Ticket" | "A4_Receipt";
 
 export const FONT_CSS: Record<string, string> = {
   inter:   "Inter, system-ui, sans-serif",

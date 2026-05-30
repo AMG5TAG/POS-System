@@ -407,6 +407,194 @@ export function printA4Invoice(
   openPrintWindow(html, `Invoice ${escReceiptNum}`);
 }
 
+/* ─── A4 sales receipt ─────────────────────────────────────────────────── */
+/* Shares the same layout as the Invoice but with a "Receipt" title. */
+
+export function printA4Receipt(
+  tx: Transaction,
+  businessInfo?: ReceiptBusinessInfo,
+  opts?: ReceiptTemplateOpts,
+): void {
+  const rawBusinessName = businessInfo?.businessName ?? "Your Store";
+  const rawAbn = businessInfo?.abn ?? "";
+  const rawWebsite = businessInfo?.website ?? "";
+  const rawEmail = businessInfo?.email ?? "";
+  const rawBrandColor = businessInfo?.brandColor ?? "#374151";
+  const businessName = esc(rawBusinessName);
+  const abn = esc(rawAbn);
+  const website = esc(rawWebsite);
+  const contactEmail = esc(rawEmail);
+  const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
+
+  const tpl: ReceiptTemplateOpts = {
+    showAbn: true,
+    showGstBreakdown: true,
+    showWebsite: true,
+    thankYouMsg: "Thank you for your purchase.",
+    footerText: "",
+    ...opts,
+  };
+
+  const receiptNum = tx.receiptNumber ? tx.receiptNumber : `${tx.id}`;
+  const escReceiptNum = esc(receiptNum);
+  const dateStr = new Date(tx.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
+  const pmLabel = (tx.paymentMethod ?? "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const customer = tx.customer;
+  const customerName = customer
+    ? esc([customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "")
+    : "";
+  const customerEmail = customer ? esc(customer.email ?? "") : "";
+
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number }>;
+
+  const itemRows = items.map((item, i) => {
+    const name = esc(item.productName ?? "Item");
+    const qty = item.quantity ?? 1;
+    const unit = item.unitPrice ?? 0;
+    const lineTotal = item.totalPrice ?? unit * qty;
+    const bg = i % 2 === 0 ? "#f9fafb" : "#ffffff";
+    return `
+      <tr style="background:${bg}">
+        <td class="td-name">${name}</td>
+        <td class="td-center">${qty}</td>
+        <td class="td-right">${fmtAUD(unit)}</td>
+        <td class="td-right">${fmtAUD(lineTotal)}</td>
+      </tr>`;
+  }).join("");
+
+  const subtotal = tx.subtotal ?? 0;
+  const taxTotal = tx.taxTotal ?? 0;
+  const discountTotal = tx.discountTotal ?? 0;
+  const total = tx.total ?? 0;
+
+  const thankYou = tpl.thankYouMsg ? esc(tpl.thankYouMsg) : "";
+  const footerTxt = tpl.footerText ? esc(tpl.footerText) : "";
+
+  const css = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1f2937; background: #fff; }
+    .page { max-width: 780px; margin: 0 auto; padding: 40px; }
+
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid ${brandColor}; }
+    .biz-name { font-size: 22px; font-weight: 700; color: ${brandColor}; letter-spacing: -0.3px; }
+    .biz-meta { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.6; }
+    .doc-label { text-align: right; }
+    .doc-label h1 { font-size: 28px; font-weight: 800; color: ${brandColor}; letter-spacing: 1px; text-transform: uppercase; }
+    .doc-label .doc-num { font-size: 14px; color: #374151; font-weight: 600; margin-top: 4px; }
+    .doc-label .doc-date { font-size: 12px; color: #6b7280; margin-top: 2px; }
+
+    .meta-row { display: flex; gap: 32px; margin-bottom: 32px; }
+    .meta-block { flex: 1; }
+    .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; color: #1f2937; }
+    .meta-value.bold { font-weight: 600; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    thead tr { background: ${brandColor}; }
+    thead th { padding: 10px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; text-align: left; }
+    thead th.right { text-align: right; }
+    thead th.center { text-align: center; }
+    .td-name { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; }
+    .td-center { padding: 9px 12px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+    .td-right { padding: 9px 12px; text-align: right; border-bottom: 1px solid #f3f4f6; }
+    .td-empty { font-style: italic; color: #9ca3af; padding: 16px 12px; }
+
+    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 0; }
+    .totals { width: 280px; border: 1px solid #e5e7eb; border-top: none; }
+    .totals-row { display: flex; justify-content: space-between; padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #f3f4f6; }
+    .totals-row .lbl { color: #6b7280; }
+    .totals-total { display: flex; justify-content: space-between; padding: 10px 12px; font-size: 14px; font-weight: 700; background: ${brandColor}; color: #fff; }
+
+    .payment-badge { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-top: 20px; }
+
+    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.7; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: A4; margin: 15mm 18mm; }
+      .page { padding: 0; max-width: 100%; }
+    }
+  `;
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Sales Receipt ${escReceiptNum}</title>
+<style>${css}</style>
+</head><body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <div class="biz-name">${businessName}</div>
+      <div class="biz-meta">
+        ${abn ? `ABN ${abn}<br>` : ""}
+        ${contactEmail ? `${contactEmail}<br>` : ""}
+        ${website ? `${website}` : ""}
+      </div>
+    </div>
+    <div class="doc-label">
+      <h1>Sales Receipt</h1>
+      <div class="doc-num">${escReceiptNum}</div>
+      <div class="doc-date">${dateStr}</div>
+    </div>
+  </div>
+
+  <div class="meta-row">
+    ${customerName ? `
+    <div class="meta-block">
+      <div class="meta-label">Customer</div>
+      <div class="meta-value bold">${customerName}</div>
+      ${customerEmail ? `<div class="meta-value" style="color:#6b7280;font-size:12px">${customerEmail}</div>` : ""}
+    </div>` : ""}
+    <div class="meta-block">
+      <div class="meta-label">Payment Method</div>
+      <div class="meta-value">${esc(pmLabel) || "—"}</div>
+    </div>
+    <div class="meta-block">
+      <div class="meta-label">Status</div>
+      <div class="meta-value bold" style="text-transform:capitalize">${esc(tx.status ?? "completed")}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50%">Description</th>
+        <th class="center" style="width:10%">Qty</th>
+        <th class="right" style="width:20%">Unit Price</th>
+        <th class="right" style="width:20%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows || `<tr><td class="td-name td-empty" colspan="4">No items</td></tr>`}
+    </tbody>
+  </table>
+
+  <div class="totals-wrap">
+    <div class="totals">
+      <div class="totals-row"><span class="lbl">Subtotal (ex. GST)</span><span>${fmtAUD(subtotal - taxTotal)}</span></div>
+      ${tpl.showGstBreakdown ? `<div class="totals-row"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
+      ${discountTotal > 0 ? `<div class="totals-row" style="color:#dc2626"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+      <div class="totals-total"><span>Total AUD</span><span>${fmtAUD(total)}</span></div>
+    </div>
+  </div>
+
+  <div><span class="payment-badge">✓ Paid — ${esc(pmLabel) || "Payment received"}</span></div>
+
+  <div class="footer">
+    ${thankYou ? `<p>${thankYou}</p>` : ""}
+    ${abn ? `<p>ABN ${abn}</p>` : ""}
+    ${footerTxt ? `<p>${footerTxt}</p>` : ""}
+  </div>
+
+</div>
+</body></html>`;
+
+  openPrintWindow(html, `Receipt ${escReceiptNum}`);
+}
+
 /* ─── A4 service job report ─────────────────────────────────────────────── */
 
 export interface ServiceJobPrintData {

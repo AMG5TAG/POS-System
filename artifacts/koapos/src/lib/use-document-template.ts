@@ -5,6 +5,7 @@ import { useBusinessProfile } from "@/lib/business-profile";
 import {
   printReceipt as rawPrintReceipt,
   printA4Invoice as rawPrintA4Invoice,
+  printA4Receipt as rawPrintA4Receipt,
   printA4ServiceJob as rawPrintA4ServiceJob,
   type ReceiptBusinessInfo,
   type ReceiptTemplateOpts,
@@ -51,6 +52,8 @@ export interface DocumentTemplateController {
   printReceipt: (tx: Transaction) => void;
   /** Print an A4 tax invoice using the saved Invoice template. */
   printInvoice: (tx: Transaction) => void;
+  /** Print an A4 receipt using the saved A4_Receipt template. */
+  printA4Receipt: (tx: Transaction) => void;
   /** Print an A4 service report using the saved Service_Ticket template. */
   printServiceJob: (
     job: ServiceJobPrintData,
@@ -71,6 +74,7 @@ export interface DocumentTemplateController {
 export function useDocumentTemplate(): DocumentTemplateController {
   const receipt = useSalesTemplate("Thermal_Receipt");
   const invoice = useSalesTemplate("Invoice");
+  const a4Receipt = useSalesTemplate("A4_Receipt");
   const service = useSalesTemplate("Service_Ticket");
   const { profile, isLoading: profileLoading } = useBusinessProfile();
   const { data: merchant, isLoading: merchantLoading } = useGetMerchant();
@@ -86,6 +90,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
   const isLoading =
     receipt.isLoading ||
     invoice.isLoading ||
+    a4Receipt.isLoading ||
     service.isLoading ||
     profileLoading ||
     merchantLoading;
@@ -97,6 +102,8 @@ export function useDocumentTemplate(): DocumentTemplateController {
       rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss)),
     printInvoice: (tx) =>
       rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss)),
+    printA4Receipt: (tx) =>
+      rawPrintA4Receipt(tx, businessInfo, toReceiptOpts(a4Receipt.opts, a4Receipt.fontCss)),
     printServiceJob: (job, customerOverride) =>
       rawPrintA4ServiceJob(
         job,

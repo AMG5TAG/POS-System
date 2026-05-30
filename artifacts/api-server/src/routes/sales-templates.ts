@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-const VALID_TYPES = ["Invoice", "Thermal_Receipt", "Quote", "Service_Ticket"] as const;
+const VALID_TYPES = ["Invoice", "Thermal_Receipt", "Quote", "Service_Ticket", "A4_Receipt"] as const;
 type TemplateType = (typeof VALID_TYPES)[number];
 
 function defaultRows(merchantId: number) {
