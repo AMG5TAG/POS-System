@@ -29,6 +29,30 @@ type Highlight = {
   pctChange: number | null;
 };
 
+type SparklineRow = {
+  name: string;
+  count: number;
+};
+
+function computeSparklineData(customers: RawCustomer[]): SparklineRow[] {
+  const now = Date.now();
+  const curStart = now - WINDOW_DAYS * DAY_MS;
+
+  const counts = new Map<string, number>();
+  for (const c of customers) {
+    const ts = c.createdAt.getTime();
+    if (Number.isNaN(ts) || ts < curStart) continue;
+    const source = (c.heardFrom ?? "").trim() || NOT_RECORDED;
+    if (source === NOT_RECORDED) continue;
+    counts.set(source, (counts.get(source) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .filter(([, n]) => n >= 1)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 function computeHighlights(customers: RawCustomer[]): Highlight[] {
   const now = Date.now();
   const curStart = now - WINDOW_DAYS * DAY_MS;
@@ -93,7 +117,52 @@ function formatPct(pct: number | null): string {
   return pct > 0 ? `+${pct}%` : `${pct}%`;
 }
 
-function buildEmailHtml(businessName: string, highlights: Highlight[]): string {
+function buildSparklineHtml(rows: SparklineRow[]): string {
+  if (rows.length === 0) return "";
+
+  const maxCount = Math.max(...rows.map((r) => r.count));
+  const BAR_COLOR = "#3b82f6";
+  const BAR_BG = "#e2e8f0";
+  const BAR_MAX_PX = 220;
+
+  const sparkRows = rows.map((r, i) => {
+    const barPx = Math.max(4, Math.round((r.count / maxCount) * BAR_MAX_PX));
+    const isLast = i === rows.length - 1;
+    const borderBottom = isLast ? "" : "border-bottom:1px solid #f1f5f9;";
+    return `
+      <tr>
+        <td style="padding:10px 20px 10px 20px;${borderBottom}width:160px;white-space:nowrap;vertical-align:middle;">
+          <span style="font-size:13px;color:#1e293b;font-weight:500;">${r.name}</span>
+        </td>
+        <td style="padding:10px 8px 10px 0;${borderBottom}vertical-align:middle;">
+          <table cellpadding="0" cellspacing="0" style="display:inline-table;">
+            <tr>
+              <td style="background:${BAR_COLOR};width:${barPx}px;height:12px;border-radius:3px;vertical-align:middle;"></td>
+              <td style="background:${BAR_BG};width:${BAR_MAX_PX - barPx}px;height:12px;border-radius:0 3px 3px 0;vertical-align:middle;"></td>
+            </tr>
+          </table>
+        </td>
+        <td style="padding:10px 20px 10px 8px;${borderBottom}text-align:right;white-space:nowrap;vertical-align:middle;">
+          <span style="font-size:13px;color:#475569;">${r.count} customer${r.count === 1 ? "" : "s"}</span>
+        </td>
+      </tr>`;
+  }).join("");
+
+  return `
+        <!-- Channel Trend Sparkline -->
+        <tr>
+          <td colspan="2" style="padding:0 32px 28px;">
+            <p style="margin:0 0 8px;font-size:12px;color:#94a3b8;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">Channel Breakdown — Last 30 Days</p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+              <tbody>
+                ${sparkRows}
+              </tbody>
+            </table>
+          </td>
+        </tr>`;
+}
+
+function buildEmailHtml(businessName: string, highlights: Highlight[], sparklineData: SparklineRow[]): string {
   const accent = "#3b82f6";
 
   const highlightRows = highlights.map((h) => {
@@ -124,6 +193,8 @@ function buildEmailHtml(businessName: string, highlights: Highlight[]): string {
         Not enough data yet — highlights appear once there's a full comparison period.
       </td>
     </tr>` : "";
+
+  const sparklineSection = buildSparklineHtml(sparklineData);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -169,6 +240,8 @@ function buildEmailHtml(businessName: string, highlights: Highlight[]): string {
           </td>
         </tr>
 
+        ${sparklineSection}
+
         <!-- Footer -->
         <tr>
           <td colspan="2" style="padding:20px 32px 28px;border-top:1px solid #f1f5f9;">
@@ -187,7 +260,7 @@ function buildEmailHtml(businessName: string, highlights: Highlight[]): string {
 </html>`;
 }
 
-function buildEmailText(businessName: string, highlights: Highlight[]): string {
+function buildEmailText(businessName: string, highlights: Highlight[], sparklineData: SparklineRow[]): string {
   const lines: string[] = [
     `Weekly Referral Channel Digest — ${businessName}`,
     `Last 30 days vs the prior 30 days`,
@@ -200,6 +273,18 @@ function buildEmailText(businessName: string, highlights: Highlight[]): string {
     for (const h of highlights) {
       const label = h.kind === "gainer" ? "Top Gainer" : "Top Decliner";
       lines.push(`${label}: ${h.name} — ${h.current} customers this period (${formatDelta(h.delta)}, ${formatPct(h.pctChange)})`);
+    }
+  }
+
+  if (sparklineData.length > 0) {
+    lines.push("");
+    lines.push("Channel Breakdown — Last 30 Days:");
+    const maxCount = Math.max(...sparklineData.map((r) => r.count));
+    const BAR_CHARS = 20;
+    for (const r of sparklineData) {
+      const filled = Math.max(1, Math.round((r.count / maxCount) * BAR_CHARS));
+      const bar = "█".repeat(filled) + "░".repeat(BAR_CHARS - filled);
+      lines.push(`  ${r.name.padEnd(20)} ${bar}  ${r.count}`);
     }
   }
 
@@ -229,9 +314,10 @@ async function runDigestForMerchant(
   const recent = customers.filter((c) => c.createdAt >= since);
 
   const highlights = computeHighlights(recent as RawCustomer[]);
+  const sparklineData = computeSparklineData(recent as RawCustomer[]);
 
-  const html = buildEmailHtml(businessName, highlights);
-  const text = buildEmailText(businessName, highlights);
+  const html = buildEmailHtml(businessName, highlights, sparklineData);
+  const text = buildEmailText(businessName, highlights, sparklineData);
 
   const result = await sendEmail(merchantId, {
     to: merchantEmail,
