@@ -801,6 +801,7 @@ export default function ProductsPage() {
   const [groupExportOpen, setGroupExportOpen] = useState(false);
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [tagFilter, setTagFilter]       = useState("");
   const [hideCosts, setHideCosts]       = useState(true);
   const [showHideCostsBtn]              = useState(false);
   const [enableGroupPricing]            = useState(false);
@@ -951,6 +952,7 @@ export default function ProductsPage() {
   }, [dialogOpen]);
 
   const products   = productsData?.items || [];
+  const allTags    = [...new Set(products.flatMap((p) => (p as typeof p & { tags?: string[] }).tags ?? []))].sort();
   const categories = (categoriesData as unknown as { id: number; name: string; parentId?: number | null }[]) || [];
 
   /* Sort */
@@ -982,6 +984,10 @@ export default function ProductsPage() {
       if (pt) return pt.slug === typeFilter;
     }
     return (ep.productType ?? "standard") === typeFilter;
+  }).filter((p) => {
+    if (!tagFilter) return true;
+    const ep = p as Product & { tags?: string[] };
+    return (ep.tags ?? []).includes(tagFilter);
   });
 
   const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
@@ -1292,6 +1298,21 @@ export default function ProductsPage() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* All Tags */}
+          {allTags.length > 0 && (
+            <Select value={tagFilter || "all"} onValueChange={(v) => setTagFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All Tags" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {allTags.map((tag) => (
+                  <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {/* Hide / Show Costs — only visible when enabled in Management > Inventory */}
           {showHideCostsBtn && (
