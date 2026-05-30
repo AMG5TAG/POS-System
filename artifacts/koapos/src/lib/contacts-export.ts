@@ -6,7 +6,7 @@ function esc(v: string | null | undefined) {
   return (v ?? "").replace(/[\\,;]/g, (c) => `\\${c}`).replace(/\n/g, "\\n");
 }
 
-function dl(filename: string, content: string, mime: string) {
+export function dl(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -16,7 +16,7 @@ function dl(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-function csvRow(fields: (string | number | null | undefined)[]) {
+export function csvRow(fields: (string | number | null | undefined)[]) {
   return fields
     .map((f) => {
       const s = String(f ?? "");

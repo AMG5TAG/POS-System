@@ -13,6 +13,7 @@ import {
   type HeardFromPeriod,
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
+import { exportHeardFromCSV } from "@/lib/heard-from-export";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -34,7 +35,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
-  TrendingUp, TrendingDown, Minus,
+  TrendingUp, TrendingDown, Minus, Download,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -563,16 +564,28 @@ export default function SettingsCustomersPage() {
                   : `${heardFromData.windowTotal} new customer${heardFromData.windowTotal !== 1 ? "s" : ""} in this window — see which channels are growing or fading.`}
               </CardDescription>
             </div>
-            <Select value={heardFromPeriod} onValueChange={(v) => setHeardFromPeriod(v as HeardFromPeriod)}>
-              <SelectTrigger className="w-[150px] shrink-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {HEARD_FROM_PERIODS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={heardFromBreakdown.length === 0}
+                onClick={() => exportHeardFromCSV(heardFromData, heardFromPeriod)}
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </Button>
+              <Select value={heardFromPeriod} onValueChange={(v) => setHeardFromPeriod(v as HeardFromPeriod)}>
+                <SelectTrigger className="w-[150px] shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HEARD_FROM_PERIODS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {heardFromBreakdown.length === 0 ? (
