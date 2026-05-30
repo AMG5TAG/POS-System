@@ -36,6 +36,7 @@ function tokenize(text: string): string[][] {
   while (pos <= text.length) {
     if (pos === text.length) {
       rows.push(row);
+      row = [];   // prevent the post-loop guard from pushing the same row again
       break;
     }
 
