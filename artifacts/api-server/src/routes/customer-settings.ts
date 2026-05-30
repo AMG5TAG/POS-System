@@ -12,6 +12,7 @@ function fmt(row: typeof customerSettingsTable.$inferSelect) {
     defaultGroup:           row.defaultGroup,
     loyaltyPointsPerDollar: row.loyaltyPointsPerDollar,
     enableLoyalty:          row.enableLoyalty === "true",
+    weeklyDigestOptIn:      row.weeklyDigestOptIn === "true",
     updatedAt:              row.updatedAt,
   };
 }
@@ -48,6 +49,7 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
     defaultGroup:           String(body.defaultGroup ?? "Standard"),
     loyaltyPointsPerDollar: Number(body.loyaltyPointsPerDollar ?? 1),
     enableLoyalty:          String(body.enableLoyalty === false ? "false" : "true"),
+    weeklyDigestOptIn:      String(body.weeklyDigestOptIn === true ? "true" : "false"),
   };
 
   const [existing] = await db.select({ id: customerSettingsTable.id }).from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));

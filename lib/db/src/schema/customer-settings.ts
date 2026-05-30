@@ -9,6 +9,7 @@ export const customerSettingsTable = pgTable("customer_settings", {
   defaultGroup:            text("default_group").notNull().default("Standard"),
   loyaltyPointsPerDollar:  integer("loyalty_points_per_dollar").notNull().default(1),
   enableLoyalty:           text("enable_loyalty").notNull().default("true"),
+  weeklyDigestOptIn:       text("weekly_digest_opt_in").notNull().default("false"),
   updatedAt:               timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

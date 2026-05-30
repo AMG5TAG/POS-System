@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleRecurringInvoices } from "./services/recurringInvoiceScheduler";
 import { scheduleMarketingAutomation } from "./services/marketingAutomationScheduler";
+import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 
 assertVaultKeyConfigured();
@@ -29,6 +30,7 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   scheduleRecurringInvoices(logger);
   scheduleMarketingAutomation(logger);
+  scheduleReferralDigest(logger);
   // Migrate any tokens encrypted under VAULT_ENCRYPTION_KEY_PREVIOUS to the
   // current key first, then invalidate whatever is still unreadable.
   reEncryptVaultEntries()

@@ -37,7 +37,7 @@ import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   ChevronUp, ChevronDown, Radio, PieChart as PieChartIcon,
-  TrendingUp, TrendingDown, Minus, Download, Sparkles, FileSpreadsheet,
+  TrendingUp, TrendingDown, Minus, Download, Sparkles, FileSpreadsheet, Mail,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -827,6 +827,37 @@ export default function SettingsCustomersPage() {
                 )}
               </>
             )}
+          </CardContent>
+        </Card>
+
+        {/* ── Weekly Referral Digest ───────────────────────────────────────── */}
+        <Card id="referral-digest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-primary" />
+              Weekly Referral Digest
+            </CardTitle>
+            <CardDescription>
+              Receive a weekly email summarising your top gaining and fading referral channels over the last 30 days.
+              The email is sent to your account email address. You need an email provider configured in Management → Email for delivery to work.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Send weekly digest email</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Highlights the biggest gainer and decliner each week so you can act on fading channels.
+                </p>
+              </div>
+              <Switch
+                checked={settings.weeklyDigestOptIn}
+                onCheckedChange={(v) => {
+                  save({ weeklyDigestOptIn: v });
+                  toast.success(v ? "Weekly digest enabled" : "Weekly digest disabled");
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
 

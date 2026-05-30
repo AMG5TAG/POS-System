@@ -34,6 +34,7 @@ export interface CustomerSettings {
   loyaltyPointsPerDollar: number;
   enableLoyalty: boolean;
   heardFromSources: HeardFromSource[];
+  weeklyDigestOptIn: boolean;
 }
 
 export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
@@ -65,6 +66,7 @@ const DEFAULT_SETTINGS: CustomerSettings = {
   loyaltyPointsPerDollar: 1,
   enableLoyalty: true,
   heardFromSources: DEFAULT_HEARD_FROM_SOURCES,
+  weeklyDigestOptIn: false,
 };
 
 export function useCustomerSettings() {
