@@ -50,6 +50,7 @@ import type {
   CategoryInput,
   CategoryUpdate,
   CreateLaybyBody,
+  CsvImportResult,
   Customer,
   CustomerFile,
   CustomerFileInput,
@@ -110,6 +111,8 @@ import type {
   GiftCardValidateInput,
   GiftCardValidateResponse,
   HealthStatus,
+  ImportCustomersBody,
+  ImportProductsBody,
   InventoryItem,
   InventoryList,
   InventorySettings,
@@ -1524,6 +1527,79 @@ export const useCreateProduct = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateProductMutationOptions(options));
+    }
+
+export const getImportProductsUrl = () => {
+
+
+
+
+  return `/api/products/import`
+}
+
+/**
+ * @summary Import products from a CSV file (multipart upload, server-side parse)
+ */
+export const importProducts = async (importProductsBody: ImportProductsBody, options?: RequestInit): Promise<CsvImportResult> => {
+    const formData = new FormData();
+formData.append(`file`, importProductsBody.file);
+
+  return customFetch<CsvImportResult>(getImportProductsUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getImportProductsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,{data: BodyType<ImportProductsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,{data: BodyType<ImportProductsBody>}, TContext> => {
+
+const mutationKey = ['importProducts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importProducts>>, {data: BodyType<ImportProductsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importProducts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportProductsMutationResult = NonNullable<Awaited<ReturnType<typeof importProducts>>>
+    export type ImportProductsMutationBody = BodyType<ImportProductsBody>
+    export type ImportProductsMutationError = ErrorType<void>
+
+    /**
+ * @summary Import products from a CSV file (multipart upload, server-side parse)
+ */
+export const useImportProducts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,{data: BodyType<ImportProductsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importProducts>>,
+        TError,
+        {data: BodyType<ImportProductsBody>},
+        TContext
+      > => {
+      return useMutation(getImportProductsMutationOptions(options));
     }
 
 export const getBulkUpdateProductsUrl = () => {
@@ -3135,6 +3211,79 @@ export const useDeleteCustomer = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCustomerMutationOptions(options));
+    }
+
+export const getImportCustomersUrl = () => {
+
+
+
+
+  return `/api/customers/import`
+}
+
+/**
+ * @summary Import customers from a CSV file (multipart upload, server-side parse)
+ */
+export const importCustomers = async (importCustomersBody: ImportCustomersBody, options?: RequestInit): Promise<CsvImportResult> => {
+    const formData = new FormData();
+formData.append(`file`, importCustomersBody.file);
+
+  return customFetch<CsvImportResult>(getImportCustomersUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getImportCustomersMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importCustomers>>, TError,{data: BodyType<ImportCustomersBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importCustomers>>, TError,{data: BodyType<ImportCustomersBody>}, TContext> => {
+
+const mutationKey = ['importCustomers'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importCustomers>>, {data: BodyType<ImportCustomersBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importCustomers(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportCustomersMutationResult = NonNullable<Awaited<ReturnType<typeof importCustomers>>>
+    export type ImportCustomersMutationBody = BodyType<ImportCustomersBody>
+    export type ImportCustomersMutationError = ErrorType<void>
+
+    /**
+ * @summary Import customers from a CSV file (multipart upload, server-side parse)
+ */
+export const useImportCustomers = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importCustomers>>, TError,{data: BodyType<ImportCustomersBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importCustomers>>,
+        TError,
+        {data: BodyType<ImportCustomersBody>},
+        TContext
+      > => {
+      return useMutation(getImportCustomersMutationOptions(options));
     }
 
 export const getGenerateMissingReferralCodesUrl = () => {

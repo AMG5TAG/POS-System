@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull, inArray } from "drizzle-orm";
 import crypto from "node:crypto";
+import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import {
@@ -21,6 +22,7 @@ import {
   DeleteCustomerParams,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -165,13 +167,45 @@ router.post("/customers/generate-referral-codes", requireAuth, async (req, res):
 
 /* ── CSV Import ──────────────────────────────────────────────────────────────── */
 
-router.post("/customers/import", requireAuth, async (req, res): Promise<void> => {
+const CUSTOMER_HEADER_MAP: Record<string, string> = {
+  first_name: "firstName",  firstname: "firstName",
+  last_name:  "lastName",   lastname:  "lastName",
+  email: "email",           email_address: "email",
+  phone: "phone",           phone_number: "phone",  mobile: "phone",
+  address: "address",       billing_address: "address",
+  loyalty_points: "loyaltyPoints", loyaltypoints: "loyaltyPoints", points: "loyaltyPoints",
+  group: "customerGroup",   customer_group: "customerGroup",  customergroup: "customerGroup",
+  notes: "notes",           note: "notes",  comments: "notes",
+};
+
+const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+router.post("/customers/import", requireAuth, uploadMemory.single("file"), async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const rows = req.body?.rows;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    res.status(400).json({ error: "rows must be a non-empty array" }); return;
+
+  if (!req.file) {
+    res.status(400).json({ error: "No CSV file uploaded (field name: file)" }); return;
   }
 
+  // ── Parse CSV server-side ──────────────────────────────────────────────────
+  let rawRows: Record<string, string>[];
+  try {
+    const parsed = parseCsvBuffer(req.file.buffer);
+    if (parsed.length === 0) { res.status(400).json({ error: "CSV file is empty or has no data rows" }); return; }
+    // Normalise header keys to camelCase using the header map
+    const firstKeys = Object.keys(parsed[0]);
+    const normKeys  = normaliseHeaders(firstKeys, CUSTOMER_HEADER_MAP);
+    rawRows = parsed.map((row) => {
+      const out: Record<string, string> = {};
+      firstKeys.forEach((k, i) => { out[normKeys[i]] = row[k] ?? ""; });
+      return out;
+    });
+  } catch (err) {
+    req.log.error({ err }, "Customer CSV parse failed");
+    res.status(400).json({ error: "Failed to parse CSV file" }); return;
+  }
+
+  // ── Load existing emails for deduplication ─────────────────────────────────
   const existingEmailRows = await db
     .select({ email: customersTable.email })
     .from(customersTable)
@@ -180,53 +214,92 @@ router.post("/customers/import", requireAuth, async (req, res): Promise<void> =>
     existingEmailRows.map((r) => r.email?.toLowerCase().trim()).filter(Boolean) as string[],
   );
 
-  let imported = 0;
-  let skipped  = 0;
+  // ── Validate & build insert set ────────────────────────────────────────────
   const errors: { row: number; message: string }[] = [];
+  const seenEmails = new Set<string>(); // within-file duplicate tracking
 
-  for (let i = 0; i < rows.length; i++) {
-    const row       = rows[i] as Record<string, unknown>;
+  type InsertRow = {
+    rowNum: number;
+    firstName: string | null; lastName: string | null; email: string | null;
+    phone: string | null; address: string | null; notes: string | null;
+    customerGroup: string; loyaltyPoints: number;
+  };
+  const toInsert: InsertRow[] = [];
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row       = rawRows[i];
     const rowNum    = i + 1;
-    const firstName = String(row.firstName ?? "").trim();
-    const lastName  = String(row.lastName  ?? "").trim();
-    const email     = String(row.email     ?? "").trim().toLowerCase();
-    const phone     = String(row.phone     ?? "").trim();
-    const address   = String(row.address   ?? "").trim();
-    const notes     = String(row.notes     ?? "").trim();
-    const customerGroup  = String(row.customerGroup ?? "Standard").trim() || "Standard";
-    const loyaltyPoints  = Math.max(0, parseInt(String(row.loyaltyPoints ?? "0")) || 0);
+    const firstName = (row.firstName ?? "").trim();
+    const lastName  = (row.lastName  ?? "").trim();
+    const email     = (row.email     ?? "").trim().toLowerCase();
+    const phone     = (row.phone     ?? "").trim();
+    const address   = (row.address   ?? "").trim();
+    const notes     = (row.notes     ?? "").trim();
+    const customerGroup = (row.customerGroup ?? "Standard").trim() || "Standard";
+    const loyaltyPoints = Math.max(0, parseInt(row.loyaltyPoints ?? "0") || 0);
 
     if (!firstName && !lastName && !email && !phone) {
       errors.push({ row: rowNum, message: "At least one of first name, last name, email, or phone is required" });
-      skipped++; continue;
+      continue;
     }
     if (email && existingEmails.has(email)) {
       errors.push({ row: rowNum, message: `Email already exists: ${email}` });
-      skipped++; continue;
+      continue;
     }
+    if (email && seenEmails.has(email)) {
+      errors.push({ row: rowNum, message: `Duplicate email in file: ${email}` });
+      continue;
+    }
+    if (email) seenEmails.add(email);
 
-    try {
-      const code = await uniqueReferralCode(merchantId, firstName || null, lastName || null);
-      await db.insert(customersTable).values({
-        merchantId,
-        firstName:    firstName || null,
-        lastName:     lastName  || null,
-        email:        email     || null,
-        phone:        phone     || null,
-        address:      address   || null,
-        notes:        notes     || null,
-        customerGroup,
-        loyaltyPoints,
-        portalToken:  crypto.randomUUID(),
-        referralCode: code,
-      });
-      if (email) existingEmails.add(email);
-      imported++;
-    } catch (err) {
-      req.log.error({ err, rowNum }, "Customer CSV import row failed");
-      errors.push({ row: rowNum, message: "Database error inserting row" });
-      skipped++;
+    toInsert.push({ rowNum, firstName: firstName || null, lastName: lastName || null,
+      email: email || null, phone: phone || null, address: address || null,
+      notes: notes || null, customerGroup, loyaltyPoints });
+    if (email) existingEmails.add(email); // prevent later rows in same file from matching
+  }
+
+  if (toInsert.length === 0) {
+    res.json({ imported: 0, skipped: rawRows.length, errors }); return;
+  }
+
+  // ── Generate referral codes, then bulk insert ──────────────────────────────
+  const usedCodes = new Set<string>();
+  const insertValues: (typeof customersTable.$inferInsert)[] = [];
+
+  for (const r of toInsert) {
+    let code: string;
+    for (let attempt = 0; attempt < 15; attempt++) {
+      code = generateReferralCode(r.firstName, r.lastName);
+      const alreadyInDb = await db.select({ id: customersTable.id }).from(customersTable)
+        .where(and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, code)))
+        .limit(1);
+      if (alreadyInDb.length === 0 && !usedCodes.has(code)) { usedCodes.add(code); break; }
     }
+    code! ??= `KOA${crypto.randomBytes(3).toString("hex").toUpperCase().slice(0, 5)}`;
+    insertValues.push({
+      merchantId,
+      firstName:    r.firstName,
+      lastName:     r.lastName,
+      email:        r.email,
+      phone:        r.phone,
+      address:      r.address,
+      notes:        r.notes,
+      customerGroup: r.customerGroup,
+      loyaltyPoints: r.loyaltyPoints,
+      portalToken:  crypto.randomUUID(),
+      referralCode: code!,
+    });
+  }
+
+  let imported = 0;
+  const skipped = rawRows.length - toInsert.length;
+
+  try {
+    await db.insert(customersTable).values(insertValues);
+    imported = insertValues.length;
+  } catch (err) {
+    req.log.error({ err }, "Customer CSV bulk insert failed");
+    res.status(500).json({ error: "Database error during bulk insert" }); return;
   }
 
   res.json({ imported, skipped, errors });

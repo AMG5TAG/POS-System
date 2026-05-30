@@ -172,7 +172,7 @@ function parseAndValidateCSV(text: string, entity: "customer" | "product"): Pars
   const normalizedHdrs  = rawHeaders.map(normalizeHeaderKey);
   const colMap          = normalizedHdrs.map((h) => config.headerMap[h] ?? h);
 
-  return lines.slice(1).map((line, i) => {
+  const rows = lines.slice(1).map((line, i) => {
     const cells: string[] = parseCSVLine(line);
     const normalized: Record<string, string> = {};
     colMap.forEach((fieldKey, idx) => {
@@ -180,6 +180,27 @@ function parseAndValidateCSV(text: string, entity: "customer" | "product"): Pars
     });
     return { index: i + 1, normalized, errors: config.validate(normalized) };
   });
+
+  // Within-file duplicate detection
+  const seenEmails = new Set<string>();
+  const seenSkus   = new Set<string>();
+  for (const row of rows) {
+    if (entity === "customer") {
+      const email = row.normalized.email?.trim().toLowerCase();
+      if (email) {
+        if (seenEmails.has(email)) row.errors.push(`Duplicate email in file: ${email}`);
+        else seenEmails.add(email);
+      }
+    } else {
+      const sku = row.normalized.sku?.trim().toLowerCase();
+      if (sku) {
+        if (seenSkus.has(sku)) row.errors.push(`Duplicate SKU in file: ${sku}`);
+        else seenSkus.add(sku);
+      }
+    }
+  }
+
+  return rows;
 }
 
 /* ─── Component ──────────────────────────────────────────────────────────────── */
@@ -198,6 +219,7 @@ export function CsvImportDialog({ entity, open, onOpenChange, onSuccess }: CsvIm
 
   const [step, setParsedRows_step] = useState<"upload" | "preview" | "importing">("upload");
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [rawFile, setRawFile]       = useState<File | null>(null);
   const [fileName, setFileName]     = useState("");
   const [dragOver, setDragOver]     = useState(false);
   const fileInputRef                = useRef<HTMLInputElement>(null);
@@ -209,6 +231,7 @@ export function CsvImportDialog({ entity, open, onOpenChange, onSuccess }: CsvIm
     const t = setTimeout(() => {
       setStep("upload");
       setParsedRows([]);
+      setRawFile(null);
       setFileName("");
       setDragOver(false);
     }, 200);
@@ -228,6 +251,7 @@ export function CsvImportDialog({ entity, open, onOpenChange, onSuccess }: CsvIm
         toast.error("No data rows found in the CSV — check the file has a header row and at least one data row");
         return;
       }
+      setRawFile(file);
       setParsedRows(rows);
       setFileName(file.name);
       setStep("preview");
@@ -259,14 +283,15 @@ export function CsvImportDialog({ entity, open, onOpenChange, onSuccess }: CsvIm
 
   const handleImport = async () => {
     const validRows = parsedRows.filter((r) => r.errors.length === 0);
-    if (validRows.length === 0) return;
+    if (validRows.length === 0 || !rawFile) return;
     setStep("importing");
     try {
+      const formData = new FormData();
+      formData.append("file", rawFile, rawFile.name);
       const response = await fetch(config.apiPath, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: validRows.map((r) => r.normalized) }),
+        body: formData,
       });
       if (!response.ok) {
         const body = await response.text().catch(() => "");

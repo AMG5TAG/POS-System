@@ -2,7 +2,9 @@ import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
+import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
+import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -310,12 +312,43 @@ router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void
 
 /* ── CSV Import ──────────────────────────────────────────────────────────────── */
 
+const PRODUCT_HEADER_MAP: Record<string, string> = {
+  name: "name",             product_name: "name",
+  category: "category",    category_name: "category",
+  price: "price",           selling_price: "price",
+  cost_price: "costPrice",  cost: "costPrice",  costprice: "costPrice",
+  sku: "sku",               sku_number: "sku",  item_code: "sku",
+  barcode: "barcode",       upc: "barcode",  ean: "barcode",
+  stock_quantity: "stockQuantity", stock: "stockQuantity",
+  quantity: "stockQuantity", qty: "stockQuantity",
+  track_inventory: "trackInventory", track: "trackInventory", trackinventory: "trackInventory",
+};
+
+const uploadMemoryProducts = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
 // IMPORTANT: registered before /products/:id so "import" is not captured as :id param
-router.post("/products/import", requireAuth, async (req, res): Promise<void> => {
+router.post("/products/import", requireAuth, uploadMemoryProducts.single("file"), async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const rows = req.body?.rows;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    res.status(400).json({ error: "rows must be a non-empty array" }); return;
+
+  if (!req.file) {
+    res.status(400).json({ error: "No CSV file uploaded (field name: file)" }); return;
+  }
+
+  // ── Parse CSV server-side ──────────────────────────────────────────────────
+  let rawRows: Record<string, string>[];
+  try {
+    const parsed = parseCsvBuffer(req.file.buffer);
+    if (parsed.length === 0) { res.status(400).json({ error: "CSV file is empty or has no data rows" }); return; }
+    const firstKeys = Object.keys(parsed[0]);
+    const normKeys  = normaliseHeaders(firstKeys, PRODUCT_HEADER_MAP);
+    rawRows = parsed.map((row) => {
+      const out: Record<string, string> = {};
+      firstKeys.forEach((k, i) => { out[normKeys[i]] = row[k] ?? ""; });
+      return out;
+    });
+  } catch (err) {
+    req.log.error({ err }, "Product CSV parse failed");
+    res.status(400).json({ error: "Failed to parse CSV file" }); return;
   }
 
   const [standardType] = await db
@@ -340,74 +373,86 @@ router.post("/products/import", requireAuth, async (req, res): Promise<void> => 
     .where(eq(categoriesTable.merchantId, merchantId));
   const catByName = new Map(catRows.map((c) => [c.name.toLowerCase().trim(), c]));
 
-  let imported = 0;
-  let skipped  = 0;
+  // ── Validate rows ──────────────────────────────────────────────────────────
   const errors: { row: number; message: string }[] = [];
+  const seenSkus = new Set<string>(); // within-file duplicate tracking
 
-  for (let i = 0; i < rows.length; i++) {
-    const row          = rows[i] as Record<string, unknown>;
+  type ValidRow = {
+    name: string; categoryName: string; priceRaw: number; costRaw: number;
+    sku: string; barcode: string; stockQty: number; trackInv: boolean;
+  };
+  const toInsert: ValidRow[] = [];
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row          = rawRows[i];
     const rowNum       = i + 1;
-    const name         = String(row.name         ?? "").trim();
-    const categoryName = String(row.category     ?? "").trim();
-    const priceRaw     = parseFloat(String(row.price ?? ""));
-    const costStr      = String(row.costPrice ?? "").trim();
+    const name         = (row.name         ?? "").trim();
+    const categoryName = (row.category     ?? "").trim();
+    const priceRaw     = parseFloat(row.price ?? "");
+    const costStr      = (row.costPrice ?? "").trim();
     const costRaw      = costStr !== "" ? parseFloat(costStr) : NaN;
-    const sku          = String(row.sku      ?? "").trim();
-    const barcode      = String(row.barcode  ?? "").trim();
-    const stockQty     = Math.max(0, parseInt(String(row.stockQuantity ?? "0")) || 0);
-    const trackStr     = String(row.trackInventory ?? "true").toLowerCase().trim();
+    const sku          = (row.sku      ?? "").trim();
+    const barcode      = (row.barcode  ?? "").trim();
+    const stockQty     = Math.max(0, parseInt(row.stockQuantity ?? "0") || 0);
+    const trackStr     = (row.trackInventory ?? "true").toLowerCase().trim();
     const trackInv     = !["false", "no", "0"].includes(trackStr);
 
     if (!name) {
-      errors.push({ row: rowNum, message: "Product name is required" });
-      skipped++; continue;
+      errors.push({ row: rowNum, message: "Product name is required" }); continue;
     }
     if (isNaN(priceRaw) || priceRaw < 0) {
-      errors.push({ row: rowNum, message: "Price must be a valid number ≥ 0" });
-      skipped++; continue;
+      errors.push({ row: rowNum, message: "Price must be a valid number ≥ 0" }); continue;
     }
     if (sku && existingSkus.has(sku.toLowerCase())) {
-      errors.push({ row: rowNum, message: `SKU already exists: ${sku}` });
-      skipped++; continue;
+      errors.push({ row: rowNum, message: `SKU already exists: ${sku}` }); continue;
     }
-
-    let categoryId: number | null = null;
-    if (categoryName) {
-      const existing = catByName.get(categoryName.toLowerCase());
-      if (existing) {
-        categoryId = existing.id;
-      } else {
-        try {
-          const [newCat] = await db.insert(categoriesTable).values({ merchantId, name: categoryName }).returning();
-          catByName.set(categoryName.toLowerCase(), newCat);
-          categoryId = newCat.id;
-        } catch {
-          /* ignore — product will be imported without category */
-        }
-      }
+    if (sku && seenSkus.has(sku.toLowerCase())) {
+      errors.push({ row: rowNum, message: `Duplicate SKU in file: ${sku}` }); continue;
     }
+    if (sku) seenSkus.add(sku.toLowerCase());
 
+    toInsert.push({ name, categoryName, priceRaw, costRaw, sku, barcode, stockQty, trackInv });
+    if (sku) existingSkus.add(sku.toLowerCase());
+  }
+
+  if (toInsert.length === 0) {
+    res.json({ imported: 0, skipped: rawRows.length, errors }); return;
+  }
+
+  // ── Resolve / create categories ────────────────────────────────────────────
+  for (const r of toInsert) {
+    if (!r.categoryName) continue;
+    if (catByName.has(r.categoryName.toLowerCase())) continue;
     try {
-      await db.insert(productsTable).values({
-        merchantId,
-        name,
-        price:          priceRaw.toString(),
-        costPrice:      !isNaN(costRaw) ? costRaw.toString() : null,
-        sku:            sku     || null,
-        barcode:        barcode || null,
-        categoryId,
-        stockQuantity:  stockQty,
-        trackInventory: trackInv ? "true" : "false",
-        isActive:       "true",
-        productTypeId:  standardType.id,
-      });
-      if (sku) existingSkus.add(sku.toLowerCase());
-      imported++;
-    } catch (err) {
-      req.log.error({ err, rowNum }, "Product CSV import row failed");
-      errors.push({ row: rowNum, message: "Database error inserting row" });
-      skipped++;
-    }
+      const [newCat] = await db.insert(categoriesTable).values({ merchantId, name: r.categoryName }).returning();
+      catByName.set(r.categoryName.toLowerCase(), newCat);
+    } catch { /* ignore — product will be imported without category */ }
+  }
+
+  // ── Bulk insert all valid products ─────────────────────────────────────────
+  const insertValues: (typeof productsTable.$inferInsert)[] = toInsert.map((r) => ({
+    merchantId,
+    name:           r.name,
+    price:          r.priceRaw.toString(),
+    costPrice:      !isNaN(r.costRaw) ? r.costRaw.toString() : null,
+    sku:            r.sku     || null,
+    barcode:        r.barcode || null,
+    categoryId:     r.categoryName ? (catByName.get(r.categoryName.toLowerCase())?.id ?? null) : null,
+    stockQuantity:  r.stockQty,
+    trackInventory: r.trackInv ? "true" : "false",
+    isActive:       "true",
+    productTypeId:  standardType.id,
+  }));
+
+  let imported = 0;
+  const skipped = rawRows.length - toInsert.length;
+
+  try {
+    await db.insert(productsTable).values(insertValues);
+    imported = insertValues.length;
+  } catch (err) {
+    req.log.error({ err }, "Product CSV bulk insert failed");
+    res.status(500).json({ error: "Database error during bulk insert" }); return;
   }
 
   res.json({ imported, skipped, errors });

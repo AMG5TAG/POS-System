@@ -5,6 +5,21 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export type CsvImportResultErrorsItem = {
+  /** 1-based row number in the uploaded CSV */
+  row: number;
+  /** Human-readable reason the row was skipped */
+  message: string;
+};
+
+export interface CsvImportResult {
+  /** Number of rows successfully inserted */
+  imported: number;
+  /** Number of rows skipped (validation failures or duplicates) */
+  skipped: number;
+  errors: CsvImportResultErrorsItem[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -3402,11 +3417,21 @@ offset?: number;
 tag?: string;
 };
 
+export type ImportProductsBody = {
+  /** CSV file — headers normalised server-side (name/price/sku/category/etc.) */
+  file: Blob;
+};
+
 export type ListCustomersParams = {
 search?: string;
 heardFrom?: string;
 limit?: number;
 offset?: number;
+};
+
+export type ImportCustomersBody = {
+  /** CSV file — headers normalised server-side (first_name/email/phone/etc.) */
+  file: Blob;
 };
 
 export type GenerateMissingReferralCodes200 = {

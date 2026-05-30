@@ -366,6 +366,23 @@ export const CreateProductBody = zod.object({
 
 
 /**
+ * @summary Import products from a CSV file (multipart upload, server-side parse)
+ */
+export const ImportProductsBody = zod.object({
+  "file": zod.instanceof(File).describe('CSV file — headers normalised server-side (name\/price\/sku\/category\/etc.)')
+})
+
+export const ImportProductsResponse = zod.object({
+  "imported": zod.number().describe('Number of rows successfully inserted'),
+  "skipped": zod.number().describe('Number of rows skipped (validation failures or duplicates)'),
+  "errors": zod.array(zod.object({
+  "row": zod.number().describe('1-based row number in the uploaded CSV'),
+  "message": zod.string().describe('Human-readable reason the row was skipped')
+}))
+})
+
+
+/**
  * @summary Bulk update or delete products
  */
 export const bulkUpdateProductsBodyIdsMax = 500;
@@ -957,6 +974,23 @@ export const UpdateCustomerResponse = zod.object({
  */
 export const DeleteCustomerParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Import customers from a CSV file (multipart upload, server-side parse)
+ */
+export const ImportCustomersBody = zod.object({
+  "file": zod.instanceof(File).describe('CSV file — headers normalised server-side (first_name\/email\/phone\/etc.)')
+})
+
+export const ImportCustomersResponse = zod.object({
+  "imported": zod.number().describe('Number of rows successfully inserted'),
+  "skipped": zod.number().describe('Number of rows skipped (validation failures or duplicates)'),
+  "errors": zod.array(zod.object({
+  "row": zod.number().describe('1-based row number in the uploaded CSV'),
+  "message": zod.string().describe('Human-readable reason the row was skipped')
+}))
 })
 
 

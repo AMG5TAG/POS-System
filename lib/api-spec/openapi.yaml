@@ -369,6 +369,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Product"
 
+  /products/import:
+    post:
+      operationId: importProducts
+      tags: [products]
+      summary: Import products from a CSV file (multipart upload, server-side parse)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file — headers normalised server-side (name/price/sku/category/etc.)
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+        "400":
+          description: Bad request (missing file, empty CSV, parse error)
+
   /products/bulk:
     patch:
       operationId: bulkUpdateProducts
@@ -781,6 +808,33 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /customers/import:
+    post:
+      operationId: importCustomers
+      tags: [customers]
+      summary: Import customers from a CSV file (multipart upload, server-side parse)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file — headers normalised server-side (first_name/email/phone/etc.)
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+        "400":
+          description: Bad request (missing file, empty CSV, parse error)
 
   /customers/generate-referral-codes:
     post:
@@ -5796,6 +5850,29 @@ paths:
 
 components:
   schemas:
+    CsvImportResult:
+      type: object
+      required: [imported, skipped, errors]
+      properties:
+        imported:
+          type: integer
+          description: Number of rows successfully inserted
+        skipped:
+          type: integer
+          description: Number of rows skipped (validation failures or duplicates)
+        errors:
+          type: array
+          items:
+            type: object
+            required: [row, message]
+            properties:
+              row:
+                type: integer
+                description: 1-based row number in the uploaded CSV
+              message:
+                type: string
+                description: Human-readable reason the row was skipped
+
     HealthStatus:
       type: object
       required: [status]
