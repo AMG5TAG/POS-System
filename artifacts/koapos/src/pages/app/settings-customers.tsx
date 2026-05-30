@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields } from "@/lib/customer-settings";
+import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields, type HeardFromSource, DEFAULT_HEARD_FROM_SOURCES } from "@/lib/customer-settings";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -23,7 +23,9 @@ import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
+  ChevronUp, ChevronDown, Radio,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const CUSTOMER_TABS = [
   { href: "#customer-groups", label: "Customer Groups", icon: Users },
@@ -75,6 +77,12 @@ export default function SettingsCustomersPage() {
   const [editingGroup, setEditingGroup]         = useState<CustomerGroup | null>(null);
   const [groupForm, setGroupForm]               = useState({ name: "", description: "", color: "#3b82f6" });
   const [deleteConfirm, setDeleteConfirm]       = useState<string | null>(null);
+
+  // ── Heard From Sources state ───────────────────────────────────────────────
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
+  const [editingSource, setEditingSource]         = useState<HeardFromSource | null>(null);
+  const [sourceForm, setSourceForm]               = useState({ name: "", requiresDetails: false });
+  const [deleteSourceConfirm, setDeleteSourceConfirm] = useState<string | null>(null);
 
   // ── Bulk duplicates state ──────────────────────────────────────────────────
   const [buckets, setBuckets]           = useState<DuplicateBucket[] | null>(null);
@@ -131,6 +139,54 @@ export default function SettingsCustomersPage() {
 
   const toggleRequired = (key: keyof CustomerRequiredFields, checked: boolean) => {
     save({ requiredFields: { ...settings.requiredFields, [key]: checked } });
+  };
+
+  // ── Heard From Sources handlers ────────────────────────────────────────────
+  const openAddSource = () => {
+    setEditingSource(null);
+    setSourceForm({ name: "", requiresDetails: false });
+    setSourceDialogOpen(true);
+  };
+
+  const openEditSource = (s: HeardFromSource) => {
+    setEditingSource(s);
+    setSourceForm({ name: s.name, requiresDetails: s.requiresDetails });
+    setSourceDialogOpen(true);
+  };
+
+  const saveSource = () => {
+    if (!sourceForm.name.trim()) return;
+    const sources = [...settings.heardFromSources];
+    if (editingSource) {
+      const idx = sources.findIndex(s => s.id === editingSource.id);
+      if (idx >= 0) sources[idx] = { ...editingSource, name: sourceForm.name.trim(), requiresDetails: sourceForm.requiresDetails };
+    } else {
+      sources.push({ id: crypto.randomUUID(), name: sourceForm.name.trim(), requiresDetails: sourceForm.requiresDetails });
+    }
+    save({ heardFromSources: sources });
+    toast.success(editingSource ? "Source updated" : "Source added");
+    setSourceDialogOpen(false);
+  };
+
+  const moveSource = (id: string, dir: -1 | 1) => {
+    const sources = [...settings.heardFromSources];
+    const idx = sources.findIndex(s => s.id === id);
+    const next = idx + dir;
+    if (next < 0 || next >= sources.length) return;
+    [sources[idx], sources[next]] = [sources[next], sources[idx]];
+    save({ heardFromSources: sources });
+  };
+
+  const deleteSource = () => {
+    if (!deleteSourceConfirm) return;
+    save({ heardFromSources: settings.heardFromSources.filter(s => s.id !== deleteSourceConfirm) });
+    toast.success("Source deleted");
+    setDeleteSourceConfirm(null);
+  };
+
+  const resetSourcesToDefault = () => {
+    save({ heardFromSources: DEFAULT_HEARD_FROM_SOURCES });
+    toast.success("Sources reset to defaults");
   };
 
   // ── Bulk duplicates handlers ───────────────────────────────────────────────
@@ -373,6 +429,105 @@ export default function SettingsCustomersPage() {
 
         </div>{/* end col 2 */}
         </div>{/* end 2-col grid */}
+
+        {/* ── Heard From Sources ───────────────────────────────────────────── */}
+        <Card id="heard-from-sources">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-primary" />
+                Heard From Sources
+              </CardTitle>
+              <CardDescription>
+                Referral channels shown in the customer form's "Heard From" dropdown. Sources marked as
+                "Requires details" prompt staff for extra context (e.g. who referred them).
+              </CardDescription>
+            </div>
+            <Button size="sm" className="gap-1.5 shrink-0" onClick={openAddSource}>
+              <Plus className="w-3.5 h-3.5" /> Add Source
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {settings.heardFromSources.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
+                <Radio className="w-8 h-8 opacity-25" />
+                <p className="text-sm">No sources configured.</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={openAddSource}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Source
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={resetSourcesToDefault}>
+                    Reset to defaults
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {settings.heardFromSources.map((s, idx) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-muted/10 hover:bg-muted/20 transition-colors"
+                  >
+                    {/* Reorder arrows */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveSource(s.id, -1)}
+                        disabled={idx === 0}
+                        className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSource(s.id, 1)}
+                        disabled={idx === settings.heardFromSources.length - 1}
+                        className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Name */}
+                    <span className="flex-1 text-sm font-medium">{s.name}</span>
+
+                    {/* Requires-details badge */}
+                    {s.requiresDetails && (
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        Requires details
+                      </Badge>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditSource(s)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteSourceConfirm(s.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground h-7"
+                    onClick={resetSourcesToDefault}
+                  >
+                    Reset to defaults
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ── Bulk Duplicates Resolver ─────────────────────────────────────── */}
         <Card id="bulk-duplicates">
@@ -714,7 +869,7 @@ export default function SettingsCustomersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm Dialog */}
+      {/* Delete Group Confirm Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -727,6 +882,62 @@ export default function SettingsCustomersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
             <Button variant="destructive" onClick={doDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add / Edit Source Dialog */}
+      <Dialog open={sourceDialogOpen} onOpenChange={setSourceDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editingSource ? "Edit Source" : "Add Heard From Source"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Source Name <span className="text-destructive">*</span></Label>
+              <Input
+                value={sourceForm.name}
+                onChange={(e) => setSourceForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Instagram, Walk-in, Radio"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && saveSource()}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Requires details</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Staff will be prompted for extra info when this source is selected.
+                </p>
+              </div>
+              <Switch
+                checked={sourceForm.requiresDetails}
+                onCheckedChange={(v) => setSourceForm(f => ({ ...f, requiresDetails: v }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSourceDialogOpen(false)}>Cancel</Button>
+            <Button onClick={saveSource} disabled={!sourceForm.name.trim()}>
+              {editingSource ? "Update Source" : "Add Source"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Source Confirm Dialog */}
+      <Dialog open={!!deleteSourceConfirm} onOpenChange={() => setDeleteSourceConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Source</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Removing this source won't affect existing customers — their saved "Heard From" value
+            will be preserved as text. New customers won't see this option.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteSourceConfirm(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={deleteSource}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

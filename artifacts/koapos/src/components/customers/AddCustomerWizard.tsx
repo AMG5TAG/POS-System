@@ -272,24 +272,19 @@ export function AddCustomerWizard({
                   <Select value={form.heardFrom} onValueChange={(v) => { setField("heardFrom", v); setField("heardFromDetails", ""); }}>
                     <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Google">Google</SelectItem>
-                      <SelectItem value="Social Media">Social Media</SelectItem>
-                      <SelectItem value="Friend">Friend</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {customerSettings.heardFromSources.map(s => (
+                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
-                {form.heardFrom === "Friend" && (
-                  <Field label="Friend's Name">
-                    <Input value={form.heardFromDetails} onChange={(e) => setField("heardFromDetails", e.target.value)} placeholder="Who referred them?" />
+                {customerSettings.heardFromSources.find(s => s.name === form.heardFrom)?.requiresDetails ? (
+                  <Field label="Details">
+                    <Input value={form.heardFromDetails} onChange={(e) => setField("heardFromDetails", e.target.value)} placeholder="Please specify…" />
                   </Field>
+                ) : (
+                  <div />
                 )}
-                {form.heardFrom === "Other" && (
-                  <Field label="Other Details">
-                    <Input value={form.heardFromDetails} onChange={(e) => setField("heardFromDetails", e.target.value)} placeholder="e.g. Billboard, Flyer..." />
-                  </Field>
-                )}
-                {form.heardFrom !== "Friend" && form.heardFrom !== "Other" && <div />}
               </FieldRow>
               <FieldRow>
                 <Field label="Referral" full>

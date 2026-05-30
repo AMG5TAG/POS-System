@@ -1,0 +1,22 @@
+Act as a Senior QA and Layout Automation Engineer. Fix the printing template discrepancy where creating a new service and reprinting a service form fails to follow the designated visual template.
+
+Execute the following systemic review and alignment steps:
+
+1. Map and Bind Layout Templates (Code Architecture Audit):
+   - Systematically locate all template print sheets and component views under 'artifacts/koapos/src/components/printing/' (e.g., 'service-receipt-template.tsx', 'invoice-print-template.tsx').
+   - Open the "New Service" creation form ('artifacts/koapos/src/pages/app/services-new.tsx') and the "Reprint Service Form" trigger handler.
+   - Explicitly link both actions to the exact same unified, standardized print component wrapper. Ensure that the reprinting function does not call a separate, unformatted raw-text layout fallback.
+
+2. Enforce Strict Style and Structural Alignment:
+   - Ensure the template uses fixed CSS styling (such as inline Tailwind utilities or global print media blocks '@media print') to lock down elements like company logos, business metadata (Urban Forestry / Koastal Komputers), grid lines, signatures, and customer data blocks.
+   - Strip out any dynamic auto-formatting overrides inside the print container that allow the web browser to wrap text unpredictably or rearrange layout structures away from the design template bounds.
+
+3. Programmatic Mock Sales & Print Validation Pass:
+   - Programmatically run a suite of sample data transactions through your test environment:
+     * Generate 1 sample OTC Retail POS sale using various payment methods.
+     * Generate 1 sample New Service booking with custom notes and populated "Heard From" trackers.
+   - Intercept the generated DOM HTML/CSS print string payload for both the initial creation event and the subsequent historical re-print execution hook.
+   - Verify with absolute precision that the structural elements, text sizing, padding heights, and data arrays (Itemized Tables, Customer Referral IDs, Disclaimers) are 100% identical and identically positioned in both layout states.
+
+4. Compile and Certify the Pipeline:
+   - Verify that all dynamic data fields parse safely without rendering blank spaces or throwing structural layout collapses if a field (like dynamic notes) contains long text blocks. Run 'pnpm run typecheck' to certify a completely clean production build.

@@ -21,12 +21,19 @@ export interface CustomerRequiredFields {
   billingAddress: boolean;
 }
 
+export interface HeardFromSource {
+  id: string;
+  name: string;
+  requiresDetails: boolean;
+}
+
 export interface CustomerSettings {
   groups: CustomerGroup[];
   requiredFields: CustomerRequiredFields;
   defaultGroup: string;
   loyaltyPointsPerDollar: number;
   enableLoyalty: boolean;
+  heardFromSources: HeardFromSource[];
 }
 
 export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
@@ -35,6 +42,13 @@ export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
   { id: "wholesale", name: "Wholesale",  description: "Wholesale / reseller customers with discounted pricing", color: "#8b5cf6" },
   { id: "trade",     name: "Trade",      description: "Trade account holders",                                  color: "#10b981" },
   { id: "staff",     name: "Staff",      description: "Team members and staff accounts",                        color: "#ef4444" },
+];
+
+export const DEFAULT_HEARD_FROM_SOURCES: HeardFromSource[] = [
+  { id: "google",       name: "Google",       requiresDetails: false },
+  { id: "social-media", name: "Social Media", requiresDetails: false },
+  { id: "friend",       name: "Friend",       requiresDetails: true  },
+  { id: "other",        name: "Other",        requiresDetails: true  },
 ];
 
 const DEFAULT_SETTINGS: CustomerSettings = {
@@ -50,6 +64,7 @@ const DEFAULT_SETTINGS: CustomerSettings = {
   defaultGroup: "Standard",
   loyaltyPointsPerDollar: 1,
   enableLoyalty: true,
+  heardFromSources: DEFAULT_HEARD_FROM_SOURCES,
 };
 
 export function useCustomerSettings() {
@@ -63,6 +78,7 @@ export function useCustomerSettings() {
         ...raw,
         requiredFields: { ...DEFAULT_SETTINGS.requiredFields, ...(raw.requiredFields ?? {}) },
         groups: (raw.groups as CustomerGroup[]) ?? DEFAULT_CUSTOMER_GROUPS,
+        heardFromSources: (raw.heardFromSources as HeardFromSource[]) ?? DEFAULT_HEARD_FROM_SOURCES,
       }
     : DEFAULT_SETTINGS;
 
