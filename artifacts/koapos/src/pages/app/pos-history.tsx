@@ -340,7 +340,8 @@ function RefundDialog({ tx, onConfirm, isPending, onClose }: RefundDialogProps) 
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
-type SortDir = "asc" | "desc" | null;
+type SortKey = "date" | "total" | "payment" | "customer";
+type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 
 function customerName(tx: Transaction): string {
   const c = tx.customer;
@@ -348,11 +349,48 @@ function customerName(tx: Transaction): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
 }
 
+function SortHeaderButton({
+  label,
+  sortKey,
+  sort,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: SortState;
+  onClick: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(sortKey)}
+      className={cn(
+        "flex items-center gap-1 hover:text-foreground text-left transition-colors",
+        className
+      )}
+    >
+      {label}
+      {active ? (
+        sort.dir === "asc" ? (
+          <ChevronUp className="w-3.5 h-3.5 text-primary" />
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5 text-primary" />
+        )
+      ) : (
+        <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground/50" />
+      )}
+    </button>
+  );
+}
+
 export default function POSHistoryPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [customerSort, setCustomerSort] = useState<SortDir>(null);
+  const [sort, setSort] = useState<SortState>(null);
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
   const [sendTx, setSendTx] = useState<Transaction | null>(null);
   const [reprintTx, setReprintTx] = useState<Transaction | null>(null);
@@ -409,16 +447,40 @@ export default function POSHistoryPage() {
     customerName(tx).toLowerCase().includes(q)
   );
 
-  const transactions = customerSort === null
+  function handleSort(key: SortKey) {
+    setSort((prev) => {
+      if (prev?.key === key) {
+        return prev.dir === "asc" ? { key, dir: "desc" } : null;
+      }
+      return { key, dir: "asc" };
+    });
+  }
+
+  const transactions = sort === null
     ? filtered
     : [...filtered].sort((a, b) => {
-        const na = customerName(a).toLowerCase();
-        const nb = customerName(b).toLowerCase();
-        if (!na && !nb) return 0;
-        if (!na) return 1;
-        if (!nb) return -1;
-        const cmp = na.localeCompare(nb, undefined, { sensitivity: "base" });
-        return customerSort === "asc" ? cmp : -cmp;
+        let cmp = 0;
+        switch (sort.key) {
+          case "date":
+            cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            break;
+          case "total":
+            cmp = (a.total ?? 0) - (b.total ?? 0);
+            break;
+          case "payment":
+            cmp = (a.paymentMethod ?? "").localeCompare(b.paymentMethod ?? "");
+            break;
+          case "customer": {
+            const na = customerName(a).toLowerCase();
+            const nb = customerName(b).toLowerCase();
+            if (!na && !nb) cmp = 0;
+            else if (!na) cmp = 1;
+            else if (!nb) cmp = -1;
+            else cmp = na.localeCompare(nb, undefined, { sensitivity: "base" });
+            break;
+          }
+        }
+        return sort.dir === "asc" ? cmp : -cmp;
       });
 
   return (
@@ -469,30 +531,19 @@ export default function POSHistoryPage() {
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="text-left p-3 font-medium">Receipt</th>
-                  <th className="text-left p-3 font-medium hidden sm:table-cell">Date</th>
-                  <th className="text-left p-3 font-medium hidden lg:table-cell">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCustomerSort((prev) =>
-                          prev === null ? "asc" : prev === "asc" ? "desc" : null
-                        )
-                      }
-                      className="flex items-center gap-1 hover:text-foreground text-left transition-colors"
-                    >
-                      Customer
-                      {customerSort === "asc" ? (
-                        <ChevronUp className="w-3.5 h-3.5 text-primary" />
-                      ) : customerSort === "desc" ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-primary" />
-                      ) : (
-                        <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground/50" />
-                      )}
-                    </button>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">
+                    <SortHeaderButton label="Date" sortKey="date" sort={sort} onClick={handleSort} />
                   </th>
-                  <th className="text-left p-3 font-medium hidden md:table-cell">Payment</th>
+                  <th className="text-left p-3 font-medium hidden lg:table-cell">
+                    <SortHeaderButton label="Customer" sortKey="customer" sort={sort} onClick={handleSort} />
+                  </th>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">
+                    <SortHeaderButton label="Payment" sortKey="payment" sort={sort} onClick={handleSort} />
+                  </th>
                   <th className="text-left p-3 font-medium">Status</th>
-                  <th className="text-right p-3 font-medium">Total</th>
+                  <th className="text-right p-3 font-medium">
+                    <SortHeaderButton label="Total" sortKey="total" sort={sort} onClick={handleSort} className="ml-auto" />
+                  </th>
                   <th className="p-3 w-36" />
                 </tr>
               </thead>
