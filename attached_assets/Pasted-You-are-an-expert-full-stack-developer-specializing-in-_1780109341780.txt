@@ -1,0 +1,28 @@
+You are an expert full-stack developer specializing in POS systems. We are experiencing data persistence and formatting issues in our "koapos" application, and we need to implement a couple of new receipt features. 
+
+Please analyze the codebase, identify the files responsible for sales/receipt data storage, backend API routes, and the frontend UI components, and execute the following fixes and upgrades:
+
+---
+
+### 1. BUG FIX: Missing Product Data on Receipts and History
+- **The Issue:** The receipt history is currently not saving or printing the names/descriptions of the products. It only displays the quantity (qty) and the price.
+- **The Fix:** - Audit the database schema, model, or localStorage/state structure where receipts/sales are saved. Ensure the entire product object (or at least `product_name` / `title`) is being included in the line items array before it is committed to the database or state.
+  - Fix the backend API endpoint (e.g., `POST /api/sales` or similar) to ensure product names are processed and stored.
+  - Update the receipt printing/rendering component (frontend or backend template) so that the product name is properly pulled and displayed next to the quantity and price.
+
+---
+
+### 2. NEW FEATURE: Re-print Receipts from Sales History
+- **The Requirement:** Users need the ability to re-print a receipt directly from the main "Sales History" section.
+- **The Implementation:**
+  - Locate the Sales History / Transactions view component.
+  - Add a clearly labeled "Print" or "Re-print" action button next to each past transaction record.
+  - When clicked, this button should trigger the exact same print layout/functionality used during the initial checkout, populated with that specific transaction's stored data (including the newly fixed product names).
+
+---
+
+### 3. NEW FEATURE: Re-print Receipts from Customer Profile
+- **The Requirement:** Users must also be able to view a customer's specific purchase history and re-print receipts from there.
+- **The Implementation:**
+  - Locate the Customer management/details view.
+  - Ensure there is a dedicated "

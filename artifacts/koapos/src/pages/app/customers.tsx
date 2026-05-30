@@ -37,12 +37,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
+import { printReceipt } from "@/lib/print-receipt";
+import { useBusinessProfile } from "@/lib/business-profile";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
   Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown, Filter,
+  Printer,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -993,6 +996,7 @@ function CustomerDetailInner({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   const queryClient = useQueryClient();
+  const { profile } = useBusinessProfile();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
@@ -1993,6 +1997,24 @@ function CustomerDetailInner({
               )}
             </div>
           )}
+          <DialogFooter className="gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!selectedTx) return;
+                printReceipt(selectedTx, {
+                  abn: profile?.abn ?? "",
+                  website: profile?.website ?? "",
+                  email: profile?.contactEmail ?? "",
+                  brandColor: (profile?.brandColors ?? [])[0] ?? "",
+                });
+              }}
+            >
+              <Printer className="h-4 w-4 mr-1.5" />
+              Print Receipt
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

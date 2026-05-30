@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { printReceipt } from "@/lib/print-receipt";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   completed: "default",
@@ -66,63 +67,7 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
 
   function handleReprint() {
     if (!tx) return;
-
-    const tpl = {
-      showAbn: true, showGstBreakdown: true, showWebsite: true,
-      thankYouMsg: "Thank you for your purchase!",
-      footerText: "", headerText: "",
-    };
-
-    let bizName = "Your Business";
-    let abn = "";
-    let website = "";
-
-    const win = window.open("", "_blank", "width=400,height=600");
-    if (!win) { toast.error("Popup blocked — please allow popups"); return; }
-
-    const items = (txDetail?.items ?? []) as { name?: string; quantity?: number; price?: number }[];
-    const itemRows = items.map((item) => `
-      <div class="row">
-        <span>${item.name ?? ""} × ${item.quantity ?? 1}</span>
-        <span>${new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format((item.price ?? 0) * (item.quantity ?? 1))}</span>
-      </div>`).join("");
-
-    const subtotal = txDetail?.subtotal ?? 0;
-    const taxTotal = txDetail?.taxTotal ?? 0;
-    const total    = tx.total ?? 0;
-    const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
-
-    win.document.write(`
-      <html><head><title>Receipt ${tx.receiptNumber ?? "#" + tx.id}</title>
-      <style>
-        body { font-family: monospace; font-size: 12px; padding: 16px; max-width: 320px; margin: 0 auto; }
-        .row { display: flex; justify-content: space-between; margin: 4px 0; }
-        .bold { font-weight: bold; }
-        .center { text-align: center; }
-        .divider { border-top: 1px dashed #999; margin: 8px 0; }
-        .total { font-size: 14px; font-weight: bold; }
-        .footer-msg { font-size: 11px; color: #666; }
-      </style>
-      </head><body>
-        ${tpl.headerText ? `<div class="center bold" style="margin-bottom:6px">${tpl.headerText}</div>` : ""}
-        <div class="center bold">${bizName}</div>
-        ${tpl.showAbn && abn ? `<div class="center" style="font-size:11px">ABN ${abn}</div>` : ""}
-        <div class="center" style="margin-top:4px">${tx.receiptNumber ?? "#" + tx.id}</div>
-        <div class="divider"></div>
-        ${itemRows}
-        <div class="divider"></div>
-        <div class="row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
-        ${tpl.showGstBreakdown ? `<div class="row"><span>GST incl.</span><span>${fmt(taxTotal)}</span></div>` : ""}
-        <div class="row total"><span>TOTAL</span><span>${fmt(total)}</span></div>
-        <div class="divider"></div>
-        ${tpl.thankYouMsg ? `<div class="center footer-msg" style="margin-top:8px">${tpl.thankYouMsg}</div>` : ""}
-        ${tpl.footerText  ? `<div class="center footer-msg">${tpl.footerText}</div>` : ""}
-        ${tpl.showWebsite && website ? `<div class="center footer-msg">${website}</div>` : ""}
-      </body></html>
-    `);
-    win.document.close();
-    win.focus();
-    win.print();
+    printReceipt(tx);
     toast.success("Receipt sent to printer");
     setSent(true);
     setTimeout(handleClose, 800);
@@ -142,7 +87,7 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
     setTimeout(handleClose, 800);
   }
 
-  const items = (txDetail?.items ?? []) as { name?: string; quantity?: number; price?: number }[];
+  const items = (txDetail?.items ?? []) as { productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number }[];
 
   return (
     <Dialog open={!!tx} onOpenChange={handleClose}>
@@ -193,8 +138,8 @@ function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogPro
                 <div className="divider" />
                 {items.map((item, i) => (
                   <div key={i} className="row">
-                    <span>{item.name} × {item.quantity}</span>
-                    <span>{formatCurrency((item.price ?? 0) * (item.quantity ?? 1))}</span>
+                    <span>{item.productName} × {item.quantity}</span>
+                    <span>{formatCurrency(item.totalPrice ?? (item.unitPrice ?? 0) * (item.quantity ?? 1))}</span>
                   </div>
                 ))}
                 <div className="divider" />
@@ -304,10 +249,10 @@ function ReceiptDialog({ tx, txDetail, onClose }: ReceiptDialogProps) {
         {txDetail && (
           <div className="space-y-3 text-sm">
             <div className="border rounded-lg divide-y">
-              {(txDetail.items ?? []).map((item: { name?: string; quantity?: number; price?: number }, i: number) => (
+              {(txDetail.items ?? []).map((item: { productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number }, i: number) => (
                 <div key={i} className="flex justify-between p-2">
-                  <span>{item.name} × {item.quantity}</span>
-                  <span>{formatCurrency((item.price ?? 0) * (item.quantity ?? 1))}</span>
+                  <span>{item.productName} × {item.quantity}</span>
+                  <span>{formatCurrency(item.totalPrice ?? (item.unitPrice ?? 0) * (item.quantity ?? 1))}</span>
                 </div>
               ))}
             </div>
