@@ -1,6 +1,11 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff } from "@workspace/api-client-react";
+import {
+  useListStaff,
+  useListRosterShifts, useCreateRosterShift, useDeleteRosterShift,
+  useListLeaveRequests, useCreateLeaveRequest, useUpdateLeaveRequest,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +30,7 @@ import {
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 interface RosterShift {
-  id: string;
+  id: number;
   staffId: string;
   date: string;        // YYYY-MM-DD
   startTime: string;   // HH:MM
@@ -37,7 +42,7 @@ type LeaveType = "annual" | "sick" | "personal" | "unpaid" | "public_holiday";
 type LeaveStatus = "pending" | "approved" | "declined";
 
 interface LeaveRequest {
-  id: string;
+  id: number;
   staffId: string;
   staffName: string;
   type: LeaveType;
@@ -47,14 +52,6 @@ interface LeaveRequest {
   status: LeaveStatus;
   createdAt: string;
 }
-
-/* ─── Data storage ───────────────────────────────────────────────────────── */
-
-function loadShifts(): RosterShift[] { return []; }
-function saveShifts(_s: RosterShift[]) { /* no-op */ }
-
-function loadLeave(): LeaveRequest[] { return []; }
-function saveLeave(_l: LeaveRequest[]) { /* no-op */ }
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 
@@ -163,14 +160,23 @@ function ShiftDialog({
 const today = new Date();
 
 export default function StaffRosteringPage() {
+  const queryClient = useQueryClient();
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string }[];
+
+  const { data: shiftsData } = useListRosterShifts({ query: { queryKey: ["roster-shifts"] } });
+  const { data: leavesData } = useListLeaveRequests({ query: { queryKey: ["leave-requests"] } });
+  const shifts: RosterShift[] = ((shiftsData as { items?: RosterShift[] } | undefined)?.items ?? []);
+  const leaves: LeaveRequest[] = ((leavesData as { items?: LeaveRequest[] } | undefined)?.items ?? []);
+
+  const createShiftMutation = useCreateRosterShift({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roster-shifts"] }) } });
+  const deleteShiftMutation = useDeleteRosterShift({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roster-shifts"] }) } });
+  const createLeaveMutation = useCreateLeaveRequest({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["leave-requests"] }) } });
+  const updateLeaveMutation = useUpdateLeaveRequest({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["leave-requests"] }) } });
 
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [shifts, setShifts]   = useState<RosterShift[]>(loadShifts);
-  const [leaves, setLeaves]   = useState<LeaveRequest[]>(loadLeave);
   const [shiftOpen, setShiftOpen] = useState(false);
 
   /* Leave form */
@@ -198,9 +204,18 @@ export default function StaffRosteringPage() {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
 
-  const persistShifts = (next: RosterShift[]) => { setShifts(next); saveShifts(next); };
-  const addShift = (s: Omit<RosterShift, "id">) => { persistShifts([...shifts, { ...s, id: crypto.randomUUID() }]); toast.success("Shift added"); };
-  const removeShift = (id: string) => { persistShifts(shifts.filter((s) => s.id !== id)); };
+  const addShift = (s: Omit<RosterShift, "id">) => {
+    createShiftMutation.mutate(
+      { data: { shiftId: crypto.randomUUID(), staffId: s.staffId, date: s.date, startTime: s.startTime, endTime: s.endTime, note: s.note } },
+      { onSuccess: () => toast.success("Shift added"), onError: () => toast.error("Failed to add shift") },
+    );
+  };
+  const removeShift = (id: number) => {
+    deleteShiftMutation.mutate(
+      { id },
+      { onError: () => toast.error("Failed to remove shift") },
+    );
+  };
 
   const selectedShifts = selectedDate ? (shiftsByDate.get(selectedDate) ?? []) : [];
 
@@ -212,27 +227,23 @@ export default function StaffRosteringPage() {
     if (leaveForm.startDate > leaveForm.endDate) {
       toast.error("End date must be on or after start date"); return;
     }
-    const req: LeaveRequest = {
-      id: crypto.randomUUID(),
-      staffId: leaveForm.staffId,
-      staffName: member?.name ?? "Unknown",
-      type: leaveForm.type,
-      startDate: leaveForm.startDate,
-      endDate: leaveForm.endDate,
-      reason: leaveForm.reason,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    const next = [...leaves, req];
-    setLeaves(next); saveLeave(next);
-    setLeaveForm({ staffId: "", type: "annual", startDate: "", endDate: "", reason: "" });
-    toast.success("Leave request submitted");
+    createLeaveMutation.mutate(
+      { data: { requestId: crypto.randomUUID(), staffId: leaveForm.staffId, staffName: member?.name ?? "Unknown", type: leaveForm.type, startDate: leaveForm.startDate, endDate: leaveForm.endDate, reason: leaveForm.reason, status: "pending" } },
+      {
+        onSuccess: () => {
+          setLeaveForm({ staffId: "", type: "annual", startDate: "", endDate: "", reason: "" });
+          toast.success("Leave request submitted");
+        },
+        onError: () => toast.error("Failed to submit leave request"),
+      },
+    );
   };
 
-  const updateLeaveStatus = (id: string, status: LeaveStatus) => {
-    const next = leaves.map((l) => l.id === id ? { ...l, status } : l);
-    setLeaves(next); saveLeave(next);
-    toast.success(`Request ${status}`);
+  const updateLeaveStatus = (id: number, status: LeaveStatus) => {
+    updateLeaveMutation.mutate(
+      { id, data: { status } },
+      { onSuccess: () => toast.success(`Request ${status}`), onError: () => toast.error("Failed to update request") },
+    );
   };
 
   return (

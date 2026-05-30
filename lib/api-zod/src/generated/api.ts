@@ -6484,6 +6484,111 @@ export const UpdateStaffRosteringSettingsResponse = zod.object({
 
 
 /**
+ * @summary List roster shifts
+ */
+export const ListRosterShiftsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "shiftId": zod.string(),
+  "staffId": zod.string(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "note": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create roster shift
+ */
+export const CreateRosterShiftBody = zod.object({
+  "shiftId": zod.string(),
+  "staffId": zod.string(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "note": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete roster shift
+ */
+export const DeleteRosterShiftParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List leave requests
+ */
+export const ListLeaveRequestsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "requestId": zod.string(),
+  "staffId": zod.string(),
+  "staffName": zod.string(),
+  "type": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "reason": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create leave request
+ */
+export const CreateLeaveRequestBody = zod.object({
+  "requestId": zod.string(),
+  "staffId": zod.string(),
+  "staffName": zod.string(),
+  "type": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "reason": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+
+/**
+ * @summary Update leave request status
+ */
+export const UpdateLeaveRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLeaveRequestBody = zod.object({
+  "status": zod.string()
+})
+
+export const UpdateLeaveRequestResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "requestId": zod.string(),
+  "staffId": zod.string(),
+  "staffName": zod.string(),
+  "type": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "reason": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List staff links
  */
 export const ListStaffLinksResponse = zod.object({

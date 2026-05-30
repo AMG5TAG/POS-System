@@ -3285,6 +3285,68 @@ export interface ReferralDigestSendResult {
   email: string;
 }
 
+export interface RosterShiftItem {
+  id: number;
+  merchantId: number;
+  shiftId: string;
+  staffId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RosterShiftInput {
+  shiftId: string;
+  staffId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  note?: string;
+}
+
+export interface RosterShiftListResponse {
+  items: RosterShiftItem[];
+  total: number;
+}
+
+export interface LeaveRequestItem {
+  id: number;
+  merchantId: number;
+  requestId: string;
+  staffId: string;
+  staffName: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveRequestInput {
+  requestId: string;
+  staffId: string;
+  staffName: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status?: string;
+}
+
+export interface LeaveRequestUpdateInput {
+  status: string;
+}
+
+export interface LeaveRequestListResponse {
+  items: LeaveRequestItem[];
+  total: number;
+}
+
 export interface AppleOAuthCallbackBody {
   /** Authorization code issued by Apple */
   code?: string;

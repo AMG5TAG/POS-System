@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useListTransactions } from "@workspace/api-client-react";
+import { useListStaff, useListTransactions, useListKpiTargets } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,8 +31,21 @@ interface KpiTarget {
   reward: KpiReward | null; notes: string; isActive: boolean;
 }
 
-function loadKpiTargets(): KpiTarget[] {
-  return [];
+function mapKpiTarget(r: {
+  id: number; targetId: string; name: string; metric: string; categoryId: string;
+  period: string; target: number; staffIds: string; reward: string; notes: string; isActive: string;
+}): KpiTarget {
+  let staffIds: string[] = [];
+  let reward: KpiReward | null = null;
+  try { staffIds = typeof r.staffIds === "string" ? JSON.parse(r.staffIds) : []; } catch { staffIds = []; }
+  try { reward = typeof r.reward === "string" ? JSON.parse(r.reward) : null; } catch { reward = null; }
+  return {
+    id: String(r.id), name: r.name,
+    metric: r.metric as KpiMetric, categoryId: r.categoryId ?? "",
+    period: r.period as KpiPeriod, target: r.target,
+    staffIds, reward, notes: r.notes ?? "",
+    isActive: String(r.isActive) !== "false",
+  };
 }
 
 /* ─── Metric metadata ────────────────────────────────────────────────────── */
@@ -129,7 +142,12 @@ export default function StaffKpisPage() {
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; role?: string }[];
   const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string }[];
 
-  const targets = useMemo(() => loadKpiTargets().filter((t) => t.isActive), []);
+  const { data: kpiData } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
+  const rawTargets = (kpiData as { items?: unknown[] } | undefined)?.items ?? [];
+  const targets = useMemo(
+    () => (rawTargets as Parameters<typeof mapKpiTarget>[0][]).map(mapKpiTarget).filter((t) => t.isActive),
+    [rawTargets],
+  );
 
   /* Compute actual store-level values */
   const completedTx = txList.filter((t) => t.status === "completed");

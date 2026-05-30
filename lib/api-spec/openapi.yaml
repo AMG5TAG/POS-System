@@ -4913,6 +4913,96 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/StaffRosteringSettings" }
 
+  /roster-shifts:
+    get:
+      operationId: listRosterShifts
+      summary: List roster shifts
+      tags: [roster-shifts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RosterShiftListResponse" }
+    post:
+      operationId: createRosterShift
+      summary: Create roster shift
+      tags: [roster-shifts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RosterShiftInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RosterShiftItem" }
+
+  /roster-shifts/{id}:
+    delete:
+      operationId: deleteRosterShift
+      summary: Delete roster shift
+      tags: [roster-shifts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: No Content
+
+  /leave-requests:
+    get:
+      operationId: listLeaveRequests
+      summary: List leave requests
+      tags: [leave-requests]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeaveRequestListResponse" }
+    post:
+      operationId: createLeaveRequest
+      summary: Create leave request
+      tags: [leave-requests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRequestInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeaveRequestItem" }
+
+  /leave-requests/{id}:
+    patch:
+      operationId: updateLeaveRequest
+      summary: Update leave request status
+      tags: [leave-requests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRequestUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeaveRequestItem" }
+
   /staff-links:
     get:
       operationId: listStaffLinks
@@ -9849,6 +9939,86 @@ components:
       properties:
         sent:  { type: boolean }
         email: { type: string }
+
+    RosterShiftItem:
+      type: object
+      required: [id, merchantId, shiftId, staffId, date, startTime, endTime, note, createdAt, updatedAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        shiftId:     { type: string }
+        staffId:     { type: string }
+        date:        { type: string }
+        startTime:   { type: string }
+        endTime:     { type: string }
+        note:        { type: string }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    RosterShiftInput:
+      type: object
+      required: [shiftId, staffId, date, startTime, endTime]
+      properties:
+        shiftId:   { type: string }
+        staffId:   { type: string }
+        date:      { type: string }
+        startTime: { type: string }
+        endTime:   { type: string }
+        note:      { type: string }
+
+    RosterShiftListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RosterShiftItem" }
+        total: { type: integer }
+
+    LeaveRequestItem:
+      type: object
+      required: [id, merchantId, requestId, staffId, staffName, type, startDate, endDate, reason, status, createdAt, updatedAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        requestId:   { type: string }
+        staffId:     { type: string }
+        staffName:   { type: string }
+        type:        { type: string }
+        startDate:   { type: string }
+        endDate:     { type: string }
+        reason:      { type: string }
+        status:      { type: string }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    LeaveRequestInput:
+      type: object
+      required: [requestId, staffId, staffName, type, startDate, endDate]
+      properties:
+        requestId:  { type: string }
+        staffId:    { type: string }
+        staffName:  { type: string }
+        type:       { type: string }
+        startDate:  { type: string }
+        endDate:    { type: string }
+        reason:     { type: string }
+        status:     { type: string }
+
+    LeaveRequestUpdateInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+
+    LeaveRequestListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LeaveRequestItem" }
+        total: { type: integer }
 
     AppleOAuthCallbackBody:
       type: object

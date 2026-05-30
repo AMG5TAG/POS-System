@@ -126,6 +126,10 @@ import type {
   LaybyPayment,
   LaybySettings,
   LaybySettingsInput,
+  LeaveRequestInput,
+  LeaveRequestItem,
+  LeaveRequestListResponse,
+  LeaveRequestUpdateInput,
   ListAppointmentsParams,
   ListBrandsParams,
   ListCameraSnapshotsParams,
@@ -243,6 +247,9 @@ import type {
   RegionalExtSettings,
   RegionalExtSettingsInput,
   RegisterInput,
+  RosterShiftInput,
+  RosterShiftItem,
+  RosterShiftListResponse,
   SalesDataPoint,
   SalesSummaryReport,
   SalesTemplate,
@@ -20523,6 +20530,444 @@ export const useUpdateStaffRosteringSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateStaffRosteringSettingsMutationOptions(options));
+    }
+
+export const getListRosterShiftsUrl = () => {
+
+
+
+
+  return `/api/roster-shifts`
+}
+
+/**
+ * @summary List roster shifts
+ */
+export const listRosterShifts = async ( options?: RequestInit): Promise<RosterShiftListResponse> => {
+
+  return customFetch<RosterShiftListResponse>(getListRosterShiftsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRosterShiftsQueryKey = () => {
+    return [
+    `/api/roster-shifts`
+    ] as const;
+    }
+
+
+export const getListRosterShiftsQueryOptions = <TData = Awaited<ReturnType<typeof listRosterShifts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRosterShifts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRosterShiftsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRosterShifts>>> = ({ signal }) => listRosterShifts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRosterShifts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRosterShiftsQueryResult = NonNullable<Awaited<ReturnType<typeof listRosterShifts>>>
+export type ListRosterShiftsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List roster shifts
+ */
+
+export function useListRosterShifts<TData = Awaited<ReturnType<typeof listRosterShifts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRosterShifts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRosterShiftsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateRosterShiftUrl = () => {
+
+
+
+
+  return `/api/roster-shifts`
+}
+
+/**
+ * @summary Create roster shift
+ */
+export const createRosterShift = async (rosterShiftInput: RosterShiftInput, options?: RequestInit): Promise<RosterShiftItem> => {
+
+  return customFetch<RosterShiftItem>(getCreateRosterShiftUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rosterShiftInput,)
+  }
+);}
+
+
+
+
+export const getCreateRosterShiftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRosterShift>>, TError,{data: BodyType<RosterShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createRosterShift>>, TError,{data: BodyType<RosterShiftInput>}, TContext> => {
+
+const mutationKey = ['createRosterShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRosterShift>>, {data: BodyType<RosterShiftInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createRosterShift(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRosterShiftMutationResult = NonNullable<Awaited<ReturnType<typeof createRosterShift>>>
+    export type CreateRosterShiftMutationBody = BodyType<RosterShiftInput>
+    export type CreateRosterShiftMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create roster shift
+ */
+export const useCreateRosterShift = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRosterShift>>, TError,{data: BodyType<RosterShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createRosterShift>>,
+        TError,
+        {data: BodyType<RosterShiftInput>},
+        TContext
+      > => {
+      return useMutation(getCreateRosterShiftMutationOptions(options));
+    }
+
+export const getDeleteRosterShiftUrl = (id: number,) => {
+
+
+
+
+  return `/api/roster-shifts/${id}`
+}
+
+/**
+ * @summary Delete roster shift
+ */
+export const deleteRosterShift = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteRosterShiftUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteRosterShiftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRosterShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRosterShift>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteRosterShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRosterShift>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteRosterShift(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRosterShiftMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRosterShift>>>
+
+    export type DeleteRosterShiftMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete roster shift
+ */
+export const useDeleteRosterShift = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRosterShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRosterShift>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteRosterShiftMutationOptions(options));
+    }
+
+export const getListLeaveRequestsUrl = () => {
+
+
+
+
+  return `/api/leave-requests`
+}
+
+/**
+ * @summary List leave requests
+ */
+export const listLeaveRequests = async ( options?: RequestInit): Promise<LeaveRequestListResponse> => {
+
+  return customFetch<LeaveRequestListResponse>(getListLeaveRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeaveRequestsQueryKey = () => {
+    return [
+    `/api/leave-requests`
+    ] as const;
+    }
+
+
+export const getListLeaveRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listLeaveRequests>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeaveRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeaveRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeaveRequests>>> = ({ signal }) => listLeaveRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeaveRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeaveRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listLeaveRequests>>>
+export type ListLeaveRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List leave requests
+ */
+
+export function useListLeaveRequests<TData = Awaited<ReturnType<typeof listLeaveRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeaveRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeaveRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateLeaveRequestUrl = () => {
+
+
+
+
+  return `/api/leave-requests`
+}
+
+/**
+ * @summary Create leave request
+ */
+export const createLeaveRequest = async (leaveRequestInput: LeaveRequestInput, options?: RequestInit): Promise<LeaveRequestItem> => {
+
+  return customFetch<LeaveRequestItem>(getCreateLeaveRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      leaveRequestInput,)
+  }
+);}
+
+
+
+
+export const getCreateLeaveRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeaveRequest>>, TError,{data: BodyType<LeaveRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLeaveRequest>>, TError,{data: BodyType<LeaveRequestInput>}, TContext> => {
+
+const mutationKey = ['createLeaveRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLeaveRequest>>, {data: BodyType<LeaveRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLeaveRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLeaveRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createLeaveRequest>>>
+    export type CreateLeaveRequestMutationBody = BodyType<LeaveRequestInput>
+    export type CreateLeaveRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create leave request
+ */
+export const useCreateLeaveRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeaveRequest>>, TError,{data: BodyType<LeaveRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLeaveRequest>>,
+        TError,
+        {data: BodyType<LeaveRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLeaveRequestMutationOptions(options));
+    }
+
+export const getUpdateLeaveRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/leave-requests/${id}`
+}
+
+/**
+ * @summary Update leave request status
+ */
+export const updateLeaveRequest = async (id: number,
+    leaveRequestUpdateInput: LeaveRequestUpdateInput, options?: RequestInit): Promise<LeaveRequestItem> => {
+
+  return customFetch<LeaveRequestItem>(getUpdateLeaveRequestUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      leaveRequestUpdateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateLeaveRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeaveRequest>>, TError,{id: number;data: BodyType<LeaveRequestUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLeaveRequest>>, TError,{id: number;data: BodyType<LeaveRequestUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateLeaveRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLeaveRequest>>, {id: number;data: BodyType<LeaveRequestUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLeaveRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLeaveRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateLeaveRequest>>>
+    export type UpdateLeaveRequestMutationBody = BodyType<LeaveRequestUpdateInput>
+    export type UpdateLeaveRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update leave request status
+ */
+export const useUpdateLeaveRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeaveRequest>>, TError,{id: number;data: BodyType<LeaveRequestUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLeaveRequest>>,
+        TError,
+        {id: number;data: BodyType<LeaveRequestUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLeaveRequestMutationOptions(options));
     }
 
 export const getListStaffLinksUrl = () => {
