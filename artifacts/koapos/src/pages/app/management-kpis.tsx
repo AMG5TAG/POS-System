@@ -439,14 +439,15 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementKpisPage() {
-  const { data: rawTargets = [], refetch: refetchTargets } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
+  const { data: kpiListData, refetch: refetchTargets } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const { data: rawSettings } = useGetKpiSettings({ query: { queryKey: ["kpi-settings"] } });
   const createTarget = useCreateKpiTarget();
   const updateTarget = useUpdateKpiTarget();
   const deleteTarget = useDeleteKpiTarget();
   const upsertSettings = useUpsertKpiSettings();
 
-  const targets: KpiTarget[] = (rawTargets as Record<string, unknown>[]).map(apiToTarget);
+  const rawItems = kpiListData?.items ?? [];
+  const targets: KpiTarget[] = (rawItems as unknown as Record<string, unknown>[]).map(apiToTarget);
   const settingsRaw = rawSettings as Record<string, unknown> | undefined;
   const trackCategories   = settingsRaw ? String(settingsRaw.trackCategories)   !== "false" : true;
   const trackAppointments = settingsRaw ? String(settingsRaw.trackAppointments) !== "false" : true;
