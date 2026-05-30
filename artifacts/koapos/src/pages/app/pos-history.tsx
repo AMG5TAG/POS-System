@@ -25,7 +25,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   History, Eye, CreditCard, Banknote, Search,
   Send, Printer, Mail, MessageSquare, Check, X,
-  RotateCcw, Trash2,
+  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -340,10 +340,19 @@ function RefundDialog({ tx, onConfirm, isPending, onClose }: RefundDialogProps) 
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+type SortDir = "asc" | "desc" | null;
+
+function customerName(tx: Transaction): string {
+  const c = tx.customer;
+  if (!c) return "";
+  return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+}
+
 export default function POSHistoryPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [customerSort, setCustomerSort] = useState<SortDir>(null);
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
   const [sendTx, setSendTx] = useState<Transaction | null>(null);
   const [reprintTx, setReprintTx] = useState<Transaction | null>(null);
@@ -392,11 +401,25 @@ export default function POSHistoryPage() {
     },
   });
 
-  const transactions = (txData?.items ?? []).filter((tx) =>
-    !search ||
-    tx.receiptNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    String(tx.total).includes(search)
+  const q = search.toLowerCase();
+  const filtered = (txData?.items ?? []).filter((tx) =>
+    !q ||
+    tx.receiptNumber?.toLowerCase().includes(q) ||
+    String(tx.total).includes(q) ||
+    customerName(tx).toLowerCase().includes(q)
   );
+
+  const transactions = customerSort === null
+    ? filtered
+    : [...filtered].sort((a, b) => {
+        const na = customerName(a).toLowerCase();
+        const nb = customerName(b).toLowerCase();
+        if (!na && !nb) return 0;
+        if (!na) return 1;
+        if (!nb) return -1;
+        const cmp = na.localeCompare(nb, undefined, { sensitivity: "base" });
+        return customerSort === "asc" ? cmp : -cmp;
+      });
 
   return (
     <AppLayout>
@@ -447,6 +470,26 @@ export default function POSHistoryPage() {
                 <tr>
                   <th className="text-left p-3 font-medium">Receipt</th>
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Date</th>
+                  <th className="text-left p-3 font-medium hidden lg:table-cell">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCustomerSort((prev) =>
+                          prev === null ? "asc" : prev === "asc" ? "desc" : null
+                        )
+                      }
+                      className="flex items-center gap-1 hover:text-foreground text-left transition-colors"
+                    >
+                      Customer
+                      {customerSort === "asc" ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-primary" />
+                      ) : customerSort === "desc" ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-primary" />
+                      ) : (
+                        <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground/50" />
+                      )}
+                    </button>
+                  </th>
                   <th className="text-left p-3 font-medium hidden md:table-cell">Payment</th>
                   <th className="text-left p-3 font-medium">Status</th>
                   <th className="text-right p-3 font-medium">Total</th>
@@ -458,6 +501,13 @@ export default function POSHistoryPage() {
                   <tr key={tx.id} className="bg-background hover:bg-muted/20 transition-colors">
                     <td className="p-3 font-mono text-xs font-medium">{tx.receiptNumber || `#${tx.id}`}</td>
                     <td className="p-3 hidden sm:table-cell text-muted-foreground text-xs">{formatDate(tx.createdAt)}</td>
+                    <td className="p-3 hidden lg:table-cell max-w-[160px]">
+                      {customerName(tx) ? (
+                        <span className="truncate block">{customerName(tx)}</span>
+                      ) : (
+                        <span className="text-muted-foreground/50 text-xs italic">Walk-in</span>
+                      )}
+                    </td>
                     <td className="p-3 hidden md:table-cell">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         {tx.paymentMethod === "card"
