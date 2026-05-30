@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Boxes, AlertTriangle, ShoppingCart,
   ChevronUp, ChevronDown, ChevronsUpDown, Plus, Minus,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Search, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -70,6 +70,7 @@ type ReorderLines = Record<number, { qty: number; unitCost: string; selected: bo
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [showLowStock, setShowLowStock] = useState(false);
+  const [search, setSearch]             = useState("");
   const [page, setPage]                 = useState(1);
   const [editingItem, setEditingItem]   = useState<InventoryItem | null>(null);
   const [editForm, setEditForm]         = useState({ stockQuantity: "", lowStockThreshold: "" });
@@ -84,13 +85,13 @@ export default function InventoryPage() {
   const [reorderNotes, setReorderNotes] = useState("");
   const [poSaving, setPoSaving]         = useState(false);
 
-  /* Reset to page 1 when filter changes */
-  useEffect(() => { setPage(1); }, [showLowStock]);
+  /* Reset to page 1 when filter/search changes */
+  useEffect(() => { setPage(1); }, [showLowStock, search]);
 
   /* ── Main paginated list for the table ── */
   const { data: inventoryData, isLoading } = useListInventory(
-    { lowStock: showLowStock || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
-    { query: { queryKey: ["inventory", showLowStock, page] } }
+    { lowStock: showLowStock || undefined, search: search || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
+    { query: { queryKey: ["inventory", showLowStock, search, page] } }
   );
 
   /* ── Always-fetched low-stock list for count badge + reorder dialog ── */
@@ -232,7 +233,7 @@ export default function InventoryPage() {
             <h1 className="text-2xl font-bold">Inventory</h1>
             <p className="text-sm text-muted-foreground">Track stock levels, manage replenishment, and monitor low-stock items.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {lowStockCount > 0 && (
               <Button variant="outline" size="sm"
                 className="gap-1.5 border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
@@ -253,6 +254,26 @@ export default function InventoryPage() {
           </div>
         </div>
 
+        {/* Search bar */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search products…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Loading inventory...</div>
         ) : items.length === 0 ? (
@@ -261,10 +282,12 @@ export default function InventoryPage() {
               <Boxes className="w-16 h-16 text-muted-foreground/30" />
               <div>
                 <p className="font-medium text-lg">
-                  {showLowStock ? "No low stock items" : "No inventory tracked"}
+                  {search ? "No products match your search" : showLowStock ? "No low stock items" : "No inventory tracked"}
                 </p>
                 <p className="text-muted-foreground text-sm">
-                  {showLowStock
+                  {search
+                    ? `No products found for "${search}".`
+                    : showLowStock
                     ? "All products are sufficiently stocked."
                     : "Enable inventory tracking on your products to manage stock here."}
                 </p>

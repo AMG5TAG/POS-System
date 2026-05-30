@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, productsTable, productTypesTable } from "@workspace/db";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, ilike } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ListInventoryQueryParams, UpdateInventoryParams, UpdateInventoryBody } from "@workspace/api-zod";
 
@@ -13,7 +13,7 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { lowStock, limit = 50, offset = 0 } = queryParams.data;
+  const { lowStock, search, limit = 50, offset = 0 } = queryParams.data;
   const merchantId = req.session.merchantId!;
 
   const [serviceType] = await db.select({ id: productTypesTable.id })
@@ -28,6 +28,7 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
     serviceType ? ne(productsTable.productTypeId, serviceType.id) : undefined,
     lowStock ? eq(productsTable.trackInventory, "true") : undefined,
     lowStock ? sql`${productsTable.stockQuantity} <= COALESCE(${productsTable.lowStockThreshold}, 5)` : undefined,
+    search ? ilike(productsTable.name, `%${search}%`) : undefined,
   );
 
   const [products, countResult] = await Promise.all([

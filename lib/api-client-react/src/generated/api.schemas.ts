@@ -3396,6 +3396,7 @@ status?: string;
 
 export type ListInventoryParams = {
 lowStock?: boolean;
+search?: string;
 limit?: number;
 offset?: number;
 };

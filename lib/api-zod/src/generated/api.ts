@@ -1997,6 +1997,7 @@ export const GetLoyaltyLeaderboardResponse = zod.object({
  */
 export const ListInventoryQueryParams = zod.object({
   "lowStock": zod.coerce.boolean().optional(),
+  "search": zod.coerce.string().optional(),
   "limit": zod.coerce.number().optional(),
   "offset": zod.coerce.number().optional()
 })

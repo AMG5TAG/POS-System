@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useGetDashboardCalendar, CalendarDay, CalendarAppointment, CalendarBirthday } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +29,12 @@ interface SelectedDay {
 
 function DayAppointmentsDialog({
   appts,
+  timezone,
   onSelect,
   onClose,
 }: {
   appts: CalendarAppointment[];
+  timezone: string;
   onSelect: (a: CalendarAppointment) => void;
   onClose: () => void;
 }) {
@@ -46,7 +49,7 @@ function DayAppointmentsDialog({
         <div className="space-y-2 pt-2 max-h-80 overflow-y-auto">
           {sorted.map((appt) => {
             const time = new Date(appt.scheduledAt).toLocaleTimeString("en-AU", {
-              hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney",
+              hour: "2-digit", minute: "2-digit", timeZone: timezone,
             });
             const statusColor =
               appt.status === "completed" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
@@ -82,9 +85,9 @@ function DayAppointmentsDialog({
   );
 }
 
-function AppointmentDialog({ appt, onClose }: { appt: CalendarAppointment; onClose: () => void }) {
+function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointment; timezone: string; onClose: () => void }) {
   const time = new Date(appt.scheduledAt).toLocaleTimeString("en-AU", {
-    hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney"
+    hour: "2-digit", minute: "2-digit", timeZone: timezone,
   });
   const statusColor = appt.status === "completed" ? "bg-emerald-100 text-emerald-700" :
                       appt.status === "cancelled" ? "bg-red-100 text-red-700" :
@@ -265,6 +268,8 @@ function DayCell({
 }
 
 export function DashboardCalendar() {
+  const { user } = useAuth();
+  const tz = user?.timezone ?? "Australia/Sydney";
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -387,11 +392,12 @@ export function DashboardCalendar() {
       </Card>
 
       {selectedAppt && (
-        <AppointmentDialog appt={selectedAppt} onClose={() => setSelectedAppt(null)} />
+        <AppointmentDialog appt={selectedAppt} timezone={tz} onClose={() => setSelectedAppt(null)} />
       )}
       {selectedDayAppts && (
         <DayAppointmentsDialog
           appts={selectedDayAppts}
+          timezone={tz}
           onSelect={setSelectedAppt}
           onClose={() => setSelectedDayAppts(null)}
         />
