@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   useCreateCustomer,
   useUpdateCustomer,
@@ -9,6 +9,11 @@ import {
 } from "@workspace/api-client-react";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -107,6 +112,8 @@ export function AddCustomerWizard({
   const [step, setStep] = useState<Step>("personal");
   const [referralOpen, setReferralOpen] = useState(false);
   const [referralQuery, setReferralQuery] = useState("");
+  const [pendingClose, setPendingClose] = useState(false);
+  const initialFormRef = useRef<CustomerForm>(defaultForm);
 
   const { data: allCustomersData } = useListCustomers({ limit: 500 });
   const allCustomers = useMemo(() => (allCustomersData?.items ?? []) as Customer[], [allCustomersData]);
@@ -116,9 +123,10 @@ export function AddCustomerWizard({
 
   useEffect(() => {
     if (!open) return;
+    let initialForm: CustomerForm;
     if (editingCustomer) {
       const c = editingCustomer;
-      setForm({
+      initialForm = {
         firstName: c.firstName || "", lastName: c.lastName || "",
         email: c.email || "", phone: c.phone || "",
         whatsappSameAsPhone: c.whatsappSameAsPhone === "true",
@@ -135,20 +143,25 @@ export function AddCustomerWizard({
         agreedToMarketing: c.agreedToMarketing === "true", notes: c.notes || "",
         heardFrom: c.heardFrom || "", heardFromDetails: c.heardFromDetails || "",
         referredByCustomerId: c.referredByCustomerId ? String(c.referredByCustomerId) : "",
-      });
+      };
     } else {
       const parts = (prefillName ?? "").trim().split(/\s+/).filter(Boolean);
-      setForm({
+      initialForm = {
         ...defaultForm,
         billingCountry: defaultCountryName,
         shippingCountry: defaultCountryName,
         firstName: parts[0] ?? "",
         lastName: parts.slice(1).join(" "),
-      });
+      };
     }
+    initialFormRef.current = initialForm;
+    setForm(initialForm);
     setStep("personal");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCustomer, prefillName]);
+
+  const isDirty = open && JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
+  const { ConfirmDialog: CustomerNavGuard } = useUnsavedChangesGuard(isDirty);
 
   const setField = <K extends keyof CustomerForm>(key: K, value: CustomerForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -207,8 +220,14 @@ export function AddCustomerWizard({
   const goNext = () => { if (!isLast) setStep(STEPS[currentIndex + 1]); else handleSave(); };
   const goBack = () => { if (currentIndex > 0) setStep(STEPS[currentIndex - 1]); };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isDirty) { setPendingClose(true); return; }
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
         {/* Header — locked, never scrolls */}
         <div className="px-6 pt-5 pb-4 shrink-0 border-b">
@@ -565,5 +584,25 @@ export function AddCustomerWizard({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Unsaved changes guard — page navigation */}
+    <CustomerNavGuard />
+
+    {/* Unsaved changes guard — dialog close (Escape / click outside) */}
+    <AlertDialog open={pendingClose} onOpenChange={setPendingClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved changes. If you close now, your changes will be lost.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setPendingClose(false)}>Stay on page</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setPendingClose(false); onOpenChange(false); }}>Discard changes</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import {
   useListProducts,
   useListCategories,
@@ -799,9 +800,11 @@ function getSuggestedTags(categoryName: string): string[] {
 export default function ProductsPage() {
   const queryClient = useQueryClient();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const initialProductFormRef = useRef<ProductForm>(defaultForm);
   const [search, setSearch]             = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
+  const [pendingProductClose, setPendingProductClose] = useState(false);
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
@@ -987,6 +990,9 @@ export default function ProductsPage() {
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: floorPlanZones } = useListFloorPlanZones();
   const createMutation   = useCreateProduct();
+  const isDirtyProduct = dialogOpen && JSON.stringify(form) !== JSON.stringify(initialProductFormRef.current);
+  const { ConfirmDialog: ProductNavGuard } = useUnsavedChangesGuard(isDirtyProduct);
+
   const updateMutation   = useUpdateProduct();
   const deleteMutation   = useDeleteProduct();
   const createCategoryMutation = useCreateCategory();
@@ -1044,13 +1050,14 @@ export default function ProductsPage() {
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
+    initialProductFormRef.current = defaultForm;
     setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
     setEditingProduct(p);
     const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; productTypeId?: number | null; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
-    setForm({
+    const editForm: ProductForm = {
       name: p.name, description: p.description || "",
       price: p.price.toString(), costPrice: p.costPrice?.toString() || "",
       sku: p.sku || "", barcode: ep.barcode || "",
@@ -1077,7 +1084,9 @@ export default function ProductsPage() {
       isEpay: ep.isEpay ?? false,
       stockLocationDisplay: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
       stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
-    });
+    };
+    initialProductFormRef.current = editForm;
+    setForm(editForm);
     const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
     setPcPartType(_c?.partType || "");
     setPcSocket(_c?.socket || "");
@@ -1824,7 +1833,10 @@ export default function ProductsPage() {
       />
 
       {/* ─── Add / Edit Product dialog ─────────────────────────────────────── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        if (!open && isDirtyProduct) { setPendingProductClose(true); return; }
+        setDialogOpen(open);
+      }}>
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
@@ -2889,7 +2901,10 @@ export default function ProductsPage() {
               <div />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => {
+                if (isDirtyProduct) { setPendingProductClose(true); return; }
+                setDialogOpen(false);
+              }}>Cancel</Button>
               <Button
                 onClick={handleSave}
                 disabled={createMutation.isPending || updateMutation.isPending}
@@ -2900,6 +2915,25 @@ export default function ProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Unsaved product changes guard (page navigation) ───────────────── */}
+      <ProductNavGuard />
+
+      {/* ─── Unsaved product changes guard (dialog close) ──────────────────── */}
+      <AlertDialog open={pendingProductClose} onOpenChange={setPendingProductClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. If you close now, your changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingProductClose(false)}>Stay on page</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setPendingProductClose(false); setDialogOpen(false); }}>Discard changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── CSV Import ────────────────────────────────────────────────────── */}
       <CsvImportDialog
