@@ -456,61 +456,98 @@ function StaffLoginMessageToggle() {
 
 /* ─── Role Discount Limits section ──────────────────────────────────────── */
 
-type RoleDiscountLimits = { cashier?: number | null; manager?: number | null; owner?: number | null };
+type RoleDiscountEntry = { hardCap: number | null; approvalThreshold: number | null };
+type RoleDiscountLimits = { cashier?: RoleDiscountEntry; manager?: RoleDiscountEntry; owner?: RoleDiscountEntry };
 
 const DISCOUNT_ROLES: { key: keyof RoleDiscountLimits; label: string; description: string }[] = [
   { key: "cashier",  label: "Cashier",  description: "Staff members with the cashier role." },
   { key: "manager",  label: "Manager",  description: "Staff members with the manager role." },
-  { key: "owner",    label: "Owner",    description: "Business owners — leave blank to allow unlimited." },
+  { key: "owner",    label: "Owner",    description: "Business owners — leave blank for no limit." },
 ];
+
+function parseRoleDiscountLimits(raw: string): Record<string, RoleDiscountEntry> {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: Record<string, RoleDiscountEntry> = {};
+    for (const [role, val] of Object.entries(parsed)) {
+      if (typeof val === "number") {
+        result[role] = { hardCap: val, approvalThreshold: null };
+      } else if (val == null) {
+        result[role] = { hardCap: null, approvalThreshold: null };
+      } else if (typeof val === "object") {
+        const v = val as { hardCap?: number | null; approvalThreshold?: number | null };
+        result[role] = { hardCap: v.hardCap ?? null, approvalThreshold: v.approvalThreshold ?? null };
+      }
+    }
+    return result;
+  } catch { return {}; }
+}
+
+function parsePctField(raw: string): { ok: true; value: number | null } | { ok: false } {
+  const trimmed = raw.trim();
+  if (trimmed === "") return { ok: true, value: null };
+  const v = parseFloat(trimmed);
+  if (isNaN(v) || v < 0 || v > 100) return { ok: false };
+  return { ok: true, value: parseFloat(v.toFixed(2)) };
+}
 
 function RoleDiscountLimitsSection() {
   const { settings, upsert } = usePosSettings();
 
-  const limits = useMemo((): RoleDiscountLimits => {
-    try {
-      if (settings?.roleDiscountLimits) return JSON.parse(settings.roleDiscountLimits) as RoleDiscountLimits;
-    } catch { /* ignore */ }
+  const limits = useMemo((): Record<string, RoleDiscountEntry> => {
+    if (settings?.roleDiscountLimits) return parseRoleDiscountLimits(settings.roleDiscountLimits);
     return {};
   }, [settings]);
 
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [hardCapDrafts,    setHardCapDrafts]    = useState<Record<string, string>>({});
+  const [approvalDrafts,   setApprovalDrafts]   = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
 
-  const handleChange = (role: string, val: string) => {
-    setDrafts(d => ({ ...d, [role]: val }));
+  const isDirty = (role: string) => role in hardCapDrafts || role in approvalDrafts;
+
+  const handleChange = (role: string, field: "hardCap" | "approvalThreshold", val: string) => {
+    if (field === "hardCap")          { setHardCapDrafts(d  => ({ ...d, [role]: val })); }
+    else                              { setApprovalDrafts(d => ({ ...d, [role]: val })); }
     setSaved(s => ({ ...s, [role]: false }));
   };
 
-  const handleSave = (role: keyof RoleDiscountLimits) => {
-    const raw = drafts[role] ?? "";
-    const trimmed = raw.trim();
-    const next: RoleDiscountLimits = { ...limits };
-    if (trimmed === "") {
-      next[role] = null;
-    } else {
-      const parsed = parseFloat(trimmed);
-      if (isNaN(parsed) || parsed < 0 || parsed > 100) {
-        toast.error("Enter a percentage between 0 and 100, or leave blank for no limit.");
-        return;
-      }
-      next[role] = parseFloat(parsed.toFixed(2));
+  const handleSave = (role: string) => {
+    const rawHardCap    = hardCapDrafts[role]  ?? (limits[role]?.hardCap    != null ? String(limits[role].hardCap)    : "");
+    const rawApproval   = approvalDrafts[role] ?? (limits[role]?.approvalThreshold != null ? String(limits[role].approvalThreshold) : "");
+
+    const hcResult = parsePctField(rawHardCap);
+    if (!hcResult.ok)  { toast.error("Hard cap: enter a percentage 0–100, or leave blank for no limit."); return; }
+    const atResult = parsePctField(rawApproval);
+    if (!atResult.ok)  { toast.error("Approval threshold: enter a percentage 0–100, or leave blank."); return; }
+
+    if (hcResult.value != null && atResult.value != null && atResult.value > hcResult.value) {
+      toast.error("Approval threshold must be less than or equal to the hard cap."); return;
     }
+
+    const entry: RoleDiscountEntry = { hardCap: hcResult.value, approvalThreshold: atResult.value };
+    const next = { ...limits, [role]: entry };
+
     upsert.mutate(
       { data: { roleDiscountLimits: JSON.stringify(next) } },
       {
         onSuccess: () => {
           setSaved(s => ({ ...s, [role]: true }));
-          setDrafts(d => { const n = { ...d }; delete n[role]; return n; });
-          toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} discount limit saved`);
+          setHardCapDrafts(d  => { const n = { ...d }; delete n[role]; return n; });
+          setApprovalDrafts(d => { const n = { ...d }; delete n[role]; return n; });
+          toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} discount limits saved`);
         },
       },
     );
   };
 
-  const getDisplayValue = (role: keyof RoleDiscountLimits): string => {
-    if (role in drafts) return drafts[role];
-    const v = limits[role];
+  const getHardCapDisplay = (role: string): string => {
+    if (role in hardCapDrafts) return hardCapDrafts[role];
+    const v = limits[role]?.hardCap;
+    return v != null ? String(v) : "";
+  };
+  const getApprovalDisplay = (role: string): string => {
+    if (role in approvalDrafts) return approvalDrafts[role];
+    const v = limits[role]?.approvalThreshold;
     return v != null ? String(v) : "";
   };
 
@@ -520,36 +557,60 @@ function RoleDiscountLimitsSection() {
         <ShieldCheck className="w-4 h-4 text-muted-foreground" />
         <div>
           <p className="font-semibold text-sm">Role Discount Limits</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Cap the maximum discount % each role can apply at checkout. Leave blank for no limit.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Set a hard cap and an optional approval threshold per role. Discounts above the threshold require a manager PIN; discounts above the hard cap are blocked entirely. Leave blank for no limit.
+          </p>
         </div>
       </div>
       <div className="divide-y">
         {DISCOUNT_ROLES.map(({ key, label, description }) => (
-          <div key={key} className="flex items-center gap-4 px-5 py-3.5">
-            <div className="flex-1 min-w-0">
+          <div key={key} className="px-5 py-3.5 space-y-2.5">
+            <div>
               <p className="text-sm font-medium">{label}</p>
               <p className="text-xs text-muted-foreground">{description}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative">
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  placeholder="No limit"
-                  value={getDisplayValue(key)}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave(key)}
-                  className="w-28 pr-7 text-sm"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Hard cap %</label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="number" min="0" max="100" step="1"
+                      placeholder="No limit"
+                      value={getHardCapDisplay(key)}
+                      onChange={(e) => handleChange(key, "hardCap", e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSave(key)}
+                      className="pr-7 text-sm"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Blocked beyond this amount.</p>
               </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Require approval above %</label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="number" min="0" max="100" step="1"
+                      placeholder="No approval gate"
+                      value={getApprovalDisplay(key)}
+                      onChange={(e) => handleChange(key, "approvalThreshold", e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSave(key)}
+                      className="pr-7 text-sm"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Manager PIN required above this.</p>
+              </div>
+            </div>
+            <div className="flex justify-end">
               <Button
                 size="sm"
                 variant={saved[key] ? "outline" : "default"}
                 onClick={() => handleSave(key)}
-                disabled={upsert.isPending || !(key in drafts)}
+                disabled={upsert.isPending || !isDirty(key)}
                 className="shrink-0"
               >
                 {saved[key] ? "Saved" : "Save"}

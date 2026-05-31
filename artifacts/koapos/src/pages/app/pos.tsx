@@ -59,7 +59,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
-  WifiOff,
+  WifiOff, ShieldCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -149,9 +149,23 @@ export default function POSPage() {
 
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
-  const roleDiscountLimits = useMemo((): Record<string, number | null> => {
+  const parsedRoleLimits = useMemo((): Record<string, { hardCap: number | null; approvalThreshold: number | null }> => {
     try {
-      if (posSettingsData?.roleDiscountLimits) return JSON.parse(posSettingsData.roleDiscountLimits) as Record<string, number | null>;
+      if (posSettingsData?.roleDiscountLimits) {
+        const raw = JSON.parse(posSettingsData.roleDiscountLimits) as Record<string, unknown>;
+        const result: Record<string, { hardCap: number | null; approvalThreshold: number | null }> = {};
+        for (const [role, val] of Object.entries(raw)) {
+          if (typeof val === "number") {
+            result[role] = { hardCap: val, approvalThreshold: null };
+          } else if (val == null) {
+            result[role] = { hardCap: null, approvalThreshold: null };
+          } else if (typeof val === "object") {
+            const v = val as { hardCap?: number | null; approvalThreshold?: number | null };
+            result[role] = { hardCap: v.hardCap ?? null, approvalThreshold: v.approvalThreshold ?? null };
+          }
+        }
+        return result;
+      }
     } catch { /* ignore */ }
     return {};
   }, [posSettingsData]);
@@ -264,9 +278,25 @@ export default function POSPage() {
   /* max discount % for the currently signed-in staff's role (null = no limit) */
   const maxDiscountPct = useMemo((): number | null => {
     if (!currentStaff?.role) return null;
-    const limit = roleDiscountLimits[currentStaff.role];
-    return (limit != null && !isNaN(limit)) ? limit : null;
-  }, [currentStaff, roleDiscountLimits]);
+    const limit = parsedRoleLimits[currentStaff.role];
+    return (limit?.hardCap != null && !isNaN(limit.hardCap)) ? limit.hardCap : null;
+  }, [currentStaff, parsedRoleLimits]);
+
+  /* approval threshold % — discounts above this but below hardCap require manager PIN */
+  const approvalThresholdPct = useMemo((): number | null => {
+    if (!currentStaff?.role) return null;
+    const limit = parsedRoleLimits[currentStaff.role];
+    return (limit?.approvalThreshold != null && !isNaN(limit.approvalThreshold)) ? limit.approvalThreshold : null;
+  }, [currentStaff, parsedRoleLimits]);
+
+  /* discount approval dialog */
+  type PendingDiscountApproval =
+    | { kind: "overall"; dollarAmt: number; pct: number }
+    | { kind: "item"; productId: number; productName: string; dollarAmt: number; pct: number };
+  const [pendingApproval, setPendingApproval] = useState<PendingDiscountApproval | null>(null);
+  const [discountApprovalOpen, setDiscountApprovalOpen] = useState(false);
+  const [approvalPin, setApprovalPin] = useState("");
+  const [approvalPinError, setApprovalPinError] = useState("");
 
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -1146,7 +1176,7 @@ export default function POSPage() {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      if (paymentModalOpen || pinDialogOpen || quickAddOpen) return;
+      if (paymentModalOpen || pinDialogOpen || quickAddOpen || discountApprovalOpen) return;
       if (e.key === "Enter") {
         const barcode = buffer.trim();
         buffer = "";
@@ -1322,15 +1352,15 @@ export default function POSPage() {
     setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0));
   };
 
-  const setItemDiscount = (productId: number, value: string) => {
+  const setItemDiscount = (productId: number, value: string, bypassRoleLimit = false) => {
     const amt = parseFloat(value) || 0;
     setCart(prev => prev.map(i => {
       if (i.product.id !== productId) return i;
       const linePrice = (i.customPrice ?? i.product.price) * i.quantity;
       const maxByCart = linePrice;
-      const maxByRole = maxDiscountPct != null ? (maxDiscountPct / 100) * linePrice : Infinity;
+      const maxByRole = (!bypassRoleLimit && maxDiscountPct != null) ? (maxDiscountPct / 100) * linePrice : Infinity;
       const clamped = Math.min(Math.max(0, amt), maxByCart, maxByRole);
-      if (clamped < amt) {
+      if (clamped < amt && !bypassRoleLimit) {
         setFlashingItemIds(prev2 => { const n = new Set(prev2); n.add(productId); return n; });
         setTimeout(() => setFlashingItemIds(prev2 => { const n = new Set(prev2); n.delete(productId); return n; }), 600);
       }
@@ -1721,6 +1751,53 @@ export default function POSPage() {
     }
 
     if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
+  };
+
+  const handleDiscountApprovalSubmit = async () => {
+    const authoriser = (staffList as Staff[] ?? []).find(
+      s => s.pin && s.pin === approvalPin && s.isActive && (s.role === "manager" || s.role === "owner"),
+    );
+    if (!authoriser) {
+      setApprovalPinError("Incorrect PIN or staff not authorised to approve discounts.");
+      setApprovalPin("");
+      return;
+    }
+    if (!pendingApproval) return;
+
+    if (pendingApproval.kind === "overall") {
+      setOverallDiscount(String(pendingApproval.dollarAmt));
+      if (overallDiscountMode === "percent") {
+        setOverallDiscountPctInput(String(pendingApproval.pct));
+      }
+    } else {
+      setItemDiscount(pendingApproval.productId, String(pendingApproval.dollarAmt), true);
+      if (itemDiscountModes.has(pendingApproval.productId)) {
+        setItemDiscountPctInputs(p => new Map(p).set(pendingApproval.productId, String(pendingApproval.pct)));
+      }
+    }
+
+    const productName = pendingApproval.kind === "item" ? pendingApproval.productName : "Overall sale";
+    try {
+      await fetch("/api/void-audit", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName,
+          quantity: 1,
+          action: "discount_override",
+          reason: `${pendingApproval.pct.toFixed(1)}% discount approved by ${authoriser.name} (${authoriser.role})`,
+          staffId: authoriser.id,
+          staffName: authoriser.name,
+        }),
+      });
+    } catch { /* non-critical — override applied regardless */ }
+
+    toast.success(`Discount approved by ${authoriser.name}`);
+    setDiscountApprovalOpen(false);
+    setPendingApproval(null);
+    setApprovalPin("");
+    setApprovalPinError("");
   };
 
   const handleCheckout = (
@@ -2482,6 +2559,15 @@ export default function POSPage() {
                                 setItemDiscountPctInputs(p => new Map(p).set(item.product.id, raw));
                                 const maxPct = maxDiscountPct ?? 100;
                                 const rawPct = Math.max(parseFloat(raw) || 0, 0);
+                                if (approvalThresholdPct != null && rawPct > approvalThresholdPct && rawPct <= maxPct) {
+                                  const thresholdDollar = (approvalThresholdPct / 100) * linePrice;
+                                  setItemDiscount(item.product.id, String(thresholdDollar));
+                                  setItemDiscountPctInputs(p => new Map(p).set(item.product.id, String(approvalThresholdPct)));
+                                  setPendingApproval({ kind: "item", productId: item.product.id, productName: item.product.name ?? "Item", dollarAmt: (rawPct / 100) * linePrice, pct: rawPct });
+                                  setApprovalPin(""); setApprovalPinError("");
+                                  setDiscountApprovalOpen(true);
+                                  return;
+                                }
                                 const exceeds = rawPct > maxPct;
                                 const pct = Math.min(rawPct, maxPct);
                                 const dollarAmt = (pct / 100) * linePrice;
@@ -2498,7 +2584,22 @@ export default function POSPage() {
                             <Input
                               type="number" min="0" step="0.50"
                               value={item.itemDiscount || ""}
-                              onChange={(e) => setItemDiscount(item.product.id, e.target.value)}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val) && approvalThresholdPct != null) {
+                                  const thresholdDollar = (approvalThresholdPct / 100) * linePrice;
+                                  const hardCapDollar = maxDiscountPct != null ? (maxDiscountPct / 100) * linePrice : Infinity;
+                                  if (val > thresholdDollar && val <= hardCapDollar) {
+                                    const pct = linePrice > 0 ? (val / linePrice) * 100 : 0;
+                                    setItemDiscount(item.product.id, String(thresholdDollar));
+                                    setPendingApproval({ kind: "item", productId: item.product.id, productName: item.product.name ?? "Item", dollarAmt: val, pct });
+                                    setApprovalPin(""); setApprovalPinError("");
+                                    setDiscountApprovalOpen(true);
+                                    return;
+                                  }
+                                }
+                                setItemDiscount(item.product.id, e.target.value);
+                              }}
                               placeholder="0.00"
                               className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
                             />
@@ -2607,6 +2708,15 @@ export default function POSPage() {
                     const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
                     const maxPct = maxDiscountPct ?? 100;
                     const rawPct = Math.max(parseFloat(raw) || 0, 0);
+                    if (approvalThresholdPct != null && rawPct > approvalThresholdPct && rawPct <= maxPct) {
+                      const thresholdDollar = (approvalThresholdPct / 100) * maxOverall;
+                      setOverallDiscount(String(thresholdDollar));
+                      setOverallDiscountPctInput(String(approvalThresholdPct));
+                      setPendingApproval({ kind: "overall", dollarAmt: (rawPct / 100) * maxOverall, pct: rawPct });
+                      setApprovalPin(""); setApprovalPinError("");
+                      setDiscountApprovalOpen(true);
+                      return;
+                    }
                     const exceeds = rawPct > maxPct;
                     const pct = Math.min(rawPct, maxPct);
                     const dollarAmt = (pct / 100) * maxOverall;
@@ -2629,6 +2739,17 @@ export default function POSPage() {
                     const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
                     const maxByRole = maxDiscountPct != null ? (maxDiscountPct / 100) * maxOverall : Infinity;
                     const effectiveMax = Math.min(maxOverall, maxByRole);
+                    if (!isNaN(val) && approvalThresholdPct != null) {
+                      const thresholdDollar = (approvalThresholdPct / 100) * maxOverall;
+                      if (val > thresholdDollar && val <= effectiveMax) {
+                        const pct = maxOverall > 0 ? (val / maxOverall) * 100 : 0;
+                        setOverallDiscount(String(thresholdDollar));
+                        setPendingApproval({ kind: "overall", dollarAmt: val, pct });
+                        setApprovalPin(""); setApprovalPinError("");
+                        setDiscountApprovalOpen(true);
+                        return;
+                      }
+                    }
                     if (!isNaN(val) && val > effectiveMax) {
                       setOverallDiscount(String(effectiveMax));
                       setOverallDiscountFlash(true);
@@ -3559,6 +3680,61 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(false); }}>Cancel</Button>
             <Button onClick={handlePinSubmit} disabled={!pinInput}>Sign In</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Discount Approval Dialog ─── */}
+      <Dialog open={discountApprovalOpen} onOpenChange={o => {
+        if (!o) {
+          setDiscountApprovalOpen(false);
+          setPendingApproval(null);
+          setApprovalPin("");
+          setApprovalPinError("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-500" /> Manager Approval Required
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
+              {pendingApproval && (
+                <p>
+                  A <span className="font-semibold">{pendingApproval.pct.toFixed(1)}% discount</span>
+                  {pendingApproval.kind === "item" ? ` on "${pendingApproval.productName}"` : " on this sale"}
+                  {" "}requires manager approval.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs">Manager / Owner PIN</Label>
+              <Input
+                type="password"
+                value={approvalPin}
+                onChange={e => { setApprovalPin(e.target.value); setApprovalPinError(""); }}
+                placeholder="••••"
+                className="mt-1 text-center tracking-widest text-lg"
+                autoFocus
+                onKeyDown={e => e.key === "Enter" && handleDiscountApprovalSubmit()}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
+                <button
+                  key={ki} disabled={!k}
+                  onClick={() => { if (k === "⌫") setApprovalPin(p => p.slice(0, -1)); else if (k) { setApprovalPin(p => p + k); setApprovalPinError(""); } }}
+                  className={cn("h-11 rounded-xl border font-semibold text-base transition-colors", k ? "hover:bg-muted active:bg-muted/80" : "opacity-0 pointer-events-none", k === "⌫" && "text-destructive text-sm")}
+                >{k}</button>
+              ))}
+            </div>
+            {approvalPinError && <p className="text-xs text-destructive text-center">{approvalPinError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDiscountApprovalOpen(false); setPendingApproval(null); setApprovalPin(""); setApprovalPinError(""); }}>Cancel</Button>
+            <Button onClick={handleDiscountApprovalSubmit} disabled={!approvalPin}>Approve</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
