@@ -293,11 +293,12 @@ export default function POSInvoicesPage() {
   const subtotal  = invTotal - taxTotal;
 
   const lineErrors = lines.map((l) => ({
+    description: l.description.trim() === "" ? "Required" : "",
     quantity:  l.quantity < 0.0001 ? "Must be > 0" : "",
     unitPrice: l.unitPrice < 0     ? "Cannot be negative" : "",
     taxRate:   l.taxRate < 0 || l.taxRate > 100 ? "Must be 0–100" : "",
   }));
-  const hasLineErrors = lineErrors.some((e) => e.quantity || e.unitPrice || e.taxRate);
+  const hasLineErrors = lineErrors.some((e) => e.description || e.quantity || e.unitPrice || e.taxRate);
 
   /* ── Edit line helpers ── */
   const addEditLine = () => {
@@ -332,11 +333,12 @@ export default function POSInvoicesPage() {
   const editSubtotal  = editInvTotal - editTaxTotal;
 
   const editLineErrors = editLines.map((l) => ({
+    description: l.description.trim() === "" ? "Required" : "",
     quantity:  l.quantity < 0.0001 ? "Must be > 0" : "",
     unitPrice: l.unitPrice < 0     ? "Cannot be negative" : "",
     taxRate:   l.taxRate < 0 || l.taxRate > 100 ? "Must be 0–100" : "",
   }));
-  const hasEditLineErrors = editLineErrors.some((e) => e.quantity || e.unitPrice || e.taxRate);
+  const hasEditLineErrors = editLineErrors.some((e) => e.description || e.quantity || e.unitPrice || e.taxRate);
 
   /* ── Open edit dialog ── */
   const openEdit = (inv: Invoice) => {
@@ -1928,7 +1930,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={(lineSearch[i] ?? "") !== "" ? lineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className="h-8 text-sm pl-6"
+                          className={`h-8 text-sm pl-6${lineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -1955,6 +1957,7 @@ export default function POSInvoicesPage() {
                           ))}
                         </div>
                       )}
+                      {lineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].description}</p>}
                     </div>
                     <div>
                       <Input type="number" value={line.quantity}
@@ -2158,7 +2161,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={editLineSearch[i] !== undefined && editLineSearch[i] !== "" ? editLineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className="h-8 text-sm pl-6"
+                          className={`h-8 text-sm pl-6${editLineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setEditLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -2189,6 +2192,7 @@ export default function POSInvoicesPage() {
                           ))}
                         </div>
                       )}
+                      {editLineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].description}</p>}
                     </div>
                     <div>
                       <Input type="number" value={line.quantity}
