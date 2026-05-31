@@ -1055,6 +1055,11 @@ export const GetCustomerHistoryParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const getCustomerHistoryResponseTransactionsItemItemsItemUnitPriceMin = 0;
+
+
+
 export const GetCustomerHistoryResponse = zod.object({
   "transactions": zod.array(zod.object({
   "id": zod.number(),
@@ -1112,8 +1117,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(getCustomerHistoryResponseTransactionsItemItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -1465,6 +1470,11 @@ export const ListTransactionsQueryParams = zod.object({
   "to": zod.coerce.string().optional().describe('ISO date string (YYYY-MM-DD) — filter transactions on or before this date')
 })
 
+
+export const listTransactionsResponseItemsItemItemsItemUnitPriceMin = 0;
+
+
+
 export const ListTransactionsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
@@ -1522,8 +1532,8 @@ export const ListTransactionsResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(listTransactionsResponseItemsItemItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -1543,14 +1553,19 @@ export const ListTransactionsResponse = zod.object({
 /**
  * @summary Create a new transaction (complete a sale)
  */
+
+export const createTransactionBodyItemsItemUnitPriceMin = 0;
+
+
+
 export const CreateTransactionBody = zod.object({
   "customerId": zod.number().optional(),
   "staffId": zod.number().optional(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(createTransactionBodyItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -1581,6 +1596,11 @@ export const CreateTransactionBody = zod.object({
 export const GetTransactionParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+export const getTransactionResponseItemsItemUnitPriceMin = 0;
+
+
 
 export const GetTransactionResponse = zod.object({
   "id": zod.number(),
@@ -1638,8 +1658,8 @@ export const GetTransactionResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(getTransactionResponseItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -1673,6 +1693,11 @@ export const RefundTransactionBody = zod.object({
   "reason": zod.string(),
   "amount": zod.number().optional()
 })
+
+
+export const refundTransactionResponseItemsItemUnitPriceMin = 0;
+
+
 
 export const RefundTransactionResponse = zod.object({
   "id": zod.number(),
@@ -1730,8 +1755,8 @@ export const RefundTransactionResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(refundTransactionResponseItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -2361,6 +2386,11 @@ export const GetRecentTransactionsQueryParams = zod.object({
   "limit": zod.coerce.number().optional()
 })
 
+
+export const getRecentTransactionsResponseItemsItemUnitPriceMin = 0;
+
+
+
 export const GetRecentTransactionsResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -2417,8 +2447,8 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(getRecentTransactionsResponseItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),

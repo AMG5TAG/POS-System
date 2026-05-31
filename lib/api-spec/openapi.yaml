@@ -7685,8 +7685,10 @@ components:
           type: string
         quantity:
           type: integer
+          minimum: 1
         unitPrice:
           type: number
+          minimum: 0
         totalPrice:
           type: number
         taxAmount:

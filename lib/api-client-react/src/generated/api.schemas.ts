@@ -522,7 +522,9 @@ export interface CustomerList {
 export interface TransactionItem {
   productId: number;
   productName: string;
+  /** @minimum 1 */
   quantity: number;
+  /** @minimum 0 */
   unitPrice: number;
   totalPrice: number;
   taxAmount?: number;
