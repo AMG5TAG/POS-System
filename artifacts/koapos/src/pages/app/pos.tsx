@@ -40,6 +40,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +142,8 @@ export default function POSPage() {
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
   ]);
+  const [payDiscardConfirmOpen, setPayDiscardConfirmOpen] = useState(false);
+  const paymentModalInitialMethodRef = useRef<PaymentMethodId | null>(null);
 
   /* gift card — issuance */
   const [gcIssueOpen, setGcIssueOpen]   = useState(false);
@@ -787,7 +793,9 @@ export default function POSPage() {
     if (paymentModalOpen) {
       const enabled = getEnabledPaymentMethods();
       const first = ALL_PAYMENT_METHODS.find(m => enabled.includes(m.id));
-      setPayMethod(first?.id ?? "cash");
+      const initialMethod = first?.id ?? "cash";
+      setPayMethod(initialMethod);
+      paymentModalInitialMethodRef.current = initialMethod;
       setNumpadInput("");
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
@@ -796,6 +804,27 @@ export default function POSPage() {
       setGcRemainingMethod("cash");
     }
   }, [paymentModalOpen]);
+
+  const isPaymentDirty =
+    numpadInput !== "" ||
+    gcPayCardNumber !== "" ||
+    splitLegs.some(l => l.amount !== "") ||
+    (paymentModalInitialMethodRef.current !== null && payMethod !== paymentModalInitialMethodRef.current);
+
+  const tryClosePaymentModal = () => {
+    if (isPaymentDirty) {
+      setPayDiscardConfirmOpen(true);
+    } else {
+      setPaymentModalOpen(false);
+      setNumpadInput("");
+    }
+  };
+
+  const confirmDiscardPayment = () => {
+    setPayDiscardConfirmOpen(false);
+    setPaymentModalOpen(false);
+    setNumpadInput("");
+  };
 
   /* Clear numpad when switching to a method that doesn't use it;
      clear gift-card state when switching away from gift_card. */
@@ -2310,7 +2339,7 @@ export default function POSPage() {
       </div>
 
       {/* ─── Payment modal ─── */}
-      <Dialog open={paymentModalOpen} onOpenChange={(o) => { setPaymentModalOpen(o); if (!o) setNumpadInput(""); }}>
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => { if (!o) { tryClosePaymentModal(); } else { setPaymentModalOpen(true); } }}>
         <DialogContent className="max-w-[740px] p-0 overflow-hidden gap-0 [&>button.absolute]:hidden">
           <div className="flex flex-col sm:flex-row" style={{ minHeight: 520 }}>
 
@@ -2519,7 +2548,7 @@ export default function POSPage() {
               })()}
 
               <div className="flex-1" />
-              <Button variant="outline" className="w-full" onClick={() => setPaymentModalOpen(false)}>
+              <Button variant="outline" className="w-full" onClick={tryClosePaymentModal}>
                 Cancel
               </Button>
             </div>
@@ -2810,6 +2839,22 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Payment discard confirmation ─── */}
+      <AlertDialog open={payDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setPayDiscardConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved payment details. Closing now will clear all entered amounts and selections.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardPayment}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Receipt dialog ─── */}
       <Dialog open={receiptOpen} onOpenChange={(open) => { setReceiptOpen(open); if (!open) setCompletedIssuedGiftCards([]); }}>
