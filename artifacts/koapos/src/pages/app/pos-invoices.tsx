@@ -1297,6 +1297,16 @@ export default function POSInvoicesPage() {
         onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}>
         <Download className="w-3.5 h-3.5" />
       </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Email invoice"
+        onClick={(e) => {
+          e.stopPropagation();
+          const bizName = merchant?.businessName ?? "Your Business";
+          setEmailDialog({ open: true, invoiceId: inv.id });
+          setEmailAddr(inv.customerEmail ?? "");
+          setEmailSubject(`Invoice ${inv.invoiceNumber} from ${bizName}`);
+        }}>
+        <Mail className="w-3.5 h-3.5" />
+      </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
         onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
         <Trash2 className="w-3.5 h-3.5" />
