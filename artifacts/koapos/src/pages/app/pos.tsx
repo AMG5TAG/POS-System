@@ -2450,6 +2450,9 @@ export default function POSPage() {
                       {discExpanded && (
                         <div className="px-2.5 pb-2 pt-1.5 flex items-center gap-2 border-t bg-muted/20">
                           <Label className="text-[10px] shrink-0 text-muted-foreground">Discount</Label>
+                          {maxDiscountPct != null && (
+                            <span className="text-[10px] text-muted-foreground/60 shrink-0 -ml-1">Max {maxDiscountPct}%</span>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -2573,6 +2576,9 @@ export default function POSPage() {
             {/* Overall discount */}
             <div className="flex items-center gap-2">
               <label className="text-[11px] text-muted-foreground shrink-0">Sale discount</label>
+              {maxDiscountPct != null && (
+                <span className="text-[10px] text-muted-foreground/60 shrink-0 -ml-1">Max {maxDiscountPct}%</span>
+              )}
               <button
                 type="button"
                 onClick={() => {
