@@ -202,6 +202,7 @@ export default function POSPage() {
   /* discard guards for other input dialogs */
   const [walkInDiscardConfirmOpen, setWalkInDiscardConfirmOpen] = useState(false);
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
+  const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
   const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
@@ -1094,6 +1095,23 @@ export default function POSPage() {
     setTempItemDiscardConfirmOpen(false);
     setTempItemOpen(false);
     setTempItemForm({ name: "", price: "", cost: "" });
+  };
+
+  const zeroPriceDirty = zeroPriceForm.price.trim() !== "" || zeroPriceForm.note.trim() !== "";
+
+  const tryCloseZeroPrice = () => {
+    if (zeroPriceDirty) {
+      setZeroPriceDiscardConfirmOpen(true);
+    } else {
+      setZeroPricePending(null);
+      setZeroPriceForm({ price: "", note: "" });
+    }
+  };
+
+  const confirmDiscardZeroPrice = () => {
+    setZeroPriceDiscardConfirmOpen(false);
+    setZeroPricePending(null);
+    setZeroPriceForm({ price: "", note: "" });
   };
 
   /* Clear numpad when switching to a method that doesn't use it;
@@ -3573,7 +3591,7 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── $0 price dialog ─── */}
-      <Dialog open={!!zeroPricePending} onOpenChange={o => { if (!o) setZeroPricePending(null); }}>
+      <Dialog open={!!zeroPricePending} onOpenChange={o => { if (!o) tryCloseZeroPrice(); }}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader><DialogTitle>Set Sale Price</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground"><span className="font-semibold">{zeroPricePending?.name}</span> has a $0.00 price. Please enter a price and a reason before adding it to the sale.</p>
@@ -3582,7 +3600,7 @@ export default function POSPage() {
             <div><Label className="text-xs">Reason / Note</Label><Input value={zeroPriceForm.note} onChange={e => setZeroPriceForm(f => ({ ...f, note: e.target.value }))} placeholder="e.g. Staff discount, warranty replacement..." className="mt-1" onKeyDown={e => e.key === "Enter" && addZeroPriceProduct()} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setZeroPricePending(null)}>Cancel</Button>
+            <Button variant="outline" onClick={tryCloseZeroPrice}>Cancel</Button>
             <Button onClick={addZeroPriceProduct}>Add to Cart</Button>
           </DialogFooter>
         </DialogContent>
@@ -4260,6 +4278,22 @@ export default function POSPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDiscardTempItem}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Zero-price discard confirmation ─── */}
+      <AlertDialog open={zeroPriceDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setZeroPriceDiscardConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have entered a price or note for this item. Closing now will clear what you typed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardZeroPrice}>Discard</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
