@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ export default function SettingsTyroEftposPage() {
   const [config, setConfig] = useState<TyroConfig>(DEFAULT_CONFIG);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [saved, setSaved] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     try {
@@ -46,10 +48,23 @@ export default function SettingsTyroEftposPage() {
     } catch { /* ignore */ }
   }, []);
 
+  const patchConfig = useCallback((fn: (c: TyroConfig) => TyroConfig) => {
+    setConfig(fn);
+    setIsDirty(true);
+  }, []);
+
+  const { ConfirmDialog: TyroFormGuard } = useUnsavedChangesGuard(isDirty, {
+    title: "Unsaved EFTPOS configuration",
+    description: "You have unsaved changes to your Tyro EFTPOS configuration. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
+
   const saveConfig = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
       setSaved(true);
+      setIsDirty(false);
       toast.success("Tyro EFTPOS configuration saved");
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -114,19 +129,19 @@ export default function SettingsTyroEftposPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <Label>Terminal IP Address</Label>
-                  <Input value={config.terminalIp} onChange={e => setConfig(c => ({ ...c, terminalIp: e.target.value }))}
+                  <Input value={config.terminalIp} onChange={e => patchConfig(c => ({ ...c, terminalIp: e.target.value }))}
                     placeholder="192.168.1.100" className="mt-1 font-mono" />
                 </div>
                 <div>
                   <Label>Port</Label>
-                  <Input value={config.terminalPort} onChange={e => setConfig(c => ({ ...c, terminalPort: e.target.value }))}
+                  <Input value={config.terminalPort} onChange={e => patchConfig(c => ({ ...c, terminalPort: e.target.value }))}
                     placeholder="8080" className="mt-1 font-mono" />
                 </div>
               </div>
               <div>
                 <Label>Integration Key</Label>
                 <Input type="password" value={config.integrationKey}
-                  onChange={e => setConfig(c => ({ ...c, integrationKey: e.target.value }))}
+                  onChange={e => patchConfig(c => ({ ...c, integrationKey: e.target.value }))}
                   placeholder="Tyro Integration Key from developer portal" className="mt-1 font-mono" />
               </div>
               <Button onClick={testConnection} disabled={status === "connecting"} className="w-full">
@@ -148,12 +163,12 @@ export default function SettingsTyroEftposPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label>Merchant ID (MID)</Label>
-                <Input value={config.merchantId} onChange={e => setConfig(c => ({ ...c, merchantId: e.target.value }))}
+                <Input value={config.merchantId} onChange={e => patchConfig(c => ({ ...c, merchantId: e.target.value }))}
                   placeholder="Your Tyro Merchant ID" className="mt-1 font-mono" />
               </div>
               <div>
                 <Label>Terminal ID (TID)</Label>
-                <Input value={config.terminalId} onChange={e => setConfig(c => ({ ...c, terminalId: e.target.value }))}
+                <Input value={config.terminalId} onChange={e => patchConfig(c => ({ ...c, terminalId: e.target.value }))}
                   placeholder="Your Tyro Terminal ID" className="mt-1 font-mono" />
               </div>
               <Separator />
@@ -163,14 +178,14 @@ export default function SettingsTyroEftposPage() {
                     <p className="text-sm font-medium">Auto-settle at end of day</p>
                     <p className="text-xs text-muted-foreground">Automatically settle batch when closing</p>
                   </div>
-                  <Switch checked={config.autoSettle} onCheckedChange={v => setConfig(c => ({ ...c, autoSettle: v }))} />
+                  <Switch checked={config.autoSettle} onCheckedChange={v => patchConfig(c => ({ ...c, autoSettle: v }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">MOTO payments</p>
                     <p className="text-xs text-muted-foreground">Enable Mail Order / Telephone Order transactions</p>
                   </div>
-                  <Switch checked={config.motoEnabled} onCheckedChange={v => setConfig(c => ({ ...c, motoEnabled: v }))} />
+                  <Switch checked={config.motoEnabled} onCheckedChange={v => patchConfig(c => ({ ...c, motoEnabled: v }))} />
                 </div>
               </div>
             </CardContent>
@@ -212,6 +227,8 @@ export default function SettingsTyroEftposPage() {
           </Button>
         </div>
       </div>
+
+      <TyroFormGuard />
     </AppLayout>
   );
 }

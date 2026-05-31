@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,13 @@ export default function SettingsModifierGroupsPage() {
   const [groupForm, setGroupForm] = useState(defaultGroupForm());
   const [modDialog, setModDialog] = useState<{ open: boolean; groupId: number | null; editId: number | null }>({ open: false, groupId: null, editId: null });
   const [modForm, setModForm] = useState(defaultModForm());
+
+  const { ConfirmDialog: ModifierFormGuard } = useUnsavedChangesGuard(groupDialog || modDialog.open, {
+    title: "Close modifier form?",
+    description: "The modifier form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
 
   const { data, isLoading } = useQuery<{ groups: ModifierGroup[] }>({
     queryKey: ["modifier-groups"],
@@ -261,6 +269,8 @@ export default function SettingsModifierGroupsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ModifierFormGuard />
     </AppLayout>
   );
 }

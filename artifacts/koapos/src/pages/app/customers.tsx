@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant,
@@ -2456,6 +2457,13 @@ export default function CustomersPage() {
     });
   };
 
+  const { ConfirmDialog: CustomerFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+    title: "Close customer form?",
+    description: "The customer form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
+
   /* Sort */
   const sorted = [...customers].sort((a, b) => {
     let av: string | number = "", bv: string | number = "";
@@ -3026,6 +3034,8 @@ export default function CustomersPage() {
         onOpenChange={setCsvImportOpen}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() })}
       />
+
+      <CustomerFormGuard />
     </AppLayout>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -105,6 +106,13 @@ export default function SettingsCustomersPage() {
   const [editingSource, setEditingSource]         = useState<HeardFromSource | null>(null);
   const [sourceForm, setSourceForm]               = useState({ name: "", requiresDetails: false });
   const [deleteSourceConfirm, setDeleteSourceConfirm] = useState<string | null>(null);
+
+  const { ConfirmDialog: CustomerSettingsFormGuard } = useUnsavedChangesGuard(groupDialogOpen || sourceDialogOpen, {
+    title: "Close settings form?",
+    description: "The form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
 
   // ── Bulk duplicates state ──────────────────────────────────────────────────
   const [buckets, setBuckets]           = useState<DuplicateBucket[] | null>(null);
@@ -1410,6 +1418,7 @@ export default function SettingsCustomersPage() {
         </DialogContent>
       </Dialog>
 
+      <CustomerSettingsFormGuard />
     </AppLayout>
   );
 }

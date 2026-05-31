@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff,
@@ -824,6 +825,13 @@ export default function StaffPage() {
     (registersData?.items ?? []).map((r) => [String(r.id), r.name])
   );
 
+  const { ConfirmDialog: StaffFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+    title: "Close staff form?",
+    description: "The staff form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
+
   type SortKey = "name" | "email" | "role" | "status" | "register";
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -1086,6 +1094,8 @@ export default function StaffPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <StaffFormGuard />
     </AppLayout>
   );
 }

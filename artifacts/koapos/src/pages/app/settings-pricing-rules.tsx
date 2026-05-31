@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,13 @@ export default function SettingsPricingRulesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(defaultForm());
+
+  const { ConfirmDialog: PricingRuleFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+    title: "Close pricing rule form?",
+    description: "The pricing rule form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
 
   const { data: rulesData, isLoading } = useQuery<{ rules: PricingRule[] }>({
     queryKey: ["pricing-rules"],
@@ -266,6 +274,8 @@ export default function SettingsPricingRulesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PricingRuleFormGuard />
     </AppLayout>
   );
 }

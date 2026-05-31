@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProductTypes,
@@ -188,6 +189,13 @@ export default function SettingsProductTypesPage() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductType | null>(null);
   const [localOrder, setLocalOrder] = useState<ProductType[]>([]);
+
+  const { ConfirmDialog: ProductTypeFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+    title: "Close product type form?",
+    description: "The product type form has unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
 
   const { data } = useListProductTypes();
   const createProductType = useCreateProductType();
@@ -543,6 +551,8 @@ export default function SettingsProductTypesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProductTypeFormGuard />
     </AppLayout>
   );
 }

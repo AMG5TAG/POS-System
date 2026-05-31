@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
@@ -108,6 +109,19 @@ export default function SettingsAccountPage() {
   const hasChanged = username !== (savedUsername ?? "");
   const isLongEnough = username.length >= 3;
   const canSave = hasChanged && isValid && isLongEnough;
+
+  const isAccountDirty =
+    hasChanged ||
+    currentPw.length > 0 ||
+    newPw.length > 0 ||
+    newEmail.length > 0;
+
+  const { ConfirmDialog: AccountFormGuard } = useUnsavedChangesGuard(isAccountDirty, {
+    title: "Unsaved account changes",
+    description: "You have unsaved changes to your account. If you leave now, your changes will be lost.",
+    cancelLabel: "Stay on page",
+    actionLabel: "Leave anyway",
+  });
 
   const updateMerchant = useUpdateMerchant();
 
@@ -447,6 +461,8 @@ export default function SettingsAccountPage() {
 
         </div>
       </div>
+
+      <AccountFormGuard />
     </AppLayout>
   );
 }
