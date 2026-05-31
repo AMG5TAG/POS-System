@@ -292,6 +292,13 @@ export default function POSInvoicesPage() {
   const taxTotal  = linesGross > 0 ? rawTaxTotal * (invTotal / linesGross) : 0;
   const subtotal  = invTotal - taxTotal;
 
+  const lineErrors = lines.map((l) => ({
+    quantity:  l.quantity < 0.0001 ? "Must be > 0" : "",
+    unitPrice: l.unitPrice < 0     ? "Cannot be negative" : "",
+    taxRate:   l.taxRate < 0 || l.taxRate > 100 ? "Must be 0–100" : "",
+  }));
+  const hasLineErrors = lineErrors.some((e) => e.quantity || e.unitPrice || e.taxRate);
+
   /* ── Edit line helpers ── */
   const addEditLine = () => {
     setEditLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
@@ -323,6 +330,13 @@ export default function POSInvoicesPage() {
   const editInvTotal  = Math.max(0, editLinesGross - editDiscountAmt);
   const editTaxTotal  = editLinesGross > 0 ? editRawTaxTotal * (editInvTotal / editLinesGross) : 0;
   const editSubtotal  = editInvTotal - editTaxTotal;
+
+  const editLineErrors = editLines.map((l) => ({
+    quantity:  l.quantity < 0.0001 ? "Must be > 0" : "",
+    unitPrice: l.unitPrice < 0     ? "Cannot be negative" : "",
+    taxRate:   l.taxRate < 0 || l.taxRate > 100 ? "Must be 0–100" : "",
+  }));
+  const hasEditLineErrors = editLineErrors.some((e) => e.quantity || e.unitPrice || e.taxRate);
 
   /* ── Open edit dialog ── */
   const openEdit = (inv: Invoice) => {
@@ -1942,15 +1956,24 @@ export default function POSInvoicesPage() {
                         </div>
                       )}
                     </div>
-                    <Input type="number" min={1} value={line.quantity}
-                      onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 1)}
-                      className="h-8 text-sm text-center" />
-                    <Input type="number" step="0.01" value={line.unitPrice || ""}
-                      onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                      placeholder="0.00" className="h-8 text-sm text-right" />
-                    <Input type="number" min={0} max={100} value={line.taxRate}
-                      onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm text-right" />
+                    <div>
+                      <Input type="number" value={line.quantity}
+                        onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                        className={`h-8 text-sm text-center${lineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {lineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].quantity}</p>}
+                    </div>
+                    <div>
+                      <Input type="number" step="0.01" value={line.unitPrice || ""}
+                        onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                        placeholder="0.00" className={`h-8 text-sm text-right${lineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {lineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].unitPrice}</p>}
+                    </div>
+                    <div>
+                      <Input type="number" min={0} max={100} value={line.taxRate}
+                        onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                        className={`h-8 text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
+                    </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeLine(i)} disabled={lines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2078,7 +2101,7 @@ export default function POSInvoicesPage() {
 
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
             <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreate(); }}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || hasLineErrors}>
               {saving ? "Creating…" : recurring.enabled ? "Create Recurring Invoice" : "Create Invoice"}
             </Button>
           </div>
@@ -2167,15 +2190,24 @@ export default function POSInvoicesPage() {
                         </div>
                       )}
                     </div>
-                    <Input type="number" min={1} value={line.quantity}
-                      onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 1)}
-                      className="h-8 text-sm text-center" />
-                    <Input type="number" step="0.01" value={line.unitPrice || ""}
-                      onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                      placeholder="0.00" className="h-8 text-sm text-right" />
-                    <Input type="number" min={0} max={100} value={line.taxRate}
-                      onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm text-right" />
+                    <div>
+                      <Input type="number" value={line.quantity}
+                        onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                        className={`h-8 text-sm text-center${editLineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {editLineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].quantity}</p>}
+                    </div>
+                    <div>
+                      <Input type="number" step="0.01" value={line.unitPrice || ""}
+                        onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                        placeholder="0.00" className={`h-8 text-sm text-right${editLineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {editLineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].unitPrice}</p>}
+                    </div>
+                    <div>
+                      <Input type="number" min={0} max={100} value={line.taxRate}
+                        onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                        className={`h-8 text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                      {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
+                    </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2294,7 +2326,7 @@ export default function POSInvoicesPage() {
 
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button onClick={handleUpdate} disabled={editSaving}>
+            <Button onClick={handleUpdate} disabled={editSaving || hasEditLineErrors}>
               {editSaving ? "Saving…" : editRecurring.enabled ? "Save Recurring Invoice" : "Save Changes"}
             </Button>
           </div>
