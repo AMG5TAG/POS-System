@@ -1914,16 +1914,17 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span>Description</span>
                 <span className="text-center">Qty</span>
                 <span className="text-right">Price</span>
                 <span className="text-right">Tax%</span>
+                <span className="text-right">Total</span>
                 <span />
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
                     <div className="relative" ref={(el) => { lineDropRefs.current[i] = el; }}>
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
@@ -1976,6 +1977,9 @@ export default function POSInvoicesPage() {
                         onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
                         className={`h-8 text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
                       {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
+                    </div>
+                    <div className="flex items-center justify-end h-8">
+                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
                     </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeLine(i)} disabled={lines.length === 1}>
@@ -2145,16 +2149,17 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span>Description</span>
                 <span className="text-center">Qty</span>
                 <span className="text-right">Price</span>
                 <span className="text-right">Tax%</span>
+                <span className="text-right">Total</span>
                 <span />
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
                     <div className="relative" ref={(el) => { editLineDropRefs.current[i] = el; }}>
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
@@ -2211,6 +2216,9 @@ export default function POSInvoicesPage() {
                         onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
                         className={`h-8 text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
                       {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
+                    </div>
+                    <div className="flex items-center justify-end h-8">
+                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
                     </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
