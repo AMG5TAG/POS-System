@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetTaxSettings,
@@ -80,8 +81,15 @@ export default function SettingsTaxPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const updateExt = useUpdateRegionalExtSettings();
 
+  const [dirtyGst, setDirtyGst] = useState(false);
+  const [dirtyExt, setDirtyExt] = useState(false);
+  const isDirty = dirtyGst || dirtyExt;
+
   const [ext, setExt] = useState<ExtSettings>({ ...EXT_DEFAULTS });
-  const patchExt = (patch: Partial<ExtSettings>) => setExt(prev => ({ ...prev, ...patch }));
+  const patchExt = useCallback((patch: Partial<ExtSettings>) => {
+    setExt(prev => ({ ...prev, ...patch }));
+    setDirtyExt(true);
+  }, []);
   const activeTaxLabel = ext.taxLabel === "Custom" ? ext.customTaxLabel || "Tax" : ext.taxLabel;
   const fiscalEnd = MONTHS[((ext.fiscalYearStart - 1 + 11) % 12)];
 
@@ -112,6 +120,7 @@ export default function SettingsTaxPage() {
       {
         onSuccess: () => {
           toast.success("Tax settings saved");
+          setDirtyExt(false);
           queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
         },
         onError: () => toast.error("Failed to save tax settings"),
@@ -129,6 +138,10 @@ export default function SettingsTaxPage() {
     receiptHeader: "",
     receiptFooter: "",
   });
+  const patchForm = useCallback((patch: Partial<typeof form>) => {
+    setForm(prev => ({ ...prev, ...patch }));
+    setDirtyGst(true);
+  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -156,7 +169,7 @@ export default function SettingsTaxPage() {
         receiptFooter: form.receiptFooter || undefined,
       } },
       {
-        onSuccess: () => toast.success("Tax settings saved"),
+        onSuccess: () => { toast.success("Tax settings saved"); setDirtyGst(false); },
         onError: () => toast.error("Failed to save settings"),
       }
     );
@@ -164,6 +177,8 @@ export default function SettingsTaxPage() {
 
   const bool = (v: string) => v === "true";
   const toggleStr = (v: string) => v === "true" ? "false" : "true";
+
+  const { ConfirmDialog } = useUnsavedChangesGuard(isDirty);
 
   if (isLoading) {
     return (
@@ -203,7 +218,7 @@ export default function SettingsTaxPage() {
                 <p className="text-xs text-muted-foreground">Apply GST to sales transactions</p>
               </div>
               <Switch checked={bool(form.gstEnabled)}
-                onCheckedChange={() => setForm({ ...form, gstEnabled: toggleStr(form.gstEnabled) })} />
+                onCheckedChange={() => patchForm({ gstEnabled: toggleStr(form.gstEnabled) })} />
             </div>
 
             {bool(form.gstEnabled) && (
@@ -212,13 +227,13 @@ export default function SettingsTaxPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Tax Name</Label>
-                    <Input value={form.taxName} onChange={(e) => setForm({ ...form, taxName: e.target.value })}
+                    <Input value={form.taxName} onChange={(e) => patchForm({ taxName: e.target.value })}
                       placeholder="GST" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>GST Rate (%)</Label>
                     <Input type="number" step="0.1" value={form.gstRate}
-                      onChange={(e) => setForm({ ...form, gstRate: e.target.value })} />
+                      onChange={(e) => patchForm({ gstRate: e.target.value })} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -229,7 +244,7 @@ export default function SettingsTaxPage() {
                       return bizAbn ? (
                         <button
                           type="button"
-                          onClick={() => setForm({ ...form, gstNumber: bizAbn })}
+                          onClick={() => patchForm({ gstNumber: bizAbn })}
                           className="flex items-center gap-1.5 text-xs text-primary hover:underline"
                         >
                           <Copy className="w-3 h-3" />
@@ -239,7 +254,7 @@ export default function SettingsTaxPage() {
                     })()}
                   </div>
                   <Input value={form.gstNumber}
-                    onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
+                    onChange={(e) => patchForm({ gstNumber: e.target.value })}
                     placeholder="e.g. 12 345 678 901" />
                 </div>
                 <div className="space-y-2">
@@ -250,7 +265,7 @@ export default function SettingsTaxPage() {
                   <div className="flex rounded-lg border overflow-hidden">
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, taxInclusive: "true" })}
+                      onClick={() => patchForm({ taxInclusive: "true" })}
                       className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                         form.taxInclusive === "true"
                           ? "bg-primary/10 text-primary"
@@ -261,7 +276,7 @@ export default function SettingsTaxPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, taxInclusive: "false" })}
+                      onClick={() => patchForm({ taxInclusive: "false" })}
                       className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                         form.taxInclusive === "false"
                           ? "bg-primary/10 text-primary"
@@ -287,7 +302,7 @@ export default function SettingsTaxPage() {
                     <p className="text-xs text-muted-foreground">Display GST breakdown on customer receipts</p>
                   </div>
                   <Switch checked={bool(form.showTaxOnReceipt)}
-                    onCheckedChange={() => setForm({ ...form, showTaxOnReceipt: toggleStr(form.showTaxOnReceipt) })} />
+                    onCheckedChange={() => patchForm({ showTaxOnReceipt: toggleStr(form.showTaxOnReceipt) })} />
                 </div>
               </>
             )}
@@ -409,6 +424,7 @@ export default function SettingsTaxPage() {
         </div>
 
       </div>
+      <ConfirmDialog />
     </AppLayout>
   );
 }

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -102,6 +103,8 @@ export default function SettingsEmailPage() {
   }, [data]);
 
   const mark = () => setDirty(true);
+
+  const { ConfirmDialog } = useUnsavedChangesGuard(dirty);
 
   async function handleSave() {
     const payload: Record<string, string> = {
@@ -420,6 +423,7 @@ export default function SettingsEmailPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog />
     </AppLayout>
   );
 }

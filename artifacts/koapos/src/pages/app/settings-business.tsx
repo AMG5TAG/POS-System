@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant, useUpdateMerchant,
@@ -286,6 +287,11 @@ export default function SettingsBusinessPage() {
   const updateMutation = useUpdateMerchant();
   const { profile, save } = useBusinessProfile();
 
+  const [dirtyBusiness, setDirtyBusiness] = useState(false);
+  const [dirtyRegional, setDirtyRegional] = useState(false);
+  const [dirtyAlerts, setDirtyAlerts] = useState(false);
+  const isDirty = dirtyBusiness || dirtyRegional || dirtyAlerts;
+
   /* API-backed fields */
   const [apiForm, setApiForm] = useState({
     businessName: "",
@@ -294,6 +300,11 @@ export default function SettingsBusinessPage() {
     city: "",
     country: "AU",
   });
+
+  const patchApiForm = useCallback((patch: Partial<typeof apiForm>) => {
+    setApiForm(prev => ({ ...prev, ...patch }));
+    setDirtyBusiness(true);
+  }, []);
 
   /* Extended fields */
   const [ext, setExt] = useState<BusinessProfile>(profile);
@@ -330,6 +341,7 @@ export default function SettingsBusinessPage() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["low-stock-alert-settings"] });
         toast.success("Low-stock alert settings saved");
+        setDirtyAlerts(false);
       },
       onError: () => toast.error("Failed to save low-stock alert settings"),
     });
@@ -339,6 +351,7 @@ export default function SettingsBusinessPage() {
     const email = alertEmailInput.trim();
     if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !alertEmails.includes(email)) {
       setAlertEmails([...alertEmails, email]);
+      setDirtyAlerts(true);
     }
     setAlertEmailInput("");
   };
@@ -347,7 +360,10 @@ export default function SettingsBusinessPage() {
   const [regCurrency, setRegCurrency] = useState("AUD");
   const [regTimezone, setRegTimezone] = useState("Australia/Sydney");
   const [regExt, setRegExt] = useState<RegExtSettings>(REG_DEFAULT);
-  const patchRegExt = (patch: Partial<RegExtSettings>) => setRegExt(prev => ({ ...prev, ...patch }));
+  const patchRegExt = useCallback((patch: Partial<RegExtSettings>) => {
+    setRegExt(prev => ({ ...prev, ...patch }));
+    setDirtyRegional(true);
+  }, []);
 
   const { data: regExtData } = useGetRegionalExtSettings({ query: { queryKey: ["regional-ext-settings"] } });
   const updateRegExtMutation = useUpdateRegionalExtSettings();
@@ -393,8 +409,10 @@ export default function SettingsBusinessPage() {
   }, [merchant]);
 
   /* Helpers */
-  const setExtField = <K extends keyof BusinessProfile>(key: K, val: BusinessProfile[K]) =>
+  const setExtField = <K extends keyof BusinessProfile>(key: K, val: BusinessProfile[K]) => {
     setExt((p) => ({ ...p, [key]: val }));
+    setDirtyBusiness(true);
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -426,14 +444,18 @@ export default function SettingsBusinessPage() {
     );
   };
 
-  const setDayHours = (day: string, field: "enabled" | "open" | "close", val: string | boolean) =>
+  const setDayHours = (day: string, field: "enabled" | "open" | "close", val: string | boolean) => {
     setExt((p) => ({
       ...p,
       openingHours: { ...p.openingHours, [day]: { ...p.openingHours[day], [field]: val } },
     }));
+    setDirtyBusiness(true);
+  };
 
-  const setSocial = (platform: string, val: string) =>
+  const setSocial = (platform: string, val: string) => {
     setExt((p) => ({ ...p, socialLinks: { ...p.socialLinks, [platform]: val } }));
+    setDirtyBusiness(true);
+  };
 
   const addCustomLink = () => {
     if (linkDraft.label && linkDraft.url) {
@@ -463,6 +485,31 @@ export default function SettingsBusinessPage() {
     setExtField("textColors", next);
   };
 
+  const handleRegCurrencyChange = useCallback((val: string) => {
+    setRegCurrency(val);
+    setDirtyRegional(true);
+  }, []);
+
+  const handleRegTimezoneChange = useCallback((val: string) => {
+    setRegTimezone(val);
+    setDirtyRegional(true);
+  }, []);
+
+  const handleAlertEnabledChange = useCallback((val: boolean) => {
+    setAlertEnabled(val);
+    setDirtyAlerts(true);
+  }, []);
+
+  const handleAlertModeChange = useCallback((val: "immediate" | "digest") => {
+    setAlertMode(val);
+    setDirtyAlerts(true);
+  }, []);
+
+  const handleAlertThresholdChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setAlertThreshold(e.target.value);
+    setDirtyAlerts(true);
+  }, []);
+
   /* Save regional */
   const handleRegionalSave = () => {
     updateMutation.mutate(
@@ -472,11 +519,13 @@ export default function SettingsBusinessPage() {
           updateRegExtMutation.mutate({ data: regExt }, {
             onSuccess: () => {
               queryClient.invalidateQueries({ queryKey: ["regional-ext-settings"] });
+              toast.success("Regional settings saved");
+              setDirtyRegional(false);
             },
+            onError: () => toast.error("Failed to save regional ext settings"),
           });
           login(updated);
           queryClient.invalidateQueries({ queryKey: ["merchant"] });
-          toast.success("Regional settings saved");
         },
         onError: () => toast.error("Failed to save regional settings"),
       }
@@ -501,11 +550,14 @@ export default function SettingsBusinessPage() {
           queryClient.invalidateQueries({ queryKey: ["merchant"] });
           save(ext);
           toast.success("Business profile saved");
+          setDirtyBusiness(false);
         },
         onError: () => toast.error("Failed to save"),
       }
     );
   };
+
+  const { ConfirmDialog } = useUnsavedChangesGuard(isDirty);
 
   return (
     <AppLayout>
@@ -529,7 +581,7 @@ export default function SettingsBusinessPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label>Business Name</Label>
-                <Input value={apiForm.businessName} onChange={(e) => setApiForm({ ...apiForm, businessName: e.target.value })} placeholder="Your Business Name" />
+                <Input value={apiForm.businessName} onChange={(e) => patchApiForm({ businessName: e.target.value })} placeholder="Your Business Name" />
               </div>
               <div>
                 <Label>ABN</Label>
@@ -652,7 +704,7 @@ export default function SettingsBusinessPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Phone</Label>
-                <Input value={apiForm.phone} onChange={(e) => setApiForm({ ...apiForm, phone: e.target.value })} placeholder="+61 2 0000 0000" />
+                <Input value={apiForm.phone} onChange={(e) => patchApiForm({ phone: e.target.value })} placeholder="+61 2 0000 0000" />
               </div>
               <div>
                 <Label>Email</Label>
@@ -673,11 +725,11 @@ export default function SettingsBusinessPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label>Street Address</Label>
-                <Input value={apiForm.address} onChange={(e) => setApiForm({ ...apiForm, address: e.target.value })} placeholder="123 Main St" />
+                <Input value={apiForm.address} onChange={(e) => patchApiForm({ address: e.target.value })} placeholder="123 Main St" />
               </div>
               <div>
                 <Label>Suburb / City</Label>
-                <Input value={apiForm.city} onChange={(e) => setApiForm({ ...apiForm, city: e.target.value })} placeholder="Sydney" />
+                <Input value={apiForm.city} onChange={(e) => patchApiForm({ city: e.target.value })} placeholder="Sydney" />
               </div>
               <div>
                 <Label>State</Label>
@@ -689,7 +741,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>Country</Label>
-                <Input value={apiForm.country} onChange={(e) => setApiForm({ ...apiForm, country: e.target.value })} placeholder="Australia" />
+                <Input value={apiForm.country} onChange={(e) => patchApiForm({ country: e.target.value })} placeholder="Australia" />
               </div>
               <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-2 pt-0.5">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
@@ -709,6 +761,7 @@ export default function SettingsBusinessPage() {
                         ...prev,
                         country: checked ? expandCountryCode(prev.country) : collapseCountryName(prev.country),
                       }));
+                      setDirtyBusiness(true);
                     }}
                   />
                   Use full country name (e.g. AU → Australia)
@@ -879,7 +932,7 @@ export default function SettingsBusinessPage() {
                   Get notified when products drop at or below their stock threshold.
                 </CardDescription>
               </div>
-              <Switch checked={alertEnabled} onCheckedChange={setAlertEnabled} />
+              <Switch checked={alertEnabled} onCheckedChange={handleAlertEnabledChange} />
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -902,7 +955,7 @@ export default function SettingsBusinessPage() {
                   {alertEmails.map((email) => (
                     <Badge key={email} variant="secondary" className="flex items-center gap-1 pr-1">
                       {email}
-                      <button onClick={() => setAlertEmails(alertEmails.filter((e) => e !== email))} className="ml-1 hover:text-destructive">
+                      <button onClick={() => { setAlertEmails(alertEmails.filter((e) => e !== email)); setDirtyAlerts(true); }} className="ml-1 hover:text-destructive">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -914,7 +967,7 @@ export default function SettingsBusinessPage() {
             {/* Frequency */}
             <div>
               <Label className="mb-1.5 block">Alert frequency</Label>
-              <Select value={alertMode} onValueChange={(v) => setAlertMode(v as "immediate" | "digest")}>
+              <Select value={alertMode} onValueChange={(v) => handleAlertModeChange(v as "immediate" | "digest")}>
                 <SelectTrigger className="w-64">
                   <SelectValue />
                 </SelectTrigger>
@@ -936,7 +989,7 @@ export default function SettingsBusinessPage() {
                   type="number"
                   min={0}
                   value={alertThreshold}
-                  onChange={(e) => setAlertThreshold(e.target.value)}
+                  onChange={handleAlertThresholdChange}
                   placeholder="5"
                   className="w-28"
                 />
@@ -991,6 +1044,7 @@ export default function SettingsBusinessPage() {
         </div>
 
       </div>
+      <ConfirmDialog />
     </AppLayout>
   );
 }

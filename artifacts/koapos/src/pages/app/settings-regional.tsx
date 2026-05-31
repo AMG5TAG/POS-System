@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant,
@@ -308,6 +309,8 @@ export default function SettingsRegionalPage() {
   const { data: dbExt, isLoading: extLoading } = useGetRegionalExtSettings();
   const updateExtMutation = useUpdateRegionalExtSettings();
 
+  const [isDirty, setIsDirty] = useState(false);
+
   const [currency, setCurrency] = useState("AUD");
   const [timezone, setTimezone] = useState("Australia/Sydney");
   const [ext,      setExt]      = useState<ExtSettings>({ ...DEFAULT_EXT });
@@ -335,7 +338,20 @@ export default function SettingsRegionalPage() {
     }
   }, [dbExt]);
 
-  const patchExt = (patch: Partial<ExtSettings>) => setExt(prev => ({ ...prev, ...patch }));
+  const patchExt = useCallback((patch: Partial<ExtSettings>) => {
+    setExt(prev => ({ ...prev, ...patch }));
+    setIsDirty(true);
+  }, []);
+
+  const handleCurrencyChange = useCallback((val: string) => {
+    setCurrency(val);
+    setIsDirty(true);
+  }, []);
+
+  const handleTimezoneChange = useCallback((val: string) => {
+    setTimezone(val);
+    setIsDirty(true);
+  }, []);
 
   const handleSave = () => {
     updateMutation.mutate(
@@ -359,6 +375,7 @@ export default function SettingsRegionalPage() {
               onSuccess: () => {
                 toast.success("Regional settings saved");
                 queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
+                setIsDirty(false);
               },
               onError: () => toast.error("Failed to save regional settings"),
             }
@@ -370,6 +387,8 @@ export default function SettingsRegionalPage() {
       }
     );
   };
+
+  const { ConfirmDialog } = useUnsavedChangesGuard(isDirty);
 
 
   return (
@@ -410,7 +429,7 @@ export default function SettingsRegionalPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
+                <Select value={currency} onValueChange={handleCurrencyChange}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-64">
                     {CURRENCIES.map(c => (
@@ -450,7 +469,7 @@ export default function SettingsRegionalPage() {
             {/* Row 3: Timezone */}
             <div className="space-y-1.5">
               <Label>Timezone</Label>
-              <Select value={timezone} onValueChange={setTimezone}>
+              <Select value={timezone} onValueChange={handleTimezoneChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="max-h-72">
                   {TIMEZONES.map(group => (
@@ -592,6 +611,7 @@ export default function SettingsRegionalPage() {
           </Button>
         </div>
       </div>
+      <ConfirmDialog />
     </AppLayout>
   );
 }
