@@ -160,8 +160,9 @@ export default function POSPage() {
   const paymentModalInitialMethodRef = useRef<PaymentMethodId | null>(null);
 
   /* gift card — issuance */
-  const [gcIssueOpen, setGcIssueOpen]   = useState(false);
-  const [gcIssueForm, setGcIssueForm]   = useState({ cardNumber: "", amount: "" });
+  const [gcIssueOpen, setGcIssueOpen]           = useState(false);
+  const [gcIssueForm, setGcIssueForm]           = useState({ cardNumber: "", amount: "" });
+  const [gcIssueDiscardConfirmOpen, setGcIssueDiscardConfirmOpen] = useState(false);
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
   const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
@@ -838,6 +839,23 @@ export default function POSPage() {
     setPayDiscardConfirmOpen(false);
     setPaymentModalOpen(false);
     setNumpadInput("");
+  };
+
+  const gcIssueDirty = gcIssueForm.cardNumber.trim() !== "" || gcIssueForm.amount !== "";
+
+  const tryCloseGcIssue = () => {
+    if (gcIssueDirty) {
+      setGcIssueDiscardConfirmOpen(true);
+    } else {
+      setGcIssueOpen(false);
+      setGcIssueForm({ cardNumber: "", amount: "" });
+    }
+  };
+
+  const confirmDiscardGcIssue = () => {
+    setGcIssueDiscardConfirmOpen(false);
+    setGcIssueOpen(false);
+    setGcIssueForm({ cardNumber: "", amount: "" });
   };
 
   /* Clear numpad when switching to a method that doesn't use it;
@@ -3651,7 +3669,7 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── Sell Gift Card modal ─── */}
-      <Dialog open={gcIssueOpen} onOpenChange={setGcIssueOpen}>
+      <Dialog open={gcIssueOpen} onOpenChange={(open) => { if (!open) tryCloseGcIssue(); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -3686,7 +3704,7 @@ export default function POSPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGcIssueOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={tryCloseGcIssue}>Cancel</Button>
             <Button
               className="bg-violet-600 hover:bg-violet-700 text-white"
               disabled={!gcIssueForm.amount || parseFloat(gcIssueForm.amount) <= 0}
@@ -3719,6 +3737,7 @@ export default function POSPage() {
                 });
                 toast.success(`Gift card ${cardNumber} added to cart`);
                 setGcIssueOpen(false);
+                setGcIssueForm({ cardNumber: "", amount: "" });
               }}
             >
               <Plus className="w-4 h-4 mr-1" />
@@ -3727,6 +3746,22 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Gift card issuance discard confirmation ─── */}
+      <AlertDialog open={gcIssueDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setGcIssueDiscardConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved gift card details. Closing now will clear the card number and amount you entered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardGcIssue}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Till Closed Guard Dialog ─── */}
       <Dialog open={tillClosedDialogOpen} onOpenChange={(o) => { if (!o) setTillClosedDialogOpen(false); }}>
