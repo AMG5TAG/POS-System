@@ -116,6 +116,10 @@ export default function POSPage() {
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
   const [overallDiscountFlash, setOverallDiscountFlash] = useState(false);
   const [flashingItemIds, setFlashingItemIds] = useState<Set<number>>(new Set());
+  const [itemDiscountModes, setItemDiscountModes] = useState<Map<number, "percent">>(new Map());
+  const [itemDiscountPctInputs, setItemDiscountPctInputs] = useState<Map<number, string>>(new Map());
+  const [overallDiscountMode, setOverallDiscountMode] = useState<"dollar" | "percent">("dollar");
+  const [overallDiscountPctInput, setOverallDiscountPctInput] = useState("");
 
   /* merchant / business data for receipts */
   const { data: merchantData } = useGetMerchant();
@@ -2155,14 +2159,50 @@ export default function POSPage() {
                       </div>
                       {discExpanded && (
                         <div className="px-2.5 pb-2 pt-1.5 flex items-center gap-2 border-t bg-muted/20">
-                          <Label className="text-[10px] shrink-0 text-muted-foreground">Discount ($)</Label>
-                          <Input
-                            type="number" min="0" step="0.50"
-                            value={item.itemDiscount || ""}
-                            onChange={(e) => setItemDiscount(item.product.id, e.target.value)}
-                            placeholder="0.00"
-                            className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
-                          />
+                          <Label className="text-[10px] shrink-0 text-muted-foreground">Discount</Label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const isPercent = itemDiscountModes.has(item.product.id);
+                              setItemDiscountModes(prev => {
+                                const n = new Map(prev);
+                                if (isPercent) {
+                                  n.delete(item.product.id);
+                                } else {
+                                  n.set(item.product.id, "percent");
+                                  const pct = linePrice > 0 ? (item.itemDiscount / linePrice) * 100 : 0;
+                                  setItemDiscountPctInputs(p => new Map(p).set(item.product.id, pct > 0 ? String(parseFloat(pct.toFixed(4))) : ""));
+                                }
+                                return n;
+                              });
+                            }}
+                            className="text-[10px] font-semibold w-7 h-6 shrink-0 rounded border border-input bg-background hover:bg-muted transition-colors"
+                          >
+                            {itemDiscountModes.has(item.product.id) ? "%" : "$"}
+                          </button>
+                          {itemDiscountModes.has(item.product.id) ? (
+                            <Input
+                              type="number" min="0" max="100" step="1"
+                              value={itemDiscountPctInputs.get(item.product.id) ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setItemDiscountPctInputs(p => new Map(p).set(item.product.id, raw));
+                                const pct = Math.min(Math.max(parseFloat(raw) || 0, 0), 100);
+                                const dollarAmt = (pct / 100) * linePrice;
+                                setItemDiscount(item.product.id, String(dollarAmt));
+                              }}
+                              placeholder="0"
+                              className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
+                            />
+                          ) : (
+                            <Input
+                              type="number" min="0" step="0.50"
+                              value={item.itemDiscount || ""}
+                              onChange={(e) => setItemDiscount(item.product.id, e.target.value)}
+                              placeholder="0.00"
+                              className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
@@ -2235,25 +2275,65 @@ export default function POSPage() {
             </div>
             {/* Overall discount */}
             <div className="flex items-center gap-2">
-              <label className="text-[11px] text-muted-foreground shrink-0">Sale discount ($)</label>
-              <Input
-                type="number" min="0" step="0.50"
-                value={overallDiscount}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
+              <label className="text-[11px] text-muted-foreground shrink-0">Sale discount</label>
+              <button
+                type="button"
+                onClick={() => {
                   const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
-                  if (!isNaN(val) && val > maxOverall) {
-                    setOverallDiscount(String(maxOverall));
-                    setOverallDiscountFlash(true);
-                    setTimeout(() => setOverallDiscountFlash(false), 600);
+                  if (overallDiscountMode === "dollar") {
+                    const currentDollar = parseFloat(overallDiscount) || 0;
+                    const pct = maxOverall > 0 ? (currentDollar / maxOverall) * 100 : 0;
+                    setOverallDiscountPctInput(pct > 0 ? String(parseFloat(pct.toFixed(4))) : "");
+                    setOverallDiscountMode("percent");
                   } else {
-                    setOverallDiscount(e.target.value);
+                    setOverallDiscountMode("dollar");
                   }
                 }}
-                placeholder="0.00"
-                className={cn("h-6 text-xs flex-1 transition-colors", overallDiscountFlash && "ring-2 ring-destructive border-destructive")}
                 disabled={cart.length === 0}
-              />
+                className="text-[10px] font-semibold w-7 h-6 shrink-0 rounded border border-input bg-background hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {overallDiscountMode === "percent" ? "%" : "$"}
+              </button>
+              {overallDiscountMode === "percent" ? (
+                <Input
+                  type="number" min="0" max="100" step="1"
+                  value={overallDiscountPctInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setOverallDiscountPctInput(raw);
+                    const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
+                    const pct = Math.min(Math.max(parseFloat(raw) || 0, 0), 100);
+                    const dollarAmt = (pct / 100) * maxOverall;
+                    if (pct > 100) {
+                      setOverallDiscountFlash(true);
+                      setTimeout(() => setOverallDiscountFlash(false), 600);
+                    }
+                    setOverallDiscount(String(dollarAmt));
+                  }}
+                  placeholder="0"
+                  className={cn("h-6 text-xs flex-1 transition-colors", overallDiscountFlash && "ring-2 ring-destructive border-destructive")}
+                  disabled={cart.length === 0}
+                />
+              ) : (
+                <Input
+                  type="number" min="0" step="0.50"
+                  value={overallDiscount}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
+                    if (!isNaN(val) && val > maxOverall) {
+                      setOverallDiscount(String(maxOverall));
+                      setOverallDiscountFlash(true);
+                      setTimeout(() => setOverallDiscountFlash(false), 600);
+                    } else {
+                      setOverallDiscount(e.target.value);
+                    }
+                  }}
+                  placeholder="0.00"
+                  className={cn("h-6 text-xs flex-1 transition-colors", overallDiscountFlash && "ring-2 ring-destructive border-destructive")}
+                  disabled={cart.length === 0}
+                />
+              )}
             </div>
 
             <div className="flex justify-between text-base font-bold pt-1 border-t">
