@@ -2083,8 +2083,10 @@ export default function POSPage() {
                   const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
                   const lineTotal = linePrice - item.itemDiscount;
                   const discExpanded = expandedDiscounts.has(item.product.id);
+                  const isInvalidItem =
+                    item.quantity < 1 || (item.customPrice ?? item.product.price) < 0;
                   return (
-                    <div key={item.product.id} className="border rounded-xl overflow-hidden bg-background">
+                    <div key={item.product.id} className={cn("border rounded-xl overflow-hidden bg-background", isInvalidItem && "border-destructive border-l-[3px]")}>
                       <div className="flex items-center gap-2 px-2.5 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-xs leading-snug truncate">{item.product.name}</p>
@@ -2094,8 +2096,11 @@ export default function POSPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
+                          {isInvalidItem && (
+                            <AlertTriangle className="w-3 h-3 text-destructive shrink-0 mr-0.5" />
+                          )}
                           <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
-                          <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                          <span className={cn("w-5 text-center text-xs font-medium", isInvalidItem && "text-destructive")}>{item.quantity}</span>
                           <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
