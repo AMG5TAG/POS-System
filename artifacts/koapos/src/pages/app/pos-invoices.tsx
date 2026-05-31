@@ -36,7 +36,7 @@ import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
-  ChevronUp, ChevronDown, Copy,
+  Copy, GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -162,6 +162,10 @@ export default function POSInvoicesPage() {
   const [editLines, setEditLines] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
   const [editLineSearch, setEditLineSearch] = useState<string[]>([""]);
   const [editLineDropOpen, setEditLineDropOpen] = useState<boolean[]>([false]);
+  const [createDragFrom, setCreateDragFrom] = useState<number | null>(null);
+  const [createDragOver, setCreateDragOver] = useState<number | null>(null);
+  const [editDragFrom, setEditDragFrom] = useState<number | null>(null);
+  const [editDragOver, setEditDragOver] = useState<number | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editRecurring, setEditRecurring] = useState({
     enabled: false,
@@ -299,6 +303,16 @@ export default function POSInvoicesPage() {
     setLines((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
     setLineSearch((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
     setLineDropOpen((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+  };
+  const reorderLines = (from: number, to: number) => {
+    if (from === to) return;
+    const move = <T,>(arr: T[]): T[] => { const n = [...arr]; const [item] = n.splice(from, 1); n.splice(to, 0, item); return n; };
+    setLines(move); setLineSearch(move); setLineDropOpen(move);
+  };
+  const reorderEditLines = (from: number, to: number) => {
+    if (from === to) return;
+    const move = <T,>(arr: T[]): T[] => { const n = [...arr]; const [item] = n.splice(from, 1); n.splice(to, 0, item); return n; };
+    setEditLines(move); setEditLineSearch(move); setEditLineDropOpen(move);
   };
   const filteredProducts = (q: string) =>
     !q.trim() ? allProducts.slice(0, 8) : allProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
@@ -1994,16 +2008,19 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start">
-                    <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
-                      <button type="button" onClick={() => moveLineUp(i)} disabled={i === 0}
-                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" onClick={() => moveLineDown(i)} disabled={i === lines.length - 1}
-                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
+                  <div
+                    key={i}
+                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); setCreateDragOver(i); }}
+                    onDrop={(e) => { e.preventDefault(); if (createDragFrom !== null) reorderLines(createDragFrom, i); setCreateDragFrom(null); setCreateDragOver(null); }}
+                  >
+                    <div
+                      draggable
+                      onDragStart={() => setCreateDragFrom(i)}
+                      onDragEnd={() => { setCreateDragFrom(null); setCreateDragOver(null); }}
+                      className="flex items-center justify-center h-8 w-5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
                     </div>
                     <div className="relative" ref={(el) => { lineDropRefs.current[i] = el; }}>
                       <div className="relative">
@@ -2245,16 +2262,19 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start">
-                    <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
-                      <button type="button" onClick={() => moveEditLineUp(i)} disabled={i === 0}
-                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" onClick={() => moveEditLineDown(i)} disabled={i === editLines.length - 1}
-                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
+                  <div
+                    key={i}
+                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); setEditDragOver(i); }}
+                    onDrop={(e) => { e.preventDefault(); if (editDragFrom !== null) reorderEditLines(editDragFrom, i); setEditDragFrom(null); setEditDragOver(null); }}
+                  >
+                    <div
+                      draggable
+                      onDragStart={() => setEditDragFrom(i)}
+                      onDragEnd={() => { setEditDragFrom(null); setEditDragOver(null); }}
+                      className="flex items-center justify-center h-8 w-5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
                     </div>
                     <div className="relative" ref={(el) => { editLineDropRefs.current[i] = el; }}>
                       <div className="relative">
