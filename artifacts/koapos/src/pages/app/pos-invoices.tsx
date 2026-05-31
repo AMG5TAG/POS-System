@@ -1975,7 +1975,7 @@ export default function POSInvoicesPage() {
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setEmailDialog({ open: false, invoiceId: null })}>Cancel</Button>
               <Button onClick={handleSendEmail} disabled={sendingEmail || !emailAddr.trim()}>
-                {sendingEmail ? "Sending…" : <><Mail className="w-3.5 h-3.5 mr-1.5" /> Send Invoice</>}
+                {sendingEmail ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Sending…</> : <><Mail className="w-3.5 h-3.5 mr-1.5" /> Send Invoice</>}
               </Button>
             </div>
           </div>
