@@ -26,6 +26,13 @@ import {
   getListProductVariantsQueryKey,
   Product,
   ProductType,
+  useListBrands,
+  useCreateBrand,
+  useListDigitalCodes,
+  useCreateDigitalCode,
+  useDeleteDigitalCode,
+  useListSuppliers,
+  useBulkUpdateProducts,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
@@ -829,8 +836,6 @@ export default function ProductsPage() {
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
-  const [digitalCodes, setDigitalCodes]     = useState<DigitalCodeEntry[]>([]);
-  const [codesLoading, setCodesLoading]     = useState(false);
   const [newCodeInput, setNewCodeInput]     = useState("");
   const [bulkMode, setBulkMode]             = useState(false);
   const [bulkActionPending, setBulkActionPending] = useState<BulkActionPending | null>(null);
@@ -844,33 +849,25 @@ export default function ProductsPage() {
   const [bulkInvPopover, setBulkInvPopover]       = useState(false);
 
   /* ── Brands state ── */
-  const [brandsList, setBrandsList] = useState<{ id: number; name: string }[]>([]);
   const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
   const [brandCreatingInline, setBrandCreatingInline] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [newBrandName, setNewBrandName] = useState("");
 
-  useEffect(() => {
-    fetch("/api/brands", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : { items: [] })
-      .then((d) => setBrandsList((d as { items: { id: number; name: string }[] }).items || []));
-  }, []);
+  const { data: brandsListData } = useListBrands(undefined, { query: { queryKey: ["brands"] } });
+  const brandsList = ((brandsListData?.items ?? []) as { id: number; name: string }[]);
+  const createBrandMutation = useCreateBrand();
 
   const createBrandInline = async (onCreated: (id: number) => void) => {
     if (!newBrandName.trim()) return;
-    const r = await fetch("/api/brands", {
-      method: "POST", credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newBrandName.trim() }),
-    });
-    if (r.ok) {
-      const brand = await r.json() as { id: number; name: string };
-      setBrandsList((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)));
+    try {
+      const brand = await createBrandMutation.mutateAsync({ data: { name: newBrandName.trim() } }) as { id: number; name: string };
+      queryClient.invalidateQueries({ queryKey: ["brands"] });
       onCreated(brand.id);
       setNewBrandName("");
       setBrandCreatingInline(false);
       setBrandPopoverOpen(false);
-    } else {
+    } catch {
       toast.error("Failed to create brand");
     }
   };
@@ -958,29 +955,28 @@ export default function ProductsPage() {
   /* Only owners and managers can see digital code values; cashiers see XXXX */
   const canViewCodes = true;
 
-  const loadDigitalCodes = useCallback(async (productId: number) => {
-    setCodesLoading(true);
-    try {
-      const r = await fetch(`/api/products/${productId}/digital-codes`, { credentials: "include" });
-      if (r.ok) setDigitalCodes(await r.json());
-    } finally { setCodesLoading(false); }
-  }, []);
+  const createDigitalCodeMutation = useCreateDigitalCode();
+  const deleteDigitalCodeMutation = useDeleteDigitalCode();
+  const { data: digitalCodesData, isLoading: codesLoading, refetch: refetchDigitalCodes } = useListDigitalCodes(
+    editingProductId,
+    { query: { enabled: !!editingProduct?.id && formTab === "digital_codes", queryKey: ["digital-codes", editingProductId] } }
+  );
+  const digitalCodes = (digitalCodesData ?? []) as DigitalCodeEntry[];
 
   const addDigitalCode = useCallback(async (productId: number, code: string) => {
-    const r = await fetch(`/api/products/${productId}/digital-codes`, {
-      method: "POST", credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code.trim() }),
-    });
-    if (r.ok) { await loadDigitalCodes(productId); setNewCodeInput(""); }
-    else toast.error("Failed to add code");
-  }, [loadDigitalCodes]);
+    try {
+      await createDigitalCodeMutation.mutateAsync({ productId, data: { code: code.trim() } });
+      await refetchDigitalCodes();
+      setNewCodeInput("");
+    } catch { toast.error("Failed to add code"); }
+  }, [createDigitalCodeMutation, refetchDigitalCodes]);
 
-  const deleteDigitalCode = useCallback(async (codeId: number, productId: number) => {
-    const r = await fetch(`/api/digital-codes/${codeId}`, { method: "DELETE", credentials: "include" });
-    if (r.ok) await loadDigitalCodes(productId);
-    else toast.error("Failed to delete code");
-  }, [loadDigitalCodes]);
+  const deleteDigitalCode = useCallback(async (codeId: number, _productId: number) => {
+    try {
+      await deleteDigitalCodeMutation.mutateAsync({ id: codeId });
+      await refetchDigitalCodes();
+    } catch { toast.error("Failed to delete code"); }
+  }, [deleteDigitalCodeMutation, refetchDigitalCodes]);
   const { settings: customerSettings }  = useCustomerSettings();
   const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
 
@@ -994,12 +990,9 @@ export default function ProductsPage() {
   const updateMutation   = useUpdateProduct();
   const deleteMutation   = useDeleteProduct();
   const createCategoryMutation = useCreateCategory();
-  const [suppliersList, setSuppliersList] = useState<{ id: number; name: string }[]>([]);
-  useEffect(() => {
-    fetch("/api/suppliers", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : { items: [] })
-      .then((data) => setSuppliersList((data as { items: { id: number; name: string }[] }).items || []));
-  }, []);
+  const bulkUpdateMutation = useBulkUpdateProducts();
+  const { data: suppliersListData } = useListSuppliers(undefined, { query: { queryKey: ["suppliers"] } });
+  const suppliersList = ((suppliersListData?.items ?? []) as { id: number; name: string }[]);
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -1085,9 +1078,6 @@ export default function ProductsPage() {
       stockLocationDisplay: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
       stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
     });
-    if ((ep.productType ?? "standard") === "digital_code") {
-      loadDigitalCodes(p.id);
-    }
     const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
     setPcPartType(_c?.partType || "");
     setPcSocket(_c?.socket || "");
@@ -1205,17 +1195,7 @@ export default function ProductsPage() {
       } else if (bulkActionPending.type === "set_track_inventory") {
         body.trackInventory = bulkActionPending.value;
       }
-      const r = await fetch("/api/products/bulk", {
-        method: "PATCH", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({})) as { error?: string };
-        toast.error(err.error ?? "Bulk update failed");
-        return;
-      }
-      const result = await r.json() as { updated: number; deleted: number };
+      const result = await bulkUpdateMutation.mutateAsync({ data: body as unknown as Parameters<typeof bulkUpdateMutation.mutateAsync>[0]["data"] }) as { updated: number; deleted: number };
       const n = result.deleted > 0 ? result.deleted : result.updated;
       const verb = bulkActionPending.type === "delete" ? "deleted" : "updated";
       toast.success(`${n} product${n !== 1 ? "s" : ""} ${verb}`);
@@ -1862,7 +1842,6 @@ export default function ProductsPage() {
                   key={key}
                   onClick={() => {
                     setFormTab(key);
-                    if (key === "digital_codes" && editingProduct) loadDigitalCodes(editingProduct.id);
                   }}
                   className={cn(
                     "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",

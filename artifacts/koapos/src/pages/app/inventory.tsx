@@ -3,6 +3,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListInventory, useUpdateInventory, useListSuppliers,
   useListStockTakes, useCreateStockTake, useSaveStockTakeProgress, useSubmitStockTake,
+  useDeleteStockTake,
+  useCreatePurchaseOrder,
 } from "@workspace/api-client-react";
 import type { StockTake, StockTakeLine } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -299,6 +301,7 @@ function StockTakeView({
   const [discardDlg, setDiscardDlg] = useState(false);
   const saveMutation    = useSaveStockTakeProgress();
   const submitMutation  = useSubmitStockTake();
+  const discardMutation = useDeleteStockTake();
 
   const categories = [...new Set(take.lines.map(l => l.categoryName ?? "Uncategorised"))].sort();
 
@@ -355,17 +358,19 @@ function StockTakeView({
     setShowReview(false);
   };
 
-  async function handleDiscard() {
-    try {
-      const r = await fetch(`/api/stock-takes/${take.id}`, { method: "DELETE", credentials: "include" });
-      if (!r.ok) throw new Error();
-      toast.success("Stock take discarded");
-      queryClient.invalidateQueries({ queryKey: ["stock-takes"] });
-      onExit();
-    } catch {
-      toast.error("Failed to discard stock take");
-    }
-    setDiscardDlg(false);
+  function handleDiscard() {
+    discardMutation.mutate(
+      { id: take.id },
+      {
+        onSuccess: () => {
+          toast.success("Stock take discarded");
+          queryClient.invalidateQueries({ queryKey: ["stock-takes"] });
+          onExit();
+        },
+        onError: () => toast.error("Failed to discard stock take"),
+        onSettled: () => setDiscardDlg(false),
+      }
+    );
   }
 
   const isBusy = saveMutation.isPending || submitMutation.isPending;
@@ -781,31 +786,25 @@ export default function InventoryPage() {
     .filter(([, v]) => v.selected)
     .map(([k, v]) => ({ productId: Number(k), quantity: v.qty, unitCost: parseFloat(v.unitCost) || 0 }));
 
-  async function handleCreatePO() {
+  const createPOMutation = useCreatePurchaseOrder();
+
+  function handleCreatePO() {
     if (selectedLines.length === 0) {
       toast.error("Select at least one product");
       return;
     }
     setPoSaving(true);
-    try {
-      const r = await fetch("/api/purchase-orders", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          supplierId: reorderSupplier ? parseInt(reorderSupplier) : null,
-          status: "draft",
-          notes: reorderNotes || `Auto-reorder: ${selectedLines.length} low-stock item(s)`,
-          items: selectedLines,
-        }),
-      });
-      if (!r.ok) throw new Error();
-      toast.success("Draft purchase order created — visit Purchase Orders to review");
-      setReorderDlg(false);
-    } catch {
-      toast.error("Failed to create purchase order");
-    } finally {
-      setPoSaving(false);
-    }
+    createPOMutation.mutate(
+      { data: { supplierId: reorderSupplier ? parseInt(reorderSupplier) : undefined, status: "draft", orderDate: new Date().toISOString().slice(0, 10), notes: reorderNotes || `Auto-reorder: ${selectedLines.length} low-stock item(s)`, items: selectedLines } },
+      {
+        onSuccess: () => {
+          toast.success("Draft purchase order created — visit Purchase Orders to review");
+          setReorderDlg(false);
+        },
+        onError: () => toast.error("Failed to create purchase order"),
+        onSettled: () => setPoSaving(false),
+      }
+    );
   }
 
   /* ── Start stock take ── */

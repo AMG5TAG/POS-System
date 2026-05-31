@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import {
   useGetSocialFeedSettings, useUpdateSocialFeedSettings,
+  useListIntegrations, useDisconnectIntegration,
 } from "@workspace/api-client-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -102,26 +103,13 @@ export default function ManagementMarketingSocialFeedPage() {
   });
   const [dirty, setDirty] = useState(false);
 
-  /* integration connection state */
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [intgLoading, setIntgLoading]   = useState(true);
   const [disconnecting, setDisconnecting] = useState<Record<string, boolean>>({});
 
-  const fetchIntegrations = useCallback(async () => {
-    try {
-      const res = await fetch("/api/integrations", { credentials: "include" });
-      if (res.ok) {
-        const all: IntegrationStatus[] = await res.json();
-        setIntegrations(all.filter(i =>
-          PLATFORMS.some(p => p.integrationKey === i.key)
-        ));
-      }
-    } finally {
-      setIntgLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
+  const { data: rawIntegrations = [], isLoading: intgLoading, refetch: refetchIntegrations } = useListIntegrations();
+  const integrations = (rawIntegrations as unknown as IntegrationStatus[]).filter(i =>
+    PLATFORMS.some(p => p.integrationKey === i.key)
+  );
+  const disconnectIntegration = useDisconnectIntegration();
 
   useEffect(() => {
     if (settings) {
@@ -143,7 +131,7 @@ export default function ManagementMarketingSocialFeedPage() {
     if (success) {
       const p = PLATFORMS.find(pl => pl.integrationKey === success);
       toast.success(`${p?.label ?? success} connected`);
-      fetchIntegrations();
+      void refetchIntegrations();
       window.history.replaceState({}, "", window.location.pathname);
     }
     if (error) {
@@ -180,18 +168,20 @@ export default function ManagementMarketingSocialFeedPage() {
     window.location.href = `/api/integrations/oauth/${integrationKey}/start`;
   }
 
-  async function handleDisconnect(p: PlatformDef) {
+  function handleDisconnect(p: PlatformDef) {
     if (!confirm(`Disconnect ${p.label}? Posts from this platform will no longer appear in the Social Feed.`)) return;
     setDisconnecting(d => ({ ...d, [p.integrationKey]: true }));
-    try {
-      await fetch(`/api/integrations/${p.integrationKey}`, { method: "DELETE", credentials: "include" });
-      toast.success(`${p.label} disconnected`);
-      fetchIntegrations();
-    } catch {
-      toast.error("Failed to disconnect");
-    } finally {
-      setDisconnecting(d => ({ ...d, [p.integrationKey]: false }));
-    }
+    disconnectIntegration.mutate(
+      { key: p.integrationKey },
+      {
+        onSuccess: () => {
+          toast.success(`${p.label} disconnected`);
+          void refetchIntegrations();
+        },
+        onError: () => toast.error("Failed to disconnect"),
+        onSettled: () => setDisconnecting(d => ({ ...d, [p.integrationKey]: false })),
+      }
+    );
   }
 
   function getStatus(integrationKey: string): IntegrationStatus | undefined {

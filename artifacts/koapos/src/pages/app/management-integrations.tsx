@@ -13,8 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useGetSocialFeedSettings, useUpdateSocialFeedSettings } from "@workspace/api-client-react";
+import {
+  useGetSocialFeedSettings, useUpdateSocialFeedSettings,
+  useListIntegrations, useGetVaultStatus, useDisconnectIntegration, useConnectIntegration,
+} from "@workspace/api-client-react";
 import type { SocialFeedSettingsInput } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
@@ -147,18 +151,17 @@ function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: stri
 
 function ConnectModal({ integration, onClose, onSaved }: { integration: Integration | null; onClose: () => void; onSaved: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+  const connectMutation = useConnectIntegration();
   useEffect(() => { if (integration) setValues({}); }, [integration]);
   if (!integration) return null;
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/integrations/${integration.key}/connect`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
-      if (!res.ok) throw new Error();
-      toast.success(`${integration.label} connected`);
-      onSaved(); onClose();
-    } catch { toast.error("Failed to save credentials"); }
-    finally { setSaving(false); }
+  const handleSave = () => {
+    connectMutation.mutate(
+      { key: integration.key, data: values as unknown as Parameters<typeof connectMutation.mutate>[0]["data"] },
+      {
+        onSuccess: () => { toast.success(`${integration.label} connected`); onSaved(); onClose(); },
+        onError: () => toast.error("Failed to save credentials"),
+      }
+    );
   };
   return (
     <Dialog open={!!integration} onOpenChange={onClose}>
@@ -180,8 +183,8 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save & Connect
+          <Button onClick={handleSave} disabled={connectMutation.isPending} className="gap-1.5">
+            {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Save & Connect
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -453,26 +456,14 @@ interface VaultStatus {
 
 export default function ManagementIntegrationsPage() {
   const [location, setLocation] = useLocation();
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [loading, setLoading]           = useState(true);
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
-  const [vaultStatus, setVaultStatus]   = useState<VaultStatus | null>(null);
 
-  const fetchIntegrations = async () => {
-    try {
-      const res = await fetch("/api/integrations", { credentials: "include" });
-      if (res.ok) setIntegrations(await res.json());
-    } finally { setLoading(false); }
-  };
+  const { data: integrationsRaw, isLoading: loading, refetch: refetchIntegrations } = useListIntegrations({ query: { queryKey: ["integrations"] } });
+  const integrations = (integrationsRaw ?? []) as unknown as Integration[];
+  const { data: vaultStatus } = useGetVaultStatus({ query: { queryKey: ["vault-status"] } });
 
-  useEffect(() => {
-    fetchIntegrations();
-    fetch("/api/vault/status", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setVaultStatus(data as VaultStatus); })
-      .catch(() => { /* vault status is non-critical */ });
-  }, []);
+  const disconnectMutation = useDisconnectIntegration();
 
   useEffect(() => {
     const params  = new URLSearchParams(window.location.search);
@@ -481,7 +472,7 @@ export default function ManagementIntegrationsPage() {
     if (success) {
       const intg = integrations.find((i) => i.key === success);
       toast.success(`${intg?.label ?? success} connected successfully`);
-      fetchIntegrations();
+      refetchIntegrations();
       window.history.replaceState({}, "", window.location.pathname);
     }
     if (error) {
@@ -492,15 +483,17 @@ export default function ManagementIntegrationsPage() {
     }
   }, [location, integrations.length]);
 
-  const handleDisconnect = async (intg: Integration) => {
+  const handleDisconnect = (intg: Integration) => {
     if (!confirm(`Disconnect ${intg.label}? This will remove stored credentials and tokens.`)) return;
     setConnecting((c) => ({ ...c, [intg.key]: true }));
-    try {
-      await fetch(`/api/integrations/${intg.key}`, { method: "DELETE", credentials: "include" });
-      toast.success(`${intg.label} disconnected`);
-      fetchIntegrations();
-    } catch { toast.error("Failed to disconnect"); }
-    finally { setConnecting((c) => ({ ...c, [intg.key]: false })); }
+    disconnectMutation.mutate(
+      { key: intg.key },
+      {
+        onSuccess: () => { toast.success(`${intg.label} disconnected`); refetchIntegrations(); },
+        onError: () => toast.error("Failed to disconnect"),
+        onSettled: () => setConnecting((c) => ({ ...c, [intg.key]: false })),
+      }
+    );
   };
 
   const handleOAuth = (intg: Integration) => {
@@ -629,7 +622,7 @@ export default function ManagementIntegrationsPage() {
         )}
       </div>
 
-      <ConnectModal integration={modalTarget} onClose={() => setModalTarget(null)} onSaved={fetchIntegrations} />
+      <ConnectModal integration={modalTarget} onClose={() => setModalTarget(null)} onSaved={refetchIntegrations} />
     </AppLayout>
   );
 }

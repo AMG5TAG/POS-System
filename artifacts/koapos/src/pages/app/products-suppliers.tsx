@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, useRequestUploadUrl,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,8 +62,6 @@ type Supplier = {
   createdAt: string;
 };
 
-const API = "/api/suppliers";
-const hdrs = { "Content-Type": "application/json" };
 
 const PAYMENT_TERMS = [
   "Not specified", "Net 7", "Net 14", "Net 30", "Net 60",
@@ -183,28 +185,23 @@ function LogoUploaderInline({ value, onChange }: { value: string; onChange: (url
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
+  const requestUploadUrlMutation = useRequestUploadUrl();
+
   const upload = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const urlRes = await fetch("/api/storage/uploads/request-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-        credentials: "include",
-      });
-      if (!urlRes.ok) throw new Error("Could not get upload URL");
-      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-      const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
+      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       if (!putRes.ok) throw new Error("Upload to storage failed");
-      onChange(`/api/storage${objectPath}`);
+      onChange(`/api/storage${result.objectPath}`);
       toast.success("Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
-  }, [onChange]);
+  }, [onChange, requestUploadUrlMutation]);
 
   return (
     <div className="space-y-1.5">
@@ -505,7 +502,7 @@ type SortDir = "asc" | "desc";
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ProductsSuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
@@ -514,12 +511,15 @@ export default function ProductsSuppliersPage() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  const load = async () => {
-    const res = await fetch(`${API}${search ? `?search=${encodeURIComponent(search)}` : ""}`, { credentials: "include" });
-    if (res.ok) setSuppliers((await res.json()).items);
-  };
+  const { data: suppliersData, refetch: refetchSuppliers } = useListSuppliers(
+    search ? { search } : undefined,
+    { query: { queryKey: ["suppliers", search] } }
+  );
+  const suppliers = ((suppliersData?.items ?? []) as unknown as Supplier[]);
 
-  useEffect(() => { load(); }, [search]);
+  const createSupplierMutation = useCreateSupplier();
+  const updateSupplierMutation = useUpdateSupplier();
+  const deleteSupplierMutation = useDeleteSupplier();
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit   = (s: Supplier) => { setEditing(s); setDialogOpen(true); };
@@ -527,29 +527,31 @@ export default function ProductsSuppliersPage() {
   const handleSave = async (form: SupplierForm) => {
     if (!form.name.trim()) { toast.error("Supplier name is required"); return; }
     setSaving(true);
-    const body = JSON.stringify({
+    const payload = {
       ...form,
       contacts: form.contacts.length > 0 ? form.contacts : null,
-      // Populate legacy fields from first contact for backward compat
       contactName: form.contacts[0]?.name || null,
       email: form.contacts[0]?.email || null,
       phone: form.contacts[0]?.phone || null,
       address: [form.street, form.city, form.state, form.postcode, form.country].filter(Boolean).join(", ") || null,
-    });
-    const res = editing
-      ? await fetch(`${API}/${editing.id}`, { method: "PATCH", headers: hdrs, body, credentials: "include" })
-      : await fetch(API, { method: "POST", headers: hdrs, body, credentials: "include" });
-    setSaving(false);
-    if (!res.ok) { toast.error("Failed to save supplier"); return; }
-    toast.success(editing ? "Supplier updated" : "Supplier added");
-    setDialogOpen(false);
-    load();
+    };
+    try {
+      if (editing) {
+        await updateSupplierMutation.mutateAsync({ id: editing.id, data: payload as unknown as Parameters<typeof updateSupplierMutation.mutateAsync>[0]["data"] });
+      } else {
+        await createSupplierMutation.mutateAsync({ data: payload as unknown as Parameters<typeof createSupplierMutation.mutateAsync>[0]["data"] });
+      }
+      toast.success(editing ? "Supplier updated" : "Supplier added");
+      setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    } catch { toast.error("Failed to save supplier"); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
-    await fetch(`${API}/${id}`, { method: "DELETE", credentials: "include" });
+    await deleteSupplierMutation.mutateAsync({ id });
     toast.success("Supplier deleted");
-    load();
+    refetchSuppliers();
   };
 
   const getContacts = (s: Supplier): Contact[] => {

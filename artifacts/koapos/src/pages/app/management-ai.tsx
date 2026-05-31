@@ -14,6 +14,7 @@ import {
   AlertTriangle, Sparkles, RotateCcw, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCreateOpenaiConversation, useDeleteOpenaiConversation, useSendOpenaiMessage, getOpenaiConversation } from "@workspace/api-client-react";
 
 type Mode = "budget" | "stock" | "marketing";
 type Message = { role: "user" | "assistant"; content: string };
@@ -100,10 +101,9 @@ export default function ManagementAIPage() {
     budget: [], stock: [], marketing: [],
   });
   const [input, setInput] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingConv, setIsLoadingConv] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const sendMsgMutation = useSendOpenaiMessage();
 
   const currentMessages = messages[activeMode];
   const currentConversation = conversations[activeMode];
@@ -113,21 +113,17 @@ export default function ManagementAIPage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [currentMessages, isStreaming]);
+  }, [currentMessages, sendMsgMutation.isPending]);
+
+  const createConvMutation = useCreateOpenaiConversation();
+  const deleteConvMutation = useDeleteOpenaiConversation();
 
   const loadOrCreateConversation = useCallback(async (mode: Mode) => {
     if (conversations[mode]) return conversations[mode];
     setIsLoadingConv(true);
     try {
-      const res = await fetch("/api/openai/conversations", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
-      });
-      const conv: Conversation = await res.json();
-      const detailRes = await fetch(`/api/openai/conversations/${conv.id}`, { credentials: "include" });
-      const detail = await detailRes.json() as { messages: Message[] };
+      const conv = await createConvMutation.mutateAsync({ data: { mode } }) as Conversation;
+      const detail = await getOpenaiConversation(conv.id) as { messages: Message[] };
       setConversations(prev => ({ ...prev, [mode]: conv }));
       setMessages(prev => ({ ...prev, [mode]: detail.messages ?? [] }));
       return conv;
@@ -137,6 +133,7 @@ export default function ManagementAIPage() {
     } finally {
       setIsLoadingConv(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations]);
 
   useEffect(() => {
@@ -146,73 +143,24 @@ export default function ManagementAIPage() {
   }, [activeMode, aiEnabled]);
 
   const sendMessage = async (content: string) => {
-    if (!content.trim() || isStreaming) return;
+    if (!content.trim() || sendMsgMutation.isPending) return;
     const conv = await loadOrCreateConversation(activeMode);
     if (!conv) return;
 
-    const userMsg: Message = { role: "user", content: content.trim() };
-    setMessages(prev => ({ ...prev, [activeMode]: [...prev[activeMode], userMsg] }));
+    const trimmed = content.trim();
+    setMessages(prev => ({ ...prev, [activeMode]: [...prev[activeMode], { role: "user" as const, content: trimmed }] }));
     setInput("");
-    setIsStreaming(true);
-
-    const assistantMsg: Message = { role: "assistant", content: "" };
-    setMessages(prev => ({ ...prev, [activeMode]: [...prev[activeMode], assistantMsg] }));
-
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
 
     try {
-      const res = await fetch(`/api/openai/conversations/${conv.id}/messages`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: content.trim() }),
-        signal: ctrl.signal,
+      const response = await sendMsgMutation.mutateAsync({ id: conv.id, data: { content: trimmed } }) as { role: string; content: string };
+      setMessages(prev => ({ ...prev, [activeMode]: [...prev[activeMode], { role: "assistant" as const, content: response?.content ?? "" }] }));
+    } catch {
+      toast.error("Failed to get AI response");
+      setMessages(prev => {
+        const msgs = [...prev[activeMode]];
+        msgs.pop();
+        return { ...prev, [activeMode]: msgs };
       });
-
-      if (!res.ok || !res.body) throw new Error("Request failed");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const parsed = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: string };
-            if (parsed.error) { toast.error(parsed.error); break; }
-            if (parsed.done) break;
-            if (parsed.content) {
-              setMessages(prev => {
-                const msgs = [...prev[activeMode]];
-                const last = msgs[msgs.length - 1];
-                if (last?.role === "assistant") {
-                  msgs[msgs.length - 1] = { ...last, content: last.content + parsed.content };
-                }
-                return { ...prev, [activeMode]: msgs };
-              });
-            }
-          } catch { /* skip malformed */ }
-        }
-      }
-    } catch (err: unknown) {
-      if ((err as Error)?.name !== "AbortError") {
-        toast.error("Failed to get AI response");
-        setMessages(prev => {
-          const msgs = [...prev[activeMode]];
-          msgs.pop();
-          return { ...prev, [activeMode]: msgs };
-        });
-      }
-    } finally {
-      setIsStreaming(false);
-      abortRef.current = null;
     }
   };
 
@@ -220,10 +168,7 @@ export default function ManagementAIPage() {
     const conv = conversations[activeMode];
     if (!conv) return;
     try {
-      await fetch(`/api/openai/conversations/${conv.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+      await deleteConvMutation.mutateAsync({ id: conv.id });
       setConversations(prev => ({ ...prev, [activeMode]: null }));
       setMessages(prev => ({ ...prev, [activeMode]: [] }));
       await loadOrCreateConversation(activeMode);
@@ -478,7 +423,7 @@ export default function ManagementAIPage() {
 
               {/* Input area */}
               <div className="px-5 py-4 shrink-0 bg-background">
-                {currentMessages.length > 0 && !isStreaming && (
+                {currentMessages.length > 0 && !sendMsgMutation.isPending && (
                   <div className="flex gap-2 mb-3 flex-wrap">
                     {modeInfo.prompts.slice(0, 2).map((prompt, i) => (
                       <button
@@ -498,16 +443,16 @@ export default function ManagementAIPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={`Ask anything about ${modeInfo.label.toLowerCase()}… (Enter to send, Shift+Enter for new line)`}
                     rows={2}
-                    disabled={isStreaming}
+                    disabled={sendMsgMutation.isPending}
                     className="resize-none flex-1 text-sm min-h-[60px] max-h-[140px]"
                   />
                   <Button
                     onClick={() => sendMessage(input)}
-                    disabled={!input.trim() || isStreaming}
+                    disabled={!input.trim() || sendMsgMutation.isPending}
                     size="icon"
                     className="h-[60px] w-10 shrink-0"
                   >
-                    {isStreaming
+                    {sendMsgMutation.isPending
                       ? <div className="h-4 w-4 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
                       : <Send className="h-4 w-4" />
                     }

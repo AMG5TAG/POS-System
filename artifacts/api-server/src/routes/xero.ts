@@ -51,11 +51,11 @@ type XeroCredentials = {
     lastSyncAt?: string;
   };
   syncLog?: Array<{
-    at: string;
+    timestamp: string;
     type: string;
-    count: number;
-    status: "success" | "error";
-    message: string;
+    synced?: number;
+    message?: string;
+    error?: string;
   }>;
 };
 
@@ -441,7 +441,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     ? `Synced ${xeroContacts.length} contacts`
     : `Xero API error: ${r.status}`;
 
-  await appendSyncLog(merchantId, { at: new Date().toISOString(), type: "contacts", count: xeroContacts.length, status, message: msg });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "contacts", synced: xeroContacts.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
   res.json({ ok: true, synced: xeroContacts.length, message: msg });
@@ -531,7 +531,7 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
     ? `Synced ${invoices.length} transactions`
     : `Xero API error: ${r.status}`;
 
-  await appendSyncLog(merchantId, { at: new Date().toISOString(), type: "transactions", count: invoices.length, status, message: msg });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: invoices.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
   res.json({ ok: true, synced: invoices.length, message: msg });
@@ -586,7 +586,7 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
     ? `Synced ${xeroPos.length} purchase orders as bills`
     : `Xero API error: ${r.status}`;
 
-  await appendSyncLog(merchantId, { at: new Date().toISOString(), type: "purchase_orders", count: xeroPos.length, status, message: msg });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: xeroPos.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
   res.json({ ok: true, synced: xeroPos.length, message: msg });

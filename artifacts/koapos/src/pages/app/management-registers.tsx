@@ -4,6 +4,7 @@ import {
   useListStaff, useListPosRegisters, useCreatePosRegister,
   useUpdatePosRegister, useDeletePosRegister,
   useGetPosSettings, useUpsertPosSettings,
+  useListIntegrations,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,20 +151,9 @@ type ConnectedPayIntegration = { key: string; label: string; category: string };
 
 function PaymentMethodsSection() {
   const { settings, upsert } = usePosSettings();
-  const [payIntegrations, setPayIntegrations] = useState<ConnectedPayIntegration[]>([]);
-
-  useMemo(() => {
-    fetch("/api/integrations", { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: (ConnectedPayIntegration & { status: string })[]) => {
-        setPayIntegrations(
-          data.filter(i => i.status === "connected" &&
-            (PAYMENT_INTEGRATION_CATS as readonly string[]).includes(i.category))
-        );
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { data: integrationsData = [] } = useListIntegrations();
+  const payIntegrations = (integrationsData as unknown as (ConnectedPayIntegration & { status: string })[])
+    .filter(i => i.status === "connected" && (PAYMENT_INTEGRATION_CATS as readonly string[]).includes(i.category));
 
   const enabled = useMemo((): PaymentMethodIdLocal[] => {
     try {

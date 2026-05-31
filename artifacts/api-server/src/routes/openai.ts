@@ -210,6 +210,25 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     ...history.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
   ];
 
+  const wantsStream = (req.headers.accept ?? "").includes("text/event-stream");
+
+  if (!wantsStream) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-5.4",
+        max_completion_tokens: 8192,
+        messages: chatMessages,
+      });
+      const assistantContent = completion.choices[0]?.message?.content ?? "";
+      await db.insert(messages).values({ conversationId: id, role: "assistant", content: assistantContent });
+      res.json({ role: "assistant", content: assistantContent });
+    } catch (err) {
+      req.log.error({ err }, "OpenAI error");
+      res.status(500).json({ error: "AI request failed" });
+    }
+    return;
+  }
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");

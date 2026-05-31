@@ -175,6 +175,31 @@ router.get("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(formatTake(take, lines));
 });
 
+/* ── Discard (delete) an open stock take ────────────────────────────────── */
+
+router.delete("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const paramsResult = GetStockTakeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+
+  const [take] = await db
+    .select()
+    .from(stockTakesTable)
+    .where(and(eq(stockTakesTable.id, id), eq(stockTakesTable.merchantId, merchantId)));
+
+  if (!take) { res.status(404).json({ error: "Not found" }); return; }
+  if (take.status !== "open") {
+    res.status(409).json({ error: "Cannot discard a stock take that has already been submitted." });
+    return;
+  }
+
+  await db.delete(stockTakeLinesTable).where(eq(stockTakeLinesTable.stockTakeId, id));
+  await db.delete(stockTakesTable).where(and(eq(stockTakesTable.id, id), eq(stockTakesTable.merchantId, merchantId)));
+
+  res.status(204).end();
+});
+
 /* ── Save progress ──────────────────────────────────────────────────────── */
 
 router.patch("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {

@@ -5,6 +5,8 @@ import {
   useListPosRegisters,
   useListCashDrawerEntries,
   useCreateCashDrawerEntry,
+  useCreatePosRegisterSession,
+  useUpdatePosRegisterSession,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +59,8 @@ type Entry = {
 export default function PosEodPage() {
   const qc = useQueryClient();
   const [registerId, setRegisterId] = useState("default");
+  const createSession = useCreatePosRegisterSession();
+  const updateSession = useUpdatePosRegisterSession();
 
   const { data: regsData }     = useListPosRegisters({});
   const registers: { registerId: string; name: string }[] =
@@ -84,26 +88,21 @@ export default function PosEodPage() {
   const [openForm, setOpenForm] = useState({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
   const [saving, setSaving]     = useState(false);
 
-  async function handleOpen() {
+  function handleOpen() {
     setSaving(true);
-    try {
-      const r = await fetch("/api/pos-register-sessions", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          registerId,
-          openedBy: openForm.openedBy,
-          openingFloat: parseFloat(openForm.openingFloat) || 0,
-          openingNotes: openForm.openingNotes,
-        }),
-      });
-      if (!r.ok) throw new Error();
-      toast.success("Register opened");
-      setOpenDlg(false);
-      setOpenForm({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
-      qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
-    } catch { toast.error("Failed to open register"); }
-    finally { setSaving(false); }
+    createSession.mutate(
+      { data: { registerId, openedBy: openForm.openedBy, openingFloat: openForm.openingFloat, openingNotes: openForm.openingNotes } },
+      {
+        onSuccess: () => {
+          toast.success("Register opened");
+          setOpenDlg(false);
+          setOpenForm({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
+          qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
+        },
+        onError: () => toast.error("Failed to open register"),
+        onSettled: () => setSaving(false),
+      }
+    );
   }
 
   /* ── close dialog ── */
@@ -116,27 +115,22 @@ export default function PosEodPage() {
   const expectedCash  = openingFloat + cashIn - cashOut;
   const cashVariance  = closeForm.cashCounted !== "" ? parseFloat(closeForm.cashCounted) - expectedCash : null;
 
-  async function handleClose() {
+  function handleClose() {
     if (!openSession) return;
     setSaving(true);
-    try {
-      const r = await fetch(`/api/pos-register-sessions/${openSession.id}`, {
-        method: "PATCH", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          closedAt: new Date().toISOString(),
-          cashCounted: parseFloat(closeForm.cashCounted) || 0,
-          eftposDeclared: parseFloat(closeForm.eftposDeclared) || 0,
-          closingNotes: closeForm.closingNotes,
-        }),
-      });
-      if (!r.ok) throw new Error();
-      toast.success("Register closed — Z-Read recorded");
-      setCloseDlg(false);
-      setCloseForm({ cashCounted: "", eftposDeclared: "0.00", closingNotes: "" });
-      qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
-    } catch { toast.error("Failed to close register"); }
-    finally { setSaving(false); }
+    updateSession.mutate(
+      { id: openSession.id, data: { closedAt: new Date().toISOString(), cashCounted: closeForm.cashCounted || "0", eftposDeclared: closeForm.eftposDeclared || "0", closingNotes: closeForm.closingNotes } },
+      {
+        onSuccess: () => {
+          toast.success("Register closed — Z-Read recorded");
+          setCloseDlg(false);
+          setCloseForm({ cashCounted: "", eftposDeclared: "0.00", closingNotes: "" });
+          qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
+        },
+        onError: () => toast.error("Failed to close register"),
+        onSettled: () => setSaving(false),
+      }
+    );
   }
 
   /* ── cash movement dialog ── */
@@ -146,7 +140,7 @@ export default function PosEodPage() {
   function handleAddEntry() {
     if (!moveForm.amount) return;
     createEntry.mutate(
-      { data: { type: moveForm.type, amount: parseFloat(moveForm.amount) || 0, note: moveForm.note || undefined, shiftDate: TODAY } as never },
+      { data: { type: moveForm.type, amount: parseFloat(moveForm.amount) || 0, note: moveForm.note || undefined, shiftDate: TODAY } },
       {
         onSuccess: () => {
           toast.success(moveForm.type === "cash_in" ? "Cash In recorded" : "Cash Out recorded");

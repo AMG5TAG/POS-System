@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -55,53 +55,46 @@ export default function SettingsAccountPage() {
   const emailInvalid   = newEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail);
   const canChangeEmail = newEmail.length > 0 && !emailInvalid && newEmail === confirmEmail && emailPw.length > 0;
 
-  const handleChangeEmail = async () => {
+  const changeEmailMutation = useChangeEmail();
+  const changePasswordMutation = useChangePassword();
+
+  const handleChangeEmail = () => {
     if (!canChangeEmail) return;
     setEmailSaving(true);
-    try {
-      const res = await fetch("/api/auth/change-email", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: emailPw, newEmail }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error ?? "Email change failed");
-        return;
+    changeEmailMutation.mutate(
+      { data: { currentPassword: emailPw, newEmail } },
+      {
+        onSuccess: () => {
+          toast.success("Email updated successfully");
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          setNewEmail(""); setConfirmEmail(""); setEmailPw("");
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Email change failed");
+        },
+        onSettled: () => setEmailSaving(false),
       }
-      toast.success("Email updated successfully");
-      qc.invalidateQueries({ queryKey: ["merchant"] });
-      setNewEmail(""); setConfirmEmail(""); setEmailPw("");
-    } catch {
-      toast.error("Network error — please try again");
-    } finally {
-      setEmailSaving(false);
-    }
+    );
   };
 
-  const handleChangePassword = async () => {
+  const handleChangePassword = () => {
     if (!canChangePw) return;
     setPwSaving(true);
-    try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error ?? "Password change failed");
-        return;
+    changePasswordMutation.mutate(
+      { data: { currentPassword: currentPw, newPassword: newPw } },
+      {
+        onSuccess: () => {
+          toast.success("Password updated successfully");
+          setCurrentPw(""); setNewPw(""); setConfirmPw("");
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Password change failed");
+        },
+        onSettled: () => setPwSaving(false),
       }
-      toast.success("Password updated successfully");
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-    } catch {
-      toast.error("Network error — please try again");
-    } finally {
-      setPwSaving(false);
-    }
+    );
   };
 
   useEffect(() => {
@@ -116,37 +109,33 @@ export default function SettingsAccountPage() {
   const isLongEnough = username.length >= 3;
   const canSave = hasChanged && isValid && isLongEnough;
 
-  const handleSave = async () => {
+  const updateMerchant = useUpdateMerchant();
+
+  const handleSave = () => {
     if (!canSave) return;
     setSaving(true);
-    try {
-      const res = await fetch("/api/merchants/me", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
-      });
-      if (res.status === 409) {
-        const { error } = await res.json();
-        toast.error("Username already taken", { description: error });
-        return;
+    updateMerchant.mutate(
+      { data: { username } },
+      {
+        onSuccess: (updated) => {
+          const u = (updated as { username?: string }).username;
+          setSavedUsername(u ?? null);
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success("Username saved!", {
+            description: `Your page is now at ${PORTAL_BASE}${u}`,
+          });
+        },
+        onError: (err: unknown) => {
+          const resp = err as { response?: { status?: number; data?: { error?: string } } };
+          if (resp?.response?.status === 409) {
+            toast.error("Username already taken", { description: resp.response.data?.error });
+          } else {
+            toast.error("Could not update username", { description: resp?.response?.data?.error ?? "Update failed" });
+          }
+        },
+        onSettled: () => setSaving(false),
       }
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: "Update failed" }));
-        toast.error("Could not update username", { description: error });
-        return;
-      }
-      const updated = await res.json();
-      setSavedUsername(updated.username);
-      qc.invalidateQueries({ queryKey: ["merchant"] });
-      toast.success("Username saved!", {
-        description: `Your page is now at ${PORTAL_BASE}${updated.username}`,
-      });
-    } catch {
-      toast.error("Network error — please try again");
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const fieldError =

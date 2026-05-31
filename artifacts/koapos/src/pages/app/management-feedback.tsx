@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
+import { useSubmitFeedback, ApiError } from "@workspace/api-client-react";
 import {
   Bug, Lightbulb, Upload, X, Send, Loader2, CheckCircle2,
   Paperclip, AlertCircle, MessageSquare,
@@ -115,9 +116,10 @@ export default function ManagementFeedbackPage() {
   const [description, setDescription] = useState("");
   const [steps, setSteps]           = useState("");
   const [files, setFiles]           = useState<AttachmentFile[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [noEmail, setNoEmail]       = useState(false);
+
+  const submitFeedbackMutation = useSubmitFeedback();
 
   const reset = () => {
     setTitle(""); setDescription(""); setSteps(""); setFiles([]);
@@ -128,44 +130,37 @@ export default function ManagementFeedbackPage() {
     setTab(t); setSubmitted(false); setNoEmail(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!title.trim())       { toast.error("Please enter a title."); return; }
     if (!description.trim()) { toast.error("Please enter a description."); return; }
 
-    setSubmitting(true);
     setNoEmail(false);
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    submitFeedbackMutation.mutate(
+      {
+        data: {
           type: tab,
           title: title.trim(),
           description: description.trim(),
           steps: tab === "bug" ? steps.trim() : undefined,
           appVersion: APP_VERSION,
           attachments: files.map(({ name, mimeType, data }) => ({ name, mimeType, data })),
-        }),
-      });
-
-      if (res.ok) {
-        setSubmitted(true);
-        toast.success("Feedback submitted — thank you!");
-        setFiles([]);
-      } else {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        if (res.status === 503) {
-          setNoEmail(true);
-        } else {
-          toast.error(body.error ?? "Failed to submit feedback.");
-        }
+        },
+      },
+      {
+        onSuccess: () => {
+          setSubmitted(true);
+          toast.success("Feedback submitted — thank you!");
+          setFiles([]);
+        },
+        onError: (err: unknown) => {
+          if (err instanceof ApiError && err.status === 503) {
+            setNoEmail(true);
+          } else {
+            toast.error("Failed to submit feedback.");
+          }
+        },
       }
-    } catch {
-      toast.error("Network error — please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    );
   };
 
   /* ── Success state ── */
@@ -322,15 +317,15 @@ export default function ManagementFeedbackPage() {
             <div className="flex items-center gap-3">
               <Button
                 onClick={handleSubmit}
-                disabled={submitting}
+                disabled={submitFeedbackMutation.isPending}
                 className="gap-2"
               >
-                {submitting
+                {submitFeedbackMutation.isPending
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
                   : <><Send className="w-4 h-4" /> Send Feedback</>}
               </Button>
               {(title || description || steps || files.length > 0) && (
-                <Button variant="ghost" onClick={reset} disabled={submitting} size="sm">
+                <Button variant="ghost" onClick={reset} disabled={submitFeedbackMutation.isPending} size="sm">
                   Clear
                 </Button>
               )}

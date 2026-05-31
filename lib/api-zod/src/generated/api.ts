@@ -2207,6 +2207,14 @@ export const GetStockTakeResponse = zod.object({
 
 
 /**
+ * @summary Discard an open stock take
+ */
+export const DeleteStockTakeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Save counted quantities (progress save)
  */
 export const SaveStockTakeProgressParams = zod.object({

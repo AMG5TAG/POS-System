@@ -2517,9 +2517,12 @@ export default function CustomersPage() {
     const ids = [...checked];
     let success = 0;
     await Promise.all(ids.map((id) =>
-      fetch(`/api/customers/${id}`, { method: "DELETE", credentials: "include" })
-        .then((r) => { if (r.ok) success++; })
-        .catch(() => {})
+      new Promise<void>((resolve) => {
+        deleteMutation.mutate({ id }, {
+          onSuccess: () => { success++; resolve(); },
+          onError: () => resolve(),
+        });
+      })
     ));
     setChecked(new Set());
     setBulkDeleteConfirm(false);

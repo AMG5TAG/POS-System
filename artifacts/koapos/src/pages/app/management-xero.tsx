@@ -1,4 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import {
+  useGetXeroStatus,
+  useListXeroTenants,
+  useListXeroAccounts,
+  useSelectXeroTenant,
+  useUpdateXeroMappings,
+  useSyncXeroTransactions,
+  useSyncXeroContacts,
+  useSyncXeroPurchaseOrders,
+  useDisconnectXero,
+  type XeroSyncLogEntry,
+  type XeroTenant,
+  type XeroAccount,
+  type XeroMappingsUpdate,
+} from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -43,22 +58,10 @@ interface XeroStatus {
   tenantName?: string;
   mappings?: XeroMappings;
   syncSettings?: SyncSettings;
-  syncLog?: SyncLogEntry[];
+  syncLog?: XeroSyncLogEntry[];
   connectedAt?: string;
 }
 
-interface XeroAccount {
-  AccountID: string;
-  Code: string;
-  Name: string;
-  Type: string;
-}
-
-interface XeroTenant {
-  tenantId: string;
-  tenantName: string;
-  tenantType: string;
-}
 
 interface XeroMappings {
   revenueAccount?: string;
@@ -82,13 +85,6 @@ interface SyncSettings {
   syncFrequency: "daily" | "weekly" | "manual";
 }
 
-interface SyncLogEntry {
-  at: string;
-  type: string;
-  count: number;
-  status: "success" | "error";
-  message: string;
-}
 
 /* ── Xero logo ──────────────────────────────────────────────────────────── */
 
@@ -175,30 +171,31 @@ function AccountSelect({
 
 /* ── SyncLogRow ─────────────────────────────────────────────────────────── */
 
-function SyncLogRow({ entry }: { entry: SyncLogEntry }) {
+function SyncLogRow({ entry }: { entry: XeroSyncLogEntry }) {
   const typeLabel: Record<string, string> = {
     transactions:   "Sales Transactions",
     contacts:       "Contacts",
     purchase_orders: "Purchase Orders",
   };
+  const isSuccess = !entry.error;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
-      {entry.status === "success"
+      {isSuccess
         ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
         : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{typeLabel[entry.type] ?? entry.type}</p>
-        <p className="text-xs text-muted-foreground truncate">{entry.message}</p>
+        <p className="text-xs text-muted-foreground truncate">{entry.message ?? entry.error}</p>
       </div>
       <div className="text-right shrink-0">
         <Badge variant="outline" className={cn(
           "text-[10px]",
-          entry.status === "success" ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200",
+          isSuccess ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200",
         )}>
-          {entry.count} records
+          {entry.synced ?? 0} records
         </Badge>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          {new Date(entry.at).toLocaleDateString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+          {new Date(entry.timestamp).toLocaleDateString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
     </div>
@@ -209,10 +206,7 @@ function SyncLogRow({ entry }: { entry: SyncLogEntry }) {
 
 export default function ManagementXeroPage() {
   const [, setLocation] = useLocation();
-  const [step, setStep]         = useState(1);
-  const [status, setStatus]     = useState<XeroStatus | null>(null);
-  const [tenants, setTenants]   = useState<XeroTenant[]>([]);
-  const [accounts, setAccounts] = useState<XeroAccount[]>([]);
+  const [step, setStep] = useState(1);
   const [mappings, setMappings] = useState<XeroMappings>({});
   const [syncSettings, setSyncSettings] = useState<SyncSettings>({
     syncTransactions:   true,
@@ -221,37 +215,42 @@ export default function ManagementXeroPage() {
     autoSync:           false,
     syncFrequency:      "daily",
   });
-  const [loadingStatus,   setLoadingStatus]   = useState(true);
-  const [loadingTenants,  setLoadingTenants]  = useState(false);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
-  const [saving,          setSaving]          = useState(false);
-  const [syncing,         setSyncing]         = useState<string | null>(null);
-  const [disconnecting,   setDisconnecting]   = useState(false);
+  const [saving,        setSaving]      = useState(false);
+  const [syncing,       setSyncing]     = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
-  /* ── Load status ─────────────────────────────────────────────────────── */
+  /* ── Queries ──────────────────────────────────────────────────────────── */
 
-  const loadStatus = useCallback(async () => {
-    setLoadingStatus(true);
-    try {
-      const r = await fetch("/api/xero/status", { credentials: "include" });
-      if (r.ok) {
-        const s = await r.json() as XeroStatus;
-        setStatus(s);
-        if (s.mappings)     setMappings(s.mappings);
-        if (s.syncSettings) setSyncSettings({ ...syncSettings, ...s.syncSettings });
-        /* Auto-advance step based on connection state */
-        if (s.connected && s.tenantId && s.mappings?.revenueAccount) {
-          setStep(6);
-        } else if (s.connected && s.tenantId) {
-          setStep(4);
-        } else if (s.connected) {
-          setStep(3);
-        }
-      }
-    } finally {
-      setLoadingStatus(false);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { data: status, isLoading: loadingStatus, refetch: refetchStatus } = useGetXeroStatus();
+  const connected = status?.connected ?? false;
+  const { data: tenants = [], isLoading: loadingTenants, refetch: refetchTenants } = useListXeroTenants({
+    query: { enabled: connected && step >= 3, queryKey: ["xero-tenants"] },
+  });
+  const { data: accounts = [], isLoading: loadingAccounts, refetch: refetchAccounts } = useListXeroAccounts({
+    query: { enabled: connected && !!status?.tenantId && step >= 4, queryKey: ["xero-accounts"] },
+  });
+
+  /* ── Mutations ────────────────────────────────────────────────────────── */
+
+  const selectTenantMutation  = useSelectXeroTenant();
+  const updateMappingsMutation = useUpdateXeroMappings();
+  const syncTransactionsMutation = useSyncXeroTransactions();
+  const syncContactsMutation     = useSyncXeroContacts();
+  const syncPurchaseOrdersMutation = useSyncXeroPurchaseOrders();
+  const disconnectMutation = useDisconnectXero();
+
+  /* ── One-time initialisation from status ─────────────────────────────── */
+
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (initializedRef.current || !status) return;
+    initializedRef.current = true;
+    if (status.mappings)     setMappings(status.mappings);
+    if (status.syncSettings) setSyncSettings(prev => ({ ...prev, ...status.syncSettings }));
+    if (status.connected && status.tenantId && status.mappings?.revenueAccount) setStep(6);
+    else if (status.connected && status.tenantId) setStep(4);
+    else if (status.connected) setStep(3);
+  }, [status]);
 
   /* Handle URL params after OAuth redirect */
   useEffect(() => {
@@ -272,148 +271,87 @@ export default function ManagementXeroPage() {
       toast.error(msgs[error] ?? "Xero connection failed.");
       window.history.replaceState({}, "", window.location.pathname);
     }
-    loadStatus();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Load tenants ────────────────────────────────────────────────────── */
+  /* ── Select tenant ────────────────────────────────────────────────────── */
 
-  const loadTenants = async () => {
-    setLoadingTenants(true);
-    try {
-      const r = await fetch("/api/xero/tenants", { credentials: "include" });
-      if (r.ok) setTenants(await r.json() as XeroTenant[]);
-      else toast.error("Failed to load Xero organisations.");
-    } finally {
-      setLoadingTenants(false);
-    }
-  };
-
-  /* ── Load accounts ───────────────────────────────────────────────────── */
-
-  const loadAccounts = async () => {
-    setLoadingAccounts(true);
-    try {
-      const r = await fetch("/api/xero/accounts", { credentials: "include" });
-      if (r.ok) setAccounts(await r.json() as XeroAccount[]);
-      else toast.error("Failed to load chart of accounts.");
-    } finally {
-      setLoadingAccounts(false);
-    }
-  };
-
-  /* ── When step changes ───────────────────────────────────────────────── */
-
-  useEffect(() => {
-    if (step === 3 && tenants.length === 0 && status?.connected) loadTenants();
-    if (step === 4 && accounts.length === 0 && status?.tenantId)  loadAccounts();
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* ── Select tenant ───────────────────────────────────────────────────── */
-
-  const selectTenant = async (tenant: XeroTenant) => {
+  const selectTenant = (tenant: XeroTenant) => {
     setSaving(true);
-    try {
-      const r = await fetch("/api/xero/tenant", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: tenant.tenantId, tenantName: tenant.tenantName }),
-      });
-      if (r.ok) {
-        setStatus((s) => s ? { ...s, tenantId: tenant.tenantId, tenantName: tenant.tenantName } : s);
-        toast.success(`Organisation set to ${tenant.tenantName}`);
-        setStep(4);
-      } else {
-        toast.error("Failed to save organisation.");
+    selectTenantMutation.mutate(
+      { data: { tenantId: tenant.tenantId, tenantName: tenant.tenantName } },
+      {
+        onSuccess: () => {
+          toast.success(`Organisation set to ${tenant.tenantName}`);
+          void refetchStatus();
+          setStep(4);
+        },
+        onError: () => toast.error("Failed to save organisation."),
+        onSettled: () => setSaving(false),
       }
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
-  /* ── Save mappings ───────────────────────────────────────────────────── */
+  /* ── Save mappings ────────────────────────────────────────────────────── */
 
-  const saveMappings = async () => {
+  const saveMappings = () => {
     setSaving(true);
-    try {
-      const r = await fetch("/api/xero/mappings", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mappings, syncSettings }),
-      });
-      if (r.ok) {
-        toast.success("Account mappings saved.");
-        setStep(5);
-      } else {
-        toast.error("Failed to save mappings.");
+    updateMappingsMutation.mutate(
+      { data: { mappings, syncSettings } as unknown as XeroMappingsUpdate },
+      {
+        onSuccess: () => { toast.success("Account mappings saved."); setStep(5); },
+        onError: () => toast.error("Failed to save mappings."),
+        onSettled: () => setSaving(false),
       }
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
-  /* ── Save sync settings ──────────────────────────────────────────────── */
+  /* ── Save sync settings ───────────────────────────────────────────────── */
 
-  const saveSyncSettings = async () => {
+  const saveSyncSettings = () => {
     setSaving(true);
-    try {
-      const r = await fetch("/api/xero/mappings", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mappings, syncSettings }),
-      });
-      if (r.ok) {
-        toast.success("Sync settings saved.");
-        setStep(6);
-      } else {
-        toast.error("Failed to save settings.");
+    updateMappingsMutation.mutate(
+      { data: { mappings, syncSettings } as unknown as XeroMappingsUpdate },
+      {
+        onSuccess: () => { toast.success("Sync settings saved."); setStep(6); },
+        onError: () => toast.error("Failed to save settings."),
+        onSettled: () => setSaving(false),
       }
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
-  /* ── Trigger sync ────────────────────────────────────────────────────── */
+  /* ── Trigger sync ─────────────────────────────────────────────────────── */
 
-  const triggerSync = async (type: "transactions" | "contacts" | "purchase-orders") => {
+  const triggerSync = (type: "transactions" | "contacts" | "purchase-orders") => {
     setSyncing(type);
-    try {
-      const r = await fetch(`/api/xero/sync/${type}`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await r.json() as { ok?: boolean; synced?: number; message?: string; error?: string };
-      if (data.ok) {
-        toast.success(data.message ?? `Synced ${data.synced ?? 0} records`);
-        await loadStatus();
-      } else {
-        toast.error(data.error ?? "Sync failed");
-      }
-    } catch {
-      toast.error("Sync request failed");
-    } finally {
+    const onSuccess = (data: unknown) => {
+      const d = data as { ok?: boolean; synced?: number; message?: string; error?: string };
+      if (d?.ok) toast.success(d.message ?? `Synced ${d.synced ?? 0} records`);
+      else toast.error(d?.error ?? "Sync failed");
+      void refetchStatus();
       setSyncing(null);
-    }
+    };
+    const onError = () => { toast.error("Sync request failed"); setSyncing(null); };
+    if (type === "transactions") syncTransactionsMutation.mutate(undefined, { onSuccess, onError });
+    else if (type === "contacts") syncContactsMutation.mutate(undefined, { onSuccess, onError });
+    else syncPurchaseOrdersMutation.mutate(undefined, { onSuccess, onError });
   };
 
-  /* ── Disconnect ──────────────────────────────────────────────────────── */
+  /* ── Disconnect ───────────────────────────────────────────────────────── */
 
-  const disconnect = async () => {
+  const disconnect = () => {
     if (!confirm("Disconnect Xero? OAuth tokens and account mappings will be removed.")) return;
     setDisconnecting(true);
-    try {
-      await fetch("/api/xero/disconnect", { method: "DELETE", credentials: "include" });
-      toast.success("Xero disconnected.");
-      setStatus(null);
-      setMappings({});
-      setTenants([]);
-      setAccounts([]);
-      setStep(1);
-    } finally {
-      setDisconnecting(false);
-    }
+    disconnectMutation.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Xero disconnected.");
+        setMappings({});
+        setStep(1);
+        initializedRef.current = false;
+        void refetchStatus();
+      },
+      onError: () => toast.error("Failed to disconnect Xero."),
+      onSettled: () => setDisconnecting(false),
+    });
   };
 
   /* ── Loading skeleton ────────────────────────────────────────────────── */
@@ -639,11 +577,11 @@ export default function ManagementXeroPage() {
                 ) : tenants.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4">
                     No organisations found.{" "}
-                    <button className="text-[#13B5EA] underline" onClick={loadTenants}>Retry</button>
+                    <button className="text-[#13B5EA] underline" onClick={() => void refetchTenants()}>Retry</button>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {tenants.map((t) => (
+                    {(tenants as XeroTenant[]).map((t) => (
                       <button
                         key={t.tenantId}
                         onClick={() => selectTenant(t)}
@@ -669,7 +607,7 @@ export default function ManagementXeroPage() {
                   <Button variant="outline" onClick={() => setStep(2)} className="gap-1.5">
                     <ArrowLeft className="w-4 h-4" /> Back
                   </Button>
-                  <Button variant="outline" onClick={loadTenants} disabled={loadingTenants} className="gap-1.5">
+                  <Button variant="outline" onClick={() => void refetchTenants()} disabled={loadingTenants} className="gap-1.5">
                     <RefreshCw className={cn("w-4 h-4", loadingTenants && "animate-spin")} /> Refresh
                   </Button>
                 </div>
@@ -693,7 +631,7 @@ export default function ManagementXeroPage() {
                 ) : accounts.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4">
                     Could not load accounts.{" "}
-                    <button className="text-[#13B5EA] underline" onClick={loadAccounts}>Retry</button>
+                    <button className="text-[#13B5EA] underline" onClick={() => void refetchAccounts()}>Retry</button>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -767,7 +705,7 @@ export default function ManagementXeroPage() {
                     <ArrowLeft className="w-4 h-4" /> Back
                   </Button>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={loadAccounts} disabled={loadingAccounts} className="gap-1.5">
+                    <Button variant="outline" onClick={() => void refetchAccounts()} disabled={loadingAccounts} className="gap-1.5">
                       <RefreshCw className={cn("w-4 h-4", loadingAccounts && "animate-spin")} /> Refresh
                     </Button>
                     <Button
@@ -886,7 +824,7 @@ export default function ManagementXeroPage() {
                     ].filter((r) => r.val).map((r) => (
                       <div key={r.label} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{r.label}</span>
-                        <span className="font-medium">{r.code} – {r.val}</span>
+                        <span className="font-medium">{r.code as string} – {r.val as string}</span>
                       </div>
                     ))}
                   </div>
@@ -933,7 +871,7 @@ export default function ManagementXeroPage() {
                   <Button variant="outline" onClick={() => setStep(5)} className="gap-1.5">
                     <ArrowLeft className="w-4 h-4" /> Settings
                   </Button>
-                  <Button variant="outline" onClick={loadStatus} className="gap-1.5">
+                  <Button variant="outline" onClick={() => void refetchStatus()} className="gap-1.5">
                     <RefreshCw className="w-4 h-4" /> Refresh
                   </Button>
                 </div>

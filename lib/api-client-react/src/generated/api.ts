@@ -5879,6 +5879,76 @@ export function useGetStockTake<TData = Awaited<ReturnType<typeof getStockTake>>
 
 
 
+export const getDeleteStockTakeUrl = (id: number,) => {
+
+
+
+
+  return `/api/stock-takes/${id}`
+}
+
+/**
+ * @summary Discard an open stock take
+ */
+export const deleteStockTake = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteStockTakeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteStockTakeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStockTake>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteStockTake>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteStockTake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStockTake>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteStockTake(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteStockTakeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStockTake>>>
+
+    export type DeleteStockTakeMutationError = ErrorType<void>
+
+    /**
+ * @summary Discard an open stock take
+ */
+export const useDeleteStockTake = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStockTake>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteStockTake>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteStockTakeMutationOptions(options));
+    }
+
 export const getSaveStockTakeProgressUrl = (id: number,) => {
 
 

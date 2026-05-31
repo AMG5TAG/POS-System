@@ -1578,6 +1578,23 @@ paths:
                 $ref: "#/components/schemas/StockTake"
         "404":
           description: Not found
+    delete:
+      operationId: deleteStockTake
+      tags: [inventory]
+      summary: Discard an open stock take
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Stock take discarded
+        "404":
+          description: Not found
+        "409":
+          description: Stock take already submitted
     patch:
       operationId: saveStockTakeProgress
       tags: [inventory]

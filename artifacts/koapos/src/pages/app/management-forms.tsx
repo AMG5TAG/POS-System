@@ -23,7 +23,7 @@ import {
 } from "@/lib/forms-api";
 import { FormBuilder } from "@/components/forms/FormBuilder";
 import { FormRenderer } from "@/components/forms/FormRenderer";
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useListIntegrations } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { cn } from "@/lib/utils";
 
@@ -394,17 +394,10 @@ export default function ManagementFormsPage() {
 
   // Tab navigation
   const [activeTab, setActiveTab] = useState<"forms" | "files" | "cloud">("forms");
-  const [cloudIntegrations, setCloudIntegrations] = useState<{ key: string; label: string; status: string; connectedAt: string | null }[]>([]);
-
-  useEffect(() => {
-    fetch("/api/integrations", { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: { key: string; label: string; status: string; connectedAt: string | null }[]) => {
-        const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox", "proton_drive"]);
-        setCloudIntegrations(Array.isArray(data) ? data.filter(i => CLOUD_KEYS.has(i.key)) : []);
-      })
-      .catch(() => {});
-  }, []);
+  const { data: integrationsData = [] } = useListIntegrations();
+  const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox", "proton_drive"]);
+  const cloudIntegrations = (integrationsData as unknown as { key: string; label: string; status: string; connectedAt: string | null }[])
+    .filter(i => CLOUD_KEYS.has(i.key));
 
   // Builder view
   const [builderOpen, setBuilderOpen]       = useState(false);

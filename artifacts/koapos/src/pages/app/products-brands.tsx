@@ -1,4 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
+import {
+  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl,
+  useListProducts, getListProductsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,8 +43,6 @@ type Product = {
 type SortKey = "name" | "retailValue" | "productCount";
 type SortDir = "asc" | "desc";
 
-const API = "/api/brands";
-const hdrs = { "Content-Type": "application/json" };
 
 const fmt = (n: number) =>
   n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
@@ -53,21 +56,16 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
+  const requestUploadUrlMutation = useRequestUploadUrl();
+
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const urlRes = await fetch("/api/storage/uploads/request-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-        credentials: "include",
-      });
-      if (!urlRes.ok) throw new Error("Could not get upload URL");
-      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-      const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
+      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       if (!putRes.ok) throw new Error("Upload to storage failed");
-      onChange(`/api/storage${objectPath}`);
+      onChange(`/api/storage${result.objectPath}`);
       toast.success("Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
@@ -156,16 +154,12 @@ function SortBtn({ label, col, sort, onSort }: { label: string; col: SortKey; so
 /* ─── Expanded products row ─────────────────────────────────────────────── */
 
 function BrandProducts({ brandId, showCost }: { brandId: number; showCost: boolean }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/products?brandId=${brandId}&limit=100`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setProducts(data.items ?? []))
-      .finally(() => setLoading(false));
-  }, [brandId]);
+  const params = { brandId, limit: 100 } as unknown as Parameters<typeof useListProducts>[0];
+  const { data, isPending: loading } = useListProducts(
+    params,
+    { query: { queryKey: getListProductsQueryKey(params) } },
+  );
+  const products = (data?.items ?? []) as Product[];
 
   if (loading) return (
     <div className="flex items-center justify-center py-4">
@@ -210,7 +204,7 @@ function BrandProducts({ brandId, showCost }: { brandId: number; showCost: boole
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ProductsBrandsPage() {
-  const [brands, setBrands] = useState<Brand[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [showCost, setShowCost] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
@@ -220,12 +214,15 @@ export default function ProductsBrandsPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", website: "", logoUrl: "", description: "" });
 
-  const load = useCallback(async () => {
-    const res = await fetch(`${API}${search ? `?search=${encodeURIComponent(search)}` : ""}`, { credentials: "include" });
-    if (res.ok) setBrands((await res.json()).items);
-  }, [search]);
+  const { data: brandsData, refetch: refetchBrands } = useListBrands(
+    search ? { search } : undefined,
+    { query: { queryKey: ["brands", search] } }
+  );
+  const brands = ((brandsData?.items ?? []) as unknown as Brand[]);
 
-  useEffect(() => { load(); }, [load]);
+  const createBrandMutation = useCreateBrand();
+  const updateBrandMutation = useUpdateBrand();
+  const deleteBrandMutation = useDeleteBrand();
 
   const openCreate = () => { setEditing(null); setForm({ name: "", website: "", logoUrl: "", description: "" }); setDialogOpen(true); };
   const openEdit = (b: Brand) => {
@@ -237,21 +234,23 @@ export default function ProductsBrandsPage() {
   const handleSave = async () => {
     if (!form.name) { toast.error("Name is required"); return; }
     setSaving(true);
-    const body = JSON.stringify(form);
-    const res = editing
-      ? await fetch(`${API}/${editing.id}`, { method: "PATCH", headers: hdrs, body, credentials: "include" })
-      : await fetch(API, { method: "POST", headers: hdrs, body, credentials: "include" });
-    setSaving(false);
-    if (!res.ok) { toast.error("Failed to save brand"); return; }
-    toast.success(editing ? "Brand updated" : "Brand added");
-    setDialogOpen(false);
-    load();
+    try {
+      if (editing) {
+        await updateBrandMutation.mutateAsync({ id: editing.id, data: form });
+      } else {
+        await createBrandMutation.mutateAsync({ data: form });
+      }
+      toast.success(editing ? "Brand updated" : "Brand added");
+      setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["brands"] });
+    } catch { toast.error("Failed to save brand"); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
-    await fetch(`${API}/${id}`, { method: "DELETE", credentials: "include" });
+    await deleteBrandMutation.mutateAsync({ id });
     toast.success("Brand deleted");
-    load();
+    refetchBrands();
   };
 
   const toggleExpand = (id: number) => {

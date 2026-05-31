@@ -7,9 +7,12 @@ import {
   useUpdatePurchaseOrder,
   useDeletePurchaseOrder,
   useReceivePurchaseOrderItems,
+  useSendPurchaseOrderEmail,
   useListProducts,
+  useListSuppliers,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
+  ApiError,
   type PurchaseOrder,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -94,17 +97,8 @@ export default function ProductsPurchaseOrdersPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
   /* Supplier dropdown */
-  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
-  useEffect(() => {
-    if (!dialogOpen) return;
-    fetch("/api/suppliers", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        const list: SupplierOption[] = d.items ?? [];
-        setSuppliers([...list].sort((a, b) => a.name.localeCompare(b.name)));
-      })
-      .catch(() => {});
-  }, [dialogOpen]);
+  const { data: suppliersData } = useListSuppliers({}, { query: { enabled: dialogOpen, queryKey: ["suppliers"] } });
+  const suppliers: SupplierOption[] = [...((suppliersData as { items?: SupplierOption[] })?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
   /* Product search */
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -128,10 +122,11 @@ export default function ProductsPurchaseOrdersPage() {
   }, []);
 
   const { data: orders = [], isLoading } = useListPurchaseOrders({});
-  const createPO    = useCreatePurchaseOrder();
-  const updatePO    = useUpdatePurchaseOrder();
-  const deletePO    = useDeletePurchaseOrder();
-  const receivePO   = useReceivePurchaseOrderItems();
+  const createPO      = useCreatePurchaseOrder();
+  const updatePO      = useUpdatePurchaseOrder();
+  const deletePO      = useDeletePurchaseOrder();
+  const receivePO     = useReceivePurchaseOrderItems();
+  const sendEmailMutation = useSendPurchaseOrderEmail();
 
   const filtered = orders.filter((o) =>
     o.poNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -344,33 +339,33 @@ export default function ProductsPurchaseOrdersPage() {
           return `${day}/${m}/${y}`;
         };
 
-        const handleSendEmail = async (overrideTo?: string) => {
+        const handleSendEmail = (overrideTo?: string) => {
           setEmailLoading(true);
-          try {
-            const res = await fetch(`/api/purchase-orders/${po.id}/email`, {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(overrideTo ? { to: overrideTo } : {}),
-            });
-            const json = await res.json();
-            if (!res.ok) {
-              if (json.error === "no_email") {
-                setManualEmail("");
-                setEmailModalOpen(true);
-              } else {
-                toast.error(json.message ?? "Failed to send email");
-              }
-            } else if (json.error) {
-              toast.error(`Email sent but provider reported: ${json.error}`);
-            } else {
-              toast.success("Email sent to supplier");
+          sendEmailMutation.mutate(
+            { id: po.id, data: overrideTo ? { to: overrideTo } : undefined },
+            {
+              onSuccess: (json: unknown) => {
+                const j = json as { error?: string; message?: string };
+                if (j?.error === "no_email") {
+                  setManualEmail("");
+                  setEmailModalOpen(true);
+                } else if (j?.error) {
+                  toast.error(`Email sent but provider reported: ${j.error}`);
+                } else {
+                  toast.success("Email sent to supplier");
+                }
+              },
+              onError: (err: unknown) => {
+                if (err instanceof ApiError && err.status === 400 && (err.data as { error?: string } | null)?.error === "no_email") {
+                  setManualEmail("");
+                  setEmailModalOpen(true);
+                } else {
+                  toast.error("Network error sending email");
+                }
+              },
+              onSettled: () => setEmailLoading(false),
             }
-          } catch {
-            toast.error("Network error sending email");
-          } finally {
-            setEmailLoading(false);
-          }
+          );
         };
 
         return (
@@ -532,22 +527,20 @@ export default function ProductsPurchaseOrdersPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && manualEmail) {
                   setEmailModalOpen(false);
-                  // Re-trigger with manual email using the current viewingPO
                   if (viewingPO) {
                     setEmailLoading(true);
-                    fetch(`/api/purchase-orders/${viewingPO.id}/email`, {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ to: manualEmail }),
-                    })
-                      .then((r) => r.json())
-                      .then((j) => {
-                        if (j.error) toast.error(`Email failed: ${j.error}`);
-                        else toast.success("Email sent to supplier");
-                      })
-                      .catch(() => toast.error("Network error"))
-                      .finally(() => setEmailLoading(false));
+                    sendEmailMutation.mutate(
+                      { id: viewingPO.id, data: { to: manualEmail } },
+                      {
+                        onSuccess: (j: unknown) => {
+                          const json = j as { error?: string };
+                          if (json?.error) toast.error(`Email failed: ${json.error}`);
+                          else toast.success("Email sent to supplier");
+                        },
+                        onError: () => toast.error("Network error"),
+                        onSettled: () => setEmailLoading(false),
+                      }
+                    );
                   }
                 }
               }}
@@ -561,19 +554,18 @@ export default function ProductsPurchaseOrdersPage() {
                 setEmailModalOpen(false);
                 if (viewingPO) {
                   setEmailLoading(true);
-                  fetch(`/api/purchase-orders/${viewingPO.id}/email`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ to: manualEmail }),
-                  })
-                    .then((r) => r.json())
-                    .then((j) => {
-                      if (j.error) toast.error(`Email failed: ${j.error}`);
-                      else toast.success("Email sent to supplier");
-                    })
-                    .catch(() => toast.error("Network error"))
-                    .finally(() => setEmailLoading(false));
+                  sendEmailMutation.mutate(
+                    { id: viewingPO.id, data: { to: manualEmail } },
+                    {
+                      onSuccess: (j: unknown) => {
+                        const json = j as { error?: string };
+                        if (json?.error) toast.error(`Email failed: ${json.error}`);
+                        else toast.success("Email sent to supplier");
+                      },
+                      onError: () => toast.error("Network error"),
+                      onSettled: () => setEmailLoading(false),
+                    }
+                  );
                 }
               }}
             >
