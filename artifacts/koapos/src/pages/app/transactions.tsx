@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
-  ChevronUp, ChevronDown, ChevronsUpDown, Gift,
+  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,12 +77,18 @@ function ReceiptDialog({
     <Dialog open={!!tx} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Receipt className="w-5 h-5 text-primary shrink-0" />
             <span className="truncate">Receipt #{tx.receiptNumber}</span>
             <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize", statusClass)}>
               {tx.status}
             </span>
+            {tx.discountCapped && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800">
+                <AlertTriangle className="w-3 h-3" />
+                Discount capped
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -281,7 +287,15 @@ export default function TransactionsPage() {
                           className="rounded border-muted-foreground/40 accent-primary" />
                       </td>
                       <td className="p-3">
-                        <p className="font-mono text-xs font-medium">{tx.receiptNumber}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-mono text-xs font-medium">{tx.receiptNumber}</p>
+                          {tx.discountCapped && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800 whitespace-nowrap">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Discount capped
+                            </span>
+                          )}
+                        </div>
                         {tx.items && Array.isArray(tx.items) && (
                           <p className="text-xs text-muted-foreground">
                             {(tx.items as unknown[]).length} item{(tx.items as unknown[]).length !== 1 ? "s" : ""}

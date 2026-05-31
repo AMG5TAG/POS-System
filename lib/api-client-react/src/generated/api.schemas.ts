@@ -589,6 +589,11 @@ export interface Transaction {
   notes?: string | null;
   /** @nullable */
   loyaltyEarned?: number | null;
+  /**
+     * True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.
+     * @nullable
+     */
+  discountCapped?: boolean | null;
   items: TransactionItem[];
   /** Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items. */
   issuedGiftCards?: TransactionIssuedGiftCardsItem[];
@@ -635,6 +640,8 @@ export interface TransactionInput {
   receiptNumber?: string;
   /** Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate. */
   idempotencyKey?: string;
+  /** The total dollar discount the cashier originally attempted to apply before any role-limit clamping. When this exceeds discountTotal by more than rounding noise the server infers a clamp occurred and persists discountCapped on the saved record. */
+  requestedDiscountTotal?: number;
   /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
   giftCardPayment?: TransactionInputGiftCardPayment;
 }

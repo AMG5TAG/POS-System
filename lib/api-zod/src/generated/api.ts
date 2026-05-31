@@ -1114,6 +1114,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1529,6 +1530,7 @@ export const ListTransactionsResponse = zod.object({
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1583,6 +1585,7 @@ export const CreateTransactionBody = zod.object({
   "loyaltyEarned": zod.number().optional(),
   "receiptNumber": zod.string().optional(),
   "idempotencyKey": zod.string().optional().describe('Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate.'),
+  "requestedDiscountTotal": zod.number().optional().describe('The total dollar discount the cashier originally attempted to apply before any role-limit clamping. When this exceeds discountTotal by more than rounding noise the server infers a clamp occurred and persists discountCapped on the saved record.'),
   "giftCardPayment": zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
@@ -1655,6 +1658,7 @@ export const GetTransactionResponse = zod.object({
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1752,6 +1756,7 @@ export const RefundTransactionResponse = zod.object({
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2444,6 +2449,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),

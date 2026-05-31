@@ -7752,6 +7752,12 @@ components:
           type: ["string", "null"]
         loyaltyEarned:
           type: ["number", "null"]
+        discountCapped:
+          type: ["boolean", "null"]
+          description: >-
+            True when the cashier attempted a discount exceeding their role
+            limit and it was clamped to the maximum allowed. Managers can use
+            this to review override attempts.
         items:
           type: array
           items:
@@ -7811,6 +7817,13 @@ components:
           description: >-
             Optional client-generated key. Retrying a create with the same key
             returns the original transaction instead of recording a duplicate.
+        requestedDiscountTotal:
+          type: number
+          description: >-
+            The total dollar discount the cashier originally attempted to apply
+            before any role-limit clamping. When this exceeds discountTotal by
+            more than rounding noise the server infers a clamp occurred and
+            persists discountCapped on the saved record.
         giftCardPayment:
           type: object
           description: >-

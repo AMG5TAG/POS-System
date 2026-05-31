@@ -275,6 +275,9 @@ export default function POSPage() {
   /* staff PIN */
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
 
+  /* accumulated excess from discount clamping this sale (requested minus applied) */
+  const [discountExcessAmount, setDiscountExcessAmount] = useState(0);
+
   /* max discount % for the currently signed-in staff's role (null = no limit) */
   const maxDiscountPct = useMemo((): number | null => {
     if (!currentStaff?.role) return null;
@@ -784,6 +787,7 @@ export default function POSPage() {
     setSaleNotes("");
     setSelectedCustomer(null);
     setWalkIn(null);
+    setDiscountExcessAmount(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -832,6 +836,7 @@ export default function POSPage() {
       setSaleNotes("");
       setSelectedCustomer(null);
       setWalkIn(null);
+      setDiscountExcessAmount(0);
 
       /* Re-parse encoded note → sale notes + overall discount */
       if (sale.note) {
@@ -1363,6 +1368,7 @@ export default function POSPage() {
       if (clamped < amt && !bypassRoleLimit) {
         setFlashingItemIds(prev2 => { const n = new Set(prev2); n.add(productId); return n; });
         setTimeout(() => setFlashingItemIds(prev2 => { const n = new Set(prev2); n.delete(productId); return n; }), 600);
+        setDiscountExcessAmount(prev => prev + (amt - clamped));
       }
       return { ...i, itemDiscount: clamped };
     }));
@@ -1399,6 +1405,7 @@ export default function POSPage() {
       hasAutoParkedRef.current = false;
       setCart([]); setOverallDiscount(""); setSaleNotes("");
       setSelectedCustomer(null); setWalkIn(null);
+      setDiscountExcessAmount(0);
       toast.success("Sale parked");
     } catch {
       toast.error("Failed to park sale");
@@ -1465,6 +1472,7 @@ export default function POSPage() {
       setSaleNotes("");
       setSelectedCustomer(null);
       setWalkIn(null);
+      setDiscountExcessAmount(0);
 
       /* Restore sale note / discount if encoded */
       if (saleNote) {
@@ -1508,6 +1516,7 @@ export default function POSPage() {
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     idempotencyKeyRef.current = null;
+    setDiscountExcessAmount(0);
   };
 
   const printPosReceipt = async () => {
@@ -1944,6 +1953,7 @@ export default function POSPage() {
         notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
         receiptNumber,
         idempotencyKey,
+        ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
         ...(giftCardPayment ? { giftCardPayment } : {}),
       }
     }, {
@@ -2723,6 +2733,7 @@ export default function POSPage() {
                     if (exceeds) {
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
+                      setDiscountExcessAmount(prev => prev + (rawPct - maxPct) / 100 * maxOverall);
                     }
                     setOverallDiscount(String(dollarAmt));
                   }}
@@ -2754,6 +2765,7 @@ export default function POSPage() {
                       setOverallDiscount(String(effectiveMax));
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
+                      setDiscountExcessAmount(prev => prev + (val - effectiveMax));
                     } else {
                       setOverallDiscount(e.target.value);
                     }

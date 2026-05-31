@@ -25,6 +25,10 @@ export const transactionsTable = pgTable("transactions", {
   // retry (e.g. after a network drop following a successful commit) carrying the
   // same key returns the original transaction instead of creating a duplicate.
   idempotencyKey: text("idempotency_key"),
+  // Set to "true" when the cashier attempted a discount that exceeded their role
+  // limit and it was silently clamped to the maximum allowed. Managers can filter
+  // the transaction list to review these override attempts.
+  discountCapped: text("discount_capped"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("transactions_merchant_id_idx").on(t.merchantId),

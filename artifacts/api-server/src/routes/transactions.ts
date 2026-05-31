@@ -65,6 +65,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     changeDue: t.changeDue ? parseFloat(t.changeDue) : null,
     notes: t.notes ?? null,
     loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
+    discountCapped: t.discountCapped === "true" ? true : t.discountCapped === "false" ? false : null,
     items: rawItems,
     ...(issuedGiftCards.length > 0 ? { issuedGiftCards } : {}),
     createdAt: t.createdAt.toISOString(),
@@ -145,6 +146,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     customerId, staffId, paymentMethod, notes, loyaltyEarned,
     receiptNumber: providedReceiptNumber,
     idempotencyKey: rawIdempotencyKey, giftCardPayment,
+    requestedDiscountTotal: clientRequestedDiscountTotal,
   } = parsed.data;
 
   const idempotencyKey =
@@ -548,6 +550,13 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         loyaltyEarned: sanitizedEarned > 0 ? sanitizedEarned.toString() : null,
         items: computedItems,
         idempotencyKey: idempotencyKey ?? null,
+        // Derive the flag server-side: if the client reported a larger requested
+        // discount than what was actually applied (after role-limit clamping),
+        // more than rounding noise → the cashier was capped.
+        discountCapped: (
+          clientRequestedDiscountTotal != null &&
+          clientRequestedDiscountTotal > discountTotal + 0.01
+        ) ? "true" : null,
       })
       .returning();
 
