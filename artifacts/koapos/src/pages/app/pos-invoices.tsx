@@ -36,6 +36,7 @@ import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -283,6 +284,17 @@ export default function POSInvoicesPage() {
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
+  const moveLineUp = (i: number) => {
+    if (i === 0) return;
+    setLines((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+    setLineSearch((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+    setLineDropOpen((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+  };
+  const moveLineDown = (i: number) => {
+    setLines((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+    setLineSearch((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+    setLineDropOpen((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+  };
   const filteredProducts = (q: string) =>
     !q.trim() ? allProducts.slice(0, 8) : allProducts.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
 
@@ -325,6 +337,17 @@ export default function POSInvoicesPage() {
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
     setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
+  const moveEditLineUp = (i: number) => {
+    if (i === 0) return;
+    setEditLines((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+    setEditLineSearch((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+    setEditLineDropOpen((p) => { const n = [...p]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
+  };
+  const moveEditLineDown = (i: number) => {
+    setEditLines((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+    setEditLineSearch((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
+    setEditLineDropOpen((p) => { if (i >= p.length - 1) return p; const n = [...p]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; });
   };
 
   const editLinesGross  = editLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
@@ -1945,7 +1968,8 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+                <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
                 <span className="text-right">Price</span>
@@ -1955,7 +1979,17 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                    <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
+                      <button type="button" onClick={() => moveLineUp(i)} disabled={i === 0}
+                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => moveLineDown(i)} disabled={i === lines.length - 1}
+                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div className="relative" ref={(el) => { lineDropRefs.current[i] = el; }}>
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
@@ -2180,7 +2214,8 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+                <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
                 <span className="text-right">Price</span>
@@ -2190,7 +2225,17 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                    <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
+                      <button type="button" onClick={() => moveEditLineUp(i)} disabled={i === 0}
+                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => moveEditLineDown(i)} disabled={i === editLines.length - 1}
+                        className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div className="relative" ref={(el) => { editLineDropRefs.current[i] = el; }}>
                       <div className="relative">
                         <Package className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
