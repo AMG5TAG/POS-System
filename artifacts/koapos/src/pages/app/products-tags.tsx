@@ -11,6 +11,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListProductTags,
+  useRenameProductTag,
+  useMergeProductTags,
+  useDeleteProductTag,
+} from "@workspace/api-client-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -18,8 +25,7 @@ type TagEntry = { name: string; productCount: number };
 type SortKey  = "name" | "productCount";
 type SortDir  = "asc" | "desc";
 
-const API_BASE = "/api/products/tags";
-const hdrs     = { "Content-Type": "application/json" };
+const TAGS_QUERY_KEY = ["/api/products/tags"] as const;
 
 /* ─── Sort icon ──────────────────────────────────────────────────────────── */
 
@@ -55,29 +61,34 @@ function RenameDialog({
   tag, open, onClose, onRenamed,
 }: { tag: TagEntry | null; open: boolean; onClose: () => void; onRenamed: () => void }) {
   const [newName, setNewName] = useState("");
-  const [saving, setSaving]   = useState(false);
+  const renameMutation = useRenameProductTag();
 
-  useEffect(() => { if (open && tag) setNewName(tag.name); }, [open, tag]);
+  const saving = renameMutation.isPending;
+
+  useEffect(() => {
+    if (open && tag) setNewName(tag.name);
+  }, [open, tag]);
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) onClose();
+  };
 
   const handleSave = async () => {
     if (!newName.trim() || !tag) return;
     if (newName.trim() === tag.name) { onClose(); return; }
-    setSaving(true);
     try {
-      const r = await fetch(`${API_BASE}/rename`, {
-        method: "POST", headers: hdrs, credentials: "include",
-        body: JSON.stringify({ oldName: tag.name, newName: newName.trim() }),
-      });
-      if (!r.ok) { toast.error("Failed to rename tag"); return; }
-      const { updated } = await r.json() as { updated: number };
+      const result = await renameMutation.mutateAsync({ data: { oldName: tag.name, newName: newName.trim() } });
+      const updated = (result as unknown as { updated: number }).updated;
       toast.success(`Tag renamed · ${updated} product${updated !== 1 ? "s" : ""} updated`);
       onRenamed();
       onClose();
-    } finally { setSaving(false); }
+    } catch {
+      toast.error("Failed to rename tag");
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -123,14 +134,15 @@ function MergeDialog({
 }: { tags: TagEntry[]; open: boolean; onClose: () => void; onMerged: () => void; preSelected: Set<string> }) {
   const [selected, setSelected]     = useState<Set<string>>(new Set());
   const [targetName, setTargetName] = useState("");
-  const [saving, setSaving]         = useState(false);
+  const mergeMutation = useMergeProductTags();
+
+  const saving = mergeMutation.isPending;
 
   useEffect(() => {
-    if (open) {
-      setSelected(new Set(preSelected));
-      const arr = [...preSelected];
-      setTargetName(arr.length === 1 ? arr[0] : "");
-    }
+    if (!open) return;
+    setSelected(new Set(preSelected));
+    const arr = [...preSelected];
+    setTargetName(arr.length === 1 ? arr[0] : "");
   }, [open, preSelected]);
 
   const toggle = (name: string) =>
@@ -142,22 +154,23 @@ function MergeDialog({
 
   const handleMerge = async () => {
     if (selected.size < 2 || !targetName.trim()) return;
-    setSaving(true);
     try {
-      const r = await fetch(`${API_BASE}/merge`, {
-        method: "POST", headers: hdrs, credentials: "include",
-        body: JSON.stringify({ sourceTags: [...selected], targetName: targetName.trim() }),
-      });
-      if (!r.ok) { toast.error("Failed to merge tags"); return; }
-      const { updated } = await r.json() as { updated: number };
+      const result = await mergeMutation.mutateAsync({ data: { sourceTags: [...selected], targetName: targetName.trim() } });
+      const updated = (result as unknown as { updated: number }).updated;
       toast.success(`Merged ${selected.size} tags → "${targetName.trim()}" · ${updated} product${updated !== 1 ? "s" : ""} updated`);
       onMerged();
       onClose();
-    } finally { setSaving(false); }
+    } catch {
+      toast.error("Failed to merge tags");
+    }
+  };
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -227,22 +240,21 @@ function MergeDialog({
 function DeleteDialog({
   tag, open, onClose, onDeleted,
 }: { tag: TagEntry | null; open: boolean; onClose: () => void; onDeleted: () => void }) {
-  const [saving, setSaving] = useState(false);
+  const deleteMutation = useDeleteProductTag();
+
+  const saving = deleteMutation.isPending;
 
   const handleDelete = async () => {
     if (!tag) return;
-    setSaving(true);
     try {
-      const r = await fetch(`${API_BASE}/delete`, {
-        method: "POST", headers: hdrs, credentials: "include",
-        body: JSON.stringify({ name: tag.name }),
-      });
-      if (!r.ok) { toast.error("Failed to delete tag"); return; }
-      const { updated } = await r.json() as { updated: number };
+      const result = await deleteMutation.mutateAsync({ data: { name: tag.name } });
+      const updated = (result as unknown as { updated: number }).updated;
       toast.success(`Tag "${tag.name}" removed from ${updated} product${updated !== 1 ? "s" : ""}`);
       onDeleted();
       onClose();
-    } finally { setSaving(false); }
+    } catch {
+      toast.error("Failed to delete tag");
+    }
   };
 
   return (
@@ -279,8 +291,7 @@ function DeleteDialog({
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ProductsTagsPage() {
-  const [tags, setTags]       = useState<TagEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch]   = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("productCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -294,15 +305,10 @@ export default function ProductsTagsPage() {
   const [renameTag, setRenameTag] = useState<TagEntry | null>(null);
   const [deleteTag, setDeleteTag] = useState<TagEntry | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(API_BASE, { credentials: "include" });
-      if (r.ok) setTags((await r.json() as { items: TagEntry[] }).items);
-    } finally { setLoading(false); }
-  };
+  const { data: tagsData, isLoading: loading } = useListProductTags();
+  const tags = (tagsData?.items ?? []) as TagEntry[];
 
-  useEffect(() => { void load(); }, []);
+  const invalidateTags = () => queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -523,20 +529,20 @@ export default function ProductsTagsPage() {
         tag={renameTag}
         open={!!renameTag}
         onClose={() => setRenameTag(null)}
-        onRenamed={load}
+        onRenamed={invalidateTags}
       />
       <MergeDialog
         tags={tags}
         open={mergeOpen}
         onClose={() => { setMergeOpen(false); setMergeSelected(new Set()); }}
-        onMerged={() => { void load(); setMergeSelected(new Set()); }}
+        onMerged={() => { invalidateTags(); setMergeSelected(new Set()); }}
         preSelected={mergePreSelected}
       />
       <DeleteDialog
         tag={deleteTag}
         open={!!deleteTag}
         onClose={() => setDeleteTag(null)}
-        onDeleted={load}
+        onDeleted={invalidateTags}
       />
     </AppLayout>
   );

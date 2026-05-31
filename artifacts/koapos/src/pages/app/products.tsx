@@ -19,6 +19,11 @@ import {
   useUpsertPcCompatRule,
   useDeletePcCompatRule,
   getListPcCompatRulesQueryKey,
+  useListProductVariants,
+  useCreateProductVariant,
+  useDeleteProductVariant,
+  useUpdateProductVariant,
+  getListProductVariantsQueryKey,
   Product,
   ProductType,
 } from "@workspace/api-client-react";
@@ -44,7 +49,7 @@ import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import {
-  Search, Plus, Pencil, Trash2, Package,
+  Search, Plus, Pencil, Trash2, Package, Check,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
@@ -885,43 +890,69 @@ export default function ProductsPage() {
   type VariantForm = { name: string; sku: string; price: string; stockQuantity: string };
   const defaultVariantForm: VariantForm = { name: "", sku: "", price: "", stockQuantity: "0" };
 
-  const [variants, setVariants] = useState<VariantEntry[]>([]);
-  const [variantsLoading, setVariantsLoading] = useState(false);
   const [addingVariant, setAddingVariant] = useState(false);
   const [variantForm, setVariantForm] = useState<VariantForm>(defaultVariantForm);
+  const [editingVariantId, setEditingVariantId] = useState<number | null>(null);
+  const [editVariantForm, setEditVariantForm] = useState<VariantForm>(defaultVariantForm);
 
-  const loadVariants = useCallback(async (productId: number) => {
-    setVariantsLoading(true);
-    try {
-      const r = await fetch(`/api/products/${productId}/variants`, { credentials: "include" });
-      if (r.ok) setVariants(await r.json() as VariantEntry[]);
-    } finally { setVariantsLoading(false); }
-  }, []);
+  const editingProductId = editingProduct?.id ?? 0;
+  const { data: variantsList, isLoading: variantsLoading } = useListProductVariants(
+    editingProductId,
+    { query: { enabled: !!editingProduct?.id && formTab === "variants", queryKey: getListProductVariantsQueryKey(editingProductId) } },
+  );
+  const variants = (variantsList ?? []) as VariantEntry[];
+
+  const createVariantMutation = useCreateProductVariant();
+  const deleteVariantMutation = useDeleteProductVariant();
+  const updateVariantMutation = useUpdateProductVariant();
 
   const handleAddVariant = async (productId: number) => {
     if (!variantForm.name.trim()) { toast.error("Variant name is required"); return; }
-    const r = await fetch(`/api/products/${productId}/variants`, {
-      method: "POST", credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: variantForm.name,
-        sku: variantForm.sku || undefined,
-        price: variantForm.price ? parseFloat(variantForm.price) : undefined,
-        stockQuantity: parseInt(variantForm.stockQuantity) || 0,
-      }),
-    });
-    if (r.ok) {
-      const newVariant = await r.json() as VariantEntry;
-      setVariants((prev) => [...prev, newVariant]);
+    try {
+      await createVariantMutation.mutateAsync({
+        productId,
+        data: {
+          name: variantForm.name,
+          sku: variantForm.sku || undefined,
+          price: variantForm.price ? parseFloat(variantForm.price) : undefined,
+          stockQuantity: parseInt(variantForm.stockQuantity) || 0,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListProductVariantsQueryKey(productId) });
       setVariantForm(defaultVariantForm);
       setAddingVariant(false);
-    } else { toast.error("Failed to add variant"); }
+    } catch {
+      toast.error("Failed to add variant");
+    }
   };
 
   const handleDeleteVariant = async (variantId: number, productId: number) => {
-    const r = await fetch(`/api/products/${productId}/variants/${variantId}`, { method: "DELETE", credentials: "include" });
-    if (r.ok) setVariants((prev) => prev.filter((v) => v.id !== variantId));
-    else toast.error("Failed to delete variant");
+    try {
+      await deleteVariantMutation.mutateAsync({ productId, id: variantId });
+      queryClient.invalidateQueries({ queryKey: getListProductVariantsQueryKey(productId) });
+    } catch {
+      toast.error("Failed to delete variant");
+    }
+  };
+
+  const handleUpdateVariant = async (variantId: number, productId: number) => {
+    if (!editVariantForm.name.trim()) { toast.error("Variant name is required"); return; }
+    try {
+      await updateVariantMutation.mutateAsync({
+        productId,
+        id: variantId,
+        data: {
+          name: editVariantForm.name,
+          sku: editVariantForm.sku || undefined,
+          price: editVariantForm.price ? parseFloat(editVariantForm.price) : undefined,
+          stockQuantity: parseInt(editVariantForm.stockQuantity) || 0,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListProductVariantsQueryKey(productId) });
+      setEditingVariantId(null);
+    } catch {
+      toast.error("Failed to update variant");
+    }
   };
 
   /* Only owners and managers can see digital code values; cashiers see XXXX */
@@ -1832,7 +1863,6 @@ export default function ProductsPage() {
                   onClick={() => {
                     setFormTab(key);
                     if (key === "digital_codes" && editingProduct) loadDigitalCodes(editingProduct.id);
-                    if (key === "variants" && editingProduct) loadVariants(editingProduct.id);
                   }}
                   className={cn(
                     "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
@@ -2799,27 +2829,66 @@ export default function ProductsPage() {
                               <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">SKU</th>
                               <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Price</th>
                               <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Stock</th>
-                              <th className="px-4 py-2.5 w-8"></th>
+                              <th className="px-4 py-2.5 w-16"></th>
                             </tr>
                           </thead>
                           <tbody className="divide-y">
-                            {variants.map((v) => (
-                              <tr key={v.id} className="hover:bg-muted/20 transition-colors">
-                                <td className="px-4 py-2.5 font-medium">{v.name}</td>
-                                <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{v.sku || "—"}</td>
-                                <td className="px-4 py-2.5">{v.price != null ? formatCurrency(v.price) : <span className="text-muted-foreground text-xs">uses base</span>}</td>
-                                <td className="px-4 py-2.5">{v.stockQuantity}</td>
-                                <td className="px-4 py-2.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleDeleteVariant(v.id, editingProduct.id)}
-                                    className="text-muted-foreground hover:text-destructive transition-colors"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {variants.map((v) =>
+                              editingVariantId === v.id ? (
+                                <tr key={v.id} className="bg-muted/10">
+                                  <td className="px-2 py-1.5">
+                                    <Input value={editVariantForm.name} onChange={(e) => setEditVariantForm(f => ({ ...f, name: e.target.value }))} className="h-7 text-sm" placeholder="Variant name" />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <Input value={editVariantForm.sku} onChange={(e) => setEditVariantForm(f => ({ ...f, sku: e.target.value }))} className="h-7 text-sm font-mono" placeholder="SKU" />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                      <Input type="number" step="0.01" value={editVariantForm.price} onChange={(e) => setEditVariantForm(f => ({ ...f, price: e.target.value }))} className="h-7 text-sm pl-5" placeholder="base" />
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <Input type="number" value={editVariantForm.stockQuantity} onChange={(e) => setEditVariantForm(f => ({ ...f, stockQuantity: e.target.value }))} className="h-7 text-sm" />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <div className="flex gap-1">
+                                      <button type="button" onClick={() => void handleUpdateVariant(v.id, editingProduct.id)} className="text-primary hover:text-primary/80 transition-colors">
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button type="button" onClick={() => setEditingVariantId(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                                        <XIcon className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : (
+                                <tr key={v.id} className="hover:bg-muted/20 transition-colors">
+                                  <td className="px-4 py-2.5 font-medium">{v.name}</td>
+                                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{v.sku || "—"}</td>
+                                  <td className="px-4 py-2.5">{v.price != null ? formatCurrency(v.price) : <span className="text-muted-foreground text-xs">uses base</span>}</td>
+                                  <td className="px-4 py-2.5">{v.stockQuantity}</td>
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => { setEditingVariantId(v.id); setEditVariantForm({ name: v.name, sku: v.sku || "", price: v.price != null ? String(v.price) : "", stockQuantity: String(v.stockQuantity ?? 0) }); }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleDeleteVariant(v.id, editingProduct.id)}
+                                        className="text-muted-foreground hover:text-destructive transition-colors"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            )}
                           </tbody>
                         </table>
                       </div>

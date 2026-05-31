@@ -4,7 +4,13 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings } from "@workspace/api-client-react";
+import {
+  useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings,
+  useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
+  useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
+  ListInvoicesStatus, getListInvoicesQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { setPendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
@@ -117,8 +123,6 @@ const STATUS_LABELS: Record<InvStatus, string> = {
 
 const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
 
-const API = "/api/invoices";
-
 /* ── Recurring helpers ───────────────────────────────────────────────────── */
 
 function scheduleTag(inv: Invoice): string {
@@ -138,10 +142,9 @@ function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 export default function POSInvoicesPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
+  const [detailInvoiceId, setDetailInvoiceId] = useState<number | null>(null);
+  const [detailInvoiceSeed, setDetailInvoiceSeed] = useState<Invoice | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -185,10 +188,44 @@ export default function POSInvoicesPage() {
   });
 
   const [activeTab, setActiveTab] = useState<"standard" | "recurring" | "history">("standard");
-  const [historyInvoices, setHistoryInvoices] = useState<Invoice[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+
+  /* ── Invoice query hooks ── */
+  const { data: invoicesData, isLoading: loading } = useListInvoices(
+    statusFilter !== "all" ? { status: statusFilter as ListInvoicesStatus } : undefined,
+  );
+  const invoices = (invoicesData?.items ?? []) as unknown as Invoice[];
+
+  const historyParams = { status: "paid" as ListInvoicesStatus, limit: 500 };
+  const { data: historyData, isLoading: historyLoading, refetch: refetchHistory } = useListInvoices(
+    historyParams,
+    { query: { enabled: activeTab === "history", queryKey: getListInvoicesQueryKey(historyParams) } },
+  );
+  const historyInvoices = useMemo(() =>
+    [...((historyData?.items ?? []) as unknown as Invoice[])].sort((a, b) => {
+      const ta = a.paidAt ? new Date(a.paidAt).getTime() : 0;
+      const tb = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+      return tb - ta;
+    }),
+  [historyData]);
+
+  /* ── Invoice mutation hooks ── */
+  const createInvoiceMutation = useCreateInvoice();
+  const updateInvoiceMutation = useUpdateInvoice();
+  const deleteInvoiceMutation = useDeleteInvoice();
+  const addEventMutation = useAddInvoiceEvent();
+  const sendEmailMutation = useSendInvoiceEmail();
+
+  const { data: detailInvoiceRaw } = useGetInvoice(
+    detailInvoiceId ?? 0,
+    { query: { enabled: !!detailInvoiceId, queryKey: getGetInvoiceQueryKey(detailInvoiceId ?? 0) } },
+  );
+  const detailInvoice = (detailInvoiceRaw as unknown as Invoice | undefined) ?? detailInvoiceSeed;
+
+  const invalidateInvoices = () => queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
@@ -196,34 +233,6 @@ export default function POSInvoicesPage() {
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { opts: invoiceOpts, fontCss: invoiceFontCss } = useSalesTemplate("Invoice");
   const { opts: quoteOpts, fontCss: quoteFontCss } = useSalesTemplate("Quote");
-
-  /* ── Data loading ── */
-  const load = async () => {
-    setLoading(true);
-    const q = statusFilter !== "all" ? `?status=${statusFilter}` : "";
-    const res = await fetch(`${API}${q}`, { credentials: "include" });
-    if (res.ok) setInvoices((await res.json()).items);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [statusFilter]);
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    const res = await fetch(`${API}?status=paid&limit=500`, { credentials: "include" });
-    if (res.ok) {
-      const data = await res.json();
-      const sorted = (data.items as Invoice[]).sort((a, b) => {
-        const ta = a.paidAt ? new Date(a.paidAt).getTime() : 0;
-        const tb = b.paidAt ? new Date(b.paidAt).getTime() : 0;
-        return tb - ta;
-      });
-      setHistoryInvoices(sorted);
-    }
-    setHistoryLoading(false);
-  };
-
-  useEffect(() => { if (activeTab === "history") loadHistory(); }, [activeTab]);
 
   /* ── Close product dropdowns on outside click ── */
   useEffect(() => {
@@ -347,33 +356,34 @@ export default function POSInvoicesPage() {
     const validLines = editLines.filter((l) => l.description.trim());
     if (!validLines.length) { toast.error("Add at least one line item"); return; }
     setEditSaving(true);
-    const res = await fetch(`${API}/${editingInvoice.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        customerId: editForm.customerId ? parseInt(editForm.customerId) : null,
-        dueDate: editForm.dueDate || null,
-        notes: editForm.notes || null,
-        items: validLines,
-        discount: editDiscount.enabled && editDiscount.value
-          ? { type: editDiscount.type, value: parseFloat(editDiscount.value) }
-          : null,
-        recurring: {
-          enabled: editRecurring.enabled,
-          frequency: editRecurring.frequency,
-          startDate: editRecurring.startDate || null,
-          occurrences: editRecurring.occurrences,
-        },
-      }),
-    });
-    setEditSaving(false);
-    if (!res.ok) { toast.error("Failed to update invoice"); return; }
-    const updated = await res.json() as Invoice;
-    setInvoices((prev) => prev.map((i) => i.id === updated.id ? updated : i));
-    if (detailInvoice?.id === updated.id) setDetailInvoice(updated);
-    toast.success("Invoice updated");
-    setEditOpen(false);
+    try {
+      const updated = await updateInvoiceMutation.mutateAsync({
+        id: editingInvoice.id,
+        data: {
+          customerId: editForm.customerId ? parseInt(editForm.customerId) : null,
+          dueDate: editForm.dueDate || null,
+          notes: editForm.notes || null,
+          items: validLines,
+          discount: editDiscount.enabled && editDiscount.value
+            ? { type: editDiscount.type, value: parseFloat(editDiscount.value) }
+            : null,
+          recurring: {
+            enabled: editRecurring.enabled,
+            frequency: editRecurring.frequency,
+            startDate: editRecurring.startDate || null,
+            occurrences: editRecurring.occurrences,
+          },
+        } as Parameters<typeof updateInvoiceMutation.mutateAsync>[0]["data"],
+      }) as unknown as Invoice;
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(updated.id) });
+      toast.success("Invoice updated");
+      setEditOpen(false);
+      invalidateInvoices();
+    } catch {
+      toast.error("Failed to update invoice");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   /* ── Reset create dialog ── */
@@ -392,72 +402,70 @@ export default function POSInvoicesPage() {
     const validLines = lines.filter((l) => l.description.trim());
     if (!validLines.length) { toast.error("Add at least one line item"); return; }
     setSaving(true);
-    const prefixSettings = getInvoicePrefix();
-    const body = {
-      customerId: form.customerId ? parseInt(form.customerId) : null,
-      dueDate: form.dueDate || null,
-      notes: form.notes || null,
-      items: validLines,
-      invoicePrefix: prefixSettings.invoicePrefix,
-      invoiceDigits: prefixSettings.invoiceDigits,
-      discount: discount.enabled && discount.value
-        ? { type: discount.type, value: parseFloat(discount.value) }
-        : null,
-      ...(recurring.enabled && {
-        recurring: {
-          frequency: recurring.frequency,
-          startDate: recurring.startDate || null,
-          occurrences: recurring.occurrences,
-        },
-      }),
-    };
-    const res = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(body),
-    });
-    setSaving(false);
-    if (!res.ok) { toast.error("Failed to create invoice"); return; }
-    toast.success(recurring.enabled ? "Recurring invoice created" : "Invoice created");
-    setCreateOpen(false);
-    resetCreate();
-    load();
+    try {
+      const prefixSettings = getInvoicePrefix();
+      const body = {
+        customerId: form.customerId ? parseInt(form.customerId) : null,
+        dueDate: form.dueDate || null,
+        notes: form.notes || null,
+        items: validLines,
+        invoicePrefix: prefixSettings.invoicePrefix,
+        invoiceDigits: prefixSettings.invoiceDigits,
+        discount: discount.enabled && discount.value
+          ? { type: discount.type, value: parseFloat(discount.value) }
+          : null,
+        ...(recurring.enabled && {
+          recurring: {
+            frequency: recurring.frequency,
+            startDate: recurring.startDate || null,
+            occurrences: recurring.occurrences,
+          },
+        }),
+      };
+      await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] });
+      toast.success(recurring.enabled ? "Recurring invoice created" : "Invoice created");
+      setCreateOpen(false);
+      resetCreate();
+      invalidateInvoices();
+    } catch {
+      toast.error("Failed to create invoice");
+    } finally {
+      setSaving(false);
+    }
   };
 
   /* ── Record a client-side event (download, print) ── */
   const recordEvent = async (invoiceId: number, type: string, detail?: string) => {
-    const res = await fetch(`${API}/${invoiceId}/event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ type, detail }),
-    });
-    if (res.ok) {
-      const updated = await res.json() as Invoice;
-      setInvoices((prev) => prev.map((i) => i.id === invoiceId ? updated : i));
-      setDetailInvoice((d) => d?.id === invoiceId ? updated : d);
+    try {
+      await addEventMutation.mutateAsync({
+        id: invoiceId,
+        data: { type, detail } as Parameters<typeof addEventMutation.mutateAsync>[0]["data"],
+      });
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invoiceId) });
+      invalidateInvoices();
+    } catch {
+      // Silent failure for event recording
     }
   };
 
   /* ── Row click: open detail ── */
   const openDetail = (inv: Invoice) => {
-    setDetailInvoice(inv);
+    setDetailInvoiceId(inv.id);
+    setDetailInvoiceSeed(inv);
   };
 
   /* ── Status update ── */
   const updateStatus = async (id: number, status: string) => {
-    const res = await fetch(`${API}/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      const updated = await res.json() as Invoice;
-      setInvoices((prev) => prev.map((i) => i.id === id ? updated : i));
-      if (detailInvoice?.id === id) setDetailInvoice(updated);
+    try {
+      await updateInvoiceMutation.mutateAsync({
+        id,
+        data: { status } as Parameters<typeof updateInvoiceMutation.mutateAsync>[0]["data"],
+      });
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(id) });
       toast.success(`Marked as ${status}`);
+      invalidateInvoices();
+    } catch {
+      toast.error("Failed to update invoice status");
     }
   };
 
@@ -482,10 +490,14 @@ export default function POSInvoicesPage() {
 
   /* ── Delete ── */
   const deleteInvoice = async (id: number) => {
-    await fetch(`${API}/${id}`, { method: "DELETE", credentials: "include" });
-    setInvoices((prev) => prev.filter((i) => i.id !== id));
-    if (detailInvoice?.id === id) setDetailInvoice(null);
-    toast.success("Invoice deleted");
+    try {
+      await deleteInvoiceMutation.mutateAsync({ id });
+      if (detailInvoiceId === id) { setDetailInvoiceId(null); setDetailInvoiceSeed(null); }
+      toast.success("Invoice deleted");
+      invalidateInvoices();
+    } catch {
+      toast.error("Failed to delete invoice");
+    }
   };
 
   /* ── Send email ── */
@@ -515,29 +527,21 @@ export default function POSInvoicesPage() {
     if (!emailDialog.invoiceId || !emailAddr.trim()) return;
     setSendingEmail(true);
     const invId = emailDialog.invoiceId;
-    const res = await fetch(`${API}/${invId}/send-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email: emailAddr, template: getEmailTemplatePayload() }),
-    });
-    setSendingEmail(false);
-    if (res.ok) {
+    try {
+      await sendEmailMutation.mutateAsync({
+        id: invId,
+        data: { email: emailAddr, template: getEmailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
+      });
       toast.success("Invoice emailed");
       setEmailDialog({ open: false, invoiceId: null });
       setEmailAddr("");
       setEmailSubject("");
-      // Refresh the invoice so the activity log updates
-      const refreshRes = await fetch(`${API}/${invId}`, { credentials: "include" });
-      if (refreshRes.ok) {
-        const updated = await refreshRes.json() as Invoice;
-        setInvoices((prev) => prev.map((i) => i.id === invId ? updated : i));
-        if (detailInvoice?.id === invId) setDetailInvoice(updated);
-      }
-      load();
-    } else {
-      const err = await res.json() as { error?: string };
-      toast.error(err.error ?? "Failed to send email");
+      invalidateInvoices();
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invId) });
+    } catch {
+      toast.error("Failed to send email");
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -1558,7 +1562,7 @@ export default function POSInvoicesPage() {
                     <History className="w-3 h-3" />
                     {historyInvoices.length} fully paid invoice{historyInvoices.length !== 1 ? "s" : ""} · sorted by completion date, newest first
                   </span>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={loadHistory}>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={() => void refetchHistory()}>
                     <RefreshCw className="w-2.5 h-2.5" />
                     Refresh
                   </Button>
@@ -1571,7 +1575,7 @@ export default function POSInvoicesPage() {
       </div>
 
       {/* ─── Invoice Detail Dialog ─── */}
-      <Dialog open={!!detailInvoice} onOpenChange={(o) => { if (!o) setDetailInvoice(null); }}>
+      <Dialog open={!!detailInvoiceId} onOpenChange={(o) => { if (!o) { setDetailInvoiceId(null); setDetailInvoiceSeed(null); } }}>
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
           {detailInvoice && (
             <>
@@ -1793,7 +1797,7 @@ export default function POSInvoicesPage() {
                   onClick={() => setDeleteConfirmId(detailInvoice.id)}>
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setDetailInvoice(null)}>Close</Button>
+                <Button variant="outline" size="sm" onClick={() => { setDetailInvoiceId(null); setDetailInvoiceSeed(null); }}>Close</Button>
               </div>
             </>
           )}
