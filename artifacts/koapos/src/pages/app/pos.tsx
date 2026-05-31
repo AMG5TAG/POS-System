@@ -184,6 +184,10 @@ export default function POSPage() {
   const [gcIssueOpen, setGcIssueOpen]           = useState(false);
   const [gcIssueForm, setGcIssueForm]           = useState({ cardNumber: "", amount: "" });
   const [gcIssueDiscardConfirmOpen, setGcIssueDiscardConfirmOpen] = useState(false);
+
+  /* discard guards for other input dialogs */
+  const [walkInDiscardConfirmOpen, setWalkInDiscardConfirmOpen] = useState(false);
+  const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
   const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
@@ -1021,6 +1025,40 @@ export default function POSPage() {
     setGcIssueDiscardConfirmOpen(false);
     setGcIssueOpen(false);
     setGcIssueForm({ cardNumber: "", amount: "" });
+  };
+
+  const walkInDirty = walkInForm.firstName.trim() !== "" || walkInForm.lastName.trim() !== "";
+
+  const tryCloseWalkIn = () => {
+    if (walkInDirty) {
+      setWalkInDiscardConfirmOpen(true);
+    } else {
+      setWalkInDialogOpen(false);
+      setWalkInForm({ firstName: "", lastName: "" });
+    }
+  };
+
+  const confirmDiscardWalkIn = () => {
+    setWalkInDiscardConfirmOpen(false);
+    setWalkInDialogOpen(false);
+    setWalkInForm({ firstName: "", lastName: "" });
+  };
+
+  const tempItemDirty = tempItemForm.name.trim() !== "" || tempItemForm.price !== "" || tempItemForm.cost !== "";
+
+  const tryCloseTempItem = () => {
+    if (tempItemDirty) {
+      setTempItemDiscardConfirmOpen(true);
+    } else {
+      setTempItemOpen(false);
+      setTempItemForm({ name: "", price: "", cost: "" });
+    }
+  };
+
+  const confirmDiscardTempItem = () => {
+    setTempItemDiscardConfirmOpen(false);
+    setTempItemOpen(false);
+    setTempItemForm({ name: "", price: "", cost: "" });
   };
 
   /* Clear numpad when switching to a method that doesn't use it;
@@ -3363,7 +3401,7 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── Walk-in dialog ─── */}
-      <Dialog open={walkInDialogOpen} onOpenChange={setWalkInDialogOpen}>
+      <Dialog open={walkInDialogOpen} onOpenChange={(o) => { if (!o) tryCloseWalkIn(); }}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="w-4 h-4" /> Walk-in Customer</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Enter the customer's name. They won't be added to the system and won't earn loyalty rewards.</p>
@@ -3372,7 +3410,7 @@ export default function POSPage() {
             <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => setWalkInForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setWalkInDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={tryCloseWalkIn}>Cancel</Button>
             <Button onClick={confirmWalkIn}>Confirm</Button>
           </DialogFooter>
         </DialogContent>
@@ -3844,7 +3882,7 @@ export default function POSPage() {
       </Dialog>
 
       {/* ── Custom / Temp Item Dialog ── */}
-      <Dialog open={tempItemOpen} onOpenChange={setTempItemOpen}>
+      <Dialog open={tempItemOpen} onOpenChange={(o) => { if (!o) tryCloseTempItem(); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -3895,7 +3933,7 @@ export default function POSPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTempItemOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={tryCloseTempItem}>Cancel</Button>
             <Button onClick={addTempToCart}>
               <Plus className="w-4 h-4 mr-1" />
               Add to Cart
@@ -3995,6 +4033,38 @@ export default function POSPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDiscardGcIssue}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Walk-in discard confirmation ─── */}
+      <AlertDialog open={walkInDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setWalkInDiscardConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have entered a customer name. Closing now will clear what you typed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardWalkIn}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Custom item discard confirmation ─── */}
+      <AlertDialog open={tempItemDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setTempItemDiscardConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have entered custom item details. Closing now will clear the name, price, and cost you typed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardTempItem}>Discard</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
