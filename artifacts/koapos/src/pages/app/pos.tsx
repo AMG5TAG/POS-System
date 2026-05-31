@@ -110,6 +110,8 @@ export default function POSPage() {
   const [tempItemForm, setTempItemForm] = useState({ name: "", price: "", cost: "" });
   const [saleNotes, setSaleNotes] = useState("");
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
+  const [overallDiscountFlash, setOverallDiscountFlash] = useState(false);
+  const [flashingItemIds, setFlashingItemIds] = useState<Set<number>>(new Set());
 
   /* merchant / business data for receipts */
   const { data: merchantData } = useGetMerchant();
@@ -1022,7 +1024,12 @@ export default function POSPage() {
     setCart(prev => prev.map(i => {
       if (i.product.id !== productId) return i;
       const max = (i.customPrice ?? i.product.price) * i.quantity;
-      return { ...i, itemDiscount: Math.min(Math.max(0, amt), max) };
+      const clamped = Math.min(Math.max(0, amt), max);
+      if (clamped < amt) {
+        setFlashingItemIds(prev2 => { const n = new Set(prev2); n.add(productId); return n; });
+        setTimeout(() => setFlashingItemIds(prev2 => { const n = new Set(prev2); n.delete(productId); return n; }), 600);
+      }
+      return { ...i, itemDiscount: clamped };
     }));
   };
 
@@ -2125,7 +2132,7 @@ export default function POSPage() {
                             value={item.itemDiscount || ""}
                             onChange={(e) => setItemDiscount(item.product.id, e.target.value)}
                             placeholder="0.00"
-                            className="h-6 text-xs"
+                            className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
                           />
                         </div>
                       )}
@@ -2203,9 +2210,19 @@ export default function POSPage() {
               <Input
                 type="number" min="0" step="0.50"
                 value={overallDiscount}
-                onChange={(e) => setOverallDiscount(e.target.value)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
+                  if (!isNaN(val) && val > maxOverall) {
+                    setOverallDiscount(String(maxOverall));
+                    setOverallDiscountFlash(true);
+                    setTimeout(() => setOverallDiscountFlash(false), 600);
+                  } else {
+                    setOverallDiscount(e.target.value);
+                  }
+                }}
                 placeholder="0.00"
-                className="h-6 text-xs flex-1"
+                className={cn("h-6 text-xs flex-1 transition-colors", overallDiscountFlash && "ring-2 ring-destructive border-destructive")}
                 disabled={cart.length === 0}
               />
             </div>
