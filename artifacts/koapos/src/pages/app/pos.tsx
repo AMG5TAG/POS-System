@@ -14,7 +14,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters, useListProductTypes,
-  useValidateGiftCard,
+  useValidateGiftCard, useRecordInvoicePayment,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse,
@@ -416,8 +416,9 @@ export default function POSPage() {
   const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
-  const createTransactionMutation  = useCreateTransaction();
-  const validateGiftCardMutation   = useValidateGiftCard();
+  const createTransactionMutation      = useCreateTransaction();
+  const validateGiftCardMutation       = useValidateGiftCard();
+  const recordInvoicePaymentMutation   = useRecordInvoicePayment();
 
   const allProducts = productsData?.items || [];
   const categories  = categoriesData || [];
@@ -1374,17 +1375,10 @@ export default function POSPage() {
       setInvoicePayPending(true);
       void (async () => {
         try {
-          const res = await fetch(`/api/invoices/${inv.invoiceId}/payment`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) }),
+          await recordInvoicePaymentMutation.mutateAsync({
+            id: inv.invoiceId,
+            data: { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
           });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: "Failed to record payment" }));
-            toast.error(err.error ?? "Failed to record payment");
-            return;
-          }
           idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
           // Synthesize a receipt for the invoice payment (no cart sale exists).
