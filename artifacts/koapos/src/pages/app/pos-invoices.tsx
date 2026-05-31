@@ -8,7 +8,7 @@ import {
   useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings,
   useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
-  ListInvoicesStatus, getListInvoicesQueryKey,
+  ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -241,11 +241,30 @@ export default function POSInvoicesPage() {
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
+  const { data: extSettings } = useGetRegionalExtSettings();
+  const _parsedDefaultTaxRate = parseFloat((extSettings as any)?.defaultTaxRate ?? "10");
+  const defaultTaxRate = Number.isFinite(_parsedDefaultTaxRate) && _parsedDefaultTaxRate >= 0 && _parsedDefaultTaxRate <= 100
+    ? _parsedDefaultTaxRate
+    : 10;
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { opts: invoiceOpts, fontCss: invoiceFontCss } = useSalesTemplate("Invoice");
   const { opts: quoteOpts, fontCss: quoteFontCss } = useSalesTemplate("Quote");
+
+  /* ── Sync initial line state when default tax rate loads ── */
+  useEffect(() => {
+    setLines(p => p.map(l =>
+      l.description === "" && l.quantity === 1 && l.unitPrice === 0
+        ? { ...l, taxRate: defaultTaxRate }
+        : l,
+    ));
+    setEditLines(p => p.map(l =>
+      l.description === "" && l.quantity === 1 && l.unitPrice === 0
+        ? { ...l, taxRate: defaultTaxRate }
+        : l,
+    ));
+  }, [defaultTaxRate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Close product dropdowns on outside click ── */
   useEffect(() => {
@@ -272,7 +291,7 @@ export default function POSInvoicesPage() {
 
   /* ── Line helpers ── */
   const addLine = () => {
-    setLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
+    setLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }]);
     setLineSearch((p) => [...p, ""]);
     setLineDropOpen((p) => [...p, false]);
   };
@@ -289,7 +308,7 @@ export default function POSInvoicesPage() {
     setLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
   };
   const selectProduct = (i: number, product: { name: string; price?: number | null }) => {
-    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
+    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
@@ -341,7 +360,7 @@ export default function POSInvoicesPage() {
 
   /* ── Edit line helpers ── */
   const addEditLine = () => {
-    setEditLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
+    setEditLines((p) => [...p, { description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }]);
     setEditLineSearch((p) => [...p, ""]);
     setEditLineDropOpen((p) => [...p, false]);
   };
@@ -358,7 +377,7 @@ export default function POSInvoicesPage() {
     setEditLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
   };
   const selectEditProduct = (i: number, product: { name: string; price?: number | null }) => {
-    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate } : l));
     setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
@@ -397,7 +416,7 @@ export default function POSInvoicesPage() {
 
   /* ── Dirty detection ── */
   const CREATE_PRISTINE_FORM = { customerId: "", dueDate: "", notes: "" };
-  const CREATE_PRISTINE_LINES: LineItem[] = [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
+  const CREATE_PRISTINE_LINES: LineItem[] = [{ description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }];
   const CREATE_PRISTINE_DISCOUNT = { enabled: false, type: "percent" as DiscountType, value: "" };
   const CREATE_PRISTINE_RECURRING = { enabled: false, frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly", startDate: "", occurrences: 1 };
 
@@ -428,7 +447,7 @@ export default function POSInvoicesPage() {
       startDate: inv.recurringStartDate ? inv.recurringStartDate.slice(0, 10) : "",
       occurrences: inv.recurringOccurrences ?? 1,
     };
-    const items = inv.items?.length ? inv.items : [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
+    const items = inv.items?.length ? inv.items : [{ description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }];
     const newDiscount = inv.discountType && inv.discountValue
       ? { enabled: true, type: inv.discountType as DiscountType, value: String(inv.discountValue) }
       : { enabled: false, type: "percent" as DiscountType, value: "" };
@@ -483,7 +502,7 @@ export default function POSInvoicesPage() {
   /* ── Reset create dialog ── */
   const resetCreate = () => {
     setForm({ customerId: "", dueDate: "", notes: "" });
-    setLines([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
+    setLines([{ description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }]);
     setLineSearch([""]);
     setLineDropOpen([false]);
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });

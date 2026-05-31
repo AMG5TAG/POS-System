@@ -62,6 +62,7 @@ interface ExtSettings {
   customTaxLabel:   string;
   taxNumberLabel:   string;
   receiptPaperSize: "a4" | "80mm" | "58mm";
+  defaultTaxRate:   string;
 }
 
 const EXT_DEFAULTS: ExtSettings = {
@@ -70,6 +71,7 @@ const EXT_DEFAULTS: ExtSettings = {
   customTaxLabel:   "",
   taxNumberLabel:   "ABN",
   receiptPaperSize: "80mm",
+  defaultTaxRate:   "10",
 };
 
 
@@ -102,6 +104,7 @@ export default function SettingsTaxPage() {
         customTaxLabel: anyExt.customTaxLabel || EXT_DEFAULTS.customTaxLabel,
         taxNumberLabel: anyExt.taxNumberLabel || EXT_DEFAULTS.taxNumberLabel,
         receiptPaperSize: (anyExt.receiptPaperSize as "a4" | "80mm" | "58mm") || EXT_DEFAULTS.receiptPaperSize,
+        defaultTaxRate: anyExt.defaultTaxRate ?? EXT_DEFAULTS.defaultTaxRate,
       });
     }
   }, [dbExt]);
@@ -115,6 +118,7 @@ export default function SettingsTaxPage() {
           customTaxLabel: ext.customTaxLabel,
           taxNumberLabel: ext.taxNumberLabel,
           receiptPaperSize: ext.receiptPaperSize,
+          defaultTaxRate: ext.defaultTaxRate,
         } as any,
       },
       {
@@ -410,6 +414,22 @@ export default function SettingsTaxPage() {
                   {activeTaxLabel} incl. · {ext.taxNumberLabel}: 12 345 678 901
                 </div>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default Invoice Line Tax Rate (%)</Label>
+              <p className="text-xs text-muted-foreground">
+                Pre-filled {activeTaxLabel} rate for new invoice line items. Set to 0 for {activeTaxLabel}-free goods.
+              </p>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={ext.defaultTaxRate}
+                onChange={(e) => patchExt({ defaultTaxRate: e.target.value })}
+                placeholder="10"
+                className="max-w-40"
+              />
             </div>
             <div className="flex justify-end">
               <Button size="sm" onClick={handleSaveExt}>Save Tax &amp; Compliance</Button>
