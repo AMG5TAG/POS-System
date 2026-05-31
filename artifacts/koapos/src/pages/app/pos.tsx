@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -109,6 +110,15 @@ export default function POSPage() {
 
   /* cart */
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  /* navigation guard — warn before leaving mid-sale */
+  const { ConfirmDialog: LeaveSaleDialog } = useUnsavedChangesGuard(cart.length > 0, {
+    title: "Leave sale?",
+    description: "You have items in the cart. Leaving now will discard the current sale.",
+    cancelLabel: "Stay",
+    actionLabel: "Leave",
+  });
+
   const [overallDiscount, setOverallDiscount] = useState("");
   const [tempItemOpen, setTempItemOpen] = useState(false);
   const [tempItemForm, setTempItemForm] = useState({ name: "", price: "", cost: "" });
@@ -2919,6 +2929,9 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Leave sale confirmation (navigation guard) ─── */}
+      <LeaveSaleDialog />
 
       {/* ─── Payment discard confirmation ─── */}
       <AlertDialog open={payDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setPayDiscardConfirmOpen(false); }}>

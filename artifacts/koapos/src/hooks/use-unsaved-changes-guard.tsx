@@ -11,6 +11,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+export interface UnsavedChangesGuardOptions {
+  title?: string;
+  description?: string;
+  cancelLabel?: string;
+  actionLabel?: string;
+}
+
 /**
  * Intercepts navigation away from the current page when there are unsaved
  * changes. Covers:
@@ -21,9 +28,16 @@ import {
  *
  * Returns a `ConfirmDialog` component that must be rendered inside the page.
  */
-export function useUnsavedChangesGuard(isDirty: boolean) {
+export function useUnsavedChangesGuard(isDirty: boolean, options?: UnsavedChangesGuardOptions) {
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const [, navigate] = useLocation();
+
+  const {
+    title = "Unsaved changes",
+    description = "You have unsaved changes. If you leave now, your changes will be lost.",
+    cancelLabel = "Stay on page",
+    actionLabel = "Leave anyway",
+  } = options ?? {};
 
   // Keep refs to avoid stale closures inside patched functions / event handlers
   const isDirtyRef = useRef(isDirty);
@@ -144,14 +158,14 @@ export function useUnsavedChangesGuard(isDirty: boolean) {
       <AlertDialog open={pendingHref !== null} onOpenChange={(open) => { if (!open) cancel(); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes. If you leave now, your changes will be lost.
+              {description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancel}>Stay on page</AlertDialogCancel>
-            <AlertDialogAction onClick={confirm}>Leave anyway</AlertDialogAction>
+            <AlertDialogCancel onClick={cancel}>{cancelLabel}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirm}>{actionLabel}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
