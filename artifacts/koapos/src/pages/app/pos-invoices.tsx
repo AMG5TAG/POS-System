@@ -36,7 +36,7 @@ import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
-  Copy, GripVertical,
+  Copy, GripVertical, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -193,6 +193,8 @@ export default function POSInvoicesPage() {
     startDate: "",
     occurrences: 1,
   });
+  const [pdfGeneratingId, setPdfGeneratingId] = useState<number | null>(null);
+
   const [discount, setDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
     enabled: false, type: "percent", value: "",
   });
@@ -863,6 +865,9 @@ export default function POSInvoicesPage() {
   };
 
   const downloadInvoicePDF = async (inv: Invoice) => {
+    if (pdfGeneratingId !== null) return;
+    setPdfGeneratingId(inv.id);
+    try {
     const opts      = invoiceOpts;
     const bizName   = merchant?.businessName ?? "Your Business";
     const abn       = profile.abn ?? "";
@@ -1262,6 +1267,9 @@ export default function POSInvoicesPage() {
     }
 
     doc.save(`${inv.invoiceNumber}.pdf`);
+    } finally {
+      setPdfGeneratingId(null);
+    }
   };
 
   /* ── Derived lists & KPIs ── */
@@ -1294,8 +1302,9 @@ export default function POSInvoicesPage() {
         </Button>
       )}
       <Button variant="ghost" size="icon" className="h-7 w-7" title="Download PDF"
+        disabled={pdfGeneratingId !== null}
         onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}>
-        <Download className="w-3.5 h-3.5" />
+        {pdfGeneratingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
       </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7" title="Email invoice"
         onClick={(e) => {
@@ -1662,9 +1671,10 @@ export default function POSInvoicesPage() {
                                 size="sm"
                                 className="h-7 px-2 text-[11px] font-medium gap-1"
                                 title="Download PDF"
-                                onClick={() => downloadInvoicePDF(inv)}
+                                disabled={pdfGeneratingId !== null}
+                                onClick={() => { void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}
                               >
-                                <Download className="w-3 h-3" />
+                                {pdfGeneratingId === inv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                                 <span className="hidden sm:inline">PDF</span>
                               </Button>
                               <Button
@@ -1745,8 +1755,9 @@ export default function POSInvoicesPage() {
                       <MessageSquare className="w-3.5 h-3.5" /> SMS
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      disabled={pdfGeneratingId !== null}
                       onClick={() => { void downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
-                      <Download className="w-3.5 h-3.5" /> PDF
+                      {pdfGeneratingId === detailInvoice.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
                       onClick={() => { void printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
