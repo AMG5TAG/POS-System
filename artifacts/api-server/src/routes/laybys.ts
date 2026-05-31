@@ -2,6 +2,14 @@ import { Router, type IRouter } from "express";
 import { db, laybysTable, laybyPaymentsTable, customersTable } from "@workspace/db";
 import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import {
+  GetLaybyParams,
+  UpdateLaybyParams,
+  ListLaybyPaymentsParams,
+  AddLaybyPaymentParams,
+  CancelLaybyParams,
+  CompleteLaybyParams,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -138,7 +146,9 @@ router.post("/laybys", requireAuth, async (req, res) => {
 // GET /laybys/:id
 router.get("/laybys/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = GetLaybyParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [row] = await db
     .select({ layby: laybysTable, customer: customersTable })
@@ -157,7 +167,9 @@ router.get("/laybys/:id", requireAuth, async (req, res) => {
 // PATCH /laybys/:id
 router.patch("/laybys/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateLaybyParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { dueDate, notes, status } = req.body;
 
   const updates: Partial<typeof laybysTable.$inferInsert> = {
@@ -190,7 +202,9 @@ router.patch("/laybys/:id", requireAuth, async (req, res) => {
 // GET /laybys/:id/payments
 router.get("/laybys/:id/payments", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = ListLaybyPaymentsParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [layby] = await db
     .select()
@@ -223,7 +237,9 @@ router.get("/laybys/:id/payments", requireAuth, async (req, res) => {
 // POST /laybys/:id/payments
 router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = AddLaybyPaymentParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { amount, paymentMethod, note } = req.body;
 
   if (typeof amount !== "number" || amount <= 0) {
@@ -278,7 +294,9 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
 // POST /laybys/:id/cancel
 router.post("/laybys/:id/cancel", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = CancelLaybyParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { reason } = req.body ?? {};
 
   const [layby] = await db
@@ -317,7 +335,9 @@ router.post("/laybys/:id/cancel", requireAuth, async (req, res) => {
 // POST /laybys/:id/complete
 router.post("/laybys/:id/complete", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id));
+  const paramsResult = CompleteLaybyParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [layby] = await db
     .select()

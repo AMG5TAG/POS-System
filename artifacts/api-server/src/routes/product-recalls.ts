@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, productRecallsTable } from "@workspace/db";
 import { eq, and, or, ilike, desc, max } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateProductRecallParams, DeleteProductRecallParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -58,7 +59,9 @@ router.post("/recalls", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/recalls/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateProductRecallParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const mid = req.session.merchantId!;
   const { productId, productName, reason, severity, status, affectedBatch, notes } = req.body;
   const [recall] = await db
@@ -79,7 +82,9 @@ router.patch("/recalls/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/recalls/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteProductRecallParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(productRecallsTable).where(
     and(eq(productRecallsTable.id, id), eq(productRecallsTable.merchantId, req.session.merchantId!)),
   );

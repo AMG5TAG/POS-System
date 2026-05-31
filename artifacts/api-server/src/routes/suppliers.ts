@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, suppliersTable } from "@workspace/db";
 import { eq, and, ilike, or } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateSupplierParams, DeleteSupplierParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -36,7 +37,9 @@ router.post("/suppliers", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/suppliers/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateSupplierParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const {
     name, accountNumber, website, paymentTerms, notes,
     logoUrl, street, city, state, postcode, country, address,
@@ -58,7 +61,9 @@ router.patch("/suppliers/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/suppliers/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteSupplierParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(suppliersTable).where(and(eq(suppliersTable.id, id), eq(suppliersTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

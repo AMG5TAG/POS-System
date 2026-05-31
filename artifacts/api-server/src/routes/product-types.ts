@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, productTypesTable } from "@workspace/db";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateProductTypeParams, DeleteProductTypeParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -59,7 +60,9 @@ router.post("/product-types", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateProductTypeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { name, slug, description, trackStock, printCode, isActive, sortOrder } = req.body;
   const updates: Partial<typeof productTypesTable.$inferInsert> = {};
   if (name !== undefined) updates.name = name;
@@ -75,7 +78,9 @@ router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> 
 });
 
 router.delete("/product-types/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteProductTypeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(productTypesTable).where(and(eq(productTypesTable.id, id), eq(productTypesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

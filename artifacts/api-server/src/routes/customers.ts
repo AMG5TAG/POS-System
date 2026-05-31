@@ -20,6 +20,15 @@ import {
   UpdateCustomerParams,
   UpdateCustomerBody,
   DeleteCustomerParams,
+  GenerateCustomerReferralCodeParams,
+  GetCustomerHistoryParams,
+  ListCustomerNotesParams,
+  CreateCustomerNoteParams,
+  DeleteCustomerNoteParams,
+  ListCustomerFilesParams,
+  CreateCustomerFileParams,
+  DeleteCustomerFileParams,
+  MergeCustomerProfilesParams,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
@@ -340,8 +349,9 @@ router.delete("/customers/:id", requireAuth, async (req, res): Promise<void> => 
 });
 
 router.post("/customers/:id/generate-referral-code", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = GenerateCustomerReferralCodeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const code = await uniqueStandardCode(merchantId);
   const [customer] = await db.update(customersTable)
@@ -355,8 +365,9 @@ router.post("/customers/:id/generate-referral-code", requireAuth, async (req, re
 /* ── History ───────────────────────────────────────────────────────────────── */
 
 router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = GetCustomerHistoryParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
 
   const [txRows, apptRows, jobRows] = await Promise.all([
@@ -408,8 +419,9 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
 /* ── Notes ─────────────────────────────────────────────────────────────────── */
 
 router.get("/customers/:id/notes", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = ListCustomerNotesParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
   const notes = await db.select().from(customerNotesTable)
     .where(and(eq(customerNotesTable.merchantId, merchantId), eq(customerNotesTable.customerId, customerId)))
@@ -422,8 +434,9 @@ router.get("/customers/:id/notes", requireAuth, async (req, res): Promise<void> 
 });
 
 router.post("/customers/:id/notes", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = CreateCustomerNoteParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
   const { note, popupOnBooking = false, popupOnSale = false } = req.body as { note?: string; popupOnBooking?: boolean; popupOnSale?: boolean };
   if (!note?.trim()) { res.status(400).json({ error: "note is required" }); return; }
@@ -438,9 +451,9 @@ router.post("/customers/:id/notes", requireAuth, async (req, res): Promise<void>
 });
 
 router.delete("/customers/:id/notes/:noteId", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  const noteId = parseInt(String(req.params.noteId), 10);
-  if (isNaN(customerId) || isNaN(noteId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = DeleteCustomerNoteParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { noteId } = paramsResult.data;
   await db.delete(customerNotesTable)
     .where(and(eq(customerNotesTable.id, noteId), eq(customerNotesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
@@ -453,8 +466,9 @@ function fileUrl(fileKey: string): string {
 }
 
 router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = ListCustomerFilesParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
   const files = await db.select().from(customerFilesTable)
     .where(and(eq(customerFilesTable.merchantId, merchantId), eq(customerFilesTable.customerId, customerId)))
@@ -468,8 +482,9 @@ router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> 
 });
 
 router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  const paramsResult = CreateCustomerFileParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
   const { filename, fileKey, contentType, sizeBytes } = req.body as { filename?: string; fileKey?: string; contentType?: string; sizeBytes?: number };
   if (!filename || !fileKey || !contentType) { res.status(400).json({ error: "filename, fileKey, and contentType are required" }); return; }
@@ -485,9 +500,9 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
 });
 
 router.delete("/customers/:id/files/:fileId", requireAuth, async (req, res): Promise<void> => {
-  const customerId = parseInt(String(req.params.id), 10);
-  const fileId = parseInt(String(req.params.fileId), 10);
-  if (isNaN(customerId) || isNaN(fileId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = DeleteCustomerFileParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { fileId } = paramsResult.data;
   await db.delete(customerFilesTable)
     .where(and(eq(customerFilesTable.id, fileId), eq(customerFilesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
@@ -611,11 +626,11 @@ async function resolveMergedByName(merchantId: number, staffId: number | undefin
 /* ─── Merge two profiles (single) ────────────────────────────────────────── */
 
 router.post("/customers/:primaryId/merge/:secondaryId", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
-  const merchantId  = req.session.merchantId!;
-  const primaryId   = parseInt(String(req.params.primaryId),   10);
-  const secondaryId = parseInt(String(req.params.secondaryId), 10);
+  const paramsResult = MergeCustomerProfilesParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { primaryId, secondaryId } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
 
-  if (isNaN(primaryId) || isNaN(secondaryId)) { res.status(400).json({ error: "Invalid customer ID" }); return; }
   if (primaryId === secondaryId) { res.status(400).json({ error: "Cannot merge a profile with itself" }); return; }
 
   const [primary] = await db.select().from(customersTable)

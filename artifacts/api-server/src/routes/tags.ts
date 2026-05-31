@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, tagsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateTagParams, DeleteTagParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,9 @@ router.post("/tags", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/tags/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateTagParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { name, color } = req.body;
   const [tag] = await db.update(tagsTable).set({ name, color }).where(and(eq(tagsTable.id, id), eq(tagsTable.merchantId, req.session.merchantId!))).returning();
   if (!tag) { res.status(404).json({ error: "Tag not found" }); return; }
@@ -26,7 +29,9 @@ router.patch("/tags/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/tags/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteTagParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(tagsTable).where(and(eq(tagsTable.id, id), eq(tagsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

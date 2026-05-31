@@ -3,6 +3,7 @@ import { db, serviceJobsTable, customersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -135,11 +136,9 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  const paramsResult = UpdateServiceJobParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 
@@ -191,11 +190,9 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
 });
 
 router.delete("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  const paramsResult = DeleteServiceJobParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db
     .delete(serviceJobsTable)
     .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, req.session.merchantId!)));
@@ -204,11 +201,9 @@ router.delete("/service-jobs/:id", requireAuth, async (req, res): Promise<void> 
 
 // POST /service-jobs/:id/email
 router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  const paramsResult = SendServiceJobEmailParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
 
   const [job] = await db.select().from(serviceJobsTable)

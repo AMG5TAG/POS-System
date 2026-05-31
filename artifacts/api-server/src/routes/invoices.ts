@@ -12,6 +12,14 @@ import {
   ListInvoicesQueryParams,
   CreateInvoiceBody,
   UpdateInvoiceBody,
+  GetInvoiceParams,
+  UpdateInvoiceParams,
+  DeleteInvoiceParams,
+  MarkInvoiceViewedParams,
+  RecordInvoicePaymentParams,
+  GetInvoicePdfParams,
+  SendInvoiceEmailParams,
+  AddInvoiceEventParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -199,7 +207,9 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
 
 // GET /invoices/:id
 router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = GetInvoiceParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
 
   const [row] = await db
@@ -296,7 +306,9 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 
 // PATCH /invoices/:id/viewed
 router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = MarkInvoiceViewedParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
 
   const [existing] = await db
@@ -337,7 +349,9 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
 
 // PATCH /invoices/:id
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateInvoiceParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { status, notes, dueDate, customerId, items, recurring, discount } = bodyParsed.data;
@@ -434,7 +448,9 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 
 // POST /invoices/:id/payment — record a (partial or full) payment against an invoice
 router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = RecordInvoicePaymentParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const bodyParsed = RecordInvoicePaymentBody.safeParse(req.body);
   if (!bodyParsed.success) {
@@ -584,14 +600,18 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
 
 // DELETE /invoices/:id
 router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteInvoiceParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });
 
 // GET /invoices/:id/pdf — stream a branded A4 PDF for this invoice
 router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = GetInvoicePdfParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
 
   const [row] = await db
@@ -669,7 +689,9 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
 
 // POST /invoices/:id/send-email
 router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = SendInvoiceEmailParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const bodyParsed = SendInvoiceEmailBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
@@ -848,7 +870,9 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
 
 // POST /invoices/:id/event  — record a client-side event (download, print, etc.)
 router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = AddInvoiceEventParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const bodyParsed = AddInvoiceEventBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }

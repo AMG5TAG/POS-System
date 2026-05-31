@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, brandsTable, productsTable, productTypesTable } from "@workspace/db";
 import { eq, and, ilike, count, sql, or, notInArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateBrandParams, DeleteBrandParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -62,7 +63,9 @@ router.post("/brands", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateBrandParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const { name, description, website, logoUrl } = req.body;
   const [brand] = await db.update(brandsTable).set({ name, description, website, logoUrl }).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!))).returning();
   if (!brand) { res.status(404).json({ error: "Brand not found" }); return; }
@@ -70,7 +73,9 @@ router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/brands/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteBrandParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(brandsTable).where(and(eq(brandsTable.id, id), eq(brandsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
 });

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, stockTakesTable, stockTakeLinesTable, productsTable, categoriesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { GetStockTakeParams, SaveStockTakeProgressParams, SubmitStockTakeParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -154,8 +155,9 @@ router.post("/stock-takes", requireAuth, async (req, res): Promise<void> => {
 
 router.get("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id), 10);
-  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = GetStockTakeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [take] = await db
     .select()
@@ -177,8 +179,9 @@ router.get("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.patch("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id), 10);
-  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = SaveStockTakeProgressParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [take] = await db
     .select()
@@ -222,8 +225,9 @@ router.patch("/stock-takes/:id", requireAuth, async (req, res): Promise<void> =>
 
 router.post("/stock-takes/:id/submit", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id), 10);
-  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = SubmitStockTakeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [take] = await db
     .select()
@@ -282,8 +286,9 @@ router.post("/stock-takes/:id/submit", requireAuth, async (req, res): Promise<vo
 
 router.delete("/stock-takes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(String(req.params.id), 10);
-  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = GetStockTakeParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const [take] = await db
     .select()

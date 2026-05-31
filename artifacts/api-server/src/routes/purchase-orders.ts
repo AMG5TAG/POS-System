@@ -9,6 +9,8 @@ import {
   UpdatePurchaseOrderParams,
   UpdatePurchaseOrderBody,
   DeletePurchaseOrderParams,
+  ReceivePurchaseOrderItemsParams,
+  SendPurchaseOrderEmailParams,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 
@@ -272,8 +274,9 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
 router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const userEmail  = (req.session as { email?: string }).email ?? "Unknown";
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = ReceivePurchaseOrderItemsParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
 
   const po = await getPOWithItems(id, merchantId);
   if (!po) { res.status(404).json({ error: "Purchase order not found" }); return; }
@@ -385,8 +388,9 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
 
 // POST /purchase-orders/:id/email
 router.post("/purchase-orders/:id/email", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = SendPurchaseOrderEmailParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
 
   const po = await getPOWithItems(id, merchantId);

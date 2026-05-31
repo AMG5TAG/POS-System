@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, productPreOrdersTable } from "@workspace/db";
 import { eq, and, desc, max } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateProductPreOrderParams, DeleteProductPreOrderParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -63,7 +64,9 @@ router.post("/pre-orders", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateProductPreOrderParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const mid = req.session.merchantId!;
   const { customerId, customerName, productId, productName, quantity, depositAmount, status, expectedDate, notes } = req.body;
   const [order] = await db
@@ -86,7 +89,9 @@ router.patch("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => 
 });
 
 router.delete("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteProductPreOrderParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(productPreOrdersTable).where(
     and(eq(productPreOrdersTable.id, id), eq(productPreOrdersTable.merchantId, req.session.merchantId!)),
   );

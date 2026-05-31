@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, productReturnAuthsTable } from "@workspace/db";
 import { eq, and, desc, max } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { UpdateProductReturnAuthParams, DeleteProductReturnAuthParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -61,7 +62,9 @@ router.post("/return-auths", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/return-auths/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = UpdateProductReturnAuthParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const mid = req.session.merchantId!;
   const { customerId, customerName, reason, items, refundAmount, status, notes } = req.body;
   const [ra] = await db
@@ -82,7 +85,9 @@ router.patch("/return-auths/:id", requireAuth, async (req, res): Promise<void> =
 });
 
 router.delete("/return-auths/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id));
+  const paramsResult = DeleteProductReturnAuthParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   await db.delete(productReturnAuthsTable).where(
     and(eq(productReturnAuthsTable.id, id), eq(productReturnAuthsTable.merchantId, req.session.merchantId!)),
   );

@@ -29,6 +29,7 @@ import {
   CreateProductVariantParams,
   UpdateProductVariantParams,
   DeleteProductVariantParams,
+  GetProductPricingHistoryParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -748,8 +749,9 @@ router.delete("/digital-codes/:id", requireAuth, async (req, res): Promise<void>
 
 // GET /products/:id/pricing-history
 router.get("/products/:id/pricing-history", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(String(req.params.id), 10);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const paramsResult = GetProductPricingHistoryParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const rows = await db
     .select()
