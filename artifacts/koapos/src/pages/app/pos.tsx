@@ -80,6 +80,16 @@ type WalkIn = { firstName: string; lastName: string };
 
 
 const DISPLAY_KEY = "koapos_pos_display";
+const RECOVERY_DRAFT_KEY = "koapos_pos_recovery_draft";
+
+type RecoveryDraft = {
+  cart: CartItem[];
+  selectedCustomer: Customer | null;
+  walkIn: WalkIn | null;
+  overallDiscount: string;
+  saleNotes: string;
+  savedAt: number;
+};
 
 
 function formatKode(profit: number): string {
@@ -209,6 +219,13 @@ export default function POSPage() {
   // blip) so the server dedupes them; reset to null once a sale/payment
   // succeeds or the cart is cleared, starting a fresh key for the next sale.
   const idempotencyKeyRef = useRef<string | null>(null);
+
+  // Refs kept in sync with state so pagehide / unmount cleanup can read the
+  // latest cart without stale closures.
+  const cartRef = useRef<CartItem[]>([]);
+  const selectedCustomerRef = useRef<Customer | null>(null);
+  // Prevents both pagehide AND component unmount from firing a double beacon.
+  const hasAutoParkedRef = useRef(false);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -726,6 +743,7 @@ export default function POSPage() {
     const pending = takePendingInvoicePayment();
     if (!pending) return;
     invoicePayActiveRef.current = true;
+    localStorage.removeItem(RECOVERY_DRAFT_KEY);
     setInvoicePay(pending);
     setCart([]);
     setOverallDiscount("");
@@ -823,6 +841,132 @@ export default function POSPage() {
       setPendingRestoreCustomerId(null);
     }
   }, [pendingRestoreCustomerId, customersData]);
+
+  /* ── Keep cart/customer refs in sync for stale-closure-safe beacon calls ─── */
+  useEffect(() => { cartRef.current = cart; }, [cart]);
+  useEffect(() => { selectedCustomerRef.current = selectedCustomer; }, [selectedCustomer]);
+
+  /* ── Recovery draft: show restore toast on next POS load ─────────────────── *
+   * IMPORTANT: this effect must be defined BEFORE the localStorage sync effect  *
+   * below. React runs effects in definition order on mount; defining this first  *
+   * guarantees the draft is read before the sync effect can delete it (which    *
+   * happens when the initial cart state is empty).                              */
+  useEffect(() => {
+    if (invoicePayActiveRef.current) return; // Invoice mode — skip recovery
+    const raw = localStorage.getItem(RECOVERY_DRAFT_KEY);
+    if (!raw) return;
+    let draft: RecoveryDraft;
+    try {
+      draft = JSON.parse(raw) as RecoveryDraft;
+      if (!Array.isArray(draft.cart) || draft.cart.length === 0) {
+        localStorage.removeItem(RECOVERY_DRAFT_KEY);
+        return;
+      }
+    } catch {
+      localStorage.removeItem(RECOVERY_DRAFT_KEY);
+      return;
+    }
+    // Capture the draft data in the closure — localStorage may be cleared by
+    // the sync effect below before the user interacts with the toast, but the
+    // closure keeps the data alive for the Restore action.
+    const capturedDraft = draft;
+    const itemCount = capturedDraft.cart.length;
+    const label = itemCount === 1 ? "1 item" : `${itemCount} items`;
+    const discardDraft = () => localStorage.removeItem(RECOVERY_DRAFT_KEY);
+    toast("Recovered sale", {
+      description: `${label} from your previous session.`,
+      duration: Infinity,
+      action: {
+        label: "Restore",
+        onClick: () => {
+          setCart(capturedDraft.cart);
+          setOverallDiscount(capturedDraft.overallDiscount ?? "");
+          setSaleNotes(capturedDraft.saleNotes ?? "");
+          setWalkIn(capturedDraft.walkIn ?? null);
+          if (capturedDraft.selectedCustomer) {
+            setSelectedCustomer(capturedDraft.selectedCustomer);
+          }
+          localStorage.removeItem(RECOVERY_DRAFT_KEY);
+          // Also clear any server-side "Recovered sale" parked sale created by
+          // the auto-park beacon so it doesn't linger in the parked-sales list.
+          hasAutoParkedRef.current = false;
+          toast.success("Sale restored");
+        },
+      },
+      cancel: { label: "Discard", onClick: discardDraft },
+      onDismiss: discardDraft,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); /* run once on mount */
+
+  /* ── Recovery draft: continuously sync cart to localStorage ─────────────────
+     Mobile browsers do not fire beforeunload reliably on tab close / app
+     backgrounding. Keeping localStorage up-to-date on every cart change means
+     the draft survives even when the page is killed without warning.            */
+  useEffect(() => {
+    if (cart.length === 0) {
+      localStorage.removeItem(RECOVERY_DRAFT_KEY);
+      return;
+    }
+    const draft: RecoveryDraft = {
+      cart,
+      selectedCustomer,
+      walkIn,
+      overallDiscount,
+      saleNotes,
+      savedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(RECOVERY_DRAFT_KEY, JSON.stringify(draft));
+    } catch { /* storage quota exceeded — ignore */ }
+  }, [cart, selectedCustomer, walkIn, overallDiscount, saleNotes]);
+
+  /* ── Auto-park as a named "Recovered sale" entry on page unload / unmount ───
+     Two triggers cover the main mobile-kill scenarios:
+       1. pagehide — fires on iOS Safari / Android on tab close or backgrounding;
+          more reliable than beforeunload on mobile.
+       2. Component unmount cleanup — fires on in-app SPA navigation away from POS.
+     hasAutoParkedRef prevents double-parking when both triggers fire.          */
+  useEffect(() => {
+    const sendAutoParkBeacon = () => {
+      if (hasAutoParkedRef.current) return;
+      const c = cartRef.current;
+      if (c.length === 0) return;
+      hasAutoParkedRef.current = true;
+      const items = c.map(i => ({
+        productId: i.product.id,
+        name: i.product.name ?? "",
+        quantity: i.quantity,
+        price: i.customPrice ?? (i.product.price ?? 0),
+        itemDiscount: i.itemDiscount ?? 0,
+        customPrice: i.customPrice ?? null,
+        itemNote: i.itemNote ?? null,
+      }));
+      const rawTotal = c.reduce((sum, i) => {
+        const price = i.customPrice ?? (i.product.price ?? 0);
+        return sum + price * i.quantity * (1 - (i.itemDiscount ?? 0) / 100);
+      }, 0);
+      const payload = {
+        items,
+        total: rawTotal,
+        customerId: selectedCustomerRef.current?.id ?? undefined,
+        note: "Recovered sale",
+      };
+      try {
+        navigator.sendBeacon(
+          "/api/parked-sales",
+          new Blob([JSON.stringify(payload)], { type: "application/json" }),
+        );
+      } catch { /* sendBeacon not supported — draft is still in localStorage */ }
+    };
+
+    window.addEventListener("pagehide", sendAutoParkBeacon);
+    return () => {
+      window.removeEventListener("pagehide", sendAutoParkBeacon);
+      // Unmount cleanup: auto-park if navigating away from POS mid-sale.
+      sendAutoParkBeacon();
+    };
+  }, []); /* mount/unmount only — reads values via refs */
 
   /* Reset payment modal when it opens */
   useEffect(() => {
@@ -1183,6 +1327,8 @@ export default function POSPage() {
         },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
+      localStorage.removeItem(RECOVERY_DRAFT_KEY);
+      hasAutoParkedRef.current = false;
       setCart([]); setOverallDiscount(""); setSaleNotes("");
       setSelectedCustomer(null); setWalkIn(null);
       toast.success("Sale parked");
@@ -1289,6 +1435,8 @@ export default function POSPage() {
   };
 
   const clearCart = () => {
+    localStorage.removeItem(RECOVERY_DRAFT_KEY);
+    hasAutoParkedRef.current = false;
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     idempotencyKeyRef.current = null;
