@@ -1260,6 +1260,10 @@ export default function POSInvoicesPage() {
           <Banknote className="w-4 h-4" />
         </Button>
       )}
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Download PDF"
+        onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}>
+        <Download className="w-3.5 h-3.5" />
+      </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
         onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
         <Trash2 className="w-3.5 h-3.5" />
