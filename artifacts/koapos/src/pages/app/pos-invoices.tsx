@@ -36,7 +36,7 @@ import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -279,6 +279,11 @@ export default function POSInvoicesPage() {
     setLineSearch((p) => p.filter((_, idx) => idx !== i));
     setLineDropOpen((p) => p.filter((_, idx) => idx !== i));
   };
+  const duplicateLine = (i: number) => {
+    setLines((p) => { const n = [...p]; n.splice(i + 1, 0, { ...p[i] }); return n; });
+    setLineSearch((p) => { const n = [...p]; n.splice(i + 1, 0, ""); return n; });
+    setLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
+  };
   const selectProduct = (i: number, product: { name: string; price?: number | null }) => {
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
@@ -332,6 +337,11 @@ export default function POSInvoicesPage() {
     setEditLines((p) => p.filter((_, idx) => idx !== i));
     setEditLineSearch((p) => p.filter((_, idx) => idx !== i));
     setEditLineDropOpen((p) => p.filter((_, idx) => idx !== i));
+  };
+  const duplicateEditLine = (i: number) => {
+    setEditLines((p) => { const n = [...p]; n.splice(i + 1, 0, { ...p[i] }); return n; });
+    setEditLineSearch((p) => { const n = [...p]; n.splice(i + 1, 0, ""); return n; });
+    setEditLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
   };
   const selectEditProduct = (i: number, product: { name: string; price?: number | null }) => {
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: 10 } : l));
@@ -1968,7 +1978,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -1976,10 +1986,11 @@ export default function POSInvoicesPage() {
                 <span className="text-right">Tax%</span>
                 <span className="text-right">Total</span>
                 <span />
+                <span />
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start">
                     <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
                       <button type="button" onClick={() => moveLineUp(i)} disabled={i === 0}
                         className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
@@ -2046,6 +2057,10 @@ export default function POSInvoicesPage() {
                     <div className="flex items-center justify-end h-8">
                       <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
                     </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                      onClick={() => duplicateLine(i)} title="Duplicate line">
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeLine(i)} disabled={lines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2214,7 +2229,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -2222,10 +2237,11 @@ export default function POSInvoicesPage() {
                 <span className="text-right">Tax%</span>
                 <span className="text-right">Total</span>
                 <span />
+                <span />
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px] gap-1.5 items-start">
+                  <div key={i} className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start">
                     <div className="flex flex-col items-center justify-start pt-0.5 gap-0">
                       <button type="button" onClick={() => moveEditLineUp(i)} disabled={i === 0}
                         className="h-4 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
@@ -2296,6 +2312,10 @@ export default function POSInvoicesPage() {
                     <div className="flex items-center justify-end h-8">
                       <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
                     </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                      onClick={() => duplicateEditLine(i)} title="Duplicate line">
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
