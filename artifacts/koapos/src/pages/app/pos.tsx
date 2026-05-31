@@ -16,7 +16,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters, useListProductTypes,
-  useValidateGiftCard, useRecordInvoicePayment,
+  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse,
@@ -137,6 +137,15 @@ export default function POSPage() {
   const { data: merchantData } = useGetMerchant();
   const { profile: businessProfile } = useBusinessProfile();
 
+  /* pos settings — used for role discount limits */
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const roleDiscountLimits = useMemo((): Record<string, number | null> => {
+    try {
+      if (posSettingsData?.roleDiscountLimits) return JSON.parse(posSettingsData.roleDiscountLimits) as Record<string, number | null>;
+    } catch { /* ignore */ }
+    return {};
+  }, [posSettingsData]);
+
   /* active print template */
   const { opts: thermalOpts, fontCss: thermalFontCss } = useSalesTemplate("Thermal_Receipt");
   const { printA4Receipt } = useDocumentTemplate();
@@ -229,6 +238,14 @@ export default function POSPage() {
 
   /* staff PIN */
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+
+  /* max discount % for the currently signed-in staff's role (null = no limit) */
+  const maxDiscountPct = useMemo((): number | null => {
+    if (!currentStaff?.role) return null;
+    const limit = roleDiscountLimits[currentStaff.role];
+    return (limit != null && !isNaN(limit)) ? limit : null;
+  }, [currentStaff, roleDiscountLimits]);
+
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -1126,8 +1143,10 @@ export default function POSPage() {
     const amt = parseFloat(value) || 0;
     setCart(prev => prev.map(i => {
       if (i.product.id !== productId) return i;
-      const max = (i.customPrice ?? i.product.price) * i.quantity;
-      const clamped = Math.min(Math.max(0, amt), max);
+      const linePrice = (i.customPrice ?? i.product.price) * i.quantity;
+      const maxByCart = linePrice;
+      const maxByRole = maxDiscountPct != null ? (maxDiscountPct / 100) * linePrice : Infinity;
+      const clamped = Math.min(Math.max(0, amt), maxByCart, maxByRole);
       if (clamped < amt) {
         setFlashingItemIds(prev2 => { const n = new Set(prev2); n.add(productId); return n; });
         setTimeout(() => setFlashingItemIds(prev2 => { const n = new Set(prev2); n.delete(productId); return n; }), 600);
@@ -2260,13 +2279,20 @@ export default function POSPage() {
                           </button>
                           {itemDiscountModes.has(item.product.id) ? (
                             <Input
-                              type="number" min="0" max="100" step="1"
+                              type="number" min="0" max={maxDiscountPct ?? 100} step="1"
                               value={itemDiscountPctInputs.get(item.product.id) ?? ""}
                               onChange={(e) => {
                                 const raw = e.target.value;
                                 setItemDiscountPctInputs(p => new Map(p).set(item.product.id, raw));
-                                const pct = Math.min(Math.max(parseFloat(raw) || 0, 0), 100);
+                                const maxPct = maxDiscountPct ?? 100;
+                                const rawPct = Math.max(parseFloat(raw) || 0, 0);
+                                const exceeds = rawPct > maxPct;
+                                const pct = Math.min(rawPct, maxPct);
                                 const dollarAmt = (pct / 100) * linePrice;
+                                if (exceeds) {
+                                  setFlashingItemIds(prev => { const n = new Set(prev); n.add(item.product.id); return n; });
+                                  setTimeout(() => setFlashingItemIds(prev => { const n = new Set(prev); n.delete(item.product.id); return n; }), 600);
+                                }
                                 setItemDiscount(item.product.id, String(dollarAmt));
                               }}
                               placeholder="0"
@@ -2374,15 +2400,18 @@ export default function POSPage() {
               </button>
               {overallDiscountMode === "percent" ? (
                 <Input
-                  type="number" min="0" max="100" step="1"
+                  type="number" min="0" max={maxDiscountPct ?? 100} step="1"
                   value={overallDiscountPctInput}
                   onChange={(e) => {
                     const raw = e.target.value;
                     setOverallDiscountPctInput(raw);
                     const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
-                    const pct = Math.min(Math.max(parseFloat(raw) || 0, 0), 100);
+                    const maxPct = maxDiscountPct ?? 100;
+                    const rawPct = Math.max(parseFloat(raw) || 0, 0);
+                    const exceeds = rawPct > maxPct;
+                    const pct = Math.min(rawPct, maxPct);
                     const dollarAmt = (pct / 100) * maxOverall;
-                    if (pct > 100) {
+                    if (exceeds) {
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
                     }
@@ -2399,8 +2428,10 @@ export default function POSPage() {
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
                     const maxOverall = Math.max(0, cartSubtotal - itemDiscountTotal);
-                    if (!isNaN(val) && val > maxOverall) {
-                      setOverallDiscount(String(maxOverall));
+                    const maxByRole = maxDiscountPct != null ? (maxDiscountPct / 100) * maxOverall : Infinity;
+                    const effectiveMax = Math.min(maxOverall, maxByRole);
+                    if (!isNaN(val) && val > effectiveMax) {
+                      setOverallDiscount(String(effectiveMax));
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
                     } else {

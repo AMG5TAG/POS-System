@@ -2212,6 +2212,7 @@ export interface PosSettings {
   enabledShortcuts: string;
   defaultSkuPrefix: string;
   mapProvider: string;
+  roleDiscountLimits: string;
   updatedAt: string;
 }
 
@@ -2230,6 +2231,7 @@ export interface PosSettingsInput {
   enabledShortcuts?: string;
   defaultSkuPrefix?: string;
   mapProvider?: string;
+  roleDiscountLimits?: string;
 }
 
 export interface LaybySettings {

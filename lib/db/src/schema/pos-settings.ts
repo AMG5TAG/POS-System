@@ -18,6 +18,7 @@ export const posSettingsTable = pgTable("pos_settings", {
   enabledShortcuts:          text("enabled_shortcuts").notNull().default("[]"),
   defaultSkuPrefix:          text("default_sku_prefix").notNull().default("KP"),
   mapProvider:               text("map_provider").notNull().default("google"),
+  roleDiscountLimits:        text("role_discount_limits").notNull().default("{}"),
   updatedAt:                 timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

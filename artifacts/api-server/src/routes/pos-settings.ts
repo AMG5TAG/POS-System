@@ -38,6 +38,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
     activeRegisterId,
     hardwareConfig,
     enabledShortcuts,
+    roleDiscountLimits,
   } = req.body as Partial<typeof posSettingsTable.$inferInsert>;
 
   const patch = {
@@ -53,6 +54,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
     ...(activeRegisterId !== undefined && { activeRegisterId }),
     ...(hardwareConfig !== undefined && { hardwareConfig }),
     ...(enabledShortcuts !== undefined && { enabledShortcuts }),
+    ...(roleDiscountLimits !== undefined && { roleDiscountLimits }),
   };
 
   const [existing] = await db

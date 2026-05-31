@@ -4924,6 +4924,7 @@ export const GetPosSettingsResponse = zod.object({
   "enabledShortcuts": zod.string(),
   "defaultSkuPrefix": zod.string(),
   "mapProvider": zod.string(),
+  "roleDiscountLimits": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -4945,7 +4946,8 @@ export const UpsertPosSettingsBody = zod.object({
   "hardwareConfig": zod.string().optional(),
   "enabledShortcuts": zod.string().optional(),
   "defaultSkuPrefix": zod.string().optional(),
-  "mapProvider": zod.string().optional()
+  "mapProvider": zod.string().optional(),
+  "roleDiscountLimits": zod.string().optional()
 })
 
 export const UpsertPosSettingsResponse = zod.object({
@@ -4965,6 +4967,7 @@ export const UpsertPosSettingsResponse = zod.object({
   "enabledShortcuts": zod.string(),
   "defaultSkuPrefix": zod.string(),
   "mapProvider": zod.string(),
+  "roleDiscountLimits": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 

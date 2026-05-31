@@ -9869,7 +9869,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -9887,6 +9887,7 @@ components:
         enabledShortcuts:            { type: string }
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
+        roleDiscountLimits:          { type: string }
         updatedAt:                   { type: string, format: date-time }
 
     PosSettingsInput:
@@ -9906,6 +9907,7 @@ components:
         enabledShortcuts:            { type: string }
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
+        roleDiscountLimits:          { type: string }
 
     LaybySettings:
       type: object

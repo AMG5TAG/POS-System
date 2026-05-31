@@ -24,7 +24,7 @@ import {
   Plus, Pencil, Trash2, Monitor, CreditCard, Briefcase, Banknote,
   SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star,
   ArrowRight, ArrowLeft, Printer, ScanLine, Keyboard, HardDrive,
-  Wifi, Usb, Zap, Settings2,
+  Wifi, Usb, Zap, Settings2, ShieldCheck,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
 
@@ -454,6 +454,114 @@ function StaffLoginMessageToggle() {
   );
 }
 
+/* ─── Role Discount Limits section ──────────────────────────────────────── */
+
+type RoleDiscountLimits = { cashier?: number | null; manager?: number | null; owner?: number | null };
+
+const DISCOUNT_ROLES: { key: keyof RoleDiscountLimits; label: string; description: string }[] = [
+  { key: "cashier",  label: "Cashier",  description: "Staff members with the cashier role." },
+  { key: "manager",  label: "Manager",  description: "Staff members with the manager role." },
+  { key: "owner",    label: "Owner",    description: "Business owners — leave blank to allow unlimited." },
+];
+
+function RoleDiscountLimitsSection() {
+  const { settings, upsert } = usePosSettings();
+
+  const limits = useMemo((): RoleDiscountLimits => {
+    try {
+      if (settings?.roleDiscountLimits) return JSON.parse(settings.roleDiscountLimits) as RoleDiscountLimits;
+    } catch { /* ignore */ }
+    return {};
+  }, [settings]);
+
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+
+  const handleChange = (role: string, val: string) => {
+    setDrafts(d => ({ ...d, [role]: val }));
+    setSaved(s => ({ ...s, [role]: false }));
+  };
+
+  const handleSave = (role: keyof RoleDiscountLimits) => {
+    const raw = drafts[role] ?? "";
+    const trimmed = raw.trim();
+    const next: RoleDiscountLimits = { ...limits };
+    if (trimmed === "") {
+      next[role] = null;
+    } else {
+      const parsed = parseFloat(trimmed);
+      if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+        toast.error("Enter a percentage between 0 and 100, or leave blank for no limit.");
+        return;
+      }
+      next[role] = parseFloat(parsed.toFixed(2));
+    }
+    upsert.mutate(
+      { data: { roleDiscountLimits: JSON.stringify(next) } },
+      {
+        onSuccess: () => {
+          setSaved(s => ({ ...s, [role]: true }));
+          setDrafts(d => { const n = { ...d }; delete n[role]; return n; });
+          toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} discount limit saved`);
+        },
+      },
+    );
+  };
+
+  const getDisplayValue = (role: keyof RoleDiscountLimits): string => {
+    if (role in drafts) return drafts[role];
+    const v = limits[role];
+    return v != null ? String(v) : "";
+  };
+
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b bg-muted/20 flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+        <div>
+          <p className="font-semibold text-sm">Role Discount Limits</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Cap the maximum discount % each role can apply at checkout. Leave blank for no limit.</p>
+        </div>
+      </div>
+      <div className="divide-y">
+        {DISCOUNT_ROLES.map(({ key, label, description }) => (
+          <div key={key} className="flex items-center gap-4 px-5 py-3.5">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{label}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  placeholder="No limit"
+                  value={getDisplayValue(key)}
+                  onChange={(e) => handleChange(key, e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave(key)}
+                  className="w-28 pr-7 text-sm"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+              </div>
+              <Button
+                size="sm"
+                variant={saved[key] ? "outline" : "default"}
+                onClick={() => handleSave(key)}
+                disabled={upsert.isPending || !(key in drafts)}
+                className="shrink-0"
+              >
+                {saved[key] ? "Saved" : "Save"}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Hardware section ───────────────────────────────────────────────────── */
 
 interface CashDrawerCfg  { enabled: boolean; interface: "usb"|"serial"|"network"; openOnCashSale: boolean; pulseMs: number; }
@@ -785,6 +893,7 @@ export default function ManagementRegistersPage() {
               <ForceStaffLoginToggle />
               <StaffLoginMessageToggle />
             </div>
+            <RoleDiscountLimitsSection />
             <div id="hardware"><HardwareSection /></div>
           </div>
         </div>
