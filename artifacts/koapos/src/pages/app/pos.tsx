@@ -135,6 +135,7 @@ export default function POSPage() {
   const [tempItemOpen, setTempItemOpen] = useState(false);
   const [tempItemForm, setTempItemForm] = useState({ name: "", price: "", cost: "" });
   const [saleNotes, setSaleNotes] = useState("");
+  const [clearNoteConfirm, setClearNoteConfirm] = useState(false);
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
   const [overallDiscountFlash, setOverallDiscountFlash] = useState(false);
   const [flashingItemIds, setFlashingItemIds] = useState<Set<number>>(new Set());
@@ -3673,11 +3674,29 @@ export default function POSPage() {
             className="resize-none"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setSaleNotes(""); setNotesOpen(false); }}>Clear</Button>
+            <Button variant="outline" onClick={() => { if (saleNotes) setClearNoteConfirm(true); else setNotesOpen(false); }} disabled={!saleNotes}>Clear</Button>
             <Button onClick={() => setNotesOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Clear sale note confirmation ─── */}
+      <AlertDialog open={clearNoteConfirm} onOpenChange={setClearNoteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear this note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The sale note will be permanently removed from this transaction.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setSaleNotes(""); setClearNoteConfirm(false); setNotesOpen(false); }}>
+              Clear note
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Quick add customer dialog ─── */}
       <QuickAddCustomerDialog
