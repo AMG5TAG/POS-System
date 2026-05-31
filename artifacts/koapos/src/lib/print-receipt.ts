@@ -59,6 +59,13 @@ export interface ReceiptTemplateOpts {
    *  official brand color instead of the surrounding muted text color.
    *  Has no effect on thermal/monochrome receipts. */
   socialIconBrandColors?: boolean;
+  /**
+   * When the overall cart discount was entered as a percentage, pass the
+   * numeric percentage here (e.g. 10 for 10%).  The receipt will then render
+   * the discount label as "10% discount" instead of the plain "Discount" text.
+   * Leave undefined (or 0) for dollar-amount discounts.
+   */
+  overallDiscountPct?: number;
   /* ─── Service Ticket field-visibility toggles ─── */
   showCustomerDetails?: boolean;
   showDeviceDetails?: boolean;
@@ -193,7 +200,7 @@ export function printReceipt(
       <div class="bdr-t pt small">
         <div class="row"><span class="gray">Subtotal</span><span>${fmtAUD(subtotal)}</span></div>
         ${tpl.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
-        ${tx.discountTotal ? `<div class="row"><span class="gray">Discount</span><span>−${fmtAUD(tx.discountTotal)}</span></div>` : ""}
+        ${tx.discountTotal ? `<div class="row"><span class="gray">${tpl.overallDiscountPct ? `${tpl.overallDiscountPct}% discount` : "Discount"}</span><span>−${fmtAUD(tx.discountTotal)}</span></div>` : ""}
         <div class="row bold"><span>TOTAL AUD</span><span>${fmtAUD(total)}</span></div>
         ${tpl.showPaymentMethods && pmLabel ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
       </div>
@@ -657,7 +664,7 @@ export function printA4Receipt(
       <div class="totals">
         <div class="trow"><span class="lbl">Subtotal (ex. GST)</span><span>${fmtAUD(exGst)}</span></div>
         ${tpl.showGstBreakdown ? `<div class="trow"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
-        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">${tpl.overallDiscountPct ? `${tpl.overallDiscountPct}% discount` : "Discount"}</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
         <div class="ttotal"><span>Total (AUD)</span><span>${fmtAUD(total)}</span></div>
       </div>
       <div class="badge-row">${paidBadge}</div>
@@ -698,7 +705,7 @@ export function printA4Receipt(
       </table>
       <div class="modern-totals">
         ${tpl.showGstBreakdown ? `<div class="trow"><span class="lbl">GST (10%)</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
-        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+        ${discountTotal > 0 ? `<div class="trow disc"><span class="lbl">${tpl.overallDiscountPct ? `${tpl.overallDiscountPct}% discount` : "Discount"}</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
         <div class="modern-total" style="color:${brandColor}"><span>Total Due (AUD)</span><span>${fmtAUD(total)}</span></div>
       </div>
       <div class="badge-row">${paidBadge}</div>
@@ -725,7 +732,7 @@ export function printA4Receipt(
       <div class="sep"></div>
       <div class="min-row"><span>Subtotal (ex. GST)</span><span>${fmtAUD(exGst)}</span></div>
       ${tpl.showGstBreakdown ? `<div class="min-row"><span>GST 10%</span><span>${fmtAUD(taxTotal)}</span></div>` : ""}
-      ${discountTotal > 0 ? `<div class="min-row"><span>Discount</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
+      ${discountTotal > 0 ? `<div class="min-row"><span>${tpl.overallDiscountPct ? `${tpl.overallDiscountPct}% discount` : "Discount"}</span><span>−${fmtAUD(discountTotal)}</span></div>` : ""}
       <div class="min-row strong"><span>TOTAL (AUD)</span><span>${fmtAUD(total)}</span></div>
       <div class="min-paid">${paidBadge}</div>
       ${loyaltyHtml}

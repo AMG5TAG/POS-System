@@ -19,6 +19,7 @@ interface ReceiptOptsExtra {
   styleVariant?: ReceiptTemplateOpts["styleVariant"];
   socialLinks?: Record<string, string>;
   paymentTypes?: string[];
+  overallDiscountPct?: number;
 }
 
 /**
@@ -55,6 +56,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
     styleVariant: extra?.styleVariant,
     socialLinks: extra?.socialLinks,
     paymentTypes: extra?.paymentTypes,
+    overallDiscountPct: extra?.overallDiscountPct,
     // Service Ticket field-visibility toggles
     showCustomerDetails: opts.showCustomerDetails,
     showDeviceDetails: opts.showDeviceDetails,
@@ -72,8 +74,10 @@ export interface DocumentTemplateController {
   printReceipt: (tx: Transaction) => void;
   /** Print an A4 tax invoice using the saved Invoice template. */
   printInvoice: (tx: Transaction) => void;
-  /** Print an A4 receipt using the saved A4_Receipt template. */
-  printA4Receipt: (tx: Transaction) => void;
+  /** Print an A4 receipt using the saved A4_Receipt template.
+   *  Pass `overallDiscountPct` (e.g. 10 for 10%) when the cart discount was
+   *  entered as a percentage so the receipt label reads "10% discount". */
+  printA4Receipt: (tx: Transaction, overallDiscountPct?: number) => void;
   /** Print an A4 service report using the saved Service_Ticket template. */
   printServiceJob: (
     job: ServiceJobPrintData,
@@ -124,7 +128,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
       rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss)),
     printInvoice: (tx) =>
       rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss)),
-    printA4Receipt: (tx) =>
+    printA4Receipt: (tx, overallDiscountPct) =>
       rawPrintA4Receipt(
         tx,
         businessInfo,
@@ -132,6 +136,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
           styleVariant: normalizeReceiptStyle(a4Receipt.selectedStyle),
           socialLinks: profile?.socialLinks,
           paymentTypes: profile?.paymentTypes,
+          overallDiscountPct,
         }),
       ),
     printServiceJob: (job, customerOverride) =>

@@ -191,6 +191,7 @@ export default function POSPage() {
   const [completedLoyaltyAmount, setCompletedLoyaltyAmount] = useState(0);
   const [completedLoyaltyUnit, setCompletedLoyaltyUnit] = useState("");
   const [completedIssuedGiftCards, setCompletedIssuedGiftCards] = useState<{ cardNumber: string; balance: number }[]>([]);
+  const [completedOverallDiscountPct, setCompletedOverallDiscountPct] = useState<number | null>(null);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms" | "print">("idle");
@@ -1367,6 +1368,7 @@ export default function POSPage() {
         <div class="bdr-t pt small">
           <div class="row"><span class="gray">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
           ${opts.showGstBreakdown ? `<div class="row"><span class="gray">GST (10% incl.)</span><span>$${gst.toFixed(2)}</span></div>` : ""}
+          ${(completedTx?.discountTotal ?? 0) > 0 ? `<div class="row" style="color:#dc2626"><span>${completedOverallDiscountPct ? `${completedOverallDiscountPct}% discount` : "Discount"}</span><span>−$${(completedTx!.discountTotal!).toFixed(2)}</span></div>` : ""}
           <div class="row bold"><span>TOTAL</span><span>$${total.toFixed(2)}</span></div>
           ${opts.showPaymentMethods ? `<div class="row gray"><span>${pmLabel}</span><span>Approved</span></div>` : ""}
         </div>
@@ -1709,6 +1711,11 @@ export default function POSPage() {
         setCompletedCustomer(selectedCustomer);
         setCompletedLoyaltyAmount(sendLoyaltyEarned ? loyaltyAmount : 0);
         setCompletedLoyaltyUnit(loyaltyUnit);
+        setCompletedOverallDiscountPct(
+          overallDiscountMode === "percent" && overallDiscountAmt > 0
+            ? (parseFloat(overallDiscountPctInput) || null)
+            : null,
+        );
         clearCart();
         setCompletedTx(data);
         setCompletedTotal(saleTotal);
@@ -3123,7 +3130,7 @@ export default function POSPage() {
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => {
                   if (completedTx) {
-                    printA4Receipt(completedTx);
+                    printA4Receipt(completedTx, completedOverallDiscountPct ?? undefined);
                   }
                 }}
               >
