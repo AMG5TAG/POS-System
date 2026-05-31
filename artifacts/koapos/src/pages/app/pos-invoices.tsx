@@ -171,6 +171,14 @@ export default function POSInvoicesPage() {
 
   const lineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
   const editLineDropRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const editInitialRef = useRef<{
+    form: typeof editForm;
+    lines: LineItem[];
+    discount: typeof editDiscount;
+    recurring: typeof editRecurring;
+  } | null>(null);
+
+  const [discardConfirmTarget, setDiscardConfirmTarget] = useState<"create" | "edit" | null>(null);
   const [lineSearch, setLineSearch] = useState<string[]>([""]);
   const [lineDropOpen, setLineDropOpen] = useState<boolean[]>([false]);
 
@@ -340,28 +348,51 @@ export default function POSInvoicesPage() {
   }));
   const hasEditLineErrors = editLineErrors.some((e) => e.description || e.quantity || e.unitPrice || e.taxRate);
 
+  /* ── Dirty detection ── */
+  const CREATE_PRISTINE_FORM = { customerId: "", dueDate: "", notes: "" };
+  const CREATE_PRISTINE_LINES: LineItem[] = [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
+  const CREATE_PRISTINE_DISCOUNT = { enabled: false, type: "percent" as DiscountType, value: "" };
+  const CREATE_PRISTINE_RECURRING = { enabled: false, frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly", startDate: "", occurrences: 1 };
+
+  const isCreateDirty = createOpen && (
+    JSON.stringify(form) !== JSON.stringify(CREATE_PRISTINE_FORM) ||
+    JSON.stringify(lines) !== JSON.stringify(CREATE_PRISTINE_LINES) ||
+    JSON.stringify(discount) !== JSON.stringify(CREATE_PRISTINE_DISCOUNT) ||
+    JSON.stringify(recurring) !== JSON.stringify(CREATE_PRISTINE_RECURRING)
+  );
+
+  const isEditDirty = editOpen && editInitialRef.current !== null && (
+    JSON.stringify(editForm) !== JSON.stringify(editInitialRef.current.form) ||
+    JSON.stringify(editLines) !== JSON.stringify(editInitialRef.current.lines) ||
+    JSON.stringify(editDiscount) !== JSON.stringify(editInitialRef.current.discount) ||
+    JSON.stringify(editRecurring) !== JSON.stringify(editInitialRef.current.recurring)
+  );
+
   /* ── Open edit dialog ── */
   const openEdit = (inv: Invoice) => {
-    setEditingInvoice(inv);
-    setEditForm({
+    const newForm = {
       customerId: String(inv.customerId ?? ""),
       dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : "",
       notes: inv.notes ?? "",
-    });
-    setEditRecurring({
+    };
+    const newRecurring = {
       enabled: inv.isRecurring ?? false,
       frequency: (inv.recurringFrequency as "daily" | "weekly" | "monthly" | "yearly") ?? "monthly",
       startDate: inv.recurringStartDate ? inv.recurringStartDate.slice(0, 10) : "",
       occurrences: inv.recurringOccurrences ?? 1,
-    });
+    };
     const items = inv.items?.length ? inv.items : [{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }];
+    const newDiscount = inv.discountType && inv.discountValue
+      ? { enabled: true, type: inv.discountType as DiscountType, value: String(inv.discountValue) }
+      : { enabled: false, type: "percent" as DiscountType, value: "" };
+    setEditingInvoice(inv);
+    setEditForm(newForm);
+    setEditRecurring(newRecurring);
     setEditLines(items);
     setEditLineSearch(items.map(() => ""));
     setEditLineDropOpen(items.map(() => false));
-    setEditDiscount(inv.discountType && inv.discountValue
-      ? { enabled: true, type: inv.discountType, value: String(inv.discountValue) }
-      : { enabled: false, type: "percent", value: "" }
-    );
+    setEditDiscount(newDiscount);
+    editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring };
     setEditOpen(true);
   };
 
@@ -1881,7 +1912,7 @@ export default function POSInvoicesPage() {
       </AlertDialog>
 
       {/* ─── Create Invoice Dialog ─── */}
-      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) resetCreate(); setCreateOpen(o); }}>
+      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) { if (isCreateDirty) { setDiscardConfirmTarget("create"); return; } resetCreate(); setCreateOpen(false); } else { setCreateOpen(true); } }}>
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>New Invoice</DialogTitle>
@@ -2107,7 +2138,7 @@ export default function POSInvoicesPage() {
           </div>
 
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreate(); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { if (isCreateDirty) { setDiscardConfirmTarget("create"); return; } setCreateOpen(false); resetCreate(); }}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || hasLineErrors}>
               {saving ? "Creating…" : recurring.enabled ? "Create Recurring Invoice" : "Create Invoice"}
             </Button>
@@ -2116,7 +2147,7 @@ export default function POSInvoicesPage() {
       </Dialog>
 
       {/* ─── Edit Invoice Dialog ─── */}
-      <Dialog open={editOpen} onOpenChange={(o) => { if (!o) setEditOpen(false); }}>
+      <Dialog open={editOpen} onOpenChange={(o) => { if (!o) { if (isEditDirty) { setDiscardConfirmTarget("edit"); return; } setEditOpen(false); } }}>
         <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh]">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>Edit Invoice {editingInvoice?.invoiceNumber}</DialogTitle>
@@ -2337,13 +2368,33 @@ export default function POSInvoicesPage() {
           </div>
 
           <div className="px-6 py-4 border-t shrink-0 flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { if (isEditDirty) { setDiscardConfirmTarget("edit"); return; } setEditOpen(false); }}>Cancel</Button>
             <Button onClick={handleUpdate} disabled={editSaving || hasEditLineErrors}>
               {editSaving ? "Saving…" : editRecurring.enabled ? "Save Recurring Invoice" : "Save Changes"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Discard Changes Confirmation ─── */}
+      <AlertDialog open={discardConfirmTarget !== null} onOpenChange={(o) => { if (!o) setDiscardConfirmTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Closing now will lose them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (discardConfirmTarget === "create") { setCreateOpen(false); resetCreate(); }
+              if (discardConfirmTarget === "edit") { setEditOpen(false); }
+              setDiscardConfirmTarget(null);
+            }}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </AppLayout>
   );
