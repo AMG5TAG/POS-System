@@ -11582,9 +11582,9 @@ components:
       required: [description, quantity, unitPrice, taxRate]
       properties:
         description: { type: string }
-        quantity:    { type: number }
-        unitPrice:   { type: number }
-        taxRate:     { type: number }
+        quantity:    { type: number, minimum: 0.0001 }
+        unitPrice:   { type: number, minimum: 0 }
+        taxRate:     { type: number, minimum: 0, maximum: 100 }
 
     InvoiceDiscountInput:
       type: object

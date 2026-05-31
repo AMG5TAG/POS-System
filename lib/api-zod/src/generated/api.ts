@@ -7995,6 +7995,15 @@ export const ListInvoicesQueryParams = zod.object({
   "offset": zod.coerce.number().default(listInvoicesQueryOffsetDefault)
 })
 
+export const listInvoicesResponseItemsItemItemsItemQuantityMin = 0.0001;
+
+export const listInvoicesResponseItemsItemItemsItemUnitPriceMin = 0;
+
+export const listInvoicesResponseItemsItemItemsItemTaxRateMin = 0;
+export const listInvoicesResponseItemsItemItemsItemTaxRateMax = 100;
+
+
+
 export const ListInvoicesResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
@@ -8011,9 +8020,9 @@ export const ListInvoicesResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(listInvoicesResponseItemsItemItemsItemQuantityMin),
+  "unitPrice": zod.number().min(listInvoicesResponseItemsItemItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(listInvoicesResponseItemsItemItemsItemTaxRateMin).max(listInvoicesResponseItemsItemItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -8046,15 +8055,24 @@ export const ListInvoicesResponse = zod.object({
 /**
  * @summary Create a new invoice
  */
+export const createInvoiceBodyItemsItemQuantityMin = 0.0001;
+
+export const createInvoiceBodyItemsItemUnitPriceMin = 0;
+
+export const createInvoiceBodyItemsItemTaxRateMin = 0;
+export const createInvoiceBodyItemsItemTaxRateMax = 100;
+
+
+
 export const CreateInvoiceBody = zod.object({
   "customerId": zod.number().optional(),
   "dueDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
+  "unitPrice": zod.number().min(createInvoiceBodyItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(createInvoiceBodyItemsItemTaxRateMin).max(createInvoiceBodyItemsItemTaxRateMax)
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -8077,6 +8095,15 @@ export const GetInvoiceParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getInvoiceResponseItemsItemQuantityMin = 0.0001;
+
+export const getInvoiceResponseItemsItemUnitPriceMin = 0;
+
+export const getInvoiceResponseItemsItemTaxRateMin = 0;
+export const getInvoiceResponseItemsItemTaxRateMax = 100;
+
+
+
 export const GetInvoiceResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -8092,9 +8119,9 @@ export const GetInvoiceResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(getInvoiceResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(getInvoiceResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(getInvoiceResponseItemsItemTaxRateMin).max(getInvoiceResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -8129,6 +8156,15 @@ export const UpdateInvoiceParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateInvoiceBodyItemsItemQuantityMin = 0.0001;
+
+export const updateInvoiceBodyItemsItemUnitPriceMin = 0;
+
+export const updateInvoiceBodyItemsItemTaxRateMin = 0;
+export const updateInvoiceBodyItemsItemTaxRateMax = 100;
+
+
+
 export const UpdateInvoiceBody = zod.object({
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']).optional(),
   "notes": zod.string().optional(),
@@ -8136,9 +8172,9 @@ export const UpdateInvoiceBody = zod.object({
   "customerId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(updateInvoiceBodyItemsItemQuantityMin),
+  "unitPrice": zod.number().min(updateInvoiceBodyItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(updateInvoiceBodyItemsItemTaxRateMin).max(updateInvoiceBodyItemsItemTaxRateMax)
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -8151,6 +8187,15 @@ export const UpdateInvoiceBody = zod.object({
   "occurrences": zod.number().optional()
 }).nullish()
 })
+
+export const updateInvoiceResponseItemsItemQuantityMin = 0.0001;
+
+export const updateInvoiceResponseItemsItemUnitPriceMin = 0;
+
+export const updateInvoiceResponseItemsItemTaxRateMin = 0;
+export const updateInvoiceResponseItemsItemTaxRateMax = 100;
+
+
 
 export const UpdateInvoiceResponse = zod.object({
   "id": zod.number(),
@@ -8167,9 +8212,9 @@ export const UpdateInvoiceResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(updateInvoiceResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(updateInvoiceResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(updateInvoiceResponseItemsItemTaxRateMin).max(updateInvoiceResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -8212,6 +8257,15 @@ export const MarkInvoiceViewedParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const markInvoiceViewedResponseItemsItemQuantityMin = 0.0001;
+
+export const markInvoiceViewedResponseItemsItemUnitPriceMin = 0;
+
+export const markInvoiceViewedResponseItemsItemTaxRateMin = 0;
+export const markInvoiceViewedResponseItemsItemTaxRateMax = 100;
+
+
+
 export const MarkInvoiceViewedResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -8227,9 +8281,9 @@ export const MarkInvoiceViewedResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(markInvoiceViewedResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(markInvoiceViewedResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(markInvoiceViewedResponseItemsItemTaxRateMin).max(markInvoiceViewedResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -8274,6 +8328,15 @@ export const RecordInvoicePaymentBody = zod.object({
   "idempotencyKey": zod.string().optional()
 })
 
+export const recordInvoicePaymentResponseItemsItemQuantityMin = 0.0001;
+
+export const recordInvoicePaymentResponseItemsItemUnitPriceMin = 0;
+
+export const recordInvoicePaymentResponseItemsItemTaxRateMin = 0;
+export const recordInvoicePaymentResponseItemsItemTaxRateMax = 100;
+
+
+
 export const RecordInvoicePaymentResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -8289,9 +8352,9 @@ export const RecordInvoicePaymentResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(recordInvoicePaymentResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(recordInvoicePaymentResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(recordInvoicePaymentResponseItemsItemTaxRateMin).max(recordInvoicePaymentResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -8368,6 +8431,15 @@ export const AddInvoiceEventBody = zod.object({
   "idempotencyKey": zod.string().optional()
 })
 
+export const addInvoiceEventResponseItemsItemQuantityMin = 0.0001;
+
+export const addInvoiceEventResponseItemsItemUnitPriceMin = 0;
+
+export const addInvoiceEventResponseItemsItemTaxRateMin = 0;
+export const addInvoiceEventResponseItemsItemTaxRateMax = 100;
+
+
+
 export const AddInvoiceEventResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -8383,9 +8455,9 @@ export const AddInvoiceEventResponse = zod.object({
   "discountTotal": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
-  "quantity": zod.number(),
-  "unitPrice": zod.number(),
-  "taxRate": zod.number()
+  "quantity": zod.number().min(addInvoiceEventResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(addInvoiceEventResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(addInvoiceEventResponseItemsItemTaxRateMin).max(addInvoiceEventResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),

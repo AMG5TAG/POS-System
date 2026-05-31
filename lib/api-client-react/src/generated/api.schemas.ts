@@ -3691,8 +3691,14 @@ export interface IntegrationConnectInput {
 
 export interface InvoiceLineItem {
   description: string;
+  /** @minimum 0.0001 */
   quantity: number;
+  /** @minimum 0 */
   unitPrice: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
   taxRate: number;
 }
 
