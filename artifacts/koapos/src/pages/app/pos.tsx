@@ -520,6 +520,12 @@ export default function POSPage() {
      the locked remaining balance; otherwise it's the cart total. */
   const effectiveTotal = invoicePay ? invoicePay.balance : total;
 
+  /* Cart validity — checked client-side before any network request. */
+  const cartHasInvalidItems = cart.some(
+    (i) => i.quantity < 1 || (i.customPrice ?? i.product.price) < 0,
+  );
+  const cartBlocksCheckout = !invoicePay && (cart.length === 0 || cartHasInvalidItems || total < 0);
+
   /* Loyalty — base earn + active promotion bonuses */
   const { loyaltyAmount, loyaltyLabel, loyaltyUnit } = useMemo(() => {
     if (walkIn || !loyaltySettings?.isEnabled || cart.length === 0)
@@ -2237,6 +2243,16 @@ export default function POSPage() {
               </div>
             </div>
 
+            {/* Cart validation warning */}
+            {!invoicePay && cart.length > 0 && (cartHasInvalidItems || total < 0) && (
+              <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-xs text-destructive">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {cartHasInvalidItems
+                  ? "One or more items have an invalid quantity or negative price."
+                  : "Cart total is negative — adjust prices or discounts."}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -2250,7 +2266,7 @@ export default function POSPage() {
               </Button>
               <Button
                 className="flex-1 h-12 text-base font-bold"
-                disabled={!invoicePay && cart.length === 0}
+                disabled={cartBlocksCheckout}
                 onClick={() => {
                   if (!registerOpen) {
                     setTillClosedDialogOpen(true);
