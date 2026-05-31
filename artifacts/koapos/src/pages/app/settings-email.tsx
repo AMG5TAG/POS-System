@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Mail, Server, Key, CheckCircle2, XCircle, Send, Zap,
-  ChevronDown, ChevronRight, Info,
+  ChevronDown, ChevronRight, Info, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -399,7 +399,7 @@ export default function SettingsEmailPage() {
                       onClick={handleTest}
                       disabled={testMutation.isPending || !testTo}
                     >
-                      {testMutation.isPending ? "Sending…" : "Send Test"}
+                      {testMutation.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Sending…</> : "Send Test"}
                     </Button>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1">

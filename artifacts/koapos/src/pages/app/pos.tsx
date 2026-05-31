@@ -56,7 +56,7 @@ import {
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
-  CheckCircle2, Printer, Mail, MessageSquare,
+  CheckCircle2, Printer, Mail, MessageSquare, Loader2,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
   WifiOff, ShieldCheck,
@@ -223,6 +223,7 @@ export default function POSPage() {
   const [completedIssuedGiftCards, setCompletedIssuedGiftCards] = useState<{ cardNumber: string; balance: number }[]>([]);
   const [completedOverallDiscountPct, setCompletedOverallDiscountPct] = useState<number | null>(null);
   const [receiptEmail, setReceiptEmail] = useState("");
+  const [receiptEmailSending, setReceiptEmailSending] = useState(false);
   const [receiptPhone, setReceiptPhone] = useState("");
   const [receiptMode, setReceiptMode] = useState<"idle" | "email" | "sms" | "print">("idle");
 
@@ -3499,9 +3500,13 @@ export default function POSPage() {
                   autoFocus
                   className="mt-1"
                   onKeyDown={e => {
-                    if (e.key === "Enter" && receiptEmail) {
-                      toast.success(`Receipt sent to ${receiptEmail}`);
-                      setReceiptMode("idle");
+                    if (e.key === "Enter" && receiptEmail && !receiptEmailSending) {
+                      setReceiptEmailSending(true);
+                      setTimeout(() => {
+                        toast.success(`Receipt sent to ${receiptEmail}`);
+                        setReceiptEmailSending(false);
+                        setReceiptMode("idle");
+                      }, 700);
                     }
                   }}
                 />
@@ -3510,10 +3515,17 @@ export default function POSPage() {
                 <Button variant="outline" onClick={() => setReceiptMode("idle")}>Back</Button>
                 <Button
                   className="flex-1"
-                  disabled={!receiptEmail}
-                  onClick={() => { toast.success(`Receipt emailed to ${receiptEmail}`); setReceiptMode("idle"); }}
+                  disabled={!receiptEmail || receiptEmailSending}
+                  onClick={() => {
+                    setReceiptEmailSending(true);
+                    setTimeout(() => {
+                      toast.success(`Receipt emailed to ${receiptEmail}`);
+                      setReceiptEmailSending(false);
+                      setReceiptMode("idle");
+                    }, 700);
+                  }}
                 >
-                  Send Email
+                  {receiptEmailSending ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Sending…</> : "Send Email"}
                 </Button>
               </div>
             </div>
