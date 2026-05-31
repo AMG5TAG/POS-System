@@ -184,13 +184,14 @@ export default function SettingsProductTypesPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [formTouched, setFormTouched] = useState(false);
   const [editingType, setEditingType] = useState<ProductType | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductType | null>(null);
   const [localOrder, setLocalOrder] = useState<ProductType[]>([]);
 
-  const { ConfirmDialog: ProductTypeFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+  const { ConfirmDialog: ProductTypeFormGuard } = useUnsavedChangesGuard(formTouched, {
     title: "Close product type form?",
     description: "The product type form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -258,6 +259,7 @@ export default function SettingsProductTypesPage() {
     setEditingType(null);
     setForm(EMPTY_FORM);
     setSlugManuallyEdited(false);
+    setFormTouched(false);
     setDialogOpen(true);
   };
 
@@ -272,10 +274,12 @@ export default function SettingsProductTypesPage() {
       isActive: type.isActive,
     });
     setSlugManuallyEdited(true);
+    setFormTouched(false);
     setDialogOpen(true);
   };
 
   const handleNameChange = (name: string) => {
+    setFormTouched(true);
     setForm((f) => ({
       ...f,
       name,
@@ -284,6 +288,7 @@ export default function SettingsProductTypesPage() {
   };
 
   const handleSlugChange = (slug: string) => {
+    setFormTouched(true);
     setSlugManuallyEdited(true);
     setForm((f) => ({ ...f, slug }));
   };
@@ -308,6 +313,7 @@ export default function SettingsProductTypesPage() {
         {
           onSuccess: () => {
             toast.success("Product type updated");
+            setFormTouched(false);
             setDialogOpen(false);
             inv();
           },
@@ -320,6 +326,7 @@ export default function SettingsProductTypesPage() {
         {
           onSuccess: () => {
             toast.success("Product type created");
+            setFormTouched(false);
             setDialogOpen(false);
             inv();
           },
@@ -434,7 +441,7 @@ export default function SettingsProductTypesPage() {
       </div>
 
       {/* ── Create / Edit Dialog ─────────────────────────────────────────── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) setFormTouched(false); setDialogOpen(o); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingType ? "Edit Product Type" : "New Product Type"}</DialogTitle>
@@ -470,7 +477,7 @@ export default function SettingsProductTypesPage() {
               <Label>Description</Label>
               <Textarea
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                onChange={(e) => { setFormTouched(true); setForm((f) => ({ ...f, description: e.target.value })); }}
                 placeholder="Optional description of this product type"
                 rows={2}
                 className="resize-none"
@@ -487,7 +494,7 @@ export default function SettingsProductTypesPage() {
                 </div>
                 <Switch
                   checked={form.trackStock}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, trackStock: v }))}
+                  onCheckedChange={(v) => { setFormTouched(true); setForm((f) => ({ ...f, trackStock: v })); }}
                 />
               </div>
 
@@ -500,7 +507,7 @@ export default function SettingsProductTypesPage() {
                 </div>
                 <Switch
                   checked={form.printCode}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, printCode: v }))}
+                  onCheckedChange={(v) => { setFormTouched(true); setForm((f) => ({ ...f, printCode: v })); }}
                 />
               </div>
 
@@ -513,13 +520,13 @@ export default function SettingsProductTypesPage() {
                 </div>
                 <Switch
                   checked={form.isActive}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
+                  onCheckedChange={(v) => { setFormTouched(true); setForm((f) => ({ ...f, isActive: v })); }}
                 />
               </div>
             </div>
 
             <div className="flex justify-between items-center pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button variant="outline" onClick={() => { setFormTouched(false); setDialogOpen(false); }}>
                 Cancel
               </Button>
               <Button onClick={handleSave} disabled={isPending}>

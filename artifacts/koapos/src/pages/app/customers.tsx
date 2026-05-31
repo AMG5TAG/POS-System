@@ -2457,12 +2457,8 @@ export default function CustomersPage() {
     });
   };
 
-  const { ConfirmDialog: CustomerFormGuard } = useUnsavedChangesGuard(dialogOpen, {
-    title: "Close customer form?",
-    description: "The customer form has unsaved changes. If you leave now, your changes will be lost.",
-    cancelLabel: "Stay on page",
-    actionLabel: "Leave anyway",
-  });
+  // AddCustomerWizard already has its own internal isDirty guard via useUnsavedChangesGuard.
+  // No separate page-level guard needed here because the wizard handles its own form state.
 
   /* Sort */
   const sorted = [...customers].sort((a, b) => {
@@ -3035,7 +3031,6 @@ export default function CustomersPage() {
         onSuccess={() => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() })}
       />
 
-      <CustomerFormGuard />
     </AppLayout>
   );
 }

@@ -231,9 +231,10 @@ interface WizardDialogProps {
   editingStaff: Staff | null;
   onSave: (form: WizardForm) => void;
   saving: boolean;
+  onTouched?: () => void;
 }
 
-function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDialogProps) {
+function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }: WizardDialogProps) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardForm>(defaultForm);
 
@@ -249,11 +250,15 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
     if (!isOpen) onClose();
   };
 
-  const set = <K extends keyof WizardForm>(key: K) => (val: WizardForm[K]) =>
+  const set = <K extends keyof WizardForm>(key: K) => (val: WizardForm[K]) => {
+    onTouched?.();
     setForm((f) => ({ ...f, [key]: val }));
+  };
 
-  const setField = <K extends keyof WizardForm>(key: K) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const setField = <K extends keyof WizardForm>(key: K) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    onTouched?.();
     setForm((f) => ({ ...f, [key]: (e.target as HTMLInputElement).value }));
+  };
 
   const isLastStep = step === STEPS.length - 1;
 
@@ -267,8 +272,10 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
     if (isLastStep) { onSave(form); } else { setStep((s) => s + 1); }
   };
 
-  const togglePostalSame = (v: boolean) =>
+  const togglePostalSame = (v: boolean) => {
+    onTouched?.();
     setForm((f) => ({ ...f, postalSameAsBilling: v, postal: v ? { ...f.billing } : f.postal }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -364,7 +371,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving }: WizardDia
                   type="password"
                   maxLength={4}
                   value={form.pin}
-                  onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                  onChange={(e) => { onTouched?.(); setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) })); }}
                   placeholder="••••"
                   className="rounded-md w-28 text-center tracking-widest font-mono"
                 />
@@ -825,7 +832,9 @@ export default function StaffPage() {
     (registersData?.items ?? []).map((r) => [String(r.id), r.name])
   );
 
-  const { ConfirmDialog: StaffFormGuard } = useUnsavedChangesGuard(dialogOpen, {
+  const [formTouched, setFormTouched] = useState(false);
+
+  const { ConfirmDialog: StaffFormGuard } = useUnsavedChangesGuard(formTouched, {
     title: "Close staff form?",
     description: "The staff form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -858,8 +867,8 @@ export default function StaffPage() {
     return sortedMembers;
   }, [members, sortKey, sortDir, registerMap]);
 
-  const openCreate = () => { setEditingStaff(null); setDialogOpen(true); };
-  const openEdit   = (s: Staff) => { setEditingStaff(s); setDialogOpen(true); };
+  const openCreate = () => { setEditingStaff(null); setFormTouched(false); setDialogOpen(true); };
+  const openEdit   = (s: Staff) => { setEditingStaff(s); setFormTouched(false); setDialogOpen(true); };
 
   const handleSave = (form: WizardForm) => {
     const payload = {
@@ -888,7 +897,7 @@ export default function StaffPage() {
       updateMutation.mutate(
         { id: editingStaff.id, data: payload as unknown as StaffUpdate },
         {
-          onSuccess: () => { toast.success("Staff member updated"); setDialogOpen(false); invalidate(); },
+          onSuccess: () => { toast.success("Staff member updated"); setDialogOpen(false); setFormTouched(false); invalidate(); },
           onError:   () => toast.error("Failed to update staff member"),
         },
       );
@@ -896,7 +905,7 @@ export default function StaffPage() {
       createMutation.mutate(
         { data: payload as unknown as StaffInput },
         {
-          onSuccess: () => { toast.success("Staff member added"); setDialogOpen(false); invalidate(); },
+          onSuccess: () => { toast.success("Staff member added"); setDialogOpen(false); setFormTouched(false); invalidate(); },
           onError:   () => toast.error("Failed to add staff member"),
         },
       );
@@ -1073,10 +1082,11 @@ export default function StaffPage() {
       {/* 4-step wizard */}
       <WizardDialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => { setFormTouched(false); setDialogOpen(false); }}
         editingStaff={editingStaff}
         onSave={handleSave}
         saving={isSaving}
+        onTouched={() => setFormTouched(true)}
       />
 
       {/* Delete confirm */}
