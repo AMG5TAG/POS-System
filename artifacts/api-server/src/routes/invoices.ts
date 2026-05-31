@@ -20,9 +20,32 @@ import {
   GetInvoicePdfParams,
   SendInvoiceEmailParams,
   AddInvoiceEventParams,
+  GetInvoiceResponse,
+  UpdateInvoiceResponse,
+  ListInvoicesResponse,
+  MarkInvoiceViewedResponse,
+  RecordInvoicePaymentResponse,
+  AddInvoiceEventResponse,
 } from "@workspace/api-zod";
+import type * as zod from "zod";
 
 const router: IRouter = Router();
+
+/**
+ * Validate an invoice API response body against its declared OpenAPI/Zod schema
+ * before it is sent. Throws synchronously on mismatch so Express catches it as
+ * a 500 — making schema drift immediately visible instead of silently serving
+ * a malformed payload. Uses safeParse (not parse) to avoid mutating the value
+ * (e.g. zod.coerce.date() would turn ISO strings into Date objects).
+ */
+function assertValidInvoiceResponse(schema: zod.ZodTypeAny, data: unknown, context: string): void {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw new Error(
+      `[invoices] Response schema mismatch in ${context}: ${result.error.message}`,
+    );
+  }
+}
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 type Discount = { type: "fixed" | "percent"; value: number };
@@ -199,10 +222,12 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .limit(limit)
     .offset(offset);
 
-  res.json({
+  const listBody = {
     items: rows.map((r) => fmt(r.invoice, r.customerFirstName, r.customerLastName, r.customerEmail, r.customerPhone, r.customerAddress, r.customerCompany, r.customerBillingStreet, r.customerBillingCity, r.customerBillingState, r.customerBillingPostcode)),
     total: Number(countResult.count),
-  });
+  };
+  assertValidInvoiceResponse(ListInvoicesResponse, listBody, "GET /invoices");
+  res.json(listBody);
 });
 
 // GET /invoices/:id
@@ -231,7 +256,9 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
+  const getInvoiceBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(GetInvoiceResponse, getInvoiceBody, "GET /invoices/:id");
+  res.json(getInvoiceBody);
 });
 
 // POST /invoices
@@ -301,7 +328,11 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(eq(invoicesTable.id, inv.id));
 
-  res.status(201).json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode) : fmt(inv));
+  const createInvoiceBody = row
+    ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode)
+    : fmt(inv);
+  assertValidInvoiceResponse(GetInvoiceResponse, createInvoiceBody, "POST /invoices");
+  res.status(201).json(createInvoiceBody);
 });
 
 // PATCH /invoices/:id/viewed
@@ -344,7 +375,9 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
+  const markViewedBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(MarkInvoiceViewedResponse, markViewedBody, "PATCH /invoices/:id/viewed");
+  res.json(markViewedBody);
 });
 
 // PATCH /invoices/:id
@@ -443,7 +476,11 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(eq(invoicesTable.id, id));
 
-  res.json(row ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail) : fmt(inv));
+  const updateInvoiceBody = row
+    ? fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail)
+    : fmt(inv);
+  assertValidInvoiceResponse(UpdateInvoiceResponse, updateInvoiceBody, "PATCH /invoices/:id");
+  res.json(updateInvoiceBody);
 });
 
 // POST /invoices/:id/payment — record a (partial or full) payment against an invoice
@@ -595,7 +632,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
+  const paymentBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(RecordInvoicePaymentResponse, paymentBody, "POST /invoices/:id/payment");
+  res.json(paymentBody);
 });
 
 // DELETE /invoices/:id
@@ -908,7 +947,9 @@ router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> 
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode));
+  const addEventBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(AddInvoiceEventResponse, addEventBody, "POST /invoices/:id/event");
+  res.json(addEventBody);
 });
 
 export default router;
