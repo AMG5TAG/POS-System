@@ -1280,6 +1280,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Transaction"
+        "422":
+          description: Discounts exceed cart subtotal — total would be negative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /transactions/{id}:
     get:

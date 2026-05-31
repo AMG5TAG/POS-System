@@ -4629,7 +4629,7 @@ export const createTransaction = async (transactionInput: TransactionInput, opti
 
 
 
-export const getCreateTransactionMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateTransactionMutationOptions = <TError = ErrorType<ErrorEnvelope>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTransaction>>, TError,{data: BodyType<TransactionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createTransaction>>, TError,{data: BodyType<TransactionInput>}, TContext> => {
 
@@ -4658,12 +4658,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof createTransaction>>>
     export type CreateTransactionMutationBody = BodyType<TransactionInput>
-    export type CreateTransactionMutationError = ErrorType<unknown>
+    export type CreateTransactionMutationError = ErrorType<ErrorEnvelope>
 
     /**
  * @summary Create a new transaction (complete a sale)
  */
-export const useCreateTransaction = <TError = ErrorType<unknown>,
+export const useCreateTransaction = <TError = ErrorType<ErrorEnvelope>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTransaction>>, TError,{data: BodyType<TransactionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createTransaction>>,

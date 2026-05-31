@@ -249,7 +249,17 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     }
     const lineGross = round2(unitPrice * i.quantity);
     const rawDiscount = Math.max(0, i.discount ?? 0);
-    const discount = round2(Math.min(rawDiscount, lineGross));
+    // Reject explicitly rather than silently clamping. A discount that exceeds
+    // the line gross would make the line total negative (bad data in the DB)
+    // and indicates either a UI bug or a forged request. Use 0.005 as the
+    // tolerance so sub-cent floating-point noise doesn't trigger a false 422.
+    if (rawDiscount > lineGross + 0.005) {
+      res.status(422).json({
+        error: `Discount on "${itemName}" ($${rawDiscount.toFixed(2)}) exceeds the line total ($${lineGross.toFixed(2)}). Reduce or remove the discount before completing the sale.`,
+      });
+      return;
+    }
+    const discount = round2(Math.min(rawDiscount, lineGross)); // clamp for sub-cent rounding
     const totalPrice = round2(lineGross - discount);
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
     computedItems.push({
@@ -283,6 +293,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   const taxTotal      = round2(computedItems.reduce((s, it) => s + it.taxAmount, 0));
   const subtotal      = total;
   const discountTotal = round2(computedItems.reduce((s, it) => s + (it.discount ?? 0), 0));
+
+  // Belt-and-suspenders: the per-item discount clamp above guarantees each
+  // line total is >= 0, so `total` should structurally always be >= 0. This
+  // explicit guard catches any future regression (e.g. removal of the clamp)
+  // or unexpected floating-point edge case before a negative-total record
+  // can be persisted. Returns 422 so the POS surfaces it to the cashier.
+  if (total < 0) {
+    res.status(422).json({
+      error: "Discounts exceed the cart subtotal — the sale total cannot be negative.",
+    });
+    return;
+  }
 
   // Reject obvious tampering on the only authoritative number: the charged
   // total. The breakdown fields can drift by sub-cent rounding when the
