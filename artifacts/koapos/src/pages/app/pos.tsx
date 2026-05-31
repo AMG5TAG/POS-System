@@ -52,7 +52,7 @@ import {
   Lock, User, Monitor, DoorOpen, DoorClosed, UserPlus,
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
-  MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX,
+  MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -196,6 +196,11 @@ export default function POSPage() {
   const [linkedService, setLinkedService] = useState<ServiceJob | null>(null);
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
+
+  /* AI upsell coach */
+  const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
+  const [upsellLoading, setUpsellLoading] = useState(false);
+  const [upsellOpen, setUpsellOpen] = useState(false);
 
   /* staff PIN */
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
@@ -832,9 +837,34 @@ export default function POSPage() {
       updatedAt: Date.now(),
     };
     try {
-      window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: JSON.stringify(payload) }));
+      const json = JSON.stringify(payload);
+      localStorage.setItem(DISPLAY_KEY, json);
+      window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: json }));
     } catch { /* ignore */ }
   }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier]);
+
+  /* AI Upsell Coach — refresh suggestions when cart items or customer changes */
+  useEffect(() => {
+    if (cart.length === 0) { setUpsellSugs([]); setUpsellOpen(false); return; }
+    const t = setTimeout(async () => {
+      setUpsellLoading(true);
+      try {
+        const r = await fetch("/api/ai/upsell-suggestions", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerId: selectedCustomer?.id ?? null,
+            cartItems: cart.map(i => ({ productId: i.product.id, name: i.product.name })),
+          }),
+        });
+        const data = await r.json() as { suggestions: typeof upsellSugs };
+        if (data.suggestions?.length) { setUpsellSugs(data.suggestions); setUpsellOpen(true); }
+        else { setUpsellSugs([]); setUpsellOpen(false); }
+      } catch { /* ignore */ } finally { setUpsellLoading(false); }
+    }, 1500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length, selectedCustomer?.id]);
 
   /* Click-outside closes customer dropdown */
   useEffect(() => {
@@ -959,8 +989,27 @@ export default function POSPage() {
     setZeroPricePending(null);
   };
 
-  const updateQuantity = (productId: number, delta: number) =>
+  const updateQuantity = (productId: number, delta: number) => {
+    if (delta < 0) {
+      const item = cart.find(i => i.product.id === productId);
+      if (item && item.quantity + delta <= 0) {
+        fetch("/api/void-audit", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId: item.product.id,
+            productName: item.product.name,
+            quantity: item.quantity,
+            unitPrice: item.customPrice ?? item.product.price,
+            action: "void",
+            staffId: currentStaff?.id ?? null,
+            staffName: currentStaff?.name ?? null,
+          }),
+        }).catch(() => {});
+      }
+    }
     setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0));
+  };
 
   const setItemDiscount = (productId: number, value: string) => {
     const amt = parseFloat(value) || 0;
@@ -2076,6 +2125,43 @@ export default function POSPage() {
           </ScrollArea>
           )}
 
+          {/* AI Upsell Coach panel */}
+          {upsellOpen && upsellSugs.length > 0 && cart.length > 0 && !invoicePay && (
+            <div className="mx-2.5 mb-1.5 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-2 shrink-0">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">Upsell Coach</span>
+                {upsellLoading && <span className="text-[10px] text-violet-400 ml-0.5">refreshing…</span>}
+                <button onClick={() => setUpsellOpen(false)} className="ml-auto text-violet-400 hover:text-violet-600 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              {upsellSugs.map(s => (
+                <div key={s.productId} className="flex items-start gap-2 py-1">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-medium text-violet-800 dark:text-violet-200 truncate">{s.name} — {formatCurrency(s.price)}</p>
+                    <p className="text-[10px] text-violet-600 dark:text-violet-400 leading-tight">{s.reason}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const p = productsData?.items?.find((pr) => pr.id === s.productId);
+                      if (p) {
+                        setCart(prev => {
+                          const existing = prev.find(i => i.product.id === p.id);
+                          if (existing) return prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i);
+                          return [...prev, { product: p, quantity: 1, itemDiscount: 0 }];
+                        });
+                        setUpsellOpen(false);
+                      }
+                    }}
+                    className="text-[10px] bg-violet-600 text-white px-2 py-0.5 rounded font-medium hover:bg-violet-700 transition-colors shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Totals */}
           <div className="border-t bg-background px-3 py-2.5 shrink-0 space-y-1.5">

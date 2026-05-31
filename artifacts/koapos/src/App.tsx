@@ -117,6 +117,7 @@ import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
 import PosEodPage from "@/pages/app/pos-eod";
 import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
+import ManagementReportsVoidAuditPage from "@/pages/app/management-reports-void-audit";
 import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
 import ManagementDailyReportsPage from "@/pages/app/management-daily-reports";
 
@@ -375,6 +376,9 @@ function Router() {
       </Route>
       <Route path="/management/reports/bas">
         <ManagementProtectedRoute component={ManagementReportsBasPage} />
+      </Route>
+      <Route path="/management/reports/void-audit">
+        <ManagementProtectedRoute component={ManagementReportsVoidAuditPage} />
       </Route>
       <Route path="/management/reports/margin">
         <ManagementProtectedRoute component={ManagementReportsMarginPage} />

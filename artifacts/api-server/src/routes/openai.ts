@@ -242,4 +242,99 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
   return;
 });
 
+/* ── AI Upsell Coach ────────────────────────────────────────────────────── */
+// POST /ai/upsell-suggestions
+// Returns 2 product suggestions the cashier should recommend at checkout.
+router.post("/ai/upsell-suggestions", async (req, res) => {
+  const merchantId = req.session.merchantId!;
+  const { customerId, cartItems } = req.body as {
+    customerId?: number | null;
+    cartItems?: Array<{ productId: number; name: string }>;
+  };
+
+  const [products, recentTxs] = await Promise.all([
+    db.select({
+      id: productsTable.id,
+      name: productsTable.name,
+      price: productsTable.price,
+      categoryId: productsTable.categoryId,
+    })
+      .from(productsTable)
+      .where(and(eq(productsTable.merchantId, merchantId), eq(productsTable.isActive, "true")))
+      .limit(60),
+    customerId
+      ? db.select({ items: transactionsTable.items })
+          .from(transactionsTable)
+          .where(and(
+            eq(transactionsTable.merchantId, merchantId),
+            eq(transactionsTable.customerId, customerId),
+            eq(transactionsTable.status, "completed"),
+          ))
+          .orderBy(desc(transactionsTable.createdAt))
+          .limit(10)
+      : Promise.resolve([] as { items: unknown }[]),
+  ]);
+
+  if (products.length === 0) { res.json({ suggestions: [] }); return; }
+
+  const cartIds = new Set((cartItems ?? []).map(i => i.productId));
+  const available = products.filter(p => !cartIds.has(p.id));
+  if (available.length === 0) { res.json({ suggestions: [] }); return; }
+
+  const pastNames = new Set<string>();
+  for (const tx of recentTxs) {
+    const items = tx.items as Array<{ productName?: string }> | null;
+    if (items) items.forEach(i => i.productName && pastNames.add(i.productName));
+  }
+
+  const cartContext = cartItems?.length
+    ? `Current cart: ${cartItems.map(i => i.name).join(", ")}.`
+    : "Cart is empty.";
+  const historyContext = pastNames.size
+    ? `\nCustomer previously bought: ${[...pastNames].slice(0, 20).join(", ")}.`
+    : "";
+  const productList = available
+    .map(p => `ID:${p.id} "${p.name}" $${parseFloat(String(p.price)).toFixed(2)}`)
+    .join("\n");
+
+  const prompt = `You are an upsell coach for a retail point-of-sale. Pick 2 products for the cashier to suggest.
+
+${cartContext}${historyContext}
+
+Available products (only pick from these, by exact ID):
+${productList}
+
+Rules:
+- Return ONLY a JSON array, no other text: [{"productId":number,"reason":"one short sentence for the cashier to say"}]
+- Pick products that complement the cart or match past purchases
+- Maximum 2 items`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 300,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    let parsed: Array<{ productId: number; reason: string }> = [];
+    try { parsed = JSON.parse(completion.choices[0]?.message?.content ?? "[]"); } catch { parsed = []; }
+
+    const suggestions = parsed
+      .filter(s => typeof s.productId === "number" && typeof s.reason === "string")
+      .map(s => {
+        const p = available.find(pr => pr.id === s.productId);
+        if (!p) return null;
+        return { productId: p.id, name: p.name, price: parseFloat(String(p.price)), reason: s.reason };
+      })
+      .filter(Boolean)
+      .slice(0, 2);
+
+    res.json({ suggestions });
+  } catch (err) {
+    req.log.error({ err }, "AI upsell failed");
+    res.json({ suggestions: [] });
+  }
+  return;
+});
+
 export default router;

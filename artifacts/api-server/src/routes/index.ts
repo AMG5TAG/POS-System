@@ -86,6 +86,7 @@ import stickerTemplatesRouter from "./sticker-templates";
 import signaturesRouter from "./signatures";
 import vaultRouter from "./vault";
 import dailyClosesRouter from "./daily-closes";
+import voidAuditRouter from "./void-audit";
 
 const router: IRouter = Router();
 
@@ -176,5 +177,6 @@ router.use(stickerTemplatesRouter);
 router.use(signaturesRouter);
 router.use(vaultRouter);
 router.use(dailyClosesRouter);
+router.use(voidAuditRouter);
 
 export default router;
