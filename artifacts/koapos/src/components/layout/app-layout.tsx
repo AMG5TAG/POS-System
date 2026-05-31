@@ -18,6 +18,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
+  CreditCard,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import {
@@ -181,9 +182,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     icon: TrendingUp,
     defaultHref: "/management/sales-overview",
     children: [
-      { name: "Overview",  href: "/management/sales-overview",   icon: BarChart2  },
-      { name: "BAS / GST", href: "/management/reports/bas",      icon: Receipt    },
-      { name: "Margin",    href: "/management/reports/margin",   icon: Percent    },
+      { name: "Overview",          href: "/management/sales-overview",             icon: BarChart2     },
+      { name: "BAS / GST",         href: "/management/reports/bas",                icon: Receipt       },
+      { name: "Margin",            href: "/management/reports/margin",             icon: Percent       },
+      { name: "End-of-Day",        href: "/management/reports/z-report",           icon: Moon          },
+      { name: "Staff Leaderboard", href: "/management/reports/staff-leaderboard",  icon: Trophy        },
+      { name: "Product Perf.",     href: "/management/reports/product-performance",icon: Package       },
+      { name: "Void Audit",        href: "/management/reports/void-audit",         icon: AlertTriangle },
     ],
   },
   { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
@@ -204,8 +209,11 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Templates", href: "/management/sticker-templates", icon: LayoutTemplate },
     ],
   },
-  { name: "Product Types",  href: "/management/product-types",  icon: Layers         },
-  { name: "Tax Settings",   href: "/management/tax",            icon: Receipt        },
+  { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers         },
+  { name: "Pricing Rules",  href: "/management/pricing-rules",   icon: Clock          },
+  { name: "Tyro EFTPOS",    href: "/management/tyro-eftpos",     icon: CreditCard     },
+  { name: "Product Types",  href: "/management/product-types",   icon: Layers         },
+  { name: "Tax Settings",   href: "/management/tax",             icon: Receipt        },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */

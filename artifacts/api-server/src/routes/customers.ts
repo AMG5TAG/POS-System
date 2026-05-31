@@ -786,4 +786,82 @@ router.post("/customers/bulk-execute-merge", requireAuth, requireManagerOrOwner,
   res.json({ processed: clusters.length, succeeded, failed, results });
 });
 
+/* ── GET /customers/expiring-points ─────────────────────────────────────── */
+router.get("/customers/expiring-points", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const expiryMonths = parseInt(String(req.query.expiryMonths ?? "12"), 10);
+  if (expiryMonths < 1 || expiryMonths > 120) { res.status(400).json({ error: "expiryMonths must be 1–120" }); return; }
+
+  const rows = await db.execute<{
+    id: string; first_name: string; last_name: string; loyalty_points: string;
+    last_transaction_at: string | null;
+  }>(sql`
+    SELECT c.id, c.first_name, c.last_name, c.loyalty_points,
+           MAX(t.created_at)::text AS last_transaction_at
+    FROM customers c
+    LEFT JOIN transactions t ON t.customer_id = c.id AND t.merchant_id = ${merchantId} AND t.status = 'completed'
+    WHERE c.merchant_id = ${merchantId}
+      AND c.loyalty_points > 0
+    GROUP BY c.id, c.first_name, c.last_name, c.loyalty_points
+    HAVING MAX(t.created_at) < NOW() - (${expiryMonths} || ' months')::interval
+        OR MAX(t.created_at) IS NULL
+    ORDER BY c.loyalty_points DESC
+    LIMIT 100
+  `);
+
+  res.json({ expiryMonths, customers: rows.rows.map(r => ({
+    id: Number(r.id),
+    firstName: r.first_name,
+    lastName: r.last_name,
+    loyaltyPoints: parseFloat(r.loyalty_points ?? "0"),
+    lastTransactionAt: r.last_transaction_at,
+  }))});
+});
+
+/* ── GET /customers/birthdays-today ─────────────────────────────────────── */
+router.get("/customers/birthdays-today", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const rows = await db.execute<{
+    id: string; first_name: string; last_name: string; email: string | null;
+    phone: string | null; loyalty_points: string; date_of_birth: string;
+  }>(sql`
+    SELECT id, first_name, last_name, email, phone, loyalty_points, date_of_birth::text
+    FROM customers
+    WHERE merchant_id = ${merchantId}
+      AND date_of_birth IS NOT NULL
+      AND EXTRACT(MONTH FROM date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE)
+      AND EXTRACT(DAY FROM date_of_birth) = EXTRACT(DAY FROM CURRENT_DATE)
+    ORDER BY first_name
+  `);
+  res.json({ customers: rows.rows.map(r => ({
+    id: Number(r.id),
+    firstName: r.first_name,
+    lastName: r.last_name,
+    email: r.email,
+    phone: r.phone,
+    loyaltyPoints: parseFloat(r.loyalty_points ?? "0"),
+    dateOfBirth: r.date_of_birth,
+  }))});
+});
+
+/* ── POST /customers/:id/birthday-reward ────────────────────────────────── */
+router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const customerId = parseInt(String(req.params.id), 10);
+  const points = parseInt(String(req.body?.points ?? 100), 10);
+
+  const [customer] = await db
+    .select({ id: customersTable.id, loyaltyPoints: customersTable.loyaltyPoints })
+    .from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+
+  const newPoints = (customer.loyaltyPoints ?? 0) + points;
+  await db.update(customersTable)
+    .set({ loyaltyPoints: newPoints, updatedAt: new Date() })
+    .where(eq(customersTable.id, customerId));
+
+  res.json({ success: true, pointsAwarded: points, newTotal: newPoints });
+});
+
 export default router;

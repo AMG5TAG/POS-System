@@ -290,4 +290,95 @@ router.get("/reports/product-performance", requireAuth, async (req, res): Promis
   res.json({ startDate, endDate, items });
 });
 
+/* ── GET /reports/z-report ───────────────────────────────────────────────── */
+router.get("/reports/z-report", requireAuth, async (req, res): Promise<void> => {
+  const parsed = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
+  const merchantId = req.session.merchantId!;
+
+  const [summary, byMethod] = await Promise.all([
+    db.execute<{
+      completed_count: string; gross_sales: string; discount_total: string;
+      tax_collected: string; refund_count: string; refund_amount: string;
+    }>(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'completed')         AS completed_count,
+        COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0)         AS gross_sales,
+        COALESCE(SUM(discount_total) FILTER (WHERE status = 'completed'), 0) AS discount_total,
+        COALESCE(SUM(tax_total) FILTER (WHERE status = 'completed'), 0)      AS tax_collected,
+        COUNT(*) FILTER (WHERE status = 'refunded')          AS refund_count,
+        COALESCE(SUM(ABS(total)) FILTER (WHERE status = 'refunded'), 0)      AS refund_amount
+      FROM transactions
+      WHERE merchant_id = ${merchantId}
+        AND created_at::date = ${date}::date
+    `),
+    db.execute<{ payment_method: string; count: string; total: string }>(sql`
+      SELECT payment_method, COUNT(*)::int AS count, COALESCE(SUM(total),0) AS total
+      FROM transactions
+      WHERE merchant_id = ${merchantId}
+        AND status = 'completed'
+        AND created_at::date = ${date}::date
+      GROUP BY payment_method
+      ORDER BY total DESC
+    `),
+  ]);
+
+  const s = summary.rows[0] ?? { completed_count: "0", gross_sales: "0", discount_total: "0", tax_collected: "0", refund_count: "0", refund_amount: "0" };
+  res.json({
+    date,
+    grossSales:       r2(s.gross_sales),
+    discountTotal:    r2(s.discount_total),
+    taxCollected:     r2(s.tax_collected),
+    netSales:         r2(Number(s.gross_sales) - Number(s.discount_total) - Number(s.refund_amount)),
+    transactionCount: Number(s.completed_count),
+    refundCount:      Number(s.refund_count),
+    refundAmount:     r2(s.refund_amount),
+    byPaymentMethod:  byMethod.rows.map(r => ({ method: r.payment_method, count: Number(r.count), total: r2(r.total) })),
+  });
+});
+
+/* ── GET /reports/staff-leaderboard ─────────────────────────────────────── */
+router.get("/reports/staff-leaderboard", requireAuth, async (req, res): Promise<void> => {
+  const parsed = DateRangeParams.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { startDate, endDate } = parsed.data;
+  const merchantId = req.session.merchantId!;
+
+  const rows = await db.execute<{
+    staff_id: string; staff_name: string; staff_role: string;
+    transaction_count: string; total_revenue: string; avg_basket: string; total_discounts: string;
+  }>(sql`
+    SELECT
+      t.staff_id::text,
+      COALESCE(s.name, 'Unknown') AS staff_name,
+      COALESCE(s.role, 'cashier') AS staff_role,
+      COUNT(t.id)::int            AS transaction_count,
+      COALESCE(SUM(t.total),0)    AS total_revenue,
+      COALESCE(AVG(t.total),0)    AS avg_basket,
+      COALESCE(SUM(t.discount_total),0) AS total_discounts
+    FROM transactions t
+    LEFT JOIN staff s ON s.id = t.staff_id AND s.merchant_id = ${merchantId}
+    WHERE t.merchant_id = ${merchantId}
+      AND t.status = 'completed'
+      AND t.created_at::date BETWEEN ${startDate}::date AND ${endDate}::date
+      AND t.staff_id IS NOT NULL
+    GROUP BY t.staff_id, s.name, s.role
+    ORDER BY total_revenue DESC
+  `);
+
+  res.json({
+    startDate, endDate,
+    staff: rows.rows.map(r => ({
+      staffId:          Number(r.staff_id),
+      staffName:        r.staff_name,
+      staffRole:        r.staff_role,
+      transactionCount: Number(r.transaction_count),
+      totalRevenue:     r2(r.total_revenue),
+      avgBasket:        r2(r.avg_basket),
+      totalDiscounts:   r2(r.total_discounts),
+    })),
+  });
+});
+
 export default router;

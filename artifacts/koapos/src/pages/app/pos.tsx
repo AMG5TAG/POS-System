@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -58,6 +59,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
+  WifiOff,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -441,6 +443,7 @@ export default function POSPage() {
     { query: { queryKey: ["customers-pos", customerSearch], enabled: customerOpen } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  const { isOnline, pendingCount } = useOfflineQueue();
   const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
@@ -934,6 +937,45 @@ export default function POSPage() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.length, selectedCustomer?.id]);
+
+  /* Barcode scanner — captures rapid keydown sequences from hardware scanners */
+  useEffect(() => {
+    let buffer = "";
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const TIMEOUT_MS = 80;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      if (paymentModalOpen || pinDialogOpen || quickAddOpen) return;
+      if (e.key === "Enter") {
+        const barcode = buffer.trim();
+        buffer = "";
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (barcode.length >= 3) {
+          const product = productsData?.items?.find((p) => p.barcode === barcode);
+          if (product) {
+            setCart(prev => {
+              const existing = prev.find(i => i.product.id === product.id);
+              if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+              return [...prev, { product, quantity: 1, itemDiscount: 0 }];
+            });
+            toast.success(`Scanned: ${product.name}`);
+          } else if (barcode.length > 0) {
+            toast.error(`Barcode not found: ${barcode}`);
+          }
+        }
+        return;
+      }
+      if (e.key.length === 1) {
+        buffer += e.key;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { buffer = ""; }, TIMEOUT_MS);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => { window.removeEventListener("keydown", handler); if (timer) clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsData?.items, paymentModalOpen, pinDialogOpen, quickAddOpen]);
 
   /* Click-outside closes customer dropdown */
   useEffect(() => {
@@ -1687,6 +1729,14 @@ export default function POSPage() {
 
         {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
+          {(!isOnline || pendingCount > 0) && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium ${!isOnline ? "bg-amber-500 text-amber-950" : "bg-sky-500 text-white"}`}>
+              <WifiOff className="w-3 h-3 shrink-0" />
+              {!isOnline
+                ? `Offline — ${pendingCount} sale${pendingCount !== 1 ? "s" : ""} queued`
+                : `Syncing ${pendingCount} queued sale${pendingCount !== 1 ? "s" : ""}…`}
+            </div>
+          )}
           <div className="p-3 border-b space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">

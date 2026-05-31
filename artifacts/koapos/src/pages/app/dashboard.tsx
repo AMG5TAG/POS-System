@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BirthdayBanner } from "@/components/birthday-banner";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DashboardClockBar } from "@/components/dashboard/DashboardClockBar";
 import { CloseDayDialog } from "@/components/dashboard/CloseDayDialog";
@@ -86,6 +87,7 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
+        <BirthdayBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}
           onCloseDay={() => setCloseDayOpen(true)}

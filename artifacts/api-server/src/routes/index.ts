@@ -87,6 +87,9 @@ import signaturesRouter from "./signatures";
 import vaultRouter from "./vault";
 import dailyClosesRouter from "./daily-closes";
 import voidAuditRouter from "./void-audit";
+import pricingRulesRouter from "./pricing-rules";
+import modifierGroupsRouter from "./modifier-groups";
+import quickbooksRouter from "./quickbooks";
 
 const router: IRouter = Router();
 
@@ -178,5 +181,8 @@ router.use(signaturesRouter);
 router.use(vaultRouter);
 router.use(dailyClosesRouter);
 router.use(voidAuditRouter);
+router.use(pricingRulesRouter);
+router.use(modifierGroupsRouter);
+router.use(quickbooksRouter);
 
 export default router;

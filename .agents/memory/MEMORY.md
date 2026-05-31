@@ -1,3 +1,5 @@
 - [Service job sheet print template](service-print-template.md) — one shared ServiceJobSheet component for both new-service print and reprint; both read useSalesTemplate("Service_Ticket"), never hardcoded opts.
 - [Styled XLSX exports](xlsx-styled-exports.md) — use exceljs (not the bundled SheetJS `xlsx`) when an export needs cell styling; SheetJS community ignores styles on write.
 - [Orval hook query options](orval-query-options.md) — all useXxx query hooks require queryKey in the query options object; omitting it causes TS2741.
+- [merchantIntegrationsTable columns](merchant-integrations-columns.md) — correct column names: integrationKey/status/credentials(JSON text)/accessToken/refreshToken — never key/connected/meta/vaultKey.
+- [Express 5 + Drizzle patterns](express5-drizzle-patterns.md) — Express 5 params are string|string[]; use String(req.params.id). Drizzle partial update: conditional spread {...(d.field !== undefined && { field: d.field })} not Record<string,unknown> cast.

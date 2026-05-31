@@ -120,6 +120,12 @@ import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
 import ManagementReportsVoidAuditPage from "@/pages/app/management-reports-void-audit";
 import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
 import ManagementDailyReportsPage from "@/pages/app/management-daily-reports";
+import ManagementReportsZReportPage from "@/pages/app/management-reports-z-report";
+import ManagementReportsStaffLeaderboardPage from "@/pages/app/management-reports-staff-leaderboard";
+import ManagementReportsProductPerformancePage from "@/pages/app/management-reports-product-performance";
+import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
+import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
+import SettingsTyroEftposPage from "@/pages/app/settings-tyro-eftpos";
 
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
 import NotFound from "@/pages/not-found";
@@ -382,6 +388,24 @@ function Router() {
       </Route>
       <Route path="/management/reports/margin">
         <ManagementProtectedRoute component={ManagementReportsMarginPage} />
+      </Route>
+      <Route path="/management/reports/z-report">
+        <ManagementProtectedRoute component={ManagementReportsZReportPage} />
+      </Route>
+      <Route path="/management/reports/staff-leaderboard">
+        <ManagementProtectedRoute component={ManagementReportsStaffLeaderboardPage} />
+      </Route>
+      <Route path="/management/reports/product-performance">
+        <ManagementProtectedRoute component={ManagementReportsProductPerformancePage} />
+      </Route>
+      <Route path="/management/pricing-rules">
+        <ManagementProtectedRoute component={SettingsPricingRulesPage} />
+      </Route>
+      <Route path="/management/modifier-groups">
+        <ManagementProtectedRoute component={SettingsModifierGroupsPage} />
+      </Route>
+      <Route path="/management/tyro-eftpos">
+        <ManagementProtectedRoute component={SettingsTyroEftposPage} />
       </Route>
       <Route path="/management/daily-reports">
         <ManagementProtectedRoute component={ManagementDailyReportsPage} />
