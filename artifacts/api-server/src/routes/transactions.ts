@@ -66,6 +66,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     notes: t.notes ?? null,
     loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
     discountCapped: t.discountCapped === "true" ? true : t.discountCapped === "false" ? false : null,
+    discountPct: t.discountPct != null ? parseFloat(t.discountPct) : null,
     items: rawItems,
     ...(issuedGiftCards.length > 0 ? { issuedGiftCards } : {}),
     createdAt: t.createdAt.toISOString(),
@@ -147,6 +148,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     receiptNumber: providedReceiptNumber,
     idempotencyKey: rawIdempotencyKey, giftCardPayment,
     requestedDiscountTotal: clientRequestedDiscountTotal,
+    discountPct: clientDiscountPct,
   } = parsed.data;
 
   const idempotencyKey =
@@ -557,6 +559,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           clientRequestedDiscountTotal != null &&
           clientRequestedDiscountTotal > discountTotal + 0.01
         ) ? "true" : null,
+        discountPct: (clientDiscountPct != null && clientDiscountPct > 0) ? clientDiscountPct.toString() : null,
       })
       .returning();
 

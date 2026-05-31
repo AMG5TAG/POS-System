@@ -125,9 +125,13 @@ export function useDocumentTemplate(): DocumentTemplateController {
     isLoading,
     businessInfo,
     printReceipt: (tx) =>
-      rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss)),
+      rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
+        overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
+      })),
     printInvoice: (tx) =>
-      rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss)),
+      rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
+        overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
+      })),
     printA4Receipt: (tx, overallDiscountPct) =>
       rawPrintA4Receipt(
         tx,
@@ -136,7 +140,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
           styleVariant: normalizeReceiptStyle(a4Receipt.selectedStyle),
           socialLinks: profile?.socialLinks,
           paymentTypes: profile?.paymentTypes,
-          overallDiscountPct,
+          overallDiscountPct: overallDiscountPct ?? (tx as { discountPct?: number | null }).discountPct ?? undefined,
         }),
       ),
     printServiceJob: (job, customerOverride) =>

@@ -1115,6 +1115,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1531,6 +1532,7 @@ export const ListTransactionsResponse = zod.object({
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1586,6 +1588,7 @@ export const CreateTransactionBody = zod.object({
   "receiptNumber": zod.string().optional(),
   "idempotencyKey": zod.string().optional().describe('Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate.'),
   "requestedDiscountTotal": zod.number().optional().describe('The total dollar discount the cashier originally attempted to apply before any role-limit clamping. When this exceeds discountTotal by more than rounding noise the server infers a clamp occurred and persists discountCapped on the saved record.'),
+  "discountPct": zod.number().optional().describe('When the overall cart discount was entered as a percentage, the numeric percentage value (e.g. 10 for 10%). Omit or leave undefined for dollar-amount discounts. Stored on the transaction so reprinted receipts can render \"10% discount\" instead of the plain \"Discount\".'),
   "giftCardPayment": zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
@@ -1659,6 +1662,7 @@ export const GetTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1757,6 +1761,7 @@ export const RefundTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2450,6 +2455,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),

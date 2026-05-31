@@ -390,6 +390,7 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     subtotal: parseFloat(t.subtotal),
     taxTotal: parseFloat(t.taxTotal),
     discountTotal: parseFloat(t.discountTotal),
+    discountPct: t.discountPct != null ? parseFloat(t.discountPct) : null,
     total: parseFloat(t.total),
     paymentMethod: t.paymentMethod,
     notes: t.notes ?? null,

@@ -594,6 +594,11 @@ export interface Transaction {
      * @nullable
      */
   discountCapped?: boolean | null;
+  /**
+     * The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render "10% discount" on reprinted receipts instead of "Discount".
+     * @nullable
+     */
+  discountPct?: number | null;
   items: TransactionItem[];
   /** Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items. */
   issuedGiftCards?: TransactionIssuedGiftCardsItem[];
@@ -642,6 +647,8 @@ export interface TransactionInput {
   idempotencyKey?: string;
   /** The total dollar discount the cashier originally attempted to apply before any role-limit clamping. When this exceeds discountTotal by more than rounding noise the server infers a clamp occurred and persists discountCapped on the saved record. */
   requestedDiscountTotal?: number;
+  /** When the overall cart discount was entered as a percentage, the numeric percentage value (e.g. 10 for 10%). Omit or leave undefined for dollar-amount discounts. Stored on the transaction so reprinted receipts can render "10% discount" instead of the plain "Discount". */
+  discountPct?: number;
   /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
   giftCardPayment?: TransactionInputGiftCardPayment;
 }

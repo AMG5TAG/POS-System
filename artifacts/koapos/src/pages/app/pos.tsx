@@ -1954,6 +1954,7 @@ export default function POSPage() {
         receiptNumber,
         idempotencyKey,
         ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
+        ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
         ...(giftCardPayment ? { giftCardPayment } : {}),
       }
     }, {

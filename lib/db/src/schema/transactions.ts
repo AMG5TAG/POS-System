@@ -29,6 +29,11 @@ export const transactionsTable = pgTable("transactions", {
   // limit and it was silently clamped to the maximum allowed. Managers can filter
   // the transaction list to review these override attempts.
   discountCapped: text("discount_capped"),
+  // Stores the overall cart discount percentage when the cashier entered the
+  // discount as a percentage rather than a dollar amount (e.g. 10 for 10%).
+  // NULL when no overall discount was applied or when it was entered as a dollar
+  // amount. Used to render "10% discount" instead of "Discount" on reprints.
+  discountPct: numeric("discount_pct", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("transactions_merchant_id_idx").on(t.merchantId),
