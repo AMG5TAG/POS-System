@@ -10,6 +10,25 @@ import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApp
 import { sendEmail } from "../services/email";
 
 
+const FAILED_LOGIN_NOTIFY_COOLDOWN_MS = parseInt(
+  process.env.LOGIN_NOTIFY_FAILED_COOLDOWN_MS ?? String(5 * 60 * 1000),
+  10
+);
+
+// Per-merchant timestamp of the last failed-login notification sent.
+// Prevents inbox flooding when an attacker hammers the login endpoint.
+const failedLoginNotifyLastSent = new Map<number, number>();
+
+function shouldSendFailedLoginNotify(merchantId: number): boolean {
+  const last = failedLoginNotifyLastSent.get(merchantId);
+  if (last === undefined) return true;
+  return Date.now() - last >= FAILED_LOGIN_NOTIFY_COOLDOWN_MS;
+}
+
+function recordFailedLoginNotifySent(merchantId: number): void {
+  failedLoginNotifyLastSent.set(merchantId, Date.now());
+}
+
 function parseUserAgent(ua: string): string {
   if (/Chrome\//.test(ua) && !/Chromium|Edg\/|OPR\//.test(ua)) return "Chrome";
   if (/Edg\//.test(ua)) return "Edge";
@@ -152,7 +171,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     const [lockedMerchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
     await db.insert(authEventsTable).values({ merchantId: lockedMerchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "locked" });
     // Fire-and-forget failed-login notification for "tried while locked" events
-    if (lockedMerchant?.loginNotifyEmailFailed === "true") {
+    // Guarded by a per-merchant cooldown to prevent inbox flooding.
+    if (lockedMerchant?.loginNotifyEmailFailed === "true" && shouldSendFailedLoginNotify(lockedMerchant.id)) {
+      recordFailedLoginNotifySent(lockedMerchant.id);
       const failTime = new Date().toLocaleString("en-AU", {
         timeZone: lockedMerchant.timezone ?? "Australia/Sydney",
         dateStyle: "full",
@@ -211,8 +232,10 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   if (!(await verifyPassword(password, merchant.passwordHash))) {
     const { attemptsRemaining } = await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
-    // Fire-and-forget failed-login notification email if opted in
-    if (merchant.loginNotifyEmailFailed === "true") {
+    // Fire-and-forget failed-login notification email if opted in.
+    // Guarded by a per-merchant cooldown to prevent inbox flooding.
+    if (merchant.loginNotifyEmailFailed === "true" && shouldSendFailedLoginNotify(merchant.id)) {
+      recordFailedLoginNotifySent(merchant.id);
       const failTime = new Date().toLocaleString("en-AU", {
         timeZone: merchant.timezone ?? "Australia/Sydney",
         dateStyle: "full",
