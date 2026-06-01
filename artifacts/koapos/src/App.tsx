@@ -123,6 +123,7 @@ import ManagementDailyReportsPage from "@/pages/app/management-daily-reports";
 import ManagementReportsZReportPage from "@/pages/app/management-reports-z-report";
 import ManagementReportsStaffLeaderboardPage from "@/pages/app/management-reports-staff-leaderboard";
 import ManagementReportsProductPerformancePage from "@/pages/app/management-reports-product-performance";
+import ManagementCustomersHeardFromPage from "@/pages/app/management-customers-heard-from";
 import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
 import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
 import SettingsTyroEftposPage from "@/pages/app/settings-tyro-eftpos";
@@ -488,6 +489,9 @@ function Router() {
       </Route>
       <Route path="/management/customers">
         <ManagementProtectedRoute component={SettingsCustomersPage} />
+      </Route>
+      <Route path="/management/customers/heard-from">
+        <ManagementProtectedRoute component={ManagementCustomersHeardFromPage} />
       </Route>
       <Route path="/settings/customers">
         <Redirect to="/management/customers" />
