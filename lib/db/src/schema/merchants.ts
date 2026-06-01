@@ -18,6 +18,7 @@ export const merchantsTable = pgTable("merchants", {
   username: text("username").unique(),
   loginNotifyEmail: text("login_notify_email").notNull().default("false"),
   loginNotifyEmailFailed: text("login_notify_email_failed").notNull().default("false"),
+  lastAuthEventsViewedAt: timestamp("last_auth_events_viewed_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

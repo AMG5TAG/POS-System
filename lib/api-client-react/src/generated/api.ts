@@ -103,6 +103,7 @@ import type {
   FloorZone,
   ForgotPasswordInput,
   GenerateMissingReferralCodes200,
+  GetAuthEventsUnreadCount200,
   GetDashboardActivityParams,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
@@ -188,6 +189,7 @@ import type {
   LoyaltyLeaderboard,
   LoyaltySettings,
   LoyaltySettingsInput,
+  MarkAuthEventsRead200,
   MarketingGenerator,
   MarketingGeneratorInput,
   MarketingGeneratorListResponse,
@@ -837,6 +839,153 @@ export function useListAuthEvents<TData = Awaited<ReturnType<typeof listAuthEven
 
 
 
+
+export const getGetAuthEventsUnreadCountUrl = () => {
+
+
+
+
+  return `/api/auth/events/unread-count`
+}
+
+/**
+ * @summary Get count of new auth events since the last time the merchant viewed them
+ */
+export const getAuthEventsUnreadCount = async ( options?: RequestInit): Promise<GetAuthEventsUnreadCount200> => {
+
+  return customFetch<GetAuthEventsUnreadCount200>(getGetAuthEventsUnreadCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthEventsUnreadCountQueryKey = () => {
+    return [
+    `/api/auth/events/unread-count`
+    ] as const;
+    }
+
+
+export const getGetAuthEventsUnreadCountQueryOptions = <TData = Awaited<ReturnType<typeof getAuthEventsUnreadCount>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthEventsUnreadCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthEventsUnreadCount>>> = ({ signal }) => getAuthEventsUnreadCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsUnreadCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthEventsUnreadCountQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthEventsUnreadCount>>>
+export type GetAuthEventsUnreadCountQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get count of new auth events since the last time the merchant viewed them
+ */
+
+export function useGetAuthEventsUnreadCount<TData = Awaited<ReturnType<typeof getAuthEventsUnreadCount>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthEventsUnreadCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getMarkAuthEventsReadUrl = () => {
+
+
+
+
+  return `/api/auth/events/mark-read`
+}
+
+/**
+ * @summary Mark all auth events as read by updating lastAuthEventsViewedAt
+ */
+export const markAuthEventsRead = async ( options?: RequestInit): Promise<MarkAuthEventsRead200> => {
+
+  return customFetch<MarkAuthEventsRead200>(getMarkAuthEventsReadUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMarkAuthEventsReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAuthEventsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAuthEventsRead>>, TError,void, TContext> => {
+
+const mutationKey = ['markAuthEventsRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAuthEventsRead>>, void> = () => {
+
+
+          return  markAuthEventsRead(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAuthEventsReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAuthEventsRead>>>
+
+    export type MarkAuthEventsReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark all auth events as read by updating lastAuthEventsViewedAt
+ */
+export const useMarkAuthEventsRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAuthEventsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAuthEventsRead>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkAuthEventsReadMutationOptions(options));
+    }
 
 export const getUpdateAuthEventUrl = (id: number,) => {
 

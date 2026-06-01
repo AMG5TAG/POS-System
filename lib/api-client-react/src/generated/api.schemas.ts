@@ -4212,6 +4212,14 @@ export interface XeroSyncResult {
   message: string;
 }
 
+export type GetAuthEventsUnreadCount200 = {
+  count: number;
+};
+
+export type MarkAuthEventsRead200 = {
+  ok: boolean;
+};
+
 export type ListProductsParams = {
 search?: string;
 categoryId?: number;

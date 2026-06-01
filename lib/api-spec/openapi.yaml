@@ -195,6 +195,44 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/events/unread-count:
+    get:
+      operationId: getAuthEventsUnreadCount
+      tags: [auth]
+      summary: Get count of new auth events since the last time the merchant viewed them
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+        "401":
+          description: Unauthorized
+
+  /auth/events/mark-read:
+    post:
+      operationId: markAuthEventsRead
+      tags: [auth]
+      summary: Mark all auth events as read by updating lastAuthEventsViewedAt
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          description: Unauthorized
+
   /auth/events/{id}:
     patch:
       operationId: updateAuthEvent

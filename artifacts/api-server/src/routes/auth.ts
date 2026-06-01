@@ -368,6 +368,36 @@ router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+router.get("/auth/events/unread-count", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [merchant] = await db
+    .select({ lastAuthEventsViewedAt: merchantsTable.lastAuthEventsViewedAt })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, merchantId));
+
+  const since = merchant?.lastAuthEventsViewedAt;
+
+  const whereClause = since
+    ? and(eq(authEventsTable.merchantId, merchantId), gt(authEventsTable.createdAt, since))
+    : eq(authEventsTable.merchantId, merchantId);
+
+  const rows = await db
+    .select({ id: authEventsTable.id })
+    .from(authEventsTable)
+    .where(whereClause);
+
+  res.json({ count: rows.length });
+});
+
+router.post("/auth/events/mark-read", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  await db
+    .update(merchantsTable)
+    .set({ lastAuthEventsViewedAt: new Date() })
+    .where(eq(merchantsTable.id, merchantId));
+  res.json({ ok: true });
+});
+
 router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const eventId = parseInt(String(req.params.id), 10);

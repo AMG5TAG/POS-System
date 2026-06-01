@@ -101,6 +101,22 @@ export const ListAuthEventsResponse = zod.array(ListAuthEventsResponseItem)
 
 
 /**
+ * @summary Get count of new auth events since the last time the merchant viewed them
+ */
+export const GetAuthEventsUnreadCountResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
+ * @summary Mark all auth events as read by updating lastAuthEventsViewedAt
+ */
+export const MarkAuthEventsReadResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Update the status of a sign-in event (flag or dismiss)
  */
 export const UpdateAuthEventParams = zod.object({

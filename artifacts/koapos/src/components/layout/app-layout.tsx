@@ -27,6 +27,7 @@ import {
   useListCustomers,
   useListServiceJobs,
   useListAppointments,
+  useGetAuthEventsUnreadCount,
   type Customer,
   type Appointment,
   type ServiceJob,
@@ -541,12 +542,15 @@ function isLeafActive(child: NavLeaf, location: string): boolean {
   return false;
 }
 
-function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, navigate }: {
+function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, navigate, badgeCountByHref }: {
   name: string; icon: React.ComponentType<{ className?: string }>; children: NavLeaf[]; location: string;
-  defaultHref?: string; navigate?: (href: string) => void;
+  defaultHref?: string; navigate?: (href: string) => void; badgeCountByHref?: Record<string, number>;
 }) {
   const isChildActive = children.some((c) => isLeafActive(c, location));
   const [open, setOpen] = useState(isChildActive);
+  const totalBadge = badgeCountByHref
+    ? children.reduce((sum, c) => sum + (badgeCountByHref[c.href] ?? 0), 0)
+    : 0;
   const handleClick = () => {
     if (defaultHref && navigate) navigate(defaultHref);
     setOpen((o) => !o);
@@ -556,18 +560,29 @@ function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, nav
       <SidebarMenuSubButton isActive={isChildActive} onClick={handleClick} className="cursor-pointer w-full">
         <Icon className="w-3.5 h-3.5 shrink-0" />
         <span className="flex-1">{name}</span>
+        {!open && totalBadge > 0 && (
+          <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground shrink-0">
+            {totalBadge > 9 ? "9+" : totalBadge}
+          </span>
+        )}
         <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </SidebarMenuSubButton>
       {open && (
         <SidebarMenuSub>
           {children.map((child) => {
             const active = isLeafActive(child, location);
+            const badge = badgeCountByHref?.[child.href] ?? 0;
             return (
               <SidebarMenuSubItem key={child.href}>
                 <SidebarMenuSubButton asChild isActive={active}>
                   <Link href={child.href} className="flex items-center gap-2.5">
                     <child.icon className="w-3.5 h-3.5 shrink-0" />
-                    <span>{child.name}</span>
+                    <span className="flex-1">{child.name}</span>
+                    {badge > 0 && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground shrink-0">
+                        {badge > 9 ? "9+" : badge}
+                      </span>
+                    )}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
@@ -1245,6 +1260,14 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
 
+  const { data: unreadData } = useGetAuthEventsUnreadCount({
+    query: { queryKey: ["auth-events-unread-count"], refetchInterval: 60_000, staleTime: 30_000 },
+  });
+  const unreadSecurityCount = unreadData?.count ?? 0;
+  const mgmtBadgeByHref: Record<string, number> = unreadSecurityCount > 0
+    ? { "/management/account": unreadSecurityCount }
+    : {};
+
   const [posOpen,      setPosOpen]      = useState(isPOSSection);
   const [invOpen,      setInvOpen]      = useState(isInventorySection);
   const [staffOpen,    setStaffOpen]    = useState(isStaffSection);
@@ -1288,11 +1311,19 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     );
   };
 
-  const CollapsibleSection = ({ label, icon: Icon, isActive, isOpen, onToggle, items, accent, defaultHref }: {
+  const CollapsibleSection = ({ label, icon: Icon, isActive, isOpen, onToggle, items, accent, defaultHref, badgeCountByHref }: {
     label: string; icon: React.ComponentType<{ className?: string }>; isActive: boolean; isOpen: boolean;
-    onToggle: () => void; items: NavItem[]; accent?: boolean; defaultHref?: string;
+    onToggle: () => void; items: NavItem[]; accent?: boolean; defaultHref?: string; badgeCountByHref?: Record<string, number>;
   }) => {
     const { state, setOpen } = useSidebar();
+    const totalSectionBadge = badgeCountByHref
+      ? items.reduce((sum, item) => {
+          if ("children" in item) {
+            return sum + item.children.reduce((s, c) => s + (badgeCountByHref[c.href] ?? 0), 0);
+          }
+          return sum + (badgeCountByHref[(item as NavLeaf).href] ?? 0);
+        }, 0)
+      : 0;
     const handleClick = () => {
       if (state === "collapsed") {
         setOpen(true);
@@ -1306,20 +1337,31 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           className={`flex items-center gap-3 cursor-pointer w-full data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground${accent ? " text-primary font-semibold hover:text-primary" : ""}`}>
           <Icon className={`w-4 h-4 shrink-0${accent ? " text-primary" : ""}`} />
           <span className="flex-1">{label}</span>
+          {!isOpen && totalSectionBadge > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground shrink-0">
+              {totalSectionBadge > 9 ? "9+" : totalSectionBadge}
+            </span>
+          )}
           <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}${accent ? " text-primary" : " text-muted-foreground"}`} />
         </SidebarMenuButton>
         {isOpen && (
           <SidebarMenuSub>
             {items.map((item) => {
               if ("children" in item) {
-                return <NavNestedGroup key={item.name} name={item.name} icon={item.icon} children={item.children} location={location} defaultHref={item.defaultHref} navigate={navigate} />;
+                return <NavNestedGroup key={item.name} name={item.name} icon={item.icon} children={item.children} location={location} defaultHref={item.defaultHref} navigate={navigate} badgeCountByHref={badgeCountByHref} />;
               }
               const active = location === item.href;
+              const badge = badgeCountByHref?.[(item as NavLeaf).href] ?? 0;
               return (
                 <SidebarMenuSubItem key={item.href}>
                   <SidebarMenuSubButton asChild isActive={active}>
                     <Link href={item.href} className="flex items-center gap-2.5">
-                      <item.icon className="w-3.5 h-3.5 shrink-0" /><span>{item.name}</span>
+                      <item.icon className="w-3.5 h-3.5 shrink-0" /><span className="flex-1">{item.name}</span>
+                      {badge > 0 && (
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground shrink-0">
+                          {badge > 9 ? "9+" : badge}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
@@ -1385,6 +1427,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
               label="Management" icon={BriefcaseBusiness} isActive={isManagementSection} isOpen={mgmtOpen}
               onToggle={() => { setMgmtOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setMarketingOpen(false); setOnlineOpen(false); }}
               items={MANAGEMENT_SUBNAV} accent defaultHref="/management/overview"
+              badgeCountByHref={mgmtBadgeByHref}
             />
           )}
         </SidebarMenu>

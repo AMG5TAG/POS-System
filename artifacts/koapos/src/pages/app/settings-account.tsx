@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent, useMarkAuthEventsRead } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -319,6 +319,16 @@ export default function SettingsAccountPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { data: authEvents } = useListAuthEvents({ query: { queryKey: ["auth-events"] } });
   const { data: lockStatus, refetch: refetchLock } = useGetAccountLockStatus({ query: { queryKey: ["account-lock-status"], refetchInterval: 30_000 } });
+  const markRead = useMarkAuthEventsRead();
+
+  useEffect(() => {
+    markRead.mutate(undefined, {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: ["auth-events-unread-count"] });
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const unlockMutation = useUnlockAccount();
 
   const [unlocking, setUnlocking] = useState(false);
