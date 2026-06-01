@@ -20,6 +20,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircleIcon, LockKeyholeIcon, TriangleAlertIcon, ArrowBigUpIcon } from "lucide-react";
 
+const WARN_THRESHOLD = 5;
+
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
@@ -173,6 +175,15 @@ export default function LoginPage() {
                   </Link>{" "}
                   to unlock your account immediately.
                 </span>
+              </AlertDescription>
+            </Alert>
+          )}
+          {!lockMessage && attemptsRemaining !== null && attemptsRemaining > 2 && attemptsRemaining <= WARN_THRESHOLD && (
+            <Alert className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+              <TriangleAlertIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertTitle>Heads up</AlertTitle>
+              <AlertDescription>
+                {`${attemptsRemaining} attempts remaining before your account is temporarily locked.`}
               </AlertDescription>
             </Alert>
           )}
