@@ -123,6 +123,7 @@ export interface Merchant {
   username?: string | null;
   loginNotifyEmail?: boolean;
   loginNotifyEmailFailed?: boolean;
+  securityAlertEmail?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
 }
@@ -145,6 +146,7 @@ export interface MerchantUpdate {
   username?: string;
   loginNotifyEmail?: boolean;
   loginNotifyEmailFailed?: boolean;
+  securityAlertEmail?: boolean;
 }
 
 export interface Plan {

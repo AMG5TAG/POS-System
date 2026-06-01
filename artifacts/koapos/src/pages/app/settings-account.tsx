@@ -196,6 +196,8 @@ function LoginNotifyCard() {
 
   const enabledSuccess = (merchant as { loginNotifyEmail?: boolean } | undefined)?.loginNotifyEmail ?? false;
   const enabledFailed = (merchant as { loginNotifyEmailFailed?: boolean } | undefined)?.loginNotifyEmailFailed ?? false;
+  const enabledSecurity = (merchant as { securityAlertEmail?: boolean } | undefined)?.securityAlertEmail ?? true;
+  const [savingSecurity, setSavingSecurity] = useState(false);
 
   const handleToggleSuccess = (checked: boolean) => {
     setSavingSuccess(true);
@@ -227,6 +229,23 @@ function LoginNotifyCard() {
           toast.error("Failed to update notification setting");
         },
         onSettled: () => setSavingFailed(false),
+      }
+    );
+  };
+
+  const handleToggleSecurity = (checked: boolean) => {
+    setSavingSecurity(true);
+    updateMerchant.mutate(
+      { data: { securityAlertEmail: checked } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success(checked ? "Security alert emails enabled" : "Security alert emails disabled");
+        },
+        onError: () => {
+          toast.error("Failed to update notification setting");
+        },
+        onSettled: () => setSavingSecurity(false),
       }
     );
   };
@@ -268,6 +287,20 @@ function LoginNotifyCard() {
             onCheckedChange={handleToggleFailed}
             disabled={savingFailed}
             aria-label="Toggle failed login attempt notifications"
+          />
+        </div>
+        <div className="border-t pt-4 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Security alert emails</p>
+            <p className="text-xs text-muted-foreground">
+              Get notified when a sign-in event is flagged as suspicious. This is independent of the login notification toggles above — you can receive security alerts even if regular login emails are off.
+            </p>
+          </div>
+          <Switch
+            checked={enabledSecurity}
+            onCheckedChange={handleToggleSecurity}
+            disabled={savingSecurity}
+            aria-label="Toggle security alert emails"
           />
         </div>
       </CardContent>

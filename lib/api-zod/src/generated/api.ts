@@ -34,6 +34,7 @@ export const GetMeResponse = zod.object({
   "username": zod.string().nullish(),
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
+  "securityAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -80,6 +81,7 @@ export const LoginResponse = zod.object({
   "username": zod.string().nullish(),
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
+  "securityAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -166,6 +168,7 @@ export const GetMerchantResponse = zod.object({
   "username": zod.string().nullish(),
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
+  "securityAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -193,7 +196,8 @@ export const UpdateMerchantBody = zod.object({
   "logoUrl": zod.string().optional(),
   "username": zod.string().min(updateMerchantBodyUsernameMin).max(updateMerchantBodyUsernameMax).regex(updateMerchantBodyUsernameRegExp).optional(),
   "loginNotifyEmail": zod.boolean().optional(),
-  "loginNotifyEmailFailed": zod.boolean().optional()
+  "loginNotifyEmailFailed": zod.boolean().optional(),
+  "securityAlertEmail": zod.boolean().optional()
 })
 
 export const UpdateMerchantResponse = zod.object({
@@ -211,6 +215,7 @@ export const UpdateMerchantResponse = zod.object({
   "username": zod.string().nullish(),
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
+  "securityAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })

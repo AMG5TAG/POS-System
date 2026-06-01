@@ -7316,6 +7316,8 @@ components:
           type: boolean
         loginNotifyEmailFailed:
           type: boolean
+        securityAlertEmail:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -7352,6 +7354,8 @@ components:
         loginNotifyEmail:
           type: boolean
         loginNotifyEmailFailed:
+          type: boolean
+        securityAlertEmail:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────

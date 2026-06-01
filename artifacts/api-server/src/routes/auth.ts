@@ -604,7 +604,7 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
     void (async () => {
       try {
         const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-        if (merchant?.loginNotifyEmail === "true") {
+        if (merchant?.securityAlertEmail === "true") {
           const eventTime = updated.createdAt.toLocaleString("en-AU", {
             timeZone: merchant.timezone ?? "Australia/Sydney",
             dateStyle: "full",
