@@ -125,12 +125,6 @@ export default function POSPage() {
 
   /* navigation guard — warn before leaving mid-sale or mid-form */
   const [formTouched, setFormTouched] = useState(false);
-  const { ConfirmDialog: LeaveSaleDialog } = useUnsavedChangesGuard(cart.length > 0 || formTouched, {
-    title: "Leave sale?",
-    description: "You have items in the cart. Leaving now will discard the current sale.",
-    cancelLabel: "Stay",
-    actionLabel: "Leave",
-  });
 
   const [overallDiscount, setOverallDiscount] = useState("");
   const [tempItemOpen, setTempItemOpen] = useState(false);
@@ -214,6 +208,29 @@ export default function POSPage() {
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
   const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
   const [gcRemainingMethod, setGcRemainingMethod] = useState<"cash" | "eftpos">("cash");
+
+  /* navigation guard — payment modal dirty state + cart/form dirty state */
+  const isPaymentDirty =
+    numpadInput !== "" ||
+    gcPayCardNumber !== "" ||
+    splitLegs.some(l => l.amount !== "") ||
+    (paymentModalInitialMethodRef.current !== null && payMethod !== paymentModalInitialMethodRef.current);
+
+  const _leaveSaleTitle = isPaymentDirty && !cart.length && !formTouched
+    ? "Payment in progress"
+    : "Leave sale?";
+  const _leaveSaleDescription = isPaymentDirty && !cart.length && !formTouched
+    ? "A payment is in progress. Leaving now will discard it."
+    : "You have items in the cart. Leaving now will discard the current sale.";
+  const { ConfirmDialog: LeaveSaleDialog } = useUnsavedChangesGuard(
+    cart.length > 0 || formTouched || isPaymentDirty,
+    {
+      title: _leaveSaleTitle,
+      description: _leaveSaleDescription,
+      cancelLabel: "Stay",
+      actionLabel: "Leave",
+    },
+  );
 
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -1033,12 +1050,6 @@ export default function POSPage() {
       setGcRemainingMethod("cash");
     }
   }, [paymentModalOpen]);
-
-  const isPaymentDirty =
-    numpadInput !== "" ||
-    gcPayCardNumber !== "" ||
-    splitLegs.some(l => l.amount !== "") ||
-    (paymentModalInitialMethodRef.current !== null && payMethod !== paymentModalInitialMethodRef.current);
 
   const tryClosePaymentModal = () => {
     if (isPaymentDirty) {
