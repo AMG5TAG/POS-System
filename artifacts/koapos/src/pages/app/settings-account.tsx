@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock } from "lucide-react";
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -51,6 +51,32 @@ export default function SettingsAccountPage() {
   const qc = useQueryClient();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { data: authEvents } = useListAuthEvents({ query: { queryKey: ["auth-events"] } });
+  const { data: lockStatus, refetch: refetchLock } = useGetAccountLockStatus({ query: { queryKey: ["account-lock-status"], refetchInterval: 30_000 } });
+  const unlockMutation = useUnlockAccount();
+
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [showUnlockPassword, setShowUnlockPassword] = useState(false);
+
+  const handleUnlock = () => {
+    if (!unlockPassword) return;
+    setUnlocking(true);
+    unlockMutation.mutate(
+      { data: { currentPassword: unlockPassword } },
+      {
+        onSuccess: () => {
+          toast.success("Account unlocked", { description: "Failed login attempts have been cleared." });
+          setUnlockPassword("");
+          void refetchLock();
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Failed to unlock account. Please try again.");
+        },
+        onSettled: () => setUnlocking(false),
+      }
+    );
+  };
 
   const [username, setUsername] = useState("");
   const [savedUsername, setSavedUsername] = useState<string | null>(null);
@@ -480,6 +506,82 @@ export default function SettingsAccountPage() {
                   <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                   {PORTAL_BASE}{savedUsername}
                 </a>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Account Lock Status */}
+        <Card id="account-lock">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {lockStatus?.locked ? (
+                <Lock className="w-4 h-4 text-destructive" />
+              ) : (
+                <LockOpen className="w-4 h-4 text-green-500" />
+              )}
+              Account Lock
+            </CardTitle>
+            <CardDescription>
+              After too many failed login attempts your account is temporarily locked. You can clear the lockout here if you have an active session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {lockStatus?.locked ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-4">
+                <div className="flex items-start gap-3">
+                  <Lock className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-destructive">Account is currently locked</p>
+                    {lockStatus.retryAfter && (
+                      <p className="text-xs text-muted-foreground">
+                        Lockout expires at{" "}
+                        <span className="font-mono">
+                          {new Date(lockStatus.retryAfter).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        {" "}— or enter your password below to unlock it now.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="unlock-pw">Confirm with your current password</Label>
+                  <div className="relative">
+                    <Input
+                      id="unlock-pw"
+                      type={showUnlockPassword ? "text" : "password"}
+                      value={unlockPassword}
+                      onChange={e => setUnlockPassword(e.target.value)}
+                      placeholder="Enter your password to confirm"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowUnlockPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      {showUnlockPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleUnlock}
+                  disabled={unlocking || !unlockPassword}
+                >
+                  {unlocking ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Unlocking…</>
+                  ) : (
+                    <><LockOpen className="w-4 h-4 mr-2" />Unlock Account</>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                Your account is not locked. No action needed.
               </div>
             )}
           </CardContent>

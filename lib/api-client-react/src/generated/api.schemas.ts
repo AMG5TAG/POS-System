@@ -3698,6 +3698,18 @@ export interface OkResult {
   ok: boolean;
 }
 
+export interface AccountLockStatus {
+  /** Whether the account is currently locked out */
+  locked: boolean;
+  /** ISO timestamp when the lockout expires (only present when locked) */
+  retryAfter?: string | null;
+}
+
+export interface UnlockAccountInput {
+  /** The owner's current password (required as a second-factor confirmation) */
+  currentPassword: string;
+}
+
 export interface VaultStatus {
   total: number;
   current: number;

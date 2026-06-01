@@ -8005,6 +8005,27 @@ export const ChangeEmailResponse = zod.object({
 
 
 /**
+ * @summary Get the lock status of the currently authenticated merchant's account
+ */
+export const GetAccountLockStatusResponse = zod.object({
+  "locked": zod.boolean().describe('Whether the account is currently locked out'),
+  "retryAfter": zod.coerce.date().nullish().describe('ISO timestamp when the lockout expires (only present when locked)')
+})
+
+
+/**
+ * @summary Clear any active account lockout (owner only — requires current password)
+ */
+export const UnlockAccountBody = zod.object({
+  "currentPassword": zod.string().describe('The owner\'s current password (required as a second-factor confirmation)')
+})
+
+export const UnlockAccountResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Submit a bug report or feature request
  */
 export const SubmitFeedbackBody = zod.object({

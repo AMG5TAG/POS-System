@@ -6248,6 +6248,46 @@ paths:
         "409":
           description: Email already in use
 
+  # ── Account lock ─────────────────────────────────────────────────────────
+  /auth/account-lock:
+    get:
+      operationId: getAccountLockStatus
+      tags: [auth]
+      summary: Get the lock status of the currently authenticated merchant's account
+      responses:
+        "200":
+          description: Lock status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountLockStatus"
+        "401":
+          description: Unauthorized
+
+    delete:
+      operationId: unlockAccount
+      tags: [auth]
+      summary: Clear any active account lockout (owner only — requires current password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnlockAccountInput"
+      responses:
+        "200":
+          description: Account unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: currentPassword missing
+        "401":
+          description: Unauthorized or password incorrect
+        "403":
+          description: Forbidden — caller is not the account owner
+
   # ── Feedback ──────────────────────────────────────────────────────────────
   /feedback:
     post:
@@ -11733,6 +11773,27 @@ components:
       required: [ok]
       properties:
         ok: { type: boolean }
+
+    AccountLockStatus:
+      type: object
+      required: [locked]
+      properties:
+        locked:
+          type: boolean
+          description: Whether the account is currently locked out
+        retryAfter:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO timestamp when the lockout expires (only present when locked)
+
+    UnlockAccountInput:
+      type: object
+      required: [currentPassword]
+      properties:
+        currentPassword:
+          type: string
+          description: The owner's current password (required as a second-factor confirmation)
 
     VaultStatus:
       type: object

@@ -237,6 +237,47 @@ router.post("/auth/change-email", requireAuth, async (req, res): Promise<void> =
   res.json({ ok: true });
 });
 
+router.get("/auth/account-lock", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [merchant] = await db.select({ email: merchantsTable.email }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  if (!merchant) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const status = await checkAccountLock(merchant.email);
+  res.json({
+    locked: status.locked,
+    retryAfter: status.retryAfter ? status.retryAfter.toISOString() : null,
+  });
+});
+
+router.delete("/auth/account-lock", requireAuth, async (req, res): Promise<void> => {
+  if (req.session.staffRole !== "owner") {
+    res.status(403).json({ error: "Forbidden: only the account owner can unlock the account" });
+    return;
+  }
+  const { currentPassword } = req.body as { currentPassword?: unknown };
+  if (typeof currentPassword !== "string" || currentPassword.length === 0) {
+    res.status(400).json({ error: "currentPassword is required" });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const [merchant] = await db
+    .select({ email: merchantsTable.email, passwordHash: merchantsTable.passwordHash })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, merchantId));
+  if (!merchant) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  if (!(await verifyPassword(currentPassword, merchant.passwordHash))) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+  await clearFailedAttempts(merchant.email);
+  res.json({ ok: true });
+});
+
 router.post("/auth/logout", async (req, res): Promise<void> => {
   req.session.destroy(() => {});
   res.json({ ok: true });

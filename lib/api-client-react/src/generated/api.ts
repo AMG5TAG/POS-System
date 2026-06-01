@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountLockStatus,
   AddLaybyPaymentBody,
   AiSettings,
   AiSettingsInput,
@@ -359,6 +360,7 @@ import type {
   Transaction,
   TransactionInput,
   TransactionList,
+  UnlockAccountInput,
   UpdateLaybyBody,
   UpdateShippingCarrierBody,
   UploadUrlRequest,
@@ -25858,6 +25860,154 @@ export const useChangeEmail = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getChangeEmailMutationOptions(options));
+    }
+
+export const getGetAccountLockStatusUrl = () => {
+
+
+
+
+  return `/api/auth/account-lock`
+}
+
+/**
+ * @summary Get the lock status of the currently authenticated merchant's account
+ */
+export const getAccountLockStatus = async ( options?: RequestInit): Promise<AccountLockStatus> => {
+
+  return customFetch<AccountLockStatus>(getGetAccountLockStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountLockStatusQueryKey = () => {
+    return [
+    `/api/auth/account-lock`
+    ] as const;
+    }
+
+
+export const getGetAccountLockStatusQueryOptions = <TData = Awaited<ReturnType<typeof getAccountLockStatus>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountLockStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountLockStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountLockStatus>>> = ({ signal }) => getAccountLockStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountLockStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountLockStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountLockStatus>>>
+export type GetAccountLockStatusQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the lock status of the currently authenticated merchant's account
+ */
+
+export function useGetAccountLockStatus<TData = Awaited<ReturnType<typeof getAccountLockStatus>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountLockStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountLockStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUnlockAccountUrl = () => {
+
+
+
+
+  return `/api/auth/account-lock`
+}
+
+/**
+ * @summary Clear any active account lockout (owner only — requires current password)
+ */
+export const unlockAccount = async (unlockAccountInput: UnlockAccountInput, options?: RequestInit): Promise<OkResult> => {
+
+  return customFetch<OkResult>(getUnlockAccountUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      unlockAccountInput,)
+  }
+);}
+
+
+
+
+export const getUnlockAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockAccount>>, TError,{data: BodyType<UnlockAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlockAccount>>, TError,{data: BodyType<UnlockAccountInput>}, TContext> => {
+
+const mutationKey = ['unlockAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlockAccount>>, {data: BodyType<UnlockAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  unlockAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlockAccountMutationResult = NonNullable<Awaited<ReturnType<typeof unlockAccount>>>
+    export type UnlockAccountMutationBody = BodyType<UnlockAccountInput>
+    export type UnlockAccountMutationError = ErrorType<void>
+
+    /**
+ * @summary Clear any active account lockout (owner only — requires current password)
+ */
+export const useUnlockAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockAccount>>, TError,{data: BodyType<UnlockAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unlockAccount>>,
+        TError,
+        {data: BodyType<UnlockAccountInput>},
+        TContext
+      > => {
+      return useMutation(getUnlockAccountMutationOptions(options));
     }
 
 export const getSubmitFeedbackUrl = () => {
