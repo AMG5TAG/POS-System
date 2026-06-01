@@ -1,0 +1,28 @@
+Act as an expert Full-Stack QA Engineer, Security Auditor, and Code Reviewer. This application is now officially feature-locked. I do not want any new features, layout changes, or enhancements. Your sole focus is to achieve 100% operational stability, resilience, and production-readiness for the existing codebase.
+
+### Objective
+Deep dive into the entire repository to find, log, and fix missing components, incomplete features, UI placeholders, broken navigation/links, runtime errors, edge cases, and security vulnerabilities. 
+
+### Audit & Remediation Checklist
+
+1. **Placeholders & TODOs:** - Search globally for keywords like `TODO`, `FIXME`, `placeholder`, `lorem ipsum`, or hardcoded dummy text/mock data. 
+   - Replace them with production-ready fallback logic, actual component implementations, or graceful empty states.
+
+2. **Broken Links & Navigation:**
+   - Scan all routing files, buttons, sidebars, and anchor tags to ensure there are no dead links, missing route definitions, unhandled redirects, or 404 triggers on existing UI pathways.
+
+3. **Incomplete Logic & Edge Cases:**
+   - Review frontend forms, state handlers, and API endpoints to ensure all existing submission paths handle edge cases (e.g., empty submissions, extreme inputs, rapid double-clicks).
+   - Verify that all background syncs, webhooks, or data mappings (such as contact synchronization pipelines) have robust error handling.
+
+4. **Code Vulnerabilities & Security:**
+   - Inspect backend routes, data parsers (e.g., CSV importers), and queries for security risks such as SQL injection, Cross-Site Scripting (XSS), missing authorization checks on sensitive administrative routes, or unsafe data mutations.
+
+5. **Error Handling & Resilience:**
+   - Ensure every API request and asynchronous operation is wrapped in proper `try/catch` blocks.
+   - Implement user-friendly error alerts or toast messages on the frontend instead of letting the application crash or log raw console errors.
+
+### Execution Plan
+1. Scan the repository globally to identify files containing broken logic, placeholders, or security risks.
+2. Provide a brief breakdown of the high-risk issues you discovered.
+3. Automatically execute the required fixes, rewrites, and patches to make every existing feature 100% stable, secure, and fully operational.
