@@ -102,6 +102,14 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
+
+    const merchantId = req.session.merchantId;
+    const allowedPrefix = `merchants/${merchantId}/`;
+    if (!wildcardPath.startsWith(allowedPrefix)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
     const objectPath = `/objects/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
