@@ -8003,6 +8003,35 @@ export const SetDefaultStickerTemplateResponse = zod.array(SetDefaultStickerTemp
 
 
 /**
+ * @summary Request a password-reset email
+ */
+export const ForgotPasswordBody = zod.object({
+  "email": zod.string().email()
+})
+
+export const ForgotPasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Reset password using a token received by email
+ */
+export const resetPasswordBodyNewPasswordMin = 8;
+
+
+
+export const ResetPasswordBody = zod.object({
+  "token": zod.string(),
+  "newPassword": zod.string().min(resetPasswordBodyNewPasswordMin)
+})
+
+export const ResetPasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Change the authenticated merchant's password
  */
 export const changePasswordBodyNewPasswordMin = 8;

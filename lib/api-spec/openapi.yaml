@@ -6230,6 +6230,49 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/StickerTemplate" }
 
+  # ── Auth (password reset) ─────────────────────────────────────────────────
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request a password-reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "200":
+          description: Email sent (always 200 to prevent email enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Validation error
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset password using a token received by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          description: Invalid or expired token
+
   # ── Auth (change credentials) ─────────────────────────────────────────────
   /auth/change-password:
     post:
@@ -11776,6 +11819,20 @@ components:
         state:    { type: string, description: "Opaque value passed in the start URL; carries the merchantId" }
         user:     { type: string, description: "JSON-encoded name object sent by Apple on the first authorization only" }
         error:    { type: string, description: "Set by Apple when the user cancels or an error occurs" }
+
+    # ── Auth / Password reset ─────────────────────────────────────────────────
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ResetPasswordInput:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:       { type: string }
+        newPassword: { type: string, minLength: 8 }
 
     # ── Auth / Credentials ───────────────────────────────────────────────────
     ChangePasswordInput:

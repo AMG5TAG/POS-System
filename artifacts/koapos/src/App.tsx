@@ -18,6 +18,8 @@ import LandingPage from "@/pages/marketing/landing";
 import LoginPage from "@/pages/marketing/login";
 import RegisterPage from "@/pages/marketing/register";
 import PricingPage from "@/pages/marketing/pricing";
+import ForgotPasswordPage from "@/pages/marketing/forgot-password";
+import ResetPasswordPage from "@/pages/marketing/reset-password";
 
 import DashboardPage from "@/pages/app/dashboard";
 
@@ -141,7 +143,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register"];
+const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password"];
 
 setOnUnauthorized(() => {
   queryClient.clear();
@@ -221,6 +223,12 @@ function Router() {
       </Route>
       <Route path="/register">
         <PublicRoute component={RegisterPage} />
+      </Route>
+      <Route path="/forgot-password">
+        <PublicRoute component={ForgotPasswordPage} />
+      </Route>
+      <Route path="/reset-password">
+        <PublicRoute component={ResetPasswordPage} />
       </Route>
       <Route path="/customer-display">
         <PublicRoute component={CustomerDisplayPage} />

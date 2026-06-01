@@ -146,6 +146,13 @@ export default function LoginPage() {
                 {!isLocked && (
                   <span className="block mt-1">You may try again now.</span>
                 )}
+                <span className="block mt-2">
+                  Forgot your password?{" "}
+                  <Link href="/forgot-password" className="font-medium underline">
+                    Reset your password
+                  </Link>{" "}
+                  to unlock your account immediately.
+                </span>
               </AlertDescription>
             </Alert>
           )}

@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { randomBytes, createHash } from "crypto";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable } from "@workspace/db";
+import { eq, desc, and, gt } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
-import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody } from "@workspace/api-zod";
+import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold } from "../lib/accountLimiter";
 import { sendEmail } from "../services/email";
@@ -319,6 +320,173 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
     status: updated.status,
     createdAt: updated.createdAt.toISOString(),
   });
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many reset attempts — please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const ip = req.ip ?? "";
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  },
+});
+
+/**
+ * Returns the trusted public origin for this app (used in password-reset links).
+ *
+ * Priority:
+ *   1. APP_BASE_URL — operator-configured, most explicit (e.g. "https://my.koapos.com")
+ *   2. REPLIT_DOMAINS — set by Replit infrastructure, not by inbound requests
+ *
+ * Request headers (Host, X-Forwarded-Host, etc.) are intentionally NOT used
+ * because they are attacker-controlled and can be poisoned to redirect reset
+ * links to an attacker-owned domain.
+ *
+ * In development neither var may be set; we fall back to localhost so local
+ * testing still works — but we never use request headers even then.
+ */
+function getAppBaseUrl(): string {
+  const explicit = process.env.APP_BASE_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const first = replitDomains.split(",")[0]?.trim();
+    if (first) return `https://${first}`;
+  }
+
+  // Development fallback — never used in production (REPLIT_DOMAINS is always set there)
+  return "http://localhost";
+}
+
+router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Promise<void> => {
+  const parsed = ForgotPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const email = parsed.data.email.trim().toLowerCase();
+  const [merchant] = await db
+    .select({ id: merchantsTable.id, email: merchantsTable.email })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.email, email));
+
+  // Always return 200 to prevent email enumeration
+  if (!merchant) {
+    res.json({ ok: true });
+    return;
+  }
+
+  // Generate a cryptographically secure token
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  // Invalidate any existing unused tokens for this merchant
+  await db
+    .update(passwordResetTokensTable)
+    .set({ usedAt: new Date() })
+    .where(
+      and(
+        eq(passwordResetTokensTable.merchantId, merchant.id),
+        gt(passwordResetTokensTable.expiresAt, new Date())
+      )
+    );
+
+  await db.insert(passwordResetTokensTable).values({
+    merchantId: merchant.id,
+    tokenHash,
+    expiresAt,
+  });
+
+  const resetUrl = `${getAppBaseUrl()}/reset-password?token=${rawToken}`;
+
+  void sendEmail(merchant.id, {
+    to: merchant.email,
+    subject: "Reset your KoaPOS password",
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+        <h2 style="margin-top:0">Reset your password</h2>
+        <p>We received a request to reset the password for your KoaPOS account. Click the button below to choose a new password.</p>
+        <p style="margin:24px 0">
+          <a href="${resetUrl}"
+             style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Reset password
+          </a>
+        </p>
+        <p style="color:#666;font-size:14px">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email — your account remains secure.</p>
+        <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${resetUrl}</p>
+      </div>
+    `,
+    text: `Reset your KoaPOS password\n\nClick the link below to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request a password reset, ignore this email.`,
+  });
+
+  res.json({ ok: true });
+});
+
+router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Promise<void> => {
+  const parsed = ResetPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { token: rawToken, newPassword } = parsed.data;
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+  const [record] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(eq(passwordResetTokensTable.tokenHash, tokenHash));
+
+  if (!record) {
+    res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+    return;
+  }
+
+  if (record.usedAt) {
+    res.status(400).json({ error: "This reset link has already been used. Please request a new one." });
+    return;
+  }
+
+  if (record.expiresAt < new Date()) {
+    res.status(400).json({ error: "This reset link has expired. Please request a new one." });
+    return;
+  }
+
+  const [merchant] = await db
+    .select({ email: merchantsTable.email })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, record.merchantId));
+
+  if (!merchant) {
+    res.status(400).json({ error: "Account not found." });
+    return;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  // Update password, clear account lock, mark token as used — all atomically
+  await db.transaction(async (tx) => {
+    await tx
+      .update(merchantsTable)
+      .set({ passwordHash })
+      .where(eq(merchantsTable.id, record.merchantId));
+
+    await tx
+      .update(passwordResetTokensTable)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokensTable.id, record.id));
+  });
+
+  // Clear account lockout so the merchant can sign in immediately
+  await clearFailedAttempts(merchant.email);
+
+  res.json({ ok: true });
 });
 
 router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {

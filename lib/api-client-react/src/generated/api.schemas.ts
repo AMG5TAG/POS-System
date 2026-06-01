@@ -3684,6 +3684,16 @@ export interface AppleOAuthCallbackBody {
   error?: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  /** @minLength 8 */
+  newPassword: string;
+}
+
 export interface ChangePasswordInput {
   currentPassword: string;
   /** @minLength 8 */
