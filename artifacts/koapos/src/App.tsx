@@ -128,6 +128,12 @@ import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
 import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
 import SettingsTyroEftposPage from "@/pages/app/settings-tyro-eftpos";
 
+import ManagementCustomersHub from "@/pages/app/management-customers-hub";
+import ManagementProductsHub from "@/pages/app/management-products-hub";
+import ManagementOperationsHub from "@/pages/app/management-operations-hub";
+import ManagementMarketingHub from "@/pages/app/management-marketing-hub";
+import ManagementSettingsHub from "@/pages/app/management-settings-hub";
+
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
 import NotFound from "@/pages/not-found";
 
@@ -354,153 +360,200 @@ function Router() {
         <ProtectedRoute component={StaffPage} />
       </Route>
 
-      {/* Management > Staff aliases (keep nav context in Management) */}
-      <Route path="/management/staff/timesheet">
-        <ManagementProtectedRoute component={StaffTimesheetPage} />
-      </Route>
-      <Route path="/management/staff/cost-summary">
-        <ManagementProtectedRoute component={StaffCostSummaryPage} />
-      </Route>
-      <Route path="/management/staff">
-        <ManagementProtectedRoute component={StaffPage} />
-      </Route>
-
-      {/* Management section */}
+      {/* Management section — hub entry routes */}
       <Route path="/management/overview">
         <ManagementProtectedRoute component={ManagementOverviewPage} />
       </Route>
-      <Route path="/management/kpis">
-        <ManagementProtectedRoute component={ManagementKpisPage} />
+      <Route path="/management/customers-hub">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/misc">
-        <ManagementProtectedRoute component={ManagementMiscPage} />
+      <Route path="/management/products-hub">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
       </Route>
-      <Route path="/management/registers">
-        <ManagementProtectedRoute component={ManagementRegistersPage} />
+      <Route path="/management/operations-hub">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
       </Route>
-      <Route path="/management/sales-overview">
-        <ManagementProtectedRoute component={ManagementSalesPage} />
+      <Route path="/management/marketing-hub">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
       </Route>
-      <Route path="/management/reports/bas">
-        <ManagementProtectedRoute component={ManagementReportsBasPage} />
+      <Route path="/management/settings-hub">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
       </Route>
-      <Route path="/management/reports/void-audit">
-        <ManagementProtectedRoute component={ManagementReportsVoidAuditPage} />
+
+      {/* Customers hub — deep-link routes */}
+      <Route path="/management/customers/heard-from">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/reports/margin">
-        <ManagementProtectedRoute component={ManagementReportsMarginPage} />
-      </Route>
-      <Route path="/management/reports/z-report">
-        <ManagementProtectedRoute component={ManagementReportsZReportPage} />
-      </Route>
-      <Route path="/management/reports/staff-leaderboard">
-        <ManagementProtectedRoute component={ManagementReportsStaffLeaderboardPage} />
-      </Route>
-      <Route path="/management/reports/product-performance">
-        <ManagementProtectedRoute component={ManagementReportsProductPerformancePage} />
-      </Route>
-      <Route path="/management/pricing-rules">
-        <ManagementProtectedRoute component={SettingsPricingRulesPage} />
-      </Route>
-      <Route path="/management/modifier-groups">
-        <ManagementProtectedRoute component={SettingsModifierGroupsPage} />
-      </Route>
-      <Route path="/management/tyro-eftpos">
-        <ManagementProtectedRoute component={SettingsTyroEftposPage} />
-      </Route>
-      <Route path="/management/daily-reports">
-        <ManagementProtectedRoute component={ManagementDailyReportsPage} />
-      </Route>
-      <Route path="/management/integrations">
-        <ManagementProtectedRoute component={ManagementIntegrationsPage} />
-      </Route>
-      <Route path="/management/xero">
-        <ManagementProtectedRoute component={ManagementXeroPage} />
-      </Route>
-      <Route path="/management/import-export">
-        <ManagementProtectedRoute component={ManagementImportExportPage} />
-      </Route>
-      <Route path="/management/loyalty">
-        <ManagementProtectedRoute component={ManagementLoyaltyPage} />
+      <Route path="/management/customers">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
       <Route path="/management/loyalty/leaderboard">
-        <ManagementProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
+      </Route>
+      <Route path="/management/loyalty">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
       <Route path="/management/gift-cards">
-        <ManagementProtectedRoute component={ManagementGiftCardsPage} />
-      </Route>
-      <Route path="/management/layby">
-        <ManagementProtectedRoute component={ManagementLaybyPage} />
-      </Route>
-      <Route path="/management/inventory">
-        <ManagementProtectedRoute component={ManagementInventoryPage} />
-      </Route>
-      <Route path="/management/floor-plan">
-        <ManagementProtectedRoute component={ManagementFloorPlanPage} />
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
       <Route path="/management/discounts">
-        <ManagementProtectedRoute component={ManagementDiscountsPage} />
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/templates">
-        <ManagementProtectedRoute component={ManagementTemplatesPage} />
+      <Route path="/management/pricing-rules">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/forms">
-        <ManagementProtectedRoute component={ManagementFormsPage} />
+      <Route path="/management/layby">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/stickers">
-        <ManagementProtectedRoute component={ManagementStickersPage} />
+      <Route path="/management/feedback">
+        <ManagementProtectedRoute component={ManagementCustomersHub} />
       </Route>
-      <Route path="/management/sticker-templates">
-        <ManagementProtectedRoute component={ManagementStickerTemplatesPage} />
-      </Route>
-      <Route path="/inventory/wastage">
-        <ProtectedRoute component={InventoryWastagePage} />
+
+      {/* Products hub — deep-link routes */}
+      <Route path="/management/inventory">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
       </Route>
       <Route path="/management/product-types">
-        <ManagementProtectedRoute component={SettingsProductTypesPage} />
+        <ManagementProtectedRoute component={ManagementProductsHub} />
       </Route>
-      <Route path="/management/tax">
-        <ManagementProtectedRoute component={SettingsTaxPage} />
+      <Route path="/management/modifier-groups">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+      <Route path="/management/templates">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+      <Route path="/management/stickers">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+      <Route path="/management/sticker-templates">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+      <Route path="/management/calculators/3d-printing">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+      <Route path="/management/calculators/pc-builder">
+        <ManagementProtectedRoute component={ManagementProductsHub} />
+      </Route>
+
+      {/* Operations hub — deep-link routes */}
+      <Route path="/management/staff/timesheet">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+      <Route path="/management/staff/cost-summary">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+      <Route path="/management/staff">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+      <Route path="/management/registers">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+      <Route path="/management/floor-plan">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+      <Route path="/management/cameras">
+        <ManagementProtectedRoute component={ManagementOperationsHub} />
+      </Route>
+
+      {/* Marketing hub — deep-link routes */}
+      <Route path="/management/sales-overview">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/bas">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/void-audit">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/margin">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/z-report">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/staff-leaderboard">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/reports/product-performance">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/daily-reports">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/kpis">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/marketing/referrals">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/marketing/social-feed">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/online-store">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
       </Route>
       <Route path="/management/email">
-        <ManagementProtectedRoute component={SettingsEmailPage} />
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
       </Route>
+      <Route path="/management/forms">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+      <Route path="/management/ai">
+        <ManagementProtectedRoute component={ManagementMarketingHub} />
+      </Route>
+
+      {/* Settings hub — deep-link routes */}
+      <Route path="/management/account">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/business">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/regional">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/tax">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/integrations">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/xero">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/tyro-eftpos">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/import-export">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/koapos">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+      <Route path="/management/misc">
+        <ManagementProtectedRoute component={ManagementSettingsHub} />
+      </Route>
+
+      {/* Redirect legacy settings paths */}
       <Route path="/settings/tax">
         <Redirect to="/management/tax" />
       </Route>
       <Route path="/settings/email">
         <Redirect to="/management/email" />
       </Route>
+      <Route path="/settings/customers">
+        <Redirect to="/management/customers" />
+      </Route>
+
+      <Route path="/inventory/wastage">
+        <ProtectedRoute component={InventoryWastagePage} />
+      </Route>
 
       <Route path="/modules">
         <ProtectedRoute component={ModulesPage} />
       </Route>
-      <Route path="/management/business">
-        <ManagementProtectedRoute component={SettingsBusinessPage} />
-      </Route>
-      <Route path="/management/regional">
-        <ManagementProtectedRoute component={SettingsRegionalPage} />
-      </Route>
-      <Route path="/management/account">
-        <ManagementProtectedRoute component={SettingsAccountPage} />
-      </Route>
       <Route path="/settings/pos">
         <ProtectedRoute component={SettingsPOSPage} />
-      </Route>
-      <Route path="/management/customers">
-        <ManagementProtectedRoute component={SettingsCustomersPage} />
-      </Route>
-      <Route path="/management/customers/heard-from">
-        <ManagementProtectedRoute component={ManagementCustomersHeardFromPage} />
-      </Route>
-      <Route path="/settings/customers">
-        <Redirect to="/management/customers" />
-      </Route>
-      <Route path="/management/calculators/3d-printing">
-        <ManagementProtectedRoute component={ManagementCalculators3DPage} />
-      </Route>
-      <Route path="/management/calculators/pc-builder">
-        <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />
@@ -537,33 +590,11 @@ function Router() {
       <Route path="/marketing/referrals">
         <ProtectedRoute component={MarketingReferralsPage} />
       </Route>
-      <Route path="/management/koapos">
-        <ManagementProtectedRoute component={ManagementKoaPOSPage} />
-      </Route>
-      <Route path="/management/marketing/referrals">
-        <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
-      </Route>
-      <Route path="/management/marketing/social-feed">
-        <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
-      </Route>
       <Route path="/marketing/automation">
         <ManagementProtectedRoute component={ManagementMarketingAutomationPage} />
       </Route>
-      <Route path="/management/online-store">
-        <ManagementProtectedRoute component={ManagementOnlineStorePage} />
-      </Route>
-
-      <Route path="/management/feedback">
-        <ManagementProtectedRoute component={ManagementFeedbackPage} />
-      </Route>
       <Route path="/cameras">
         <ProtectedRoute component={CamerasPage} />
-      </Route>
-      <Route path="/management/cameras">
-        <ManagementProtectedRoute component={ManagementCamerasPage} />
-      </Route>
-      <Route path="/management/ai">
-        <ManagementProtectedRoute component={ManagementAIPage} />
       </Route>
       <Route path="/online/delivery-orders">
         <ProtectedRoute component={OnlineDeliveryOrdersPage} />

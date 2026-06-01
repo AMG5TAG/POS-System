@@ -21,6 +21,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
+import { useEmbedded } from "@/lib/embedded-context";
 import {
   useLogout,
   useListCustomers,
@@ -124,118 +125,12 @@ type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{
 type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
-  { name: "Overview",       href: "/management/overview",       icon: LayoutDashboard },
-  {
-    name: "Account",
-    icon: UserCircle,
-    children: [
-      { name: "Account",  href: "/management/account", icon: UserCircle },
-      { name: "Modules",  href: "/modules",            icon: Blocks     },
-    ],
-  },
-  { name: "AI Assistant",   href: "/management/ai",             icon: Brain          },
-  {
-    name: "Business Info",
-    icon: Building2,
-    defaultHref: "/management/business",
-    children: [
-      { name: "Details",  href: "/management/business",  icon: Building2 },
-      { name: "Regional", href: "/management/regional",  icon: Globe     },
-    ],
-  },
-  {
-    name: "Calculators",
-    icon: Calculator,
-    children: [
-      { name: "3D Printing", href: "/management/calculators/3d-printing", icon: Cpu },
-      { name: "PC Builder",  href: "/management/calculators/pc-builder",  icon: HardDrive },
-    ],
-  },
-  { name: "Cameras",        href: "/management/cameras",        icon: Camera         },
-  {
-    name: "Customers",
-    icon: Users,
-    defaultHref: "/management/customers",
-    children: [
-      { name: "Settings",    href: "/management/customers",      icon: Users },
-      { name: "Heard From",  href: "/management/customers/heard-from", icon: Radio },
-    ],
-  },
-  { name: "Discounts",      href: "/management/discounts",      icon: Percent        },
-  { name: "Email",          href: "/management/email",          icon: Mail           },
-  { name: "Feedback",       href: "/management/feedback",       icon: MessageSquare  },
-  { name: "Floor Plan",     href: "/management/floor-plan",     icon: Map            },
-  { name: "Forms & Files",  href: "/management/forms",          icon: FileText       },
-  { name: "Gift Cards",     href: "/management/gift-cards",     icon: Gift           },
-  { name: "Import / Export",href: "/management/import-export",  icon: ArrowLeftRight },
-  {
-    name: "Integrations",
-    icon: Receipt,
-    defaultHref: "/management/integrations",
-    children: [
-      { name: "Integrations", href: "/management/integrations", icon: Receipt    },
-      { name: "Tyro EFTPOS",  href: "/management/tyro-eftpos",   icon: CreditCard },
-    ],
-  },
-  {
-    name: "Inventory",
-    icon: Boxes,
-    defaultHref: "/management/inventory",
-    children: [
-      { name: "Inventory",       href: "/management/inventory",       icon: Boxes },
-      { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers },
-      { name: "Product Types",   href: "/management/product-types",   icon: Tag   },
-    ],
-  },
-  { name: "KPIs & Targets", href: "/management/kpis",           icon: Target         },
-  { name: "KoaPOS",         href: "/management/koapos",         icon: Sparkles       },
-  { name: "Layby",          href: "/management/layby",          icon: Package2       },
-  { name: "Loyalty",        href: "/management/loyalty",        icon: Gift           },
-  {
-    name: "Marketing",
-    icon: Share2,
-    children: [
-      { name: "Referrals",   href: "/management/marketing/referrals",        icon: UserPlus },
-      { name: "Social Feed", href: "/management/marketing/social-feed",      icon: Share2   },
-    ],
-  },
-  { name: "Misc",           href: "/management/misc",           icon: MoreHorizontal },
-  { name: "Online Store",   href: "/management/online-store",   icon: Globe          },
-  { name: "POS Registers",  href: "/management/registers",      icon: Monitor        },
-  {
-    name: "Reports",
-    icon: TrendingUp,
-    defaultHref: "/management/sales-overview",
-    children: [
-      { name: "Overview",          href: "/management/sales-overview",             icon: BarChart2     },
-      { name: "BAS / GST",         href: "/management/reports/bas",                icon: Receipt       },
-      { name: "Margin",            href: "/management/reports/margin",             icon: Percent       },
-      { name: "End-of-Day",        href: "/management/reports/z-report",           icon: Moon          },
-      { name: "Staff Leaderboard", href: "/management/reports/staff-leaderboard",  icon: Trophy        },
-      { name: "Product Perf.",     href: "/management/reports/product-performance",icon: Package       },
-      { name: "Void Audit",        href: "/management/reports/void-audit",         icon: AlertTriangle },
-    ],
-  },
-  { name: "Sale Templates", href: "/management/templates",      icon: LayoutTemplate },
-  {
-    name: "Staff",
-    icon: UserSquare2,
-    children: [
-      { name: "Employees", href: "/management/staff",              icon: UserSquare2 },
-      { name: "Timesheet", href: "/management/staff/timesheet",    icon: Clock       },
-      { name: "Costs",     href: "/management/staff/cost-summary", icon: Coins       },
-    ],
-  },
-  {
-    name: "Stickers",
-    icon: Tag,
-    children: [
-      { name: "Labels",    href: "/management/stickers",          icon: Printer        },
-      { name: "Templates", href: "/management/sticker-templates", icon: LayoutTemplate },
-    ],
-  },
-  { name: "Pricing Rules",  href: "/management/pricing-rules",   icon: Clock          },
-  { name: "Tax Settings",   href: "/management/tax",             icon: Receipt        },
+  { name: "Overview",                href: "/management/overview",      icon: LayoutDashboard },
+  { name: "Customers",               href: "/management/customers-hub", icon: Users           },
+  { name: "Products & Inventory",    href: "/management/products-hub",  icon: Boxes           },
+  { name: "Staff & Operations",      href: "/management/operations-hub",icon: UserSquare2     },
+  { name: "Marketing & Reports",     href: "/management/marketing-hub", icon: TrendingUp      },
+  { name: "Settings & Integrations", href: "/management/settings-hub",  icon: Settings        },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -1223,6 +1118,12 @@ interface LayoutSharedProps {
 /* ─── Main AppLayout ─────────────────────────────────────────────────────── */
 
 export function AppLayout({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
+  const embedded = useEmbedded();
+  if (embedded) return <>{children}</>;
+  return <AppLayoutInner hideSidebar={hideSidebar}>{children}</AppLayoutInner>;
+}
+
+function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();

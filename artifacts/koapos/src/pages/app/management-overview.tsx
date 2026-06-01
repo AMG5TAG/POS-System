@@ -16,6 +16,7 @@ import {
   Mail, Activity, MapPin, Monitor, AlertCircle,
   RotateCcw, Receipt, Package, Percent, Package2, Calendar,
   ArrowUp, ArrowDown, Minus,
+  Boxes, UserSquare2, Settings, BarChart2, ChevronRight,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
@@ -39,6 +40,46 @@ const ACTIVITY_TABS: { id: ActivityPeriod; label: string; api: GetDashboardActiv
   { id: "week",  label: "Week",  api: "week"  },
   { id: "month", label: "Month", api: "month" },
   { id: "year",  label: "Year",  api: "year"  },
+];
+
+/* ─── Hub cards ───────────────────────────────────────────────────────────── */
+
+const HUBS = [
+  {
+    href: "/management/customers-hub",
+    icon: Users,
+    title: "Customers",
+    description: "Customer settings, heard-from tracking, loyalty, gift cards, discounts, layby, and feedback.",
+    color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600",
+  },
+  {
+    href: "/management/products-hub",
+    icon: Boxes,
+    title: "Products & Inventory",
+    description: "Inventory settings, product types, modifier groups, sale templates, labels, and calculators.",
+    color: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600",
+  },
+  {
+    href: "/management/operations-hub",
+    icon: UserSquare2,
+    title: "Staff & Operations",
+    description: "Employees, timesheets, cost summary, POS registers, floor plan, and cameras.",
+    color: "bg-violet-100 dark:bg-violet-900/30 text-violet-600",
+  },
+  {
+    href: "/management/marketing-hub",
+    icon: BarChart2,
+    title: "Marketing & Reports",
+    description: "Sales overview, reports, KPIs, referrals, social feed, online store, email, forms, and AI assistant.",
+    color: "bg-amber-100 dark:bg-amber-900/30 text-amber-600",
+  },
+  {
+    href: "/management/settings-hub",
+    icon: Settings,
+    title: "Settings & Integrations",
+    description: "Account & modules, business details, tax, integrations, import/export, and system settings.",
+    color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600",
+  },
 ];
 
 /* ─── KPI card ────────────────────────────────────────────────────────────── */
@@ -117,6 +158,7 @@ function ActivityTile({
 export default function ManagementOverviewPage() {
   const [period, setPeriod]       = useState<Period>("today");
   const [actPeriod, setActPeriod] = useState<ActivityPeriod>("week");
+  const [, navigate] = useLocation();
 
   const api = PERIOD_TABS.find((t) => t.id === period)!.api;
 
@@ -195,6 +237,38 @@ export default function ManagementOverviewPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
 
+        {/* ── Hub navigation cards ───────────────────────────────────────── */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold">Management</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Select a section to manage your business</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {HUBS.map((hub) => {
+              const Icon = hub.icon;
+              return (
+                <button
+                  key={hub.href}
+                  onClick={() => navigate(hub.href)}
+                  className="rounded-2xl border bg-card text-left p-5 hover:shadow-md transition-all hover:border-primary/30 flex flex-col gap-3 w-full group"
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", hub.color)}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{hub.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{hub.description}</p>
+                  </div>
+                  <div className="flex items-center text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                    <span>Open</span>
+                    <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         {/* ── Sales Overview ─────────────────────────────────────────────── */}
         <section className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -238,7 +312,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(totalSales)}
               sub={`${txCount} sale${txCount !== 1 ? "s" : ""} ${periodLabel}`}
               valueClass="text-emerald-600"
-              href="/management/sales-overview"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="Revenue ex-GST"
@@ -247,7 +321,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst)}
               sub={`${gstRateStr} GST removed from revenue`}
               valueClass="text-teal-600"
-              href="/management/sales-overview#profit-loss"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="Sales"
@@ -255,7 +329,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600"
               value={isLoading ? "—" : txCount.toString()}
               sub={`Transactions ${periodLabel}`}
-              href="/management/sales-overview"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="Avg Sale"
@@ -263,7 +337,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600"
               value={isLoading ? "—" : formatCurrency(avgSale)}
               sub="Average transaction value"
-              href="/management/sales-overview"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="New Customers"
@@ -271,7 +345,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600"
               value={isLoading ? "—" : newCustomers.toString()}
               sub={`Joined ${periodLabel}`}
-              href="/management/customers"
+              href="/management/customers-hub"
             />
             <KpiCard
               title="Loyalty Liability"
@@ -279,7 +353,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
               value={formatCurrency(loyaltyDollarValue)}
               sub={loyaltyEnabled ? `${totalPoints.toLocaleString()} pts across ${customers.filter((c) => (c.loyaltyPoints ?? 0) > 0).length} customers` : "Loyalty programme inactive"}
-              href="/management/sales-overview#store-credit"
+              href="/management/customers-hub"
             />
           </div>
 
@@ -292,7 +366,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(discountTotal)}
               sub="Total discounts given"
               valueClass={discountTotal > 0 ? "text-orange-500" : ""}
-              href="/management/discounts"
+              href="/management/customers-hub"
             />
             <KpiCard
               title="Refunds"
@@ -301,7 +375,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(refundTotal)}
               sub="Total refunded"
               valueClass={refundTotal > 0 ? "text-red-500" : ""}
-              href="/management/sales-overview#refunds"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="GST Collected"
@@ -310,7 +384,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(gstCollected)}
               sub="1/11th of revenue (10% GST)"
               valueClass="text-amber-600"
-              href="/management/tax"
+              href="/management/settings-hub"
             />
             <KpiCard
               title="Items Sold"
@@ -318,7 +392,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
               value={isLoading ? "—" : itemsSold.toString()}
               sub={`Units sold ${periodLabel}`}
-              href="/management/sales-overview"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="Net Profit"
@@ -327,7 +401,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(Math.max(0, revenueExGst - discountTotal - refundTotal))}
               sub="Revenue ex-GST, less discounts & refunds"
               valueClass="text-emerald-600"
-              href="/management/sales-overview#profit-loss"
+              href="/management/marketing-hub"
             />
             <KpiCard
               title="Cost"
