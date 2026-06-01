@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircleIcon, LockKeyholeIcon, TriangleAlertIcon, ArrowBigUpIcon } from "lucide-react";
 
 const WARN_THRESHOLD = 5;
+const LOCKOUT_STORAGE_KEY = "koapos_lockout_expiry";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -51,14 +52,18 @@ export default function LoginPage() {
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startCountdown = (seconds: number) => {
+  const startCountdown = (seconds: number, expiryIso?: string) => {
     if (countdownRef.current) clearInterval(countdownRef.current);
+    if (expiryIso) {
+      localStorage.setItem(LOCKOUT_STORAGE_KEY, expiryIso);
+    }
     setLockSecondsLeft(seconds);
     countdownRef.current = setInterval(() => {
       setLockSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(countdownRef.current!);
           countdownRef.current = null;
+          localStorage.removeItem(LOCKOUT_STORAGE_KEY);
           return 0;
         }
         return prev - 1;
@@ -67,6 +72,17 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    const stored = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+    if (stored) {
+      const msLeft = new Date(stored).getTime() - Date.now();
+      if (msLeft > 0) {
+        const secsLeft = Math.ceil(msLeft / 1000);
+        setLockMessage("Account temporarily locked. Please try again later.");
+        startCountdown(secsLeft);
+      } else {
+        localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+      }
+    }
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
@@ -90,6 +106,7 @@ export default function LoginPage() {
           setLockMessage(null);
           setLockSecondsLeft(0);
           setAttemptsRemaining(null);
+          localStorage.removeItem(LOCKOUT_STORAGE_KEY);
           login(data);
           toast.success("Successfully logged in");
           setLocation("/dashboard");
@@ -105,17 +122,20 @@ export default function LoginPage() {
                 : "Account temporarily locked. Please try again later.";
             // Prefer the ISO retryAfter timestamp from the body; fall back to Retry-After header seconds
             let retryAfterSecs = 60;
+            let retryAfterIso: string | undefined;
             if (typeof body.retryAfter === "string") {
+              retryAfterIso = body.retryAfter;
               const msLeft = new Date(body.retryAfter).getTime() - Date.now();
               retryAfterSecs = Math.max(1, Math.ceil(msLeft / 1000));
             } else {
               const retryAfterHeader = err.headers?.get("Retry-After");
               const parsed = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
               retryAfterSecs = isNaN(parsed) ? 60 : parsed;
+              retryAfterIso = new Date(Date.now() + retryAfterSecs * 1000).toISOString();
             }
             setAttemptsRemaining(null);
             setLockMessage(bodyMessage);
-            startCountdown(retryAfterSecs);
+            startCountdown(retryAfterSecs, retryAfterIso);
           } else if (err instanceof ApiError && err.status === 401) {
             const remaining =
               typeof err.data === "object" &&
