@@ -24,6 +24,7 @@ import {
   ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
   Landmark, ShoppingBag, Megaphone, Cloud,
+  Settings,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -194,9 +195,12 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
 
 /* ─── Integration card ───────────────────────────────────────────────────── */
 
-function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
+function IntegrationCard({
+  intg, busy, onConnect, onDisconnect, onOAuth, onNavigate,
+}: {
   intg: Integration; busy: boolean;
   onConnect: () => void; onDisconnect: () => void; onOAuth: () => void;
+  onNavigate?: (href: string) => void;
 }) {
   const isConnected = intg.status === "connected";
   const needsReconnect = !isConnected && !!intg.disconnectedReason;
@@ -285,16 +289,29 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
               <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 px-2 py-0.5 text-[11px]">
                 <CheckCircle2 className="w-3 h-3" /> Connected
               </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/8 text-xs h-7 px-2.5"
-                onClick={onDisconnect}
-                disabled={busy}
-              >
-                {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
-                Disconnect
-              </Button>
+              <div className="flex items-center gap-1">
+                {onNavigate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-xs h-7 px-2"
+                    onClick={() => onNavigate("/management/tyro-eftpos")}
+                    title="Terminal settings"
+                  >
+                    <Settings className="w-3 h-3" /> Settings
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/8 text-xs h-7 px-2.5"
+                  onClick={onDisconnect}
+                  disabled={busy}
+                >
+                  {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
+                  Disconnect
+                </Button>
+              </div>
             </div>
           ) : intg.authType === "oauth" ? (
             <Button
@@ -329,6 +346,7 @@ function IntegrationCard({ intg, busy, onConnect, onDisconnect, onOAuth }: {
 function Section({
   title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
+  onNavigate,
   defaultOpen = false,
 }: {
   title: string; description: string;
@@ -339,6 +357,7 @@ function Section({
   onConnect: (i: Integration) => void;
   onDisconnect: (i: Integration) => void;
   onOAuth: (i: Integration) => void;
+  onNavigate?: (href: string) => void;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -386,6 +405,7 @@ function Section({
               onConnect={() => onConnect(intg)}
               onDisconnect={() => onDisconnect(intg)}
               onOAuth={() => onOAuth(intg)}
+              onNavigate={intg.key === "tyro_eftpos" ? onNavigate : undefined}
             />
           ))}
         </div>
@@ -614,6 +634,7 @@ export default function ManagementIntegrationsPage() {
                   onConnect={setModalTarget}
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
+                  onNavigate={sec.id === "payments" ? (href) => setLocation(href) : undefined}
                   defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
               );
