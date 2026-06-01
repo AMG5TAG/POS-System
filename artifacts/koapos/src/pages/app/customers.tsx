@@ -1286,6 +1286,11 @@ function CustomerDetailInner({
                     {customer.loyaltyPoints} pts
                   </span>
                 )}
+                {customer.tierName && (
+                  <Badge className="text-[10px] px-1.5 py-0 h-4 bg-violet-100 text-violet-700 border-violet-200">
+                    {customer.tierName}
+                  </Badge>
+                )}
                 {mergeNoteCount > 0 && (
                   <span className="flex items-center gap-0.5 text-xs text-indigo-600 font-medium">
                     <GitMerge className="w-3 h-3" />

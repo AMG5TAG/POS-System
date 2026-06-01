@@ -22,7 +22,7 @@ import {
   GiftCardValidateResponse,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +67,23 @@ import QRCode from "qrcode";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
+type PricingRule = {
+  id: number;
+  name: string;
+  productId: number | null;
+  categoryId: number | null;
+  discountType: "percent" | "fixed";
+  discountValue: number;
+  startTime: string;
+  endTime: string;
+  daysOfWeek: string;
+  label: string | null;
+  isActive: string;
+};
+
+type Modifier = { id: number; groupId: number; name: string; priceAdjustment: number; isDefault: boolean; isActive: boolean; sortOrder: number };
+type ModifierGroup = { id: number; name: string; isRequired: boolean; minSelections: number; maxSelections: number; isActive: string; modifiers: Modifier[] };
+
 type CartItem = {
   product: Product;
   quantity: number;
@@ -74,10 +91,40 @@ type CartItem = {
   customPrice?: number;
   itemNote?: string;
   giftCardNumber?: string;
+  pricingRuleDiscount?: number;
+  pricingRuleLabel?: string;
+  modifiers?: Modifier[];
 };
 
 type WalkIn = { firstName: string; lastName: string };
 
+/* ─── Pricing rule helper ─────────────────────────────────────────────────── */
+function getActivePricingRule(
+  product: Product,
+  rules: PricingRule[],
+  now: Date = new Date()
+): { discount: number; label: string } | null {
+  const day = now.getDay(); // 0=Sun, 6=Sat
+  const dayStr = day === 0 ? "7" : String(day); // map to 1-7
+  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  const match = rules.find((r) => {
+    if (r.isActive !== "true") return false;
+    if (!r.daysOfWeek.split(",").includes(dayStr)) return false;
+    if (timeStr < r.startTime || timeStr > r.endTime) return false;
+    if (r.productId != null && r.productId !== product.id) return false;
+    if (r.categoryId != null && r.categoryId !== (product.categoryId ?? undefined)) return false;
+    return true;
+  });
+
+  if (!match) return null;
+  const basePrice = product.price ?? 0;
+  const discount =
+    match.discountType === "percent"
+      ? Math.round(basePrice * (match.discountValue / 100) * 100) / 100
+      : Math.min(match.discountValue, basePrice);
+  return { discount, label: match.label || match.name };
+}
 
 const DISPLAY_KEY = "koapos_pos_display";
 const RECOVERY_DRAFT_KEY = "koapos_pos_recovery_draft";
@@ -205,6 +252,12 @@ export default function POSPage() {
   const [walkInDiscardConfirmOpen, setWalkInDiscardConfirmOpen] = useState(false);
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
+
+  /* modifiers */
+  const [modPickerOpen, setModPickerOpen] = useState(false);
+  const [modPickerProduct, setModPickerProduct] = useState<Product | null>(null);
+  const [modPickerGroups, setModPickerGroups] = useState<ModifierGroup[]>([]);
+  const [modPickerSelected, setModPickerSelected] = useState<Record<number, number[]>>({});
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
   const [gcValidation, setGcValidation]       = useState<GiftCardValidateResponse | null>(null);
@@ -538,12 +591,21 @@ export default function POSPage() {
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types-pos"] } });
+  const { data: pricingRulesData } = useQuery<{ rules: PricingRule[] }>({
+    queryKey: ["pricing-rules-pos"],
+    queryFn: async () => {
+      const r = await fetch("/api/pricing-rules", { credentials: "include" });
+      if (!r.ok) return { rules: [] };
+      return r.json();
+    },
+  });
+  const activePricingRules = (pricingRulesData?.rules ?? []).filter(r => r.isActive === "true");
   const { data: customersData } = useListCustomers(
     { search: customerSearch || undefined, limit: 100 },
     { query: { queryKey: ["customers-pos", customerSearch], enabled: customerOpen } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
-  const { isOnline, pendingCount } = useOfflineQueue();
+  const { isOnline, pendingCount, queueSale } = useOfflineQueue();
   const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
@@ -616,6 +678,20 @@ export default function POSPage() {
     }) ?? tiers[tiers.length - 1] ?? null;
   }, [loyaltySettings, selectedCustomer]);
 
+  /* ── Re-evaluate pricing rules on cart items when rules change ── */
+  useEffect(() => {
+    if (cart.length === 0 || activePricingRules.length === 0) return;
+    const now = new Date();
+    setCart(prev => prev.map(item => {
+      const rule = getActivePricingRule(item.product, activePricingRules, now);
+      return {
+        ...item,
+        pricingRuleDiscount: rule?.discount ?? undefined,
+        pricingRuleLabel: rule?.label ?? undefined,
+      };
+    }));
+  }, [activePricingRules]);
+
   /* ── Computed totals (memoised — only recalculate when cart or discount changes) ── */
   const {
     cartSubtotal, itemDiscountTotal, overallDiscountAmt,
@@ -623,7 +699,8 @@ export default function POSPage() {
     tierDiscountAmt,
   } = useMemo(() => {
     const cartSubtotal       = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
-    const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount, 0);
+    const modifierTotal      = cart.reduce((s, i) => s + (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0) * i.quantity, 0);
+    const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount + (i.pricingRuleDiscount ?? 0), 0);
     const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
     const discountTotal      = itemDiscountTotal + overallDiscountAmt;
     const afterDiscounts     = cartSubtotal - discountTotal;
@@ -636,7 +713,8 @@ export default function POSPage() {
       cart.reduce((s, i) => {
         const price = i.customPrice ?? i.product.price;
         const cost  = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
-        return s + (price - cost) * i.quantity - i.itemDiscount;
+        const modCost = (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0);
+        return s + (price + modCost - cost) * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0);
       }, 0) - overallDiscountAmt - tierDiscountAmt,
     );
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
@@ -1320,7 +1398,7 @@ export default function POSPage() {
     setFormTouched(false);
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, pickedMods?: Modifier[]) => {
     if (invoicePay) {
       toast.error("Finish or cancel the invoice payment before adding items");
       return;
@@ -1334,11 +1412,41 @@ export default function POSPage() {
       setZeroPriceForm({ price: "", note: "" });
       return;
     }
+    const rule = getActivePricingRule(product, activePricingRules);
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
-      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { product, quantity: 1, itemDiscount: 0 }];
+      if (existing && !pickedMods) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      const newItem: CartItem = {
+        product,
+        quantity: 1,
+        itemDiscount: 0,
+        ...(rule ? { pricingRuleDiscount: rule.discount, pricingRuleLabel: rule.label } : {}),
+        ...(pickedMods && pickedMods.length ? { modifiers: pickedMods } : {}),
+      };
+      return [...prev, newItem];
     });
+  };
+
+  const fetchModifiersAndShow = async (product: Product) => {
+    try {
+      const r = await fetch(`/api/products/${product.id}/modifier-groups`, { credentials: "include" });
+      const j = await r.json() as { groupIds: number[] };
+      if (!j.groupIds?.length) { addToCart(product); return; }
+      const all = await fetch("/api/modifier-groups", { credentials: "include" }).then(r => r.json()) as { groups: ModifierGroup[] };
+      const groups = all.groups.filter(g => j.groupIds.includes(g.id) && g.isActive === "true" && g.modifiers.length > 0);
+      if (!groups.length) { addToCart(product); return; }
+      const defaults: Record<number, number[]> = {};
+      for (const g of groups) {
+        const def = g.modifiers.filter(m => m.isDefault);
+        defaults[g.id] = def.map(m => m.id);
+      }
+      setModPickerProduct(product);
+      setModPickerGroups(groups);
+      setModPickerSelected(defaults);
+      setModPickerOpen(true);
+    } catch {
+      addToCart(product);
+    }
   };
 
   /* ── Barcode scanner (USB scanners type fast then press Enter) ── */
@@ -1971,8 +2079,9 @@ export default function POSPage() {
     const _afterItemDiscounts = cartSubtotal - itemDiscountTotal;
     let _allocated = 0;
     const txItems = cart.map((i, idx) => {
+      const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
       const lineGross = (i.customPrice ?? i.product.price) * i.quantity;
-      const lineAfterItemDisc = Math.max(0, lineGross - i.itemDiscount);
+      const lineAfterItemDisc = Math.max(0, lineGross + modAdj * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
       let proportional: number;
       if (idx === cart.length - 1) {
         // Last item absorbs any rounding remainder so the sum is exact
@@ -1983,8 +2092,8 @@ export default function POSPage() {
           : 0;
         _allocated += proportional;
       }
-      const totalDiscount = Math.round((i.itemDiscount + proportional) * 100) / 100;
-      const lineTotal = Math.round((lineGross - totalDiscount) * 100) / 100;
+      const totalDiscount = Math.round((i.itemDiscount + (i.pricingRuleDiscount ?? 0) + proportional) * 100) / 100;
+      const lineTotal = Math.round((lineGross + modAdj * i.quantity - totalDiscount) * 100) / 100;
       const taxRate = i.product.taxRate ?? 10;
       return {
         // Gift card items must use productId:0 (custom item path on server) so
@@ -1996,6 +2105,7 @@ export default function POSPage() {
         totalPrice: lineTotal,
         taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
         discount: totalDiscount > 0 ? totalDiscount : undefined,
+        ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
         ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
       };
     });
@@ -2081,6 +2191,28 @@ export default function POSPage() {
       },
       onError: (err: unknown) => {
         console.error("createTransaction failed:", err);
+        const isNetworkError = err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Failed to fetch") || !navigator.onLine);
+        if (isNetworkError || !navigator.onLine) {
+          queueSale("/api/transactions", JSON.stringify({
+            items: txItems, paymentMethod, subtotal, taxTotal,
+            discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
+            total, amountTendered,
+            customerId: selectedCustomer?.id,
+            staffId: currentStaff?.id,
+            loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
+            notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+            receiptNumber,
+            idempotencyKey,
+            ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
+            ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
+            ...(giftCardPayment ? { giftCardPayment } : {}),
+          }));
+          setPaymentModalOpen(false);
+          clearCart();
+          setSelectedCustomer(null);
+          setWalkIn(null);
+          return;
+        }
         const message =
           err instanceof Error
             ? err.message
@@ -2237,10 +2369,10 @@ export default function POSPage() {
               {products.map(product => (
                 <div
                   key={product.id}
-                  onClick={() => addToCart(product)}
+                  onClick={() => fetchModifiersAndShow(product)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && addToCart(product)}
+                  onKeyDown={(e) => e.key === "Enter" && fetchModifiersAndShow(product)}
                   className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md cursor-pointer"
                 >
                   <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
@@ -2508,7 +2640,10 @@ export default function POSPage() {
                             <p className="text-sm font-medium truncate">{name}</p>
                             <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
                           </div>
-                          {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {c.tierName && <span className="text-[10px] font-medium text-violet-600 bg-violet-50 px-1 rounded">{c.tierName}</span>}
+                            {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
+                          </div>
                         </button>
                       );
                     })
@@ -2576,8 +2711,9 @@ export default function POSPage() {
           <ScrollArea className="flex-1 w-full">
               <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
+                  const modAdj = (item.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
                   const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
-                  const lineTotal = linePrice - item.itemDiscount;
+                  const lineTotal = linePrice + modAdj * item.quantity - item.itemDiscount - (item.pricingRuleDiscount ?? 0);
                   const discExpanded = expandedDiscounts.has(item.product.id);
                   const isInvalidItem =
                     item.quantity < 1 || (item.customPrice ?? item.product.price) < 0;
@@ -2589,7 +2725,13 @@ export default function POSPage() {
                           <p className="text-muted-foreground text-[11px]">
                             {formatCurrency(item.customPrice ?? item.product.price)}
                             {item.itemNote && <span className="ml-1 italic text-muted-foreground/60">· {item.itemNote}</span>}
+                            {item.pricingRuleLabel && <span className="ml-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">· {item.pricingRuleLabel}</span>}
                           </p>
+                          {(item.modifiers ?? []).length > 0 && (
+                            <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                              {item.modifiers!.map(m => `${m.name}${m.priceAdjustment ? ` (${m.priceAdjustment > 0 ? "+" : ""}${formatCurrency(Math.abs(m.priceAdjustment))})` : ""}`).join(" · ")}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
                           {isInvalidItem && (
@@ -2602,7 +2744,7 @@ export default function POSPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           <div className="w-14 text-right">
                             <p className="font-bold text-xs">{formatCurrency(lineTotal)}</p>
-                            {item.itemDiscount > 0 && <p className="text-[10px] text-destructive line-through leading-none">{formatCurrency(linePrice)}</p>}
+                            {(item.itemDiscount > 0 || item.pricingRuleDiscount) && <p className="text-[10px] text-destructive line-through leading-none">{formatCurrency(linePrice)}</p>}
                           </div>
                           <button
                             onClick={() => setExpandedDiscounts(prev => { const n = new Set(prev); if (n.has(item.product.id)) n.delete(item.product.id); else n.add(item.product.id); return n; })}

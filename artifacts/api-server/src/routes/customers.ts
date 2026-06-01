@@ -111,6 +111,8 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     heardFrom: c.heardFrom ?? null,
     heardFromDetails: c.heardFromDetails ?? null,
     referredByCustomerId: c.referredByCustomerId ?? null,
+    tierName: c.tierName ?? null,
+    tierUpdatedAt: c.tierUpdatedAt ? c.tierUpdatedAt.toISOString() : null,
   };
 }
 

@@ -7551,6 +7551,11 @@ components:
           type: ["string", "null"]
         referredByCustomerId:
           type: ["integer", "null"]
+        tierName:
+          type: ["string", "null"]
+        tierUpdatedAt:
+          type: ["string", "null"]
+          format: date-time
 
     CustomerInput:
       type: object
@@ -7674,6 +7679,11 @@ components:
           type: ["integer", "null"]
         loyaltyPoints:
           type: integer
+        tierName:
+          type: string
+        tierUpdatedAt:
+          type: string
+          format: date-time
 
     CustomerList:
       type: object

@@ -82,6 +82,7 @@ interface SyncSettings {
   syncContacts: boolean;
   syncPurchaseOrders: boolean;
   autoSync: boolean;
+  syncOnSale: boolean;
   syncFrequency: "daily" | "weekly" | "manual";
 }
 
@@ -213,6 +214,7 @@ export default function ManagementXeroPage() {
     syncContacts:       true,
     syncPurchaseOrders: true,
     autoSync:           false,
+    syncOnSale:         false,
     syncFrequency:      "daily",
   });
   const [saving,        setSaving]      = useState(false);
@@ -757,6 +759,17 @@ export default function ManagementXeroPage() {
                     <Switch
                       checked={syncSettings.autoSync}
                       onCheckedChange={(v) => setSyncSettings((s) => ({ ...s, autoSync: v }))}
+                    />
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4 py-3 border-b">
+                    <div>
+                      <p className="text-sm font-medium">Sync on every sale</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Push each completed transaction to Xero immediately</p>
+                    </div>
+                    <Switch
+                      checked={syncSettings.syncOnSale}
+                      onCheckedChange={(v) => setSyncSettings((s) => ({ ...s, syncOnSale: v }))}
                     />
                   </div>
 

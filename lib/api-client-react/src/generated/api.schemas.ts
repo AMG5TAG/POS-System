@@ -447,6 +447,10 @@ export interface Customer {
   heardFromDetails?: string | null;
   /** @nullable */
   referredByCustomerId?: number | null;
+  /** @nullable */
+  tierName?: string | null;
+  /** @nullable */
+  tierUpdatedAt?: string | null;
 }
 
 export interface CustomerInput {
@@ -512,6 +516,8 @@ export interface CustomerUpdate {
   /** @nullable */
   referredByCustomerId?: number | null;
   loyaltyPoints?: number;
+  tierName?: string;
+  tierUpdatedAt?: string;
 }
 
 export interface CustomerList {

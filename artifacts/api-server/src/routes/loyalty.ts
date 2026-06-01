@@ -135,12 +135,13 @@ router.get("/loyalty/leaderboard", requireAuth, async (req, res): Promise<void> 
   }>;
   const sortedTiers = [...tiers].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
 
-  function getTier(customer: typeof customersTable.$inferSelect) {
-    const tier = sortedTiers.find((t) => {
+  function getTier(customer: typeof customersTable.$inferSelect, tierList: typeof tiers) {
+    const sorted = [...tierList].sort((a, b) => (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0));
+    const tier = sorted.find((t) => {
       if (t.pointsRequired != null) return customer.loyaltyPoints >= t.pointsRequired;
       return (customer.totalSpent ? parseFloat(customer.totalSpent) : 0) >= (t.minSpend ?? 0);
     });
-    return tier ?? sortedTiers[sortedTiers.length - 1] ?? null;
+    return tier ?? sorted[sorted.length - 1] ?? null;
   }
 
   function pointsUntilNext(customer: typeof customersTable.$inferSelect, currentTierName: string | null) {
@@ -154,7 +155,7 @@ router.get("/loyalty/leaderboard", requireAuth, async (req, res): Promise<void> 
   }
 
   const items = customers.map((c, i) => {
-    const tier = getTier(c);
+    const tier = getTier(c, tiers);
     return {
       rank: i + 1,
       customer: {

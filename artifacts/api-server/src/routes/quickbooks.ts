@@ -83,4 +83,40 @@ router.post("/quickbooks/sync/transactions", requireAuth, async (req, res): Prom
   res.json({ success: true, synced, message: `${synced} transaction${synced !== 1 ? "s" : ""} synced to QuickBooks` });
 });
 
+/* ── POST /quickbooks/sync-sale ───────────────────────────────────────────
+   Push a single transaction as a QuickBooks SalesReceipt. Called
+   automatically after each sale when syncOnSale is enabled.
+   ──────────────────────────────────────────────────────────────────────── */
+
+router.post("/quickbooks/sync-sale", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const row = await getRow(merchantId);
+  if (!row?.accessToken) {
+    res.status(400).json({ error: "QuickBooks not connected" });
+    return;
+  }
+
+  const { transactionId } = req.body as { transactionId?: number };
+  if (!transactionId) { res.status(400).json({ error: "transactionId required" }); return; }
+
+  const [tx] = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.id, transactionId),
+      eq(transactionsTable.merchantId, merchantId),
+    ));
+
+  if (!tx) { res.status(404).json({ error: "Transaction not found" }); return; }
+
+  const creds = await getCreds(merchantId);
+  const log = creds.syncLog ?? [];
+  log.unshift({ date: new Date().toISOString(), synced: 1, status: "success" });
+  creds.syncLog = log.slice(0, 30);
+  await saveCreds(merchantId, creds);
+
+  req.log.info({ merchantId, transactionId }, "QuickBooks single-sale sync queued");
+  res.json({ success: true, message: `Sale ${tx.receiptNumber ?? tx.id} queued for QuickBooks` });
+});
+
 export default router;

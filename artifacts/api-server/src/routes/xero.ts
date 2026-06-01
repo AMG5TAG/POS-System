@@ -47,6 +47,7 @@ type XeroCredentials = {
     syncContacts: boolean;
     syncPurchaseOrders: boolean;
     autoSync: boolean;
+    syncOnSale: boolean;
     syncFrequency: "daily" | "weekly" | "manual";
     lastSyncAt?: string;
   };
@@ -598,6 +599,90 @@ router.get("/xero/sync/log", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const creds      = (await getCreds(merchantId)) ?? {};
   res.json(creds.syncLog ?? []);
+});
+
+/* ── POST /api/xero/sync-sale ───────────────────────────────────────────────
+   Push a single transaction as a Xero Invoice (ACCREC). Called automatically
+   after each sale when syncOnSale is enabled in syncSettings.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const auth       = await withFreshToken(merchantId);
+  if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+
+  const { transactionId } = req.body as { transactionId?: number };
+  if (!transactionId) { res.status(400).json({ error: "transactionId required" }); return; }
+
+  const [tx] = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.id, transactionId),
+      eq(transactionsTable.merchantId, merchantId),
+    ));
+
+  if (!tx) { res.status(404).json({ error: "Transaction not found" }); return; }
+
+  const creds = (await getCreds(merchantId)) ?? {};
+  const revenueCode = creds.mappings?.revenueAccount ?? "200";
+  const gstType     = creds.mappings?.gstTaxType     ?? "OUTPUT";
+
+  const items = Array.isArray(tx.items) ? (tx.items as Array<{
+    name?: string; quantity?: number; unitPrice?: number; taxAmount?: number;
+  }>) : [];
+
+  const lineItems = items.length > 0
+    ? items.map((item) => ({
+        Description: item.name ?? "Product",
+        Quantity:    item.quantity ?? 1,
+        UnitAmount:  item.unitPrice ?? 0,
+        AccountCode: revenueCode,
+        TaxType:     gstType,
+      }))
+    : [{
+        Description: "Sale",
+        Quantity:    1,
+        UnitAmount:  parseFloat(String(tx.subtotal ?? tx.total ?? 0)),
+        AccountCode: revenueCode,
+        TaxType:     gstType,
+      }];
+
+  const invoice = {
+    Type:      "ACCREC",
+    Status:    "AUTHORISED",
+    InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
+    Date:      new Date(tx.createdAt).toISOString().split("T")[0],
+    DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
+    Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
+    LineItems: lineItems,
+    LineAmountTypes: "INCLUSIVE",
+  };
+
+  const r = await fetch(`${XERO_API}/Invoices`, {
+    method:  "PUT",
+    headers: {
+      Authorization:    `Bearer ${auth.accessToken}`,
+      "xero-tenant-id": auth.tenantId,
+      "Content-Type":   "application/json",
+    },
+    body: JSON.stringify({ Invoices: [invoice] }),
+  });
+
+  const status = r.ok ? "success" : "error";
+  const msg    = r.ok
+    ? `Synced sale ${tx.receiptNumber ?? tx.id} to Xero`
+    : `Xero API error: ${r.status}`;
+
+  await appendSyncLog(merchantId, {
+    timestamp: new Date().toISOString(),
+    type: "sale",
+    synced: 1,
+    ...(status === "error" ? { error: msg } : { message: msg }),
+  });
+
+  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  res.json({ ok: true, message: msg });
 });
 
 export default router;

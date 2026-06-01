@@ -41,6 +41,8 @@ export const customersTable = pgTable("customers", {
   heardFrom: text("heard_from"),
   heardFromDetails: text("heard_from_details"),
   referredByCustomerId: integer("referred_by_customer_id"),
+  tierName: text("tier_name"),
+  tierUpdatedAt: timestamp("tier_updated_at", { withTimezone: true }),
 }, (t) => [
   index("customers_merchant_id_idx").on(t.merchantId),
   index("customers_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),

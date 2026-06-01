@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Wifi, WifiOff, RefreshCw, CheckCircle2, AlertTriangle, Settings, ExternalLink } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CreditCard, Wifi, WifiOff, RefreshCw, CheckCircle2, AlertTriangle, Settings, ExternalLink, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "tyro_eftpos_config";
@@ -35,11 +36,23 @@ const DEFAULT_CONFIG: TyroConfig = {
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
+/* ── WebSocket connection manager (mock/framework) ─────────────────────── */
+
+interface WsMessage {
+  id: string;
+  type: "sent" | "received";
+  timestamp: string;
+  payload: string;
+}
+
 export default function SettingsTyroEftposPage() {
   const [config, setConfig] = useState<TyroConfig>(DEFAULT_CONFIG);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [saved, setSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [wsMessages, setWsMessages] = useState<WsMessage[]>([]);
+  const [wsInput, setWsInput] = useState('{"type":"PURCHASE","amount":12.50}');
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     try {
@@ -86,6 +99,65 @@ export default function SettingsTyroEftposPage() {
       setStatus("error");
       toast.error("Connection failed — check your Integration Key and Merchant ID");
     }
+  };
+
+  /* WebSocket lifecycle */
+  const connectWs = () => {
+    if (wsRef.current) { toast.error("Already connected"); return; }
+    if (!config.terminalIp || !config.terminalPort) {
+      toast.error("Enter terminal IP and port first");
+      return;
+    }
+    setStatus("connecting");
+    const wsUrl = `wss://${config.terminalIp}:${config.terminalPort}/ws`;
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onopen = () => {
+        setStatus("connected");
+        toast.success("WebSocket connected to terminal");
+      };
+      ws.onmessage = (ev) => {
+        setWsMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          type: "received",
+          timestamp: new Date().toLocaleTimeString(),
+          payload: ev.data,
+        }]);
+      };
+      ws.onerror = () => {
+        setStatus("error");
+        toast.error("WebSocket error");
+      };
+      ws.onclose = () => {
+        setStatus("disconnected");
+        wsRef.current = null;
+      };
+    } catch {
+      setStatus("error");
+      toast.error("Failed to open WebSocket");
+    }
+  };
+
+  const disconnectWs = () => {
+    wsRef.current?.close();
+    wsRef.current = null;
+    setStatus("disconnected");
+    setWsMessages([]);
+  };
+
+  const sendWs = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      toast.error("WebSocket not connected");
+      return;
+    }
+    wsRef.current.send(wsInput);
+    setWsMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      type: "sent",
+      timestamp: new Date().toLocaleTimeString(),
+      payload: wsInput,
+    }]);
   };
 
   const STATUS_UI = {
@@ -220,6 +292,50 @@ export default function SettingsTyroEftposPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* WebSocket Test Panel */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wifi className="w-4 h-4" /> WebSocket Terminal
+            </CardTitle>
+            <CardDescription>Send test messages to a simulated Tyro terminal</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant={status === "connected" ? "destructive" : "default"} onClick={status === "connected" ? disconnectWs : connectWs}>
+                {status === "connected" ? <><X className="w-4 h-4 mr-1" /> Disconnect</> : <><Wifi className="w-4 h-4 mr-1" /> Open WebSocket</>}
+              </Button>
+              <Badge className={statusUi.color}>{statusUi.label}</Badge>
+            </div>
+            <div className="flex gap-2">
+              <Textarea
+                value={wsInput}
+                onChange={e => setWsInput(e.target.value)}
+                rows={2}
+                className="font-mono text-xs resize-none"
+                placeholder='{"type":"PURCHASE","amount":12.50}'
+              />
+              <Button size="sm" className="shrink-0" onClick={sendWs} disabled={status !== "connected"}>
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-2 space-y-1 max-h-48 overflow-y-auto">
+              {wsMessages.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">No messages yet.</p>
+              )}
+              {wsMessages.map((msg) => (
+                <div key={msg.id} className="flex gap-2 text-xs">
+                  <span className="text-muted-foreground shrink-0">{msg.timestamp}</span>
+                  <Badge variant="outline" className={msg.type === "sent" ? "text-blue-600 border-blue-200" : "text-emerald-600 border-emerald-200 shrink-0 h-5 px-1 text-[10px]"}>
+                    {msg.type === "sent" ? "SENT" : "RECV"}
+                  </Badge>
+                  <span className="font-mono text-[11px] truncate">{msg.payload}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex justify-end">
           <Button onClick={saveConfig} disabled={saved}>

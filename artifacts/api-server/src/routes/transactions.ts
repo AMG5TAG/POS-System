@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -661,6 +661,29 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           loyaltyPoints: loyaltyDelta,
         })
         .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+
+      // Tier auto-upgrade: compute new tier based on updated loyaltyPoints + totalSpent
+      const tiers = (loyaltyConfig.tiers ?? []) as Array<{
+        name: string; minSpend?: number; pointsRequired?: number; rate?: number;
+        discountPct?: number; freeShipping?: boolean; bonusMultiplier?: number; description?: string;
+      }>;
+      const sorted = [...tiers].sort((a, b) =>
+        (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0)
+      );
+      const newPts = (paymentMethod === "loyalty"
+        ? Math.max(0, scopedCustomer.loyaltyPoints - redeemed)
+        : scopedCustomer.loyaltyPoints + sanitizedEarned);
+      const newSpent = parseFloat(scopedCustomer.totalSpent) + total;
+      const tier = sorted.find((t) => {
+        if (t.pointsRequired != null) return newPts >= t.pointsRequired;
+        return newSpent >= (t.minSpend ?? 0);
+      }) ?? sorted[sorted.length - 1] ?? null;
+      if (tier && tier.name !== scopedCustomer.tierName) {
+        await tx
+          .update(customersTable)
+          .set({ tierName: tier.name, tierUpdatedAt: new Date() })
+          .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+      }
     }
 
     if (notes) {
@@ -723,6 +746,38 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p, p.previousStockQuantity)))
       .catch(() => { /* non-blocking */ });
   }
+
+  /* Fire-and-forget Xero / QuickBooks live sync if the merchant has enabled it.
+     The response is already sent; sync failures are logged silently. */
+  const mId = req.session.merchantId!;
+  (async () => {
+    try {
+      const [xeroRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
+        .from(merchantIntegrationsTable)
+        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "xero")));
+      const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
+      if (xeroCreds.syncSettings?.syncOnSale) {
+        await fetch(`https://${req.headers.host}/api/xero/sync-sale`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
+          body: JSON.stringify({ transactionId: transaction.id }),
+        });
+      }
+    } catch { /* silent */ }
+    try {
+      const [qbRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
+        .from(merchantIntegrationsTable)
+        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "quickbooks")));
+      const qbCreds = qbRow?.credentials ? JSON.parse(qbRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
+      if (qbCreds.syncSettings?.syncOnSale) {
+        await fetch(`https://${req.headers.host}/api/quickbooks/sync-sale`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
+          body: JSON.stringify({ transactionId: transaction.id }),
+        });
+      }
+    } catch { /* silent */ }
+  })();
 
   res.status(201).json(formatTransaction(transaction, scopedCustomer));
 });
