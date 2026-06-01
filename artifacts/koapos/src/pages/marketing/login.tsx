@@ -91,18 +91,26 @@ export default function LoginPage() {
         },
         onError: (err) => {
           if (err instanceof ApiError && err.status === 429) {
-            const retryAfterHeader = err.headers?.get("Retry-After");
-            const retryAfterSecs = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 60;
+            const body = typeof err.data === "object" && err.data !== null
+              ? (err.data as Record<string, unknown>)
+              : {};
             const bodyMessage =
-              typeof err.data === "object" &&
-              err.data !== null &&
-              "error" in err.data &&
-              typeof (err.data as Record<string, unknown>).error === "string"
-                ? (err.data as Record<string, unknown>).error as string
+              typeof body.error === "string"
+                ? body.error
                 : "Account temporarily locked. Please try again later.";
+            // Prefer the ISO retryAfter timestamp from the body; fall back to Retry-After header seconds
+            let retryAfterSecs = 60;
+            if (typeof body.retryAfter === "string") {
+              const msLeft = new Date(body.retryAfter).getTime() - Date.now();
+              retryAfterSecs = Math.max(1, Math.ceil(msLeft / 1000));
+            } else {
+              const retryAfterHeader = err.headers?.get("Retry-After");
+              const parsed = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+              retryAfterSecs = isNaN(parsed) ? 60 : parsed;
+            }
             setAttemptsRemaining(null);
             setLockMessage(bodyMessage);
-            startCountdown(isNaN(retryAfterSecs) ? 60 : retryAfterSecs);
+            startCountdown(retryAfterSecs);
           } else if (err instanceof ApiError && err.status === 401) {
             const remaining =
               typeof err.data === "object" &&

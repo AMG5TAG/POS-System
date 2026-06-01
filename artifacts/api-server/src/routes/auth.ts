@@ -154,7 +154,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     const errorMsg = lockStatus.isAnomalyHold
       ? `Account temporarily locked due to suspicious sign-in activity from multiple locations. An email has been sent with instructions. If you have an active session, clear the hold in Account → Account Lock.`
       : `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`;
-    res.status(429).json({ error: errorMsg, isAnomalyHold: lockStatus.isAnomalyHold ?? false });
+    res.status(429).json({ error: errorMsg, isAnomalyHold: lockStatus.isAnomalyHold ?? false, retryAfter: lockStatus.retryAfter.toISOString() });
     return;
   }
 
