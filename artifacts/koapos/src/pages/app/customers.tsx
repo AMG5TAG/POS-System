@@ -18,6 +18,8 @@ import {
   useDeleteCustomerFile,
   useRequestUploadUrl,
   useGetLoyaltySettings,
+  useSendTransactionReceipt,
+  useSendServiceJobEmail,
   getListCustomersQueryKey,
   Customer,
   CustomerNote,
@@ -1014,10 +1016,10 @@ function CustomerDetailInner({
   const [tab, setTab] = useState<DetailTab>("overview");
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
-  const [emailSending, setEmailSending] = useState(false);
   const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
   const [jobEmailAddr, setJobEmailAddr] = useState("");
-  const [jobEmailSending, setJobEmailSending] = useState(false);
+  const sendReceiptMutation = useSendTransactionReceipt();
+  const sendJobEmailMutation = useSendServiceJobEmail();
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
@@ -2266,12 +2268,13 @@ function CustomerDetailInner({
                 if (e.key === "Enter") {
                   e.preventDefault();
                   if (!emailAddr.trim() || !emailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
-                  setEmailSending(true);
-                  setTimeout(() => {
-                    toast.success(`Receipt emailed to ${emailAddr}`);
-                    setEmailSending(false);
-                    setEmailDialogTx(null);
-                  }, 700);
+                  sendReceiptMutation.mutate(
+                    { id: emailDialogTx!.id, data: { email: emailAddr } },
+                    {
+                      onSuccess: () => { toast.success(`Receipt emailed to ${emailAddr}`); setEmailDialogTx(null); },
+                      onError: (err: unknown) => { toast.error((err as { message?: string })?.message ?? "Failed to send receipt email"); },
+                    },
+                  );
                 }
               }}
             />
@@ -2282,18 +2285,19 @@ function CustomerDetailInner({
             </Button>
             <Button
               size="sm"
-              disabled={emailSending || !emailAddr.trim() || !emailAddr.includes("@")}
+              disabled={sendReceiptMutation.isPending || !emailAddr.trim() || !emailAddr.includes("@")}
               onClick={() => {
                 if (!emailAddr.trim() || !emailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
-                setEmailSending(true);
-                setTimeout(() => {
-                  toast.success(`Receipt emailed to ${emailAddr}`);
-                  setEmailSending(false);
-                  setEmailDialogTx(null);
-                }, 700);
+                sendReceiptMutation.mutate(
+                  { id: emailDialogTx!.id, data: { email: emailAddr } },
+                  {
+                    onSuccess: () => { toast.success(`Receipt emailed to ${emailAddr}`); setEmailDialogTx(null); },
+                    onError: (err: unknown) => { toast.error((err as { message?: string })?.message ?? "Failed to send receipt email"); },
+                  },
+                );
               }}
             >
-              {emailSending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              {sendReceiptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
               Send
             </Button>
           </DialogFooter>
@@ -2322,12 +2326,13 @@ function CustomerDetailInner({
                 if (e.key === "Enter") {
                   e.preventDefault();
                   if (!jobEmailAddr.trim() || !jobEmailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
-                  setJobEmailSending(true);
-                  setTimeout(() => {
-                    toast.success(`Service report emailed to ${jobEmailAddr}`);
-                    setJobEmailSending(false);
-                    setEmailDialogJob(null);
-                  }, 700);
+                  sendJobEmailMutation.mutate(
+                    { id: emailDialogJob!.id, data: { email: jobEmailAddr } },
+                    {
+                      onSuccess: () => { toast.success(`Service report emailed to ${jobEmailAddr}`); setEmailDialogJob(null); },
+                      onError: (err: unknown) => { toast.error((err as { message?: string })?.message ?? "Failed to send service report email"); },
+                    },
+                  );
                 }
               }}
             />
@@ -2338,18 +2343,19 @@ function CustomerDetailInner({
             </Button>
             <Button
               size="sm"
-              disabled={jobEmailSending || !jobEmailAddr.trim() || !jobEmailAddr.includes("@")}
+              disabled={sendJobEmailMutation.isPending || !jobEmailAddr.trim() || !jobEmailAddr.includes("@")}
               onClick={() => {
                 if (!jobEmailAddr.trim() || !jobEmailAddr.includes("@")) { toast.error("Please enter a valid email address"); return; }
-                setJobEmailSending(true);
-                setTimeout(() => {
-                  toast.success(`Service report emailed to ${jobEmailAddr}`);
-                  setJobEmailSending(false);
-                  setEmailDialogJob(null);
-                }, 700);
+                sendJobEmailMutation.mutate(
+                  { id: emailDialogJob!.id, data: { email: jobEmailAddr } },
+                  {
+                    onSuccess: () => { toast.success(`Service report emailed to ${jobEmailAddr}`); setEmailDialogJob(null); },
+                    onError: (err: unknown) => { toast.error((err as { message?: string })?.message ?? "Failed to send service report email"); },
+                  },
+                );
               }}
             >
-              {jobEmailSending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              {sendJobEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
               Send
             </Button>
           </DialogFooter>

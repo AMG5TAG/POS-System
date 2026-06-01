@@ -300,6 +300,7 @@ import type {
   SendReceiptRequest,
   SendReferralDigestNow400,
   SendServiceJobEmail200,
+  SendServiceJobEmailRequest,
   SendTransactionReceipt200,
   ServiceJob,
   ServiceJobInput,
@@ -7181,14 +7182,16 @@ export const getSendServiceJobEmailUrl = (id: number,) => {
 /**
  * @summary Email service job details to customer
  */
-export const sendServiceJobEmail = async (id: number, options?: RequestInit): Promise<SendServiceJobEmail200> => {
+export const sendServiceJobEmail = async (id: number,
+    sendServiceJobEmailRequest?: SendServiceJobEmailRequest, options?: RequestInit): Promise<SendServiceJobEmail200> => {
 
   return customFetch<SendServiceJobEmail200>(getSendServiceJobEmailUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sendServiceJobEmailRequest,)
   }
 );}
 
@@ -7196,8 +7199,8 @@ export const sendServiceJobEmail = async (id: number, options?: RequestInit): Pr
 
 
 export const getSendServiceJobEmailMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number;data?: BodyType<SendServiceJobEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number;data?: BodyType<SendServiceJobEmailRequest>}, TContext> => {
 
 const mutationKey = ['sendServiceJobEmail'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -7209,10 +7212,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendServiceJobEmail>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendServiceJobEmail>>, {id: number;data?: BodyType<SendServiceJobEmailRequest>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  sendServiceJobEmail(id,requestOptions)
+          return  sendServiceJobEmail(id,data,requestOptions)
         }
 
 
@@ -7223,18 +7226,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SendServiceJobEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendServiceJobEmail>>>
-
+    export type SendServiceJobEmailMutationBody = BodyType<SendServiceJobEmailRequest> | undefined
     export type SendServiceJobEmailMutationError = ErrorType<unknown>
 
     /**
  * @summary Email service job details to customer
  */
 export const useSendServiceJobEmail = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceJobEmail>>, TError,{id: number;data?: BodyType<SendServiceJobEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof sendServiceJobEmail>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<SendServiceJobEmailRequest>},
         TContext
       > => {
       return useMutation(getSendServiceJobEmailMutationOptions(options));

@@ -1938,6 +1938,12 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendServiceJobEmailRequest"
       responses:
         "200":
           description: Email sent
@@ -9252,6 +9258,11 @@ components:
     SendReceiptRequest:
       type: object
       required: [email]
+      properties:
+        email: { type: string }
+
+    SendServiceJobEmailRequest:
+      type: object
       properties:
         email: { type: string }
 

@@ -2744,6 +2744,10 @@ export const SendServiceJobEmailParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const SendServiceJobEmailBody = zod.object({
+  "email": zod.string().optional()
+})
+
 export const SendServiceJobEmailResponse = zod.object({
   "success": zod.boolean().optional(),
   "provider": zod.string().optional(),

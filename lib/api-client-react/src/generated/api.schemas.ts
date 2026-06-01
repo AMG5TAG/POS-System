@@ -1704,6 +1704,10 @@ export interface SendReceiptRequest {
   email: string;
 }
 
+export interface SendServiceJobEmailRequest {
+  email?: string;
+}
+
 export interface EmailSettings {
   provider: string;
   fromName?: string | null;

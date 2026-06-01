@@ -223,7 +223,10 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
         } : null)
     : null;
 
-  if (!customer?.email) {
+  const bodyEmail = (req.body as { email?: string } | undefined)?.email?.trim() || null;
+  const toEmail = bodyEmail ?? customer?.email ?? null;
+
+  if (!toEmail) {
     res.status(400).json({ error: "Customer has no email address" });
     return;
   }
@@ -249,9 +252,9 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
   <p style="color:#666;font-size:12px;margin-bottom:16px;">Sent from ${bizName}</p>
 
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;width:140px;color:#666;font-size:12px;">Customer</td><td style="padding:6px 0;border-bottom:1px solid #eee;font-weight:500;">${formatVal(customer.name)}</td></tr>
-    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Phone</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(customer.phone)}</td></tr>
-    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Email</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(customer.email)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;width:140px;color:#666;font-size:12px;">Customer</td><td style="padding:6px 0;border-bottom:1px solid #eee;font-weight:500;">${formatVal(customer?.name)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Phone</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(customer?.phone)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Email</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(toEmail)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Book-In Date</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${fmtDate(job.bookInDate)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Status</td><td style="padding:6px 0;border-bottom:1px solid #eee;"><span style="text-transform:capitalize;">${job.status.replace(/-/g, " ")}</span></td></tr>
   </table>
@@ -281,13 +284,20 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
 </html>`;
 
   const result = await sendEmail(merchantId, {
-    to: customer.email,
+    to: toEmail,
     subject: `Service Job Update — #${job.jobNumber}`,
     html,
-    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer.name)}\nPhone: ${formatVal(customer.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
+    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
   });
 
-  res.json(result);
+  if (!result.success) {
+    req.log.warn({ serviceJobId: id, to: toEmail, error: result.error }, "Service job email failed");
+    res.status(400).json({ error: result.error ?? "Failed to send service job email" });
+    return;
+  }
+
+  req.log.info({ serviceJobId: id, to: toEmail, provider: result.provider }, "Service job email sent");
+  res.json({ success: true });
 });
 
 export default router;
