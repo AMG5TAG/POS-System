@@ -82,6 +82,20 @@ export const LoginResponse = zod.object({
 
 
 /**
+ * @summary List recent sign-in events for the current merchant
+ */
+export const ListAuthEventsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number().nullish(),
+  "ipAddress": zod.string().nullish(),
+  "userAgent": zod.string().nullish(),
+  "outcome": zod.enum(['success', 'bad_password', 'not_found', 'locked']),
+  "createdAt": zod.coerce.date()
+})
+export const ListAuthEventsResponse = zod.array(ListAuthEventsResponseItem)
+
+
+/**
  * @summary Get merchant profile
  */
 export const GetMerchantResponse = zod.object({

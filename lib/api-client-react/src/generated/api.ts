@@ -26,6 +26,7 @@ import type {
   AppleOAuthCallbackBody,
   Appointment,
   AppointmentInput,
+  AuthEvent,
   Brand,
   BrandInput,
   BrandListResponse,
@@ -754,6 +755,83 @@ export const useLogout = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getLogoutMutationOptions(options));
     }
+
+export const getListAuthEventsUrl = () => {
+
+
+
+
+  return `/api/auth/events`
+}
+
+/**
+ * @summary List recent sign-in events for the current merchant
+ */
+export const listAuthEvents = async ( options?: RequestInit): Promise<AuthEvent[]> => {
+
+  return customFetch<AuthEvent[]>(getListAuthEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAuthEventsQueryKey = () => {
+    return [
+    `/api/auth/events`
+    ] as const;
+    }
+
+
+export const getListAuthEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAuthEvents>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuthEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuthEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuthEvents>>> = ({ signal }) => listAuthEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuthEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAuthEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAuthEvents>>>
+export type ListAuthEventsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List recent sign-in events for the current merchant
+ */
+
+export function useListAuthEvents<TData = Awaited<ReturnType<typeof listAuthEvents>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuthEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAuthEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetMerchantUrl = () => {
 

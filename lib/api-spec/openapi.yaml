@@ -178,6 +178,23 @@ paths:
         "200":
           description: Logged out
 
+  /auth/events:
+    get:
+      operationId: listAuthEvents
+      tags: [auth]
+      summary: List recent sign-in events for the current merchant
+      responses:
+        "200":
+          description: List of recent auth events (last 50)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuthEvent"
+        "401":
+          description: Unauthorized
+
   # ── Merchants ─────────────────────────────────────────────────────────────
   /merchants/me:
     get:
@@ -6996,6 +7013,28 @@ components:
           type: string
 
     # ── Auth ────────────────────────────────────────────────────────────────
+    AuthEvent:
+      type: object
+      required: [id, outcome, createdAt]
+      properties:
+        id:
+          type: integer
+        merchantId:
+          type: integer
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [success, bad_password, not_found, locked]
+        createdAt:
+          type: string
+          format: date-time
+
     RegisterInput:
       type: object
       required: [email, password, businessName]

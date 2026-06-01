@@ -24,6 +24,25 @@ export interface HealthStatus {
   status: string;
 }
 
+export type AuthEventOutcome = typeof AuthEventOutcome[keyof typeof AuthEventOutcome];
+
+
+export const AuthEventOutcome = {
+  success: 'success',
+  bad_password: 'bad_password',
+  not_found: 'not_found',
+  locked: 'locked',
+} as const;
+
+export interface AuthEvent {
+  id: number;
+  merchantId?: number | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  outcome: AuthEventOutcome;
+  createdAt: string;
+}
+
 export interface RegisterInput {
   email: string;
   /** @minLength 8 */

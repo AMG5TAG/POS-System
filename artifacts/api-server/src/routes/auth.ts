@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
+
 
 const DEFAULT_PRODUCT_TYPES: Array<{ name: string; slug: string; sortOrder: number }> = [
   { name: "Standard", slug: "standard", sortOrder: 0 },
@@ -129,10 +130,16 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   const { email, password } = parsed.data;
 
+  const ip = req.ip ?? undefined;
+  const ua = req.headers["user-agent"] ?? undefined;
+
   const lockStatus = await checkAccountLock(email);
   if (lockStatus.locked && lockStatus.retryAfter) {
     const retryAfterSecs = Math.ceil((lockStatus.retryAfter.getTime() - Date.now()) / 1000);
     res.setHeader("Retry-After", String(retryAfterSecs));
+    // Look up the merchant to attach merchantId to the lockout event if possible
+    const [lockedMerchant] = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(eq(merchantsTable.email, email));
+    await db.insert(authEventsTable).values({ merchantId: lockedMerchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "locked" });
     res.status(429).json({
       error: `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`,
     });
@@ -141,13 +148,22 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
 
-  if (!merchant || !(await verifyPassword(password, merchant.passwordHash))) {
+  if (!merchant) {
     await recordFailedAttempt(email);
+    await db.insert(authEventsTable).values({ merchantId: null, ipAddress: ip, userAgent: ua, outcome: "not_found" });
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+
+  if (!(await verifyPassword(password, merchant.passwordHash))) {
+    await recordFailedAttempt(email);
+    await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
 
   await clearFailedAttempts(email);
+  await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "success" });
 
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));
@@ -155,6 +171,27 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   req.session.merchantId = merchant.id;
   req.session.staffRole = "owner";
   res.json(formatMerchant(merchant, "owner"));
+});
+
+router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const events = await db
+    .select()
+    .from(authEventsTable)
+    .where(eq(authEventsTable.merchantId, merchantId))
+    .orderBy(desc(authEventsTable.createdAt))
+    .limit(50);
+
+  res.json(
+    events.map((e) => ({
+      id: e.id,
+      merchantId: e.merchantId,
+      ipAddress: e.ipAddress,
+      userAgent: e.userAgent,
+      outcome: e.outcome,
+      createdAt: e.createdAt.toISOString(),
+    }))
+  );
 });
 
 router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {

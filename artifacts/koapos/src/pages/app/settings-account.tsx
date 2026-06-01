@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,30 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return "Just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function parseUserAgent(ua: string | null | undefined): string {
+  if (!ua) return "Unknown browser";
+  if (/Chrome\//.test(ua) && !/Chromium|Edg\/|OPR\//.test(ua)) return "Chrome";
+  if (/Edg\//.test(ua)) return "Edge";
+  if (/Firefox\//.test(ua)) return "Firefox";
+  if (/Safari\//.test(ua) && !/Chrome/.test(ua)) return "Safari";
+  if (/OPR\//.test(ua)) return "Opera";
+  return "Browser";
+}
 
 const ACCOUNT_TABS = [
   { href: "#login-details",     label: "Login Details" },
@@ -27,6 +50,7 @@ function formatUsernameInput(raw: string) {
 export default function SettingsAccountPage() {
   const qc = useQueryClient();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: authEvents } = useListAuthEvents({ query: { queryKey: ["auth-events"] } });
 
   const [username, setUsername] = useState("");
   const [savedUsername, setSavedUsername] = useState<string | null>(null);
@@ -359,7 +383,9 @@ export default function SettingsAccountPage() {
 
         </div>{/* end left column */}
 
-        {/* Right column: Business Username */}
+        {/* Right column: Business Username + Recent sign-ins */}
+        <div className="space-y-6">
+
         <Card id="business-username">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -458,6 +484,50 @@ export default function SettingsAccountPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Recent sign-ins */}
+        <Card id="recent-sign-ins">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
+            </CardTitle>
+            <CardDescription>
+              The last 10 login attempts to your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!authEvents || authEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No sign-in events recorded yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {authEvents.slice(0, 10).map((ev) => (
+                  <li key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0">
+                    <div className="mt-0.5 shrink-0">
+                      {ev.outcome === "success" ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-destructive" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium capitalize">
+                          {ev.outcome === "success" ? "Successful sign-in" : ev.outcome === "bad_password" ? "Wrong password" : ev.outcome === "locked" ? "Account locked" : "Email not found"}
+                        </span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelative(ev.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {parseUserAgent(ev.userAgent)}{ev.ipAddress ? ` · ${ev.ipAddress}` : ""}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        </div>{/* end right column */}
 
         </div>
       </div>
