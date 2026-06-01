@@ -364,7 +364,7 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           )}
         </div>
         <CardDescription>
-          The last 10 login attempts to your account. Flag anything that looks suspicious.
+          The last 20 login attempts to your account. Flag anything that looks suspicious.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -372,7 +372,7 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           <p className="text-sm text-muted-foreground">No sign-in events recorded yet.</p>
         ) : (
           <ul className="space-y-2">
-            {authEvents.slice(0, 10).map((ev) => {
+            {authEvents.slice(0, 20).map((ev) => {
               const isFlagged = ev.status === "flagged";
               const isAcknowledged = ev.status === "acknowledged";
               const isLoading = !!pending[ev.id];
