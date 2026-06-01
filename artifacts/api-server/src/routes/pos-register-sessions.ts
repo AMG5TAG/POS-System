@@ -4,6 +4,13 @@ import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostPosRegisterSession = z.object({
+  registerId: z.string().default("default"),
+  openedBy: z.string().default(""),
+  openingFloat: z.string().default("0"),
+  openingNotes: z.string().default(""),
+});
+
 const PatchPosRegisterSession = z.object({
   openedBy: z.string(), openingFloat: z.string(),
   openingNotes: z.string(), sales: z.string(), txCount: z.number().int(),
@@ -32,7 +39,9 @@ router.get("/pos-register-sessions", requireAuth, async (req, res): Promise<void
 
 router.post("/pos-register-sessions", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { registerId = "default", openedBy = "", openingFloat = "0", openingNotes = "" } = req.body;
+  const parsed = PostPosRegisterSession.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { registerId, openedBy, openingFloat, openingNotes } = parsed.data;
   const [row] = await db.insert(posRegisterSessionsTable).values({
     merchantId, registerId, openedBy, openingFloat, openingNotes,
   }).returning();

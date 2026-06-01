@@ -4,6 +4,25 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostDeliveryOrder = z.object({
+  orderId: z.string().min(1),
+  number: z.string().min(1),
+  channel: z.string().default("website"),
+  customer: z.string().default(""),
+  customerEmail: z.string().default(""),
+  phone: z.string().default(""),
+  address: z.string().default(""),
+  city: z.string().default(""),
+  postcode: z.string().default(""),
+  state: z.string().default(""),
+  shippingMethod: z.string().default(""),
+  status: z.string().default("new"),
+  placedAt: z.string().default(""),
+  total: z.union([z.string(), z.number()]).transform(v => String(v)).default("0"),
+  items: z.string().default("[]"),
+  notes: z.string().default(""),
+});
+
 const PatchDeliveryOrder = z.object({
   channel: z.string(), customer: z.string(), customerEmail: z.string(),
   phone: z.string(), address: z.string(), city: z.string(),
@@ -23,10 +42,10 @@ router.get("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { orderId, number, channel = "website", customer = "", customerEmail = "", phone = "",
-    address = "", city = "", postcode = "", state = "", shippingMethod = "",
-    status = "new", placedAt = "", total = 0, items = "[]", notes = "" } = req.body;
-  if (!orderId || !number) { res.status(400).json({ error: "orderId and number are required" }); return; }
+  const parsed = PostDeliveryOrder.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { orderId, number, channel, customer, customerEmail, phone,
+    address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes } = parsed.data;
   const [row] = await db.insert(deliveryOrdersTable).values({
     merchantId, orderId, number, channel, customer, customerEmail, phone,
     address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes,

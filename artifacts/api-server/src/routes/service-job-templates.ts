@@ -4,6 +4,15 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostServiceJobTemplate = z.object({
+  templateId: z.string().min(1),
+  name: z.string().min(1),
+  category: z.string().default("sms"),
+  body: z.string().default(""),
+  options: z.string().default("{}"),
+  isActive: z.string().default("true"),
+});
+
 const PatchServiceJobTemplate = z.object({
   name: z.string(), category: z.string(), body: z.string(),
   options: z.string(), isActive: z.string(),
@@ -19,8 +28,9 @@ router.get("/service-job-templates", requireAuth, async (req, res): Promise<void
 
 router.post("/service-job-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { templateId, name, category = "sms", body = "", options = "{}", isActive = "true" } = req.body;
-  if (!templateId || !name) { res.status(400).json({ error: "templateId and name are required" }); return; }
+  const parsed = PostServiceJobTemplate.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { templateId, name, category, body, options, isActive } = parsed.data;
   const [row] = await db.insert(serviceJobTemplatesTable).values({
     merchantId, templateId, name, category, body, options, isActive,
   }).returning();

@@ -4,6 +4,14 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostMarketingGenerator = z.object({
+  generatorId: z.string().min(1),
+  name: z.string().min(1),
+  category: z.string().default("general"),
+  prompt: z.string().default(""),
+  output: z.string().default(""),
+});
+
 const PatchMarketingGenerator = z.object({
   name: z.string(), category: z.string(), prompt: z.string(), output: z.string(),
 }).partial();
@@ -18,8 +26,9 @@ router.get("/marketing-generators", requireAuth, async (req, res): Promise<void>
 
 router.post("/marketing-generators", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { generatorId, name, category = "general", prompt = "", output = "" } = req.body;
-  if (!generatorId || !name) { res.status(400).json({ error: "generatorId and name are required" }); return; }
+  const parsed = PostMarketingGenerator.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { generatorId, name, category, prompt, output } = parsed.data;
   const [row] = await db.insert(marketingGeneratorsTable).values({
     merchantId, generatorId, name, category, prompt, output,
   }).returning();

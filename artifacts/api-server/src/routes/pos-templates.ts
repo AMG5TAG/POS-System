@@ -4,6 +4,15 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostPosTemplate = z.object({
+  templateId: z.string().min(1),
+  name: z.string().min(1),
+  category: z.string().default("receipt"),
+  body: z.string().default(""),
+  options: z.string().default("{}"),
+  isActive: z.string().default("true"),
+});
+
 const PatchPosTemplate = z.object({
   name: z.string(), category: z.string(), body: z.string(),
   options: z.string(), isActive: z.string(),
@@ -19,8 +28,9 @@ router.get("/pos-templates", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/pos-templates", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { templateId, name, category = "receipt", body = "", options = "{}", isActive = "true" } = req.body;
-  if (!templateId || !name) { res.status(400).json({ error: "templateId and name are required" }); return; }
+  const parsed = PostPosTemplate.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { templateId, name, category, body, options, isActive } = parsed.data;
   const [row] = await db.insert(posTemplatesTable).values({
     merchantId, templateId, name, category, body, options, isActive,
   }).returning();

@@ -4,6 +4,13 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostStaffLink = z.object({
+  linkId: z.string().min(1),
+  label: z.string().min(1),
+  url: z.string().min(1),
+  category: z.string().default("general"),
+});
+
 const PatchStaffLink = z.object({
   label: z.string(), url: z.string(), category: z.string(),
 }).partial();
@@ -18,8 +25,9 @@ router.get("/staff-links", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/staff-links", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { linkId, label, url, category = "general" } = req.body;
-  if (!linkId || !label || !url) { res.status(400).json({ error: "linkId, label, and url are required" }); return; }
+  const parsed = PostStaffLink.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { linkId, label, url, category } = parsed.data;
   const [row] = await db.insert(staffLinksTable).values({
     merchantId, linkId, label, url, category,
   }).returning();

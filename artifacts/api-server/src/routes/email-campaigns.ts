@@ -4,6 +4,26 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
+const PostEmailCampaign = z.object({
+  campaignId: z.string().min(1),
+  name: z.string().min(1),
+  audience: z.string().default("all"),
+  audienceLabel: z.string().default("All Customers"),
+  subject: z.string().default(""),
+  body: z.string().default(""),
+  ctaEnabled: z.string().default("false"),
+  ctaLabel: z.string().default(""),
+  ctaUrl: z.string().default(""),
+  scheduled: z.string().default("false"),
+  scheduledAt: z.string().default(""),
+  status: z.string().default("draft"),
+  sentAt: z.string().default(""),
+  opens: z.number().int().min(0).default(0),
+  bounces: z.number().int().min(0).default(0),
+  recipientCount: z.number().int().min(0).default(0),
+  customerId: z.number().int().nullable().default(null),
+});
+
 const PatchEmailCampaign = z.object({
   name: z.string(), audience: z.string(), audienceLabel: z.string(),
   subject: z.string(), body: z.string(), ctaEnabled: z.string(),
@@ -23,13 +43,11 @@ router.get("/email-campaigns", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/email-campaigns", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const {
-    campaignId, name, audience = "all", audienceLabel = "All Customers",
-    subject = "", body = "", ctaEnabled = "false", ctaLabel = "", ctaUrl = "",
-    scheduled = "false", scheduledAt = "", status = "draft", sentAt = "",
-    opens = 0, bounces = 0, recipientCount = 0, customerId,
-  } = req.body;
-  if (!campaignId || !name) { res.status(400).json({ error: "campaignId and name are required" }); return; }
+  const parsed = PostEmailCampaign.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { campaignId, name, audience, audienceLabel, subject, body,
+    ctaEnabled, ctaLabel, ctaUrl, scheduled, scheduledAt, status, sentAt,
+    opens, bounces, recipientCount, customerId } = parsed.data;
   const [row] = await db.insert(emailCampaignsTable).values({
     merchantId, campaignId, name, audience, audienceLabel, subject, body,
     ctaEnabled, ctaLabel, ctaUrl, scheduled, scheduledAt, status, sentAt,
