@@ -160,14 +160,14 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
 
   if (!merchant) {
-    await recordFailedAttempt(email);
+    const { attemptsRemaining } = await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: null, ipAddress: ip, userAgent: ua, outcome: "not_found" });
-    res.status(401).json({ error: "Invalid email or password" });
+    res.status(401).json({ error: "Invalid email or password", attemptsRemaining });
     return;
   }
 
   if (!(await verifyPassword(password, merchant.passwordHash))) {
-    await recordFailedAttempt(email);
+    const { attemptsRemaining } = await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
     // Check for multi-IP anomaly — fire-and-forget hold + email if threshold exceeded
     void (async () => {
@@ -205,7 +205,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
         // Non-blocking — do not fail the login response
       }
     })();
-    res.status(401).json({ error: "Invalid email or password" });
+    res.status(401).json({ error: "Invalid email or password", attemptsRemaining });
     return;
   }
 

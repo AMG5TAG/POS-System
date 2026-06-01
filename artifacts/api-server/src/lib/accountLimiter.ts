@@ -85,17 +85,23 @@ export async function checkAndApplyAnomalyHold(rawEmail: string, merchantId: num
   return true;
 }
 
+export interface FailedAttemptResult {
+  failCount: number;
+  attemptsRemaining: number;
+}
+
 /**
  * Record a failed login attempt. If the previous lockout has already expired,
  * the fail counter is reset to 1 (fresh window) rather than continuing to
  * increment from >=MAX_FAILURES — preventing permanent re-lock after cooldown.
+ * Returns the new fail count and how many attempts remain before lockout.
  */
-export async function recordFailedAttempt(rawEmail: string): Promise<void> {
+export async function recordFailedAttempt(rawEmail: string): Promise<FailedAttemptResult> {
   const email = normaliseEmail(rawEmail);
   const now = new Date();
   const lockoutUntil = new Date(now.getTime() + LOCKOUT_MS);
 
-  await db.execute(sql`
+  const result = await db.execute<{ fail_count: string }>(sql`
     INSERT INTO login_attempts (email, fail_count, locked_until, updated_at)
     VALUES (${email}, 1, NULL, ${now.toISOString()})
     ON CONFLICT (email) DO UPDATE SET
@@ -118,7 +124,12 @@ export async function recordFailedAttempt(rawEmail: string): Promise<void> {
         ELSE NULL
       END,
       updated_at = ${now.toISOString()}
+    RETURNING fail_count
   `);
+
+  const failCount = parseInt(result.rows[0]?.fail_count ?? "1", 10);
+  const attemptsRemaining = Math.max(0, MAX_FAILURES - failCount);
+  return { failCount, attemptsRemaining };
 }
 
 export async function clearFailedAttempts(rawEmail: string): Promise<void> {

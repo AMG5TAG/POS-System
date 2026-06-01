@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { LockKeyholeIcon } from "lucide-react";
+import { LockKeyholeIcon, TriangleAlertIcon } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -43,6 +43,7 @@ export default function LoginPage() {
 
   const [lockMessage, setLockMessage] = useState<string | null>(null);
   const [lockSecondsLeft, setLockSecondsLeft] = useState<number>(0);
+  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startCountdown = (seconds: number) => {
@@ -83,6 +84,7 @@ export default function LoginPage() {
         onSuccess: (data) => {
           setLockMessage(null);
           setLockSecondsLeft(0);
+          setAttemptsRemaining(null);
           login(data);
           toast.success("Successfully logged in");
           setLocation("/dashboard");
@@ -98,9 +100,21 @@ export default function LoginPage() {
               typeof (err.data as Record<string, unknown>).error === "string"
                 ? (err.data as Record<string, unknown>).error as string
                 : "Account temporarily locked. Please try again later.";
+            setAttemptsRemaining(null);
             setLockMessage(bodyMessage);
             startCountdown(isNaN(retryAfterSecs) ? 60 : retryAfterSecs);
+          } else if (err instanceof ApiError && err.status === 401) {
+            const remaining =
+              typeof err.data === "object" &&
+              err.data !== null &&
+              "attemptsRemaining" in err.data &&
+              typeof (err.data as Record<string, unknown>).attemptsRemaining === "number"
+                ? (err.data as Record<string, unknown>).attemptsRemaining as number
+                : null;
+            setAttemptsRemaining(remaining);
+            toast.error("Invalid email or password");
           } else {
+            setAttemptsRemaining(null);
             toast.error("Invalid email or password");
           }
         },
@@ -132,6 +146,19 @@ export default function LoginPage() {
                 {!isLocked && (
                   <span className="block mt-1">You may try again now.</span>
                 )}
+              </AlertDescription>
+            </Alert>
+          )}
+          {!lockMessage && attemptsRemaining !== null && attemptsRemaining <= 2 && (
+            <Alert variant="destructive">
+              <TriangleAlertIcon className="h-4 w-4" />
+              <AlertTitle>Warning</AlertTitle>
+              <AlertDescription>
+                {attemptsRemaining === 0
+                  ? "Your account has been temporarily locked due to too many failed attempts."
+                  : attemptsRemaining === 1
+                    ? "1 attempt remaining before your account is temporarily locked."
+                    : `${attemptsRemaining} attempts remaining before your account is temporarily locked.`}
               </AlertDescription>
             </Alert>
           )}
