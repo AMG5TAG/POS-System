@@ -199,6 +199,7 @@ export default function POSPage() {
   ]);
   const [payDiscardConfirmOpen, setPayDiscardConfirmOpen] = useState(false);
   const paymentModalInitialMethodRef = useRef<PaymentMethodId | null>(null);
+  const completeSaleRef = useRef<HTMLButtonElement>(null);
 
   /* gift card — issuance */
   const [gcIssueOpen, setGcIssueOpen]           = useState(false);
@@ -1130,16 +1131,25 @@ export default function POSPage() {
   };
 
   /* Clear numpad when switching to a method that doesn't use it;
-     clear gift-card state when switching away from gift_card. */
+     clear gift-card state when switching away from gift_card.
+     Auto-fill exact amount for EFTPOS, card, and direct deposit
+     then focus the Complete Sale button so the cashier can just press Enter. */
   useEffect(() => {
-    if (payMethod !== "cash" && payMethod !== "loyalty") {
+    const autoExactMethods: PaymentMethodId[] = ["eftpos", "card", "direct_deposit"];
+    if (payMethod !== "cash" && payMethod !== "loyalty" && !autoExactMethods.includes(payMethod)) {
       setNumpadInput("");
     }
     if (payMethod !== "gift_card") {
       setGcPayCardNumber("");
       setGcValidation(null);
     }
-  }, [payMethod]);
+    if (autoExactMethods.includes(payMethod)) {
+      setNumpadInput(effectiveTotal.toFixed(2));
+      setTimeout(() => {
+        completeSaleRef.current?.focus();
+      }, 0);
+    }
+  }, [payMethod, effectiveTotal]);
 
   const handleNumpad = (key: string) => {
     setNumpadInput(prev => {
@@ -3338,6 +3348,7 @@ export default function POSPage() {
 
               {/* Complete Sale */}
               <Button
+                ref={completeSaleRef}
                 className="w-full h-12 text-base font-semibold"
                 disabled={
                   createTransactionMutation.isPending ||
