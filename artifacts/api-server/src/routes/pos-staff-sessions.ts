@@ -7,13 +7,14 @@ const router: IRouter = Router();
 
 router.get("/pos-staff-sessions", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const registerId = req.query.registerId as string | undefined;
+  const registerId = req.query.registerId;
+  if (registerId !== undefined && typeof registerId !== "string") { res.status(400).json({ error: "Invalid registerId" }); return; }
   const items = await db.select()
     .from(posStaffSessionsTable)
     .where(
       and(
         eq(posStaffSessionsTable.merchantId, merchantId),
-        registerId ? eq(posStaffSessionsTable.registerId, registerId) : undefined
+        registerId ? eq(posStaffSessionsTable.registerId, registerId as string) : undefined
       )
     )
     .orderBy(desc(posStaffSessionsTable.loggedInAt));
@@ -32,6 +33,7 @@ router.post("/pos-staff-sessions", requireAuth, async (req, res): Promise<void> 
 router.delete("/pos-staff-sessions/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(posStaffSessionsTable)
     .where(and(eq(posStaffSessionsTable.id, id), eq(posStaffSessionsTable.merchantId, merchantId)));
   res.status(204).end();

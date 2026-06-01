@@ -68,8 +68,10 @@ router.get("/gift-cards", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const search = (req.query.search as string) || "";
   const status = (req.query.status as string) || "";
-  const limit  = parseInt((req.query.limit  as string) || "100", 10);
-  const offset = parseInt((req.query.offset as string) || "0",   10);
+  const limit  = parseInt((req.query.limit  as string) || "100", 10) || 100;
+  const offset = parseInt((req.query.offset as string) || "0",   10) || 0;
+  if (req.query.limit  !== undefined && isNaN(parseInt(req.query.limit  as string, 10))) { res.status(400).json({ error: "Invalid limit" }); return; }
+  if (req.query.offset !== undefined && isNaN(parseInt(req.query.offset as string, 10))) { res.status(400).json({ error: "Invalid offset" }); return; }
 
   const conditions = [eq(giftCardsTable.merchantId, merchantId)];
   if (search) {
@@ -223,6 +225,7 @@ router.post("/gift-cards/validate", requireAuth, async (req, res): Promise<void>
 router.get("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [card] = await db.select().from(giftCardsTable)
     .where(and(eq(giftCardsTable.id, id), eq(giftCardsTable.merchantId, merchantId))).limit(1);
   if (!card) { res.status(404).json({ error: "Not found" }); return; }
@@ -233,6 +236,7 @@ router.get("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
 router.patch("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { status, currentBalance, expiryDate, issuedTo, note, adjustmentNote } = req.body as {
     status?: string;
     currentBalance?: number;
@@ -293,6 +297,7 @@ router.patch("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => 
 router.delete("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(giftCardLedgerTable).where(
     and(eq(giftCardLedgerTable.giftCardId, id), eq(giftCardLedgerTable.merchantId, merchantId))
   );
@@ -305,6 +310,7 @@ router.delete("/gift-cards/:id", requireAuth, async (req, res): Promise<void> =>
 router.get("/gift-cards/:id/ledger", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const entries = await db.select().from(giftCardLedgerTable)
     .where(and(eq(giftCardLedgerTable.giftCardId, id), eq(giftCardLedgerTable.merchantId, merchantId)))
     .orderBy(desc(giftCardLedgerTable.createdAt));

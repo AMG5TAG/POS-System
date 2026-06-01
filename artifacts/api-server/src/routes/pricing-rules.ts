@@ -50,6 +50,7 @@ router.post("/pricing-rules", requireAuth, async (req, res): Promise<void> => {
 
 router.patch("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> => {
   const ruleId = parseInt(String(req.params.id), 10);
+  if (isNaN(ruleId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
   const parsed = PricingRuleBody.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -74,6 +75,7 @@ router.patch("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> 
 
 router.delete("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> => {
   const ruleId = parseInt(String(req.params.id), 10);
+  if (isNaN(ruleId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
   await db.delete(pricingRulesTable)
     .where(and(eq(pricingRulesTable.id, ruleId), eq(pricingRulesTable.merchantId, merchantId)));

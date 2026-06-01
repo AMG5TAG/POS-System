@@ -56,6 +56,7 @@ router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => 
 router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchDeliveryOrder.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(deliveryOrdersTable)
@@ -68,6 +69,7 @@ router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void
 router.delete("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(deliveryOrdersTable).where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId)));
   res.status(204).end();
 });

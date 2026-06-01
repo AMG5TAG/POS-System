@@ -50,6 +50,8 @@ router.get("/appointments", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const year = req.query.year ? parseInt(String(req.query.year), 10) : null;
   const month = req.query.month ? parseInt(String(req.query.month), 10) : null;
+  if (year !== null && isNaN(year)) { res.status(400).json({ error: "Invalid year" }); return; }
+  if (month !== null && isNaN(month)) { res.status(400).json({ error: "Invalid month" }); return; }
 
   const conditions = [eq(appointmentsTable.merchantId, merchantId)];
   if (year && month) {

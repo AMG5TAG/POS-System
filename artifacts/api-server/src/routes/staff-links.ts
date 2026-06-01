@@ -37,6 +37,7 @@ router.post("/staff-links", requireAuth, async (req, res): Promise<void> => {
 router.patch("/staff-links/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchStaffLink.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(staffLinksTable)
@@ -49,6 +50,7 @@ router.patch("/staff-links/:id", requireAuth, async (req, res): Promise<void> =>
 router.delete("/staff-links/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(staffLinksTable)
     .where(and(eq(staffLinksTable.id, id), eq(staffLinksTable.merchantId, merchantId)));
   res.status(204).end();

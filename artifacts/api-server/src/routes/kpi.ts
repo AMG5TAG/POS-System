@@ -54,6 +54,7 @@ router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
 router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive } = req.body;
   const [row] = await db.update(kpiTargetsTable).set({ name, metric, categoryId, period, target, staffIds, reward, notes, isActive })
     .where(and(eq(kpiTargetsTable.id, id), eq(kpiTargetsTable.merchantId, merchantId))).returning();
@@ -64,6 +65,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
 router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(kpiTargetsTable).where(and(eq(kpiTargetsTable.id, id), eq(kpiTargetsTable.merchantId, merchantId)));
   res.status(204).end();
 });

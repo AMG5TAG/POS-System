@@ -129,8 +129,10 @@ router.get("/daily-closes/current", requireAuth, requireManagerOrOwner, async (r
 // ── GET /daily-closes ───────────────────────────────────────────────────────
 router.get("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const limitVal = Math.min(parseInt(String(req.query.limit ?? "50"), 10), 200);
-  const offsetVal = parseInt(String(req.query.offset ?? "0"), 10);
+  const limitVal = Math.min(parseInt(String(req.query.limit ?? "50"), 10) || 50, 200);
+  const offsetVal = parseInt(String(req.query.offset ?? "0"), 10) || 0;
+  if (req.query.limit !== undefined && isNaN(parseInt(String(req.query.limit), 10))) { res.status(400).json({ error: "Invalid limit" }); return; }
+  if (req.query.offset !== undefined && isNaN(parseInt(String(req.query.offset), 10))) { res.status(400).json({ error: "Invalid offset" }); return; }
 
   const rows = await db
     .select()

@@ -46,6 +46,7 @@ router.post("/openai/conversations", async (req, res) => {
 router.get("/openai/conversations/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   const [conv] = await db.select().from(conversations)
     .where(and(eq(conversations.id, id), eq(conversations.merchantId, merchantId)));
   if (!conv) return res.status(404).json({ error: "Not found" });
@@ -59,6 +60,7 @@ router.get("/openai/conversations/:id", async (req, res) => {
 router.delete("/openai/conversations/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   const [conv] = await db.select({ id: conversations.id }).from(conversations)
     .where(and(eq(conversations.id, id), eq(conversations.merchantId, merchantId)));
   if (!conv) return res.status(404).json({ error: "Not found" });
@@ -182,6 +184,7 @@ Your role: Generate creative, localised marketing ideas, social media copy, prom
 router.post("/openai/conversations/:id/messages", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { content } = req.body as { content: string };
 
   if (!content?.trim()) {

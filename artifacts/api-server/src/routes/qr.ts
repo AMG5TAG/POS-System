@@ -22,6 +22,7 @@ router.post("/qr-codes", requireAuth, async (req, res): Promise<void> => {
 router.delete("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(qrCodesTable).where(and(eq(qrCodesTable.id, id), eq(qrCodesTable.merchantId, merchantId)));
   res.status(204).end();
 });
@@ -65,6 +66,7 @@ router.post("/qr-saved-templates", requireAuth, async (req, res): Promise<void> 
 router.delete("/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(qrSavedTemplatesTable).where(and(eq(qrSavedTemplatesTable.id, id), eq(qrSavedTemplatesTable.merchantId, merchantId)));
   res.status(204).end();
 });

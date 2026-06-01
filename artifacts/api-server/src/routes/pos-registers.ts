@@ -22,6 +22,7 @@ router.post("/pos-registers", requireAuth, async (req, res): Promise<void> => {
 router.patch("/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { name, type, staffName, staffEmail, posCameraEnabled, posCameraDeviceId } = req.body;
   const updates: Partial<typeof posRegistersTable.$inferInsert> = {};
   if (name              !== undefined) updates.name              = name;
@@ -39,6 +40,7 @@ router.patch("/pos-registers/:id", requireAuth, async (req, res): Promise<void> 
 router.delete("/pos-registers/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(posRegistersTable).where(and(eq(posRegistersTable.id, id), eq(posRegistersTable.merchantId, merchantId)));
   res.status(204).end();
 });

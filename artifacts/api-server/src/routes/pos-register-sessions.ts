@@ -24,7 +24,8 @@ const router: IRouter = Router();
 
 router.get("/pos-register-sessions", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const registerId = req.query.registerId as string | undefined;
+  const registerId = req.query.registerId;
+  if (registerId !== undefined && typeof registerId !== "string") { res.status(400).json({ error: "Invalid registerId" }); return; }
   const items = await db.select()
     .from(posRegisterSessionsTable)
     .where(
@@ -51,6 +52,7 @@ router.post("/pos-register-sessions", requireAuth, async (req, res): Promise<voi
 router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchPosRegisterSession.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(posRegisterSessionsTable)
@@ -63,6 +65,7 @@ router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promis
 router.delete("/pos-register-sessions/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(posRegisterSessionsTable)
     .where(and(eq(posRegisterSessionsTable.id, id), eq(posRegisterSessionsTable.merchantId, merchantId)));
   res.status(204).end();

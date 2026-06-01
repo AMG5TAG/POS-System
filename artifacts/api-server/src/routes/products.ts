@@ -156,6 +156,7 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
 
   const { search, categoryId, limit = 50, offset = 0, tag } = queryParams.data;
   const brandIdRaw = req.query.brandId ? parseInt(String(req.query.brandId)) : undefined;
+  if (brandIdRaw !== undefined && isNaN(brandIdRaw)) { res.status(400).json({ error: "Invalid brandId" }); return; }
   const conditions = [eq(productsTable.merchantId, req.session.merchantId!)];
   if (search) conditions.push(or(
     ilike(productsTable.name, `%${search}%`),
@@ -164,7 +165,7 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
     sql`${productsTable.tags}::text ilike ${'%' + search + '%'}`,
   )!);
   if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
-  if (brandIdRaw && !isNaN(brandIdRaw)) conditions.push(eq(productsTable.brandId, brandIdRaw));
+  if (brandIdRaw) conditions.push(eq(productsTable.brandId, brandIdRaw));
   if (tag) conditions.push(sql`${productsTable.tags} @> jsonb_build_array(${tag}::text)`);
 
   const [countResult] = await db

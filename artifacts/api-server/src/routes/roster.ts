@@ -32,6 +32,7 @@ router.post("/roster-shifts", requireAuth, async (req, res): Promise<void> => {
 router.delete("/roster-shifts/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(rosterShiftsTable)
     .where(and(eq(rosterShiftsTable.id, id), eq(rosterShiftsTable.merchantId, merchantId)));
   res.status(204).end();
@@ -67,6 +68,7 @@ router.post("/leave-requests", requireAuth, async (req, res): Promise<void> => {
 router.patch("/leave-requests/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { status } = req.body as { status: string };
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
   const [row] = await db.update(leaveRequestsTable)

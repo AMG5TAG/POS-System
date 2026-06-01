@@ -320,6 +320,7 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
 router.get("/customers/expiring-points", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const expiryMonths = parseInt(String(req.query.expiryMonths ?? "12"), 10);
+  if (isNaN(expiryMonths)) { res.status(400).json({ error: "Invalid expiryMonths" }); return; }
   if (expiryMonths < 1 || expiryMonths > 120) { res.status(400).json({ error: "expiryMonths must be 1–120" }); return; }
 
   const rows = await db.execute<{
@@ -851,6 +852,7 @@ router.post("/customers/bulk-execute-merge", requireAuth, requireManagerOrOwner,
 router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const customerId = parseInt(String(req.params.id), 10);
+  if (isNaN(customerId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const points = parseInt(String(req.body?.points ?? 100), 10);
 
   const [customer] = await db

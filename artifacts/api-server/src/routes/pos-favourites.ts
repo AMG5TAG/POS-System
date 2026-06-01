@@ -7,18 +7,19 @@ const router: IRouter = Router();
 
 router.get("/pos-favourites", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const registerId = req.query.registerId as string | undefined;
+  const registerId = req.query.registerId;
+  if (registerId !== undefined && typeof registerId !== "string") { res.status(400).json({ error: "Invalid registerId" }); return; }
   const [row] = await db.select()
     .from(posFavouritesTable)
     .where(
       and(
         eq(posFavouritesTable.merchantId, merchantId),
-        registerId ? eq(posFavouritesTable.registerId, registerId) : eq(posFavouritesTable.registerId, "default")
+        registerId ? eq(posFavouritesTable.registerId, registerId as string) : eq(posFavouritesTable.registerId, "default")
       )
     )
     .limit(1);
   if (!row) {
-    const [created] = await db.insert(posFavouritesTable).values({ merchantId, registerId: registerId || "default" }).returning();
+    const [created] = await db.insert(posFavouritesTable).values({ merchantId, registerId: (registerId as string | undefined) || "default" }).returning();
     res.json(created); return;
   }
   res.json(row);

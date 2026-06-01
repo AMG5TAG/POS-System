@@ -75,8 +75,10 @@ router.put("/low-stock-alert-settings", requireAuth, async (req, res): Promise<v
 
 router.get("/low-stock-alert-log", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const limit = Math.min(parseInt(req.query["limit"] as string ?? "20"), 100);
-  const offset = parseInt(req.query["offset"] as string ?? "0");
+  const limit = Math.min(parseInt(req.query["limit"] as string ?? "20", 10) || 20, 100);
+  const offset = parseInt(req.query["offset"] as string ?? "0", 10) || 0;
+  if (req.query["limit"] !== undefined && isNaN(parseInt(req.query["limit"] as string, 10))) { res.status(400).json({ error: "Invalid limit" }); return; }
+  if (req.query["offset"] !== undefined && isNaN(parseInt(req.query["offset"] as string, 10))) { res.status(400).json({ error: "Invalid offset" }); return; }
 
   const [rows, countResult] = await Promise.all([
     db.select().from(lowStockAlertLogTable)

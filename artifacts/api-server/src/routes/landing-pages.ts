@@ -67,6 +67,7 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
 router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchLandingPage.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(landingPagesTable)
@@ -79,6 +80,7 @@ router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> 
 router.delete("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(landingPagesTable).where(and(eq(landingPagesTable.id, id), eq(landingPagesTable.merchantId, merchantId)));
   res.status(204).end();
 });

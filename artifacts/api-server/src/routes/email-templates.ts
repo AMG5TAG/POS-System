@@ -22,6 +22,7 @@ router.post("/email-templates", requireAuth, async (req, res): Promise<void> => 
 router.patch("/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { name, category, subject, body } = req.body;
   const [row] = await db.update(emailTemplatesTable).set({ name, category, subject, body })
     .where(and(eq(emailTemplatesTable.id, id), eq(emailTemplatesTable.merchantId, merchantId))).returning();
@@ -32,6 +33,7 @@ router.patch("/email-templates/:id", requireAuth, async (req, res): Promise<void
 router.delete("/email-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(emailTemplatesTable).where(and(eq(emailTemplatesTable.id, id), eq(emailTemplatesTable.merchantId, merchantId)));
   res.status(204).end();
 });

@@ -40,6 +40,7 @@ router.post("/service-job-templates", requireAuth, async (req, res): Promise<voi
 router.patch("/service-job-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchServiceJobTemplate.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { body: bodyField, ...rest } = parsed.data;
@@ -53,6 +54,7 @@ router.patch("/service-job-templates/:id", requireAuth, async (req, res): Promis
 router.delete("/service-job-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(serviceJobTemplatesTable)
     .where(and(eq(serviceJobTemplatesTable.id, id), eq(serviceJobTemplatesTable.merchantId, merchantId)));
   res.status(204).end();

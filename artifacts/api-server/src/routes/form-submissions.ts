@@ -8,10 +8,22 @@ const router: IRouter = Router();
 router.get("/form-submissions", requireAuth, async (req, res): Promise<void> => {
   const { formId, customerId, sourceType, sourceId } = req.query as Record<string, string | undefined>;
   const conditions = [eq(formSubmissionsTable.merchantId, req.session.merchantId!)];
-  if (formId)     conditions.push(eq(formSubmissionsTable.formId,    parseInt(formId)));
-  if (customerId) conditions.push(eq(formSubmissionsTable.customerId, parseInt(customerId)));
+  if (formId !== undefined) {
+    const parsed = parseInt(formId, 10);
+    if (isNaN(parsed)) { res.status(400).json({ error: "Invalid formId" }); return; }
+    conditions.push(eq(formSubmissionsTable.formId, parsed));
+  }
+  if (customerId !== undefined) {
+    const parsed = parseInt(customerId, 10);
+    if (isNaN(parsed)) { res.status(400).json({ error: "Invalid customerId" }); return; }
+    conditions.push(eq(formSubmissionsTable.customerId, parsed));
+  }
   if (sourceType) conditions.push(eq(formSubmissionsTable.sourceType, sourceType));
-  if (sourceId)   conditions.push(eq(formSubmissionsTable.sourceId,   parseInt(sourceId)));
+  if (sourceId !== undefined) {
+    const parsed = parseInt(sourceId, 10);
+    if (isNaN(parsed)) { res.status(400).json({ error: "Invalid sourceId" }); return; }
+    conditions.push(eq(formSubmissionsTable.sourceId, parsed));
+  }
 
   const submissions = await db
     .select()

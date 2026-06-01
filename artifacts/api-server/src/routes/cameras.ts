@@ -110,6 +110,7 @@ router.put("/cameras/settings", async (req, res) => {
 router.put("/cameras/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   const { name, streamUrl, port, username, password, status, sortOrder } = req.body as {
     name?: string; streamUrl?: string; port?: string; username?: string;
     password?: string; status?: string; sortOrder?: number;
@@ -134,6 +135,7 @@ router.put("/cameras/:id", async (req, res) => {
 router.delete("/cameras/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(ipCamerasTable)
     .where(and(eq(ipCamerasTable.id, id), eq(ipCamerasTable.merchantId, merchantId)));
   return res.status(204).end();
@@ -142,7 +144,9 @@ router.delete("/cameras/:id", async (req, res) => {
 /* ── List snapshots ─────────────────────────────────────────────────────── */
 router.get("/camera-snapshots", async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const cameraId = req.query.cameraId ? parseInt(req.query.cameraId as string, 10) : undefined;
+  const cameraIdRaw = req.query.cameraId ? parseInt(req.query.cameraId as string, 10) : undefined;
+  if (cameraIdRaw !== undefined && isNaN(cameraIdRaw)) return res.status(400).json({ error: "Invalid cameraId" });
+  const cameraId = cameraIdRaw;
 
   const rows = await db
     .select({
@@ -196,6 +200,7 @@ router.post("/camera-snapshots", async (req, res) => {
 router.delete("/camera-snapshots/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(cameraSnapshotsTable)
     .where(and(eq(cameraSnapshotsTable.id, id), eq(cameraSnapshotsTable.merchantId, merchantId)));
   return res.status(204).end();
@@ -236,6 +241,7 @@ router.post("/pos-security-captures", async (req, res) => {
 router.delete("/pos-security-captures/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(posSecurityCapturesTable)
     .where(and(eq(posSecurityCapturesTable.id, id), eq(posSecurityCapturesTable.merchantId, merchantId)));
   return res.status(204).end();

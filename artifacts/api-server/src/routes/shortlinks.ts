@@ -22,6 +22,7 @@ router.post("/shortlinks", requireAuth, async (req, res): Promise<void> => {
 router.delete("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(shortlinksTable).where(and(eq(shortlinksTable.id, id), eq(shortlinksTable.merchantId, merchantId)));
   res.status(204).end();
 });

@@ -54,9 +54,13 @@ router.get("/laybys", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { status, customerId, search, limit = "50", offset = "0" } = req.query as Record<string, string>;
 
+  if (customerId !== undefined && isNaN(parseInt(customerId, 10))) { res.status(400).json({ error: "Invalid customerId" }); return; }
+  if (isNaN(parseInt(limit, 10))) { res.status(400).json({ error: "Invalid limit" }); return; }
+  if (isNaN(parseInt(offset, 10))) { res.status(400).json({ error: "Invalid offset" }); return; }
+
   const conditions = [eq(laybysTable.merchantId, merchantId)];
   if (status) conditions.push(eq(laybysTable.status, status));
-  if (customerId) conditions.push(eq(laybysTable.customerId, parseInt(customerId)));
+  if (customerId) conditions.push(eq(laybysTable.customerId, parseInt(customerId, 10)));
 
   const rows = await db
     .select({
@@ -67,8 +71,8 @@ router.get("/laybys", requireAuth, async (req, res) => {
     .leftJoin(customersTable, eq(laybysTable.customerId, customersTable.id))
     .where(and(...conditions))
     .orderBy(desc(laybysTable.createdAt))
-    .limit(parseInt(limit))
-    .offset(parseInt(offset));
+    .limit(parseInt(limit, 10))
+    .offset(parseInt(offset, 10));
 
   const [{ total }] = await db
     .select({ total: count() })

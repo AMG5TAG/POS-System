@@ -59,6 +59,7 @@ router.post("/email-campaigns", requireAuth, async (req, res): Promise<void> => 
 router.patch("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchEmailCampaign.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { body: bodyField, ...rest } = parsed.data;
@@ -72,6 +73,7 @@ router.patch("/email-campaigns/:id", requireAuth, async (req, res): Promise<void
 router.delete("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(emailCampaignsTable).where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId)));
   res.status(204).end();
 });
@@ -79,6 +81,7 @@ router.delete("/email-campaigns/:id", requireAuth, async (req, res): Promise<voi
 router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [row] = await db.select().from(emailCampaignsTable)
     .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId)))
     .limit(1);

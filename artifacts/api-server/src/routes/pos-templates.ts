@@ -40,6 +40,7 @@ router.post("/pos-templates", requireAuth, async (req, res): Promise<void> => {
 router.patch("/pos-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchPosTemplate.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { body: bodyField, ...rest } = parsed.data;
@@ -53,6 +54,7 @@ router.patch("/pos-templates/:id", requireAuth, async (req, res): Promise<void> 
 router.delete("/pos-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(posTemplatesTable)
     .where(and(eq(posTemplatesTable.id, id), eq(posTemplatesTable.merchantId, merchantId)));
   res.status(204).end();
