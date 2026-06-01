@@ -4074,9 +4074,58 @@ export interface XeroMappingsUpdate {
   syncSettings?: XeroMappingsUpdateSyncSettings;
 }
 
+/**
+ * Target contact platform
+ */
+export type SyncContactsInputProvider = typeof SyncContactsInputProvider[keyof typeof SyncContactsInputProvider];
+
+
+export const SyncContactsInputProvider = {
+  google_contacts: 'google_contacts',
+  microsoft_contacts: 'microsoft_contacts',
+} as const;
+
+/**
+ * "append" — all notes concatenated newest-first;
+"overwrite" — only the most-recent note is sent
+
+ */
+export type SyncContactsInputNotesConflict = typeof SyncContactsInputNotesConflict[keyof typeof SyncContactsInputNotesConflict];
+
+
+export const SyncContactsInputNotesConflict = {
+  append: 'append',
+  overwrite: 'overwrite',
+} as const;
+
+export interface SyncContactsInput {
+  /** Target contact platform */
+  provider: SyncContactsInputProvider;
+  /** When true, CRM notes are mapped to the platform's native notes field */
+  includeNotes?: boolean;
+  /** "append" — all notes concatenated newest-first;
+  "overwrite" — only the most-recent note is sent
+   */
+  notesConflict?: SyncContactsInputNotesConflict;
+}
+
+export interface SyncContactsResult {
+  ok: boolean;
+  provider: string;
+  /** Number of contacts successfully pushed */
+  synced: number;
+  /** Number of contacts that failed (logged */
+  failed: number;
+  /** Number of contacts whose notes were included */
+  notesSynced: number;
+  message: string;
+}
+
 export interface XeroSyncResult {
   ok: boolean;
   synced: number;
+  notesSynced?: number;
+  notesFailed?: number;
   message: string;
 }
 

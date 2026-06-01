@@ -6827,6 +6827,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/OkResult"
 
+  /integrations/contacts/sync:
+    post:
+      operationId: syncIntegrationContacts
+      tags: [integrations]
+      summary: Sync KoaPOS customers to Google Contacts or Microsoft Contacts
+      description: |
+        Pushes all KoaPOS customers to the requested contact platform.
+        When `includeNotes` is true, CRM notes are mapped to each platform's
+        native notes field (Google → biographies, Microsoft → personalNotes).
+        Per-contact failures are counted and returned without aborting the batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncContactsInput"
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncContactsResult"
+        "400":
+          description: Invalid provider
+        "401":
+          description: Provider not connected
+
   /xero/sync/contacts:
     post:
       operationId: syncXeroContacts
@@ -12016,13 +12044,46 @@ components:
           additionalProperties: { type: string }
         syncSettings: { type: object }
 
+    SyncContactsInput:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [google_contacts, microsoft_contacts]
+          description: Target contact platform
+        includeNotes:
+          type: boolean
+          default: false
+          description: When true, CRM notes are mapped to the platform's native notes field
+        notesConflict:
+          type: string
+          enum: [append, overwrite]
+          default: append
+          description: |
+            "append" — all notes concatenated newest-first;
+            "overwrite" — only the most-recent note is sent
+
+    SyncContactsResult:
+      type: object
+      required: [ok, provider, synced, failed, notesSynced, message]
+      properties:
+        ok:          { type: boolean }
+        provider:    { type: string }
+        synced:      { type: integer, description: Number of contacts successfully pushed }
+        failed:      { type: integer, description: Number of contacts that failed (logged, not fatal) }
+        notesSynced: { type: integer, description: Number of contacts whose notes were included }
+        message:     { type: string }
+
     XeroSyncResult:
       type: object
       required: [ok, synced, message]
       properties:
-        ok:      { type: boolean }
-        synced:  { type: integer }
-        message: { type: string }
+        ok:          { type: boolean }
+        synced:      { type: integer }
+        notesSynced: { type: integer }
+        notesFailed: { type: integer }
+        message:     { type: string }
 
     XeroSyncLogEntry:
       type: object

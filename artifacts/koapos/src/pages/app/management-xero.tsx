@@ -84,6 +84,8 @@ interface SyncSettings {
   autoSync: boolean;
   syncOnSale: boolean;
   syncFrequency: "daily" | "weekly" | "manual";
+  includeNotes: boolean;
+  notesConflict: "append" | "overwrite";
 }
 
 
@@ -216,6 +218,8 @@ export default function ManagementXeroPage() {
     autoSync:           false,
     syncOnSale:         false,
     syncFrequency:      "daily",
+    includeNotes:       false,
+    notesConflict:      "append",
   });
   const [saving,        setSaving]      = useState(false);
   const [syncing,       setSyncing]     = useState<string | null>(null);
@@ -735,9 +739,8 @@ export default function ManagementXeroPage() {
 
                 <div className="space-y-4">
                   {[
-                    { key: "syncTransactions" as const, label: "Sync sales transactions", desc: "Push completed sales as Xero invoices (last 90 days)" },
-                    { key: "syncContacts"     as const, label: "Sync customers & suppliers", desc: "Keep your Xero contacts in sync with KoaPOS CRM" },
-                    { key: "syncPurchaseOrders" as const, label: "Sync purchase orders", desc: "Push purchase orders as Xero bills" },
+                    { key: "syncTransactions"  as const, label: "Sync sales transactions",    desc: "Push completed sales as Xero invoices (last 90 days)" },
+                    { key: "syncPurchaseOrders" as const, label: "Sync purchase orders",       desc: "Push purchase orders as Xero bills" },
                   ].map((item) => (
                     <div key={item.key} className="flex items-start justify-between gap-4 py-3 border-b">
                       <div>
@@ -750,6 +753,57 @@ export default function ManagementXeroPage() {
                       />
                     </div>
                   ))}
+
+                  {/* Sync Contacts + Include Notes sub-option */}
+                  <div className="py-3 border-b space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium">Sync customers &amp; suppliers</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Keep your Xero contacts in sync with KoaPOS CRM</p>
+                      </div>
+                      <Switch
+                        checked={syncSettings.syncContacts}
+                        onCheckedChange={(v) => setSyncSettings((s) => ({ ...s, syncContacts: v }))}
+                      />
+                    </div>
+
+                    {/* Include Notes — only shown when contact sync is on */}
+                    {syncSettings.syncContacts && (
+                      <div className="ml-5 pl-4 border-l-2 border-muted space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">Include customer notes</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Append KoaPOS CRM notes to each Xero contact&apos;s History
+                            </p>
+                          </div>
+                          <Switch
+                            checked={syncSettings.includeNotes}
+                            onCheckedChange={(v) => setSyncSettings((s) => ({ ...s, includeNotes: v }))}
+                          />
+                        </div>
+
+                        {/* Notes conflict resolution — only when includeNotes is on */}
+                        {syncSettings.includeNotes && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">Notes conflict</Label>
+                            <Select
+                              value={syncSettings.notesConflict}
+                              onValueChange={(v) => setSyncSettings((s) => ({ ...s, notesConflict: v as SyncSettings["notesConflict"] }))}
+                            >
+                              <SelectTrigger className="w-56 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="append">Append all notes (newest first)</SelectItem>
+                                <SelectItem value="overwrite">Most recent note only</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex items-start justify-between gap-4 py-3 border-b">
                     <div>

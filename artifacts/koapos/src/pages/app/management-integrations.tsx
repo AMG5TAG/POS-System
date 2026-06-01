@@ -9,6 +9,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -24,7 +28,7 @@ import {
   ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
   Landmark, ShoppingBag, Megaphone, Cloud,
-  Settings,
+  Settings, Users,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -196,11 +200,12 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
 /* ─── Integration card ───────────────────────────────────────────────────── */
 
 function IntegrationCard({
-  intg, busy, onConnect, onDisconnect, onOAuth, onNavigate,
+  intg, busy, onConnect, onDisconnect, onOAuth, onNavigate, onSyncContacts,
 }: {
   intg: Integration; busy: boolean;
   onConnect: () => void; onDisconnect: () => void; onOAuth: () => void;
   onNavigate?: (href: string) => void;
+  onSyncContacts?: () => void;
 }) {
   const isConnected = intg.status === "connected";
   const needsReconnect = !isConnected && !!intg.disconnectedReason;
@@ -290,6 +295,17 @@ function IntegrationCard({
                 <CheckCircle2 className="w-3 h-3" /> Connected
               </Badge>
               <div className="flex items-center gap-1">
+                {onSyncContacts && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-xs h-7 px-2"
+                    onClick={onSyncContacts}
+                    title="Sync contacts to this platform"
+                  >
+                    <Users className="w-3 h-3" /> Sync Contacts
+                  </Button>
+                )}
                 {onNavigate && (
                   <Button
                     variant="ghost"
@@ -346,7 +362,7 @@ function IntegrationCard({
 function Section({
   title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
-  onNavigate,
+  onNavigate, onSyncContacts,
   defaultOpen = false,
 }: {
   title: string; description: string;
@@ -358,6 +374,7 @@ function Section({
   onDisconnect: (i: Integration) => void;
   onOAuth: (i: Integration) => void;
   onNavigate?: (href: string) => void;
+  onSyncContacts?: (i: Integration) => void;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -406,6 +423,11 @@ function Section({
               onDisconnect={() => onDisconnect(intg)}
               onOAuth={() => onOAuth(intg)}
               onNavigate={intg.key === "tyro_eftpos" ? onNavigate : undefined}
+              onSyncContacts={
+                (intg.key === "google_contacts" || intg.key === "microsoft_contacts") && onSyncContacts
+                  ? () => onSyncContacts(intg)
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -478,6 +500,12 @@ export default function ManagementIntegrationsPage() {
   const [location, setLocation] = useLocation();
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
+
+  /* ─── Sync Contacts dialog state ────────────────────────────────────────── */
+  const [syncTarget,         setSyncTarget]         = useState<Integration | null>(null);
+  const [syncIncludeNotes,   setSyncIncludeNotes]   = useState(false);
+  const [syncNotesConflict,  setSyncNotesConflict]  = useState<"append" | "overwrite">("append");
+  const [syncingContacts,    setSyncingContacts]     = useState(false);
 
   const { data: integrationsRaw, isLoading: loading, refetch: refetchIntegrations } = useListIntegrations({ query: { queryKey: ["integrations"] } });
   const integrations = (integrationsRaw ?? []) as unknown as Integration[];
@@ -635,6 +663,7 @@ export default function ManagementIntegrationsPage() {
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
                   onNavigate={sec.id === "payments" ? (href) => setLocation(href) : undefined}
+                  onSyncContacts={sec.id === "cloud" ? (intg) => { setSyncTarget(intg); setSyncIncludeNotes(false); setSyncNotesConflict("append"); } : undefined}
                   defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
               );
@@ -644,6 +673,100 @@ export default function ManagementIntegrationsPage() {
       </div>
 
       <ConnectModal integration={modalTarget} onClose={() => setModalTarget(null)} onSaved={refetchIntegrations} />
+
+      {/* ── Sync Contacts dialog (Google / Microsoft) ────────────────────── */}
+      <Dialog open={!!syncTarget} onOpenChange={(o) => { if (!o) setSyncTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Sync Contacts to {syncTarget?.label}
+            </DialogTitle>
+            <DialogDescription>
+              Push your KoaPOS customers to{" "}
+              {syncTarget?.key === "google_contacts" ? "Google Contacts" : "Microsoft Contacts"}.
+              Existing contacts are not de-duplicated — re-syncing creates additional entries.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            {/* Include Notes toggle */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Include customer notes</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {syncTarget?.key === "google_contacts"
+                    ? "Maps to Google Contacts → About (biographies)"
+                    : "Maps to Outlook Contact → Notes (personalNotes)"}
+                </p>
+              </div>
+              <Switch
+                checked={syncIncludeNotes}
+                onCheckedChange={setSyncIncludeNotes}
+              />
+            </div>
+
+            {/* Notes conflict — only when include notes is on */}
+            {syncIncludeNotes && (
+              <div className="space-y-1.5 pl-4 border-l-2 border-muted">
+                <Label className="text-xs font-medium text-muted-foreground">Notes conflict</Label>
+                <Select
+                  value={syncNotesConflict}
+                  onValueChange={(v) => setSyncNotesConflict(v as "append" | "overwrite")}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="append">Append all notes (newest first)</SelectItem>
+                    <SelectItem value="overwrite">Most recent note only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setSyncTarget(null)} disabled={syncingContacts}>
+              Cancel
+            </Button>
+            <Button
+              disabled={syncingContacts}
+              onClick={async () => {
+                if (!syncTarget) return;
+                setSyncingContacts(true);
+                try {
+                  const r = await fetch("/api/integrations/contacts/sync", {
+                    method:      "POST",
+                    credentials: "include",
+                    headers:     { "Content-Type": "application/json" },
+                    body:        JSON.stringify({
+                      provider:      syncTarget.key,
+                      includeNotes:  syncIncludeNotes,
+                      notesConflict: syncNotesConflict,
+                    }),
+                  });
+                  const data = await r.json() as { ok?: boolean; synced?: number; failed?: number; notesSynced?: number; message?: string; error?: string };
+                  if (r.ok && data.ok) {
+                    const failMsg = (data.failed ?? 0) > 0 ? `, ${data.failed} failed` : "";
+                    toast.success(data.message ?? `Synced ${data.synced} contacts${failMsg}`);
+                    setSyncTarget(null);
+                  } else {
+                    toast.error(data.error ?? "Contact sync failed");
+                  }
+                } catch {
+                  toast.error("Contact sync request failed — please try again");
+                } finally {
+                  setSyncingContacts(false);
+                }
+              }}
+            >
+              {syncingContacts ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Users className="w-3.5 h-3.5 mr-1.5" />}
+              {syncingContacts ? "Syncing…" : "Sync Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

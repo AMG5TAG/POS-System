@@ -7,6 +7,7 @@ import {
   customersTable,
   suppliersTable,
   purchaseOrdersTable,
+  customerNotesTable,
 } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -50,6 +51,8 @@ type XeroCredentials = {
     syncOnSale: boolean;
     syncFrequency: "daily" | "weekly" | "manual";
     lastSyncAt?: string;
+    includeNotes?: boolean;
+    notesConflict?: "append" | "overwrite";
   };
   syncLog?: Array<{
     timestamp: string;
@@ -386,11 +389,27 @@ router.put("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
 });
 
 /* ── POST /api/xero/sync/contacts ────────────────────────────────────────── */
+/*
+ * Syncs KoaPOS customers and suppliers to Xero as Contacts via PUT /Contacts.
+ * When `syncSettings.includeNotes` is enabled, a follow-up POST to each
+ * contact's /History endpoint records CRM notes as a History entry. Notes sync
+ * is best-effort: individual failures are logged and counted but do not abort
+ * the main contact sync.
+ *
+ * notesConflict modes:
+ *   "append"    — all notes concatenated newest-first (default)
+ *   "overwrite" — only the single most-recent note is sent
+ */
 
 router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
   if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+
+  // Read sync settings to determine notes behaviour
+  const creds         = await getCreds(merchantId);
+  const includeNotes  = creds?.syncSettings?.includeNotes  ?? false;
+  const notesConflict = creds?.syncSettings?.notesConflict ?? "append";
 
   const customers = await db
     .select()
@@ -404,20 +423,20 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
 
   const xeroContacts = [
     ...customers.map((c) => ({
-      Name:        `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`,
-      FirstName:   c.firstName ?? undefined,
-      LastName:    c.lastName  ?? undefined,
-      EmailAddress: c.email    ?? undefined,
-      Phones:      c.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: c.phone }] : [],
-      IsCustomer:  true,
-      IsSupplier:  false,
+      Name:         `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`,
+      FirstName:    c.firstName  ?? undefined,
+      LastName:     c.lastName   ?? undefined,
+      EmailAddress: c.email      ?? undefined,
+      Phones:       c.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: c.phone }] : [],
+      IsCustomer:   true,
+      IsSupplier:   false,
     })),
     ...suppliers.map((s) => ({
-      Name:        s.name,
-      EmailAddress: s.email    ?? undefined,
-      Phones:      s.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: s.phone }] : [],
-      IsCustomer:  false,
-      IsSupplier:  true,
+      Name:          s.name,
+      EmailAddress:  s.email         ?? undefined,
+      Phones:        s.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: s.phone }] : [],
+      IsCustomer:    false,
+      IsSupplier:    true,
       AccountNumber: s.accountNumber ?? undefined,
     })),
   ];
@@ -437,15 +456,109 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     body: JSON.stringify({ Contacts: xeroContacts }),
   });
 
-  const status = r.ok ? "success" : "error";
-  const msg    = r.ok
+  // Parse the full response body so we can extract Xero ContactIDs for notes sync
+  type XeroContactRecord = { ContactID?: string; EmailAddress?: string };
+  let responseBody: { Contacts?: XeroContactRecord[] } = {};
+  try { responseBody = await r.json() as { Contacts?: XeroContactRecord[] }; } catch { /* ignore */ }
+
+  const syncStatus = r.ok ? "success" : "error";
+  let msg = r.ok
     ? `Synced ${xeroContacts.length} contacts`
     : `Xero API error: ${r.status}`;
 
-  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "contacts", synced: xeroContacts.length, ...(status === "error" ? { error: msg } : { message: msg }) });
+  // ── Notes sync (best-effort, only when the main contact sync succeeded) ──
+  let notesSynced = 0;
+  let notesFailed = 0;
 
-  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: xeroContacts.length, message: msg });
+  if (r.ok && includeNotes) {
+    // Build email → Xero ContactID lookup from Xero's upsert response
+    const emailToContactId = new Map<string, string>();
+    for (const xc of responseBody.Contacts ?? []) {
+      if (xc.ContactID && xc.EmailAddress) {
+        emailToContactId.set(xc.EmailAddress.toLowerCase(), xc.ContactID);
+      }
+    }
+
+    // Fetch all notes for this merchant ordered newest-first
+    const allNotes = await db
+      .select()
+      .from(customerNotesTable)
+      .where(eq(customerNotesTable.merchantId, merchantId))
+      .orderBy(desc(customerNotesTable.createdAt));
+
+    // Group notes by customerId
+    const notesByCustomer = new Map<number, typeof allNotes>();
+    for (const note of allNotes) {
+      const bucket = notesByCustomer.get(note.customerId) ?? [];
+      bucket.push(note);
+      notesByCustomer.set(note.customerId, bucket);
+    }
+
+    const MAX_NOTE_CHARS = 2000;
+
+    for (const customer of customers) {
+      const notes = notesByCustomer.get(customer.id);
+      if (!notes || notes.length === 0) continue;
+
+      const contactId = customer.email
+        ? emailToContactId.get(customer.email.toLowerCase())
+        : undefined;
+      if (!contactId) continue; // Xero didn't return a ContactID for this customer — skip
+
+      // "overwrite": only send the single most-recent note.
+      // "append": concatenate all notes newest-first.
+      const notesToFormat = notesConflict === "overwrite" ? notes.slice(0, 1) : notes;
+      let noteText =
+        "[KoaPOS Notes]\n" +
+        notesToFormat
+          .map((n) => {
+            const date = new Date(n.createdAt).toLocaleDateString("en-AU", {
+              day: "numeric", month: "short", year: "numeric",
+            });
+            return `• ${date}: ${n.note}`;
+          })
+          .join("\n");
+      if (noteText.length > MAX_NOTE_CHARS) {
+        noteText = noteText.slice(0, MAX_NOTE_CHARS - 3) + "...";
+      }
+
+      try {
+        const hr = await fetch(`${XERO_API}/Contacts/${contactId}/History`, {
+          method:  "POST",
+          headers: {
+            Authorization:    `Bearer ${auth.accessToken}`,
+            "xero-tenant-id": auth.tenantId,
+            "Content-Type":   "application/json",
+          },
+          body: JSON.stringify({ HistoryRecords: [{ Details: noteText }] }),
+        });
+        if (hr.ok) {
+          notesSynced++;
+        } else {
+          req.log.warn({ merchantId, contactId, status: hr.status }, "Xero notes History POST failed");
+          notesFailed++;
+        }
+      } catch (err) {
+        req.log.warn({ merchantId, contactId, err }, "Xero notes History POST threw");
+        notesFailed++;
+      }
+    }
+
+    if (notesSynced > 0 || notesFailed > 0) {
+      msg += ` — ${notesSynced} note${notesSynced !== 1 ? "s" : ""} synced`;
+      if (notesFailed > 0) msg += `, ${notesFailed} failed`;
+    }
+  }
+
+  await appendSyncLog(merchantId, {
+    timestamp: new Date().toISOString(),
+    type:      "contacts",
+    synced:    xeroContacts.length,
+    ...(syncStatus === "error" ? { error: msg } : { message: msg }),
+  });
+
+  if (!r.ok) { res.status(r.status).json({ error: `Xero API error: ${r.status}` }); return; }
+  res.json({ ok: true, synced: xeroContacts.length, notesSynced, notesFailed, message: msg });
 });
 
 /* ── POST /api/xero/sync/transactions ───────────────────────────────────────

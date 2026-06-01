@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, merchantIntegrationsTable, oauthTokenVaultTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, customerNotesTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault } from "../services/tokenVault";
+import { upsertVault, deleteVault, readVault } from "../services/tokenVault";
 
 const router: IRouter = Router();
 
@@ -543,6 +543,172 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
   } catch {
     res.redirect(`/management/integrations?error=${key}_token_exchange_failed`);
   }
+});
+
+/* ── POST /integrations/contacts/sync ────────────────────────────────────────
+   Syncs KoaPOS customers to Google Contacts (People API) or Microsoft Contacts
+   (Graph API). Optionally includes CRM notes in each platform's native notes
+   field: Google → biographies[0].value, Microsoft → personalNotes.
+
+   Body: {
+     provider:      "google_contacts" | "microsoft_contacts",
+     includeNotes?: boolean,           (default: false)
+     notesConflict?: "append" | "overwrite"  (default: "append")
+   }
+
+   Error handling: per-contact failures are counted and logged, but do not abort
+   the batch. Large note payloads are silently truncated to 2 000 characters.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const {
+    provider,
+    includeNotes  = false,
+    notesConflict = "append",
+  } = req.body as {
+    provider?: string;
+    includeNotes?: boolean;
+    notesConflict?: "append" | "overwrite";
+  };
+
+  if (provider !== "google_contacts" && provider !== "microsoft_contacts") {
+    res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
+    return;
+  }
+
+  const vault = await readVault(merchantId, provider);
+  if (!vault?.accessToken) {
+    res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
+    return;
+  }
+
+  const customers = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.merchantId, merchantId));
+
+  if (customers.length === 0) {
+    res.json({ ok: true, provider, synced: 0, failed: 0, notesSynced: 0, message: "No customers to sync" });
+    return;
+  }
+
+  // ── Build per-customer notes text when requested ─────────────────────────
+  const notesByCustomer = new Map<number, string>();
+  if (includeNotes) {
+    const MAX_NOTE_CHARS = 2000;
+    const allNotes = await db
+      .select()
+      .from(customerNotesTable)
+      .where(eq(customerNotesTable.merchantId, merchantId))
+      .orderBy(desc(customerNotesTable.createdAt)); // newest first
+
+    for (const note of allNotes) {
+      const existing = notesByCustomer.get(note.customerId) ?? "";
+
+      if (notesConflict === "overwrite") {
+        // Keep only the most-recent note (first seen in desc order)
+        if (existing === "") {
+          const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
+            day: "numeric", month: "short", year: "numeric",
+          });
+          notesByCustomer.set(
+            note.customerId,
+            `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS),
+          );
+        }
+      } else {
+        // Append: collect all notes newest-first
+        const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
+          day: "numeric", month: "short", year: "numeric",
+        });
+        const line = `• ${date}: ${note.note}`;
+        const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
+        notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
+      }
+    }
+  }
+
+  // ── Sync contacts one by one ─────────────────────────────────────────────
+  let synced     = 0;
+  let failed     = 0;
+  let notesSynced = 0;
+
+  if (provider === "google_contacts") {
+    // Google People API — POST /v1/people:createContact
+    for (const c of customers) {
+      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
+      const body: Record<string, unknown> = {
+        names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
+        emailAddresses: c.email ? [{ value: c.email }] : [],
+        phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
+      };
+      if (includeNotes && notesText) {
+        (body as Record<string, unknown>).biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }];
+      }
+      try {
+        const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
+          body:    JSON.stringify(body),
+        });
+        if (r.ok) {
+          synced++;
+          if (includeNotes && notesText) notesSynced++;
+        } else {
+          req.log.warn({ merchantId, status: r.status, email: c.email }, "Google Contacts create failed");
+          failed++;
+        }
+      } catch (err) {
+        req.log.warn({ merchantId, err, email: c.email }, "Google Contacts create threw");
+        failed++;
+      }
+    }
+  } else {
+    // Microsoft Graph Contacts API — POST /v1.0/me/contacts
+    for (const c of customers) {
+      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
+      const fullName  = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+      const body: Record<string, unknown> = {
+        givenName:      c.firstName ?? "",
+        surname:        c.lastName  ?? "",
+        emailAddresses: c.email ? [{ address: c.email, name: fullName || c.email }] : [],
+        businessPhones: c.phone ? [c.phone] : [],
+      };
+      if (includeNotes && notesText) {
+        body.personalNotes = notesText;
+      }
+      try {
+        const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
+          body:    JSON.stringify(body),
+        });
+        if (r.ok) {
+          synced++;
+          if (includeNotes && notesText) notesSynced++;
+        } else {
+          req.log.warn({ merchantId, status: r.status, email: c.email }, "Microsoft Contacts create failed");
+          failed++;
+        }
+      } catch (err) {
+        req.log.warn({ merchantId, err, email: c.email }, "Microsoft Contacts create threw");
+        failed++;
+      }
+    }
+  }
+
+  const notesMsg = includeNotes && notesSynced > 0
+    ? `, ${notesSynced} with notes`
+    : "";
+  res.json({
+    ok:         true,
+    provider,
+    synced,
+    failed,
+    notesSynced,
+    message:    `Synced ${synced} contact${synced !== 1 ? "s" : ""}${notesMsg}${failed > 0 ? ` (${failed} failed)` : ""}`,
+  });
 });
 
 export default router;

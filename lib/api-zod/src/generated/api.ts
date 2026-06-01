@@ -8829,11 +8829,40 @@ export const UpdateXeroMappingsResponse = zod.object({
 
 
 /**
+ * Pushes all KoaPOS customers to the requested contact platform.
+When `includeNotes` is true, CRM notes are mapped to each platform's
+native notes field (Google → biographies, Microsoft → personalNotes).
+Per-contact failures are counted and returned without aborting the batch.
+
+ * @summary Sync KoaPOS customers to Google Contacts or Microsoft Contacts
+ */
+export const syncIntegrationContactsBodyIncludeNotesDefault = false;
+export const syncIntegrationContactsBodyNotesConflictDefault = `append`;
+
+export const SyncIntegrationContactsBody = zod.object({
+  "provider": zod.enum(['google_contacts', 'microsoft_contacts']).describe('Target contact platform'),
+  "includeNotes": zod.boolean().default(syncIntegrationContactsBodyIncludeNotesDefault).describe('When true, CRM notes are mapped to the platform\'s native notes field'),
+  "notesConflict": zod.enum(['append', 'overwrite']).default(syncIntegrationContactsBodyNotesConflictDefault).describe('\"append\" — all notes concatenated newest-first;\n\"overwrite\" — only the most-recent note is sent\n')
+})
+
+export const SyncIntegrationContactsResponse = zod.object({
+  "ok": zod.boolean(),
+  "provider": zod.string(),
+  "synced": zod.number().describe('Number of contacts successfully pushed'),
+  "failed": zod.number().describe('Number of contacts that failed (logged'),
+  "notesSynced": zod.number().describe('Number of contacts whose notes were included'),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Push customer records to Xero as contacts
  */
 export const SyncXeroContactsResponse = zod.object({
   "ok": zod.boolean(),
   "synced": zod.number(),
+  "notesSynced": zod.number().optional(),
+  "notesFailed": zod.number().optional(),
   "message": zod.string()
 })
 
@@ -8844,6 +8873,8 @@ export const SyncXeroContactsResponse = zod.object({
 export const SyncXeroTransactionsResponse = zod.object({
   "ok": zod.boolean(),
   "synced": zod.number(),
+  "notesSynced": zod.number().optional(),
+  "notesFailed": zod.number().optional(),
   "message": zod.string()
 })
 
@@ -8854,6 +8885,8 @@ export const SyncXeroTransactionsResponse = zod.object({
 export const SyncXeroPurchaseOrdersResponse = zod.object({
   "ok": zod.boolean(),
   "synced": zod.number(),
+  "notesSynced": zod.number().optional(),
+  "notesFailed": zod.number().optional(),
   "message": zod.string()
 })
 

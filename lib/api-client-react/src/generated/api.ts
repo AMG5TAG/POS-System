@@ -343,6 +343,8 @@ import type {
   Supplier,
   SupplierInput,
   SupplierListResponse,
+  SyncContactsInput,
+  SyncContactsResult,
   Tag,
   TagInput,
   TagListResponse,
@@ -27976,6 +27978,82 @@ export const useUpdateXeroMappings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateXeroMappingsMutationOptions(options));
+    }
+
+export const getSyncIntegrationContactsUrl = () => {
+
+
+
+
+  return `/api/integrations/contacts/sync`
+}
+
+/**
+ * Pushes all KoaPOS customers to the requested contact platform.
+When `includeNotes` is true, CRM notes are mapped to each platform's
+native notes field (Google → biographies, Microsoft → personalNotes).
+Per-contact failures are counted and returned without aborting the batch.
+
+ * @summary Sync KoaPOS customers to Google Contacts or Microsoft Contacts
+ */
+export const syncIntegrationContacts = async (syncContactsInput: SyncContactsInput, options?: RequestInit): Promise<SyncContactsResult> => {
+
+  return customFetch<SyncContactsResult>(getSyncIntegrationContactsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      syncContactsInput,)
+  }
+);}
+
+
+
+
+export const getSyncIntegrationContactsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncIntegrationContacts>>, TError,{data: BodyType<SyncContactsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncIntegrationContacts>>, TError,{data: BodyType<SyncContactsInput>}, TContext> => {
+
+const mutationKey = ['syncIntegrationContacts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncIntegrationContacts>>, {data: BodyType<SyncContactsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  syncIntegrationContacts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncIntegrationContactsMutationResult = NonNullable<Awaited<ReturnType<typeof syncIntegrationContacts>>>
+    export type SyncIntegrationContactsMutationBody = BodyType<SyncContactsInput>
+    export type SyncIntegrationContactsMutationError = ErrorType<void>
+
+    /**
+ * @summary Sync KoaPOS customers to Google Contacts or Microsoft Contacts
+ */
+export const useSyncIntegrationContacts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncIntegrationContacts>>, TError,{data: BodyType<SyncContactsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncIntegrationContacts>>,
+        TError,
+        {data: BodyType<SyncContactsInput>},
+        TContext
+      > => {
+      return useMutation(getSyncIntegrationContactsMutationOptions(options));
     }
 
 export const getSyncXeroContactsUrl = () => {
