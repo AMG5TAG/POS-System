@@ -23,6 +23,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     logoUrl: m.logoUrl ?? null,
     username: m.username ?? null,
     loginNotifyEmail: m.loginNotifyEmail === "true" ? true : false,
+    loginNotifyEmailFailed: m.loginNotifyEmailFailed === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
   };
 }
@@ -48,7 +49,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { username, loginNotifyEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean };
+  const { username, loginNotifyEmail, loginNotifyEmailFailed, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean };
 
   // Validate username format if provided
   if (username !== undefined) {
@@ -73,6 +74,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ...rest,
     ...(username !== undefined && { username }),
     ...(loginNotifyEmail !== undefined && { loginNotifyEmail: loginNotifyEmail ? "true" : "false" }),
+    ...(loginNotifyEmailFailed !== undefined && { loginNotifyEmailFailed: loginNotifyEmailFailed ? "true" : "false" }),
   };
 
   const [merchant] = await db

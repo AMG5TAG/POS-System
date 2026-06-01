@@ -52,12 +52,14 @@ function LoginNotifyCard() {
   const qc = useQueryClient();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const updateMerchant = useUpdateMerchant();
-  const [saving, setSaving] = useState(false);
+  const [savingSuccess, setSavingSuccess] = useState(false);
+  const [savingFailed, setSavingFailed] = useState(false);
 
-  const enabled = (merchant as { loginNotifyEmail?: boolean } | undefined)?.loginNotifyEmail ?? false;
+  const enabledSuccess = (merchant as { loginNotifyEmail?: boolean } | undefined)?.loginNotifyEmail ?? false;
+  const enabledFailed = (merchant as { loginNotifyEmailFailed?: boolean } | undefined)?.loginNotifyEmailFailed ?? false;
 
-  const handleToggle = (checked: boolean) => {
-    setSaving(true);
+  const handleToggleSuccess = (checked: boolean) => {
+    setSavingSuccess(true);
     updateMerchant.mutate(
       { data: { loginNotifyEmail: checked } },
       {
@@ -68,7 +70,24 @@ function LoginNotifyCard() {
         onError: () => {
           toast.error("Failed to update notification setting");
         },
-        onSettled: () => setSaving(false),
+        onSettled: () => setSavingSuccess(false),
+      }
+    );
+  };
+
+  const handleToggleFailed = (checked: boolean) => {
+    setSavingFailed(true);
+    updateMerchant.mutate(
+      { data: { loginNotifyEmailFailed: checked } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success(checked ? "Failed login notifications enabled" : "Failed login notifications disabled");
+        },
+        onError: () => {
+          toast.error("Failed to update notification setting");
+        },
+        onSettled: () => setSavingFailed(false),
       }
     );
   };
@@ -80,7 +99,7 @@ function LoginNotifyCard() {
           <Bell className="w-4 h-4" /> Login Email Notifications
         </CardTitle>
         <CardDescription>
-          Receive an email whenever someone successfully signs in to your account.
+          Receive email alerts for sign-in activity on your account.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -92,10 +111,24 @@ function LoginNotifyCard() {
             </p>
           </div>
           <Switch
-            checked={enabled}
-            onCheckedChange={handleToggle}
-            disabled={saving}
+            checked={enabledSuccess}
+            onCheckedChange={handleToggleSuccess}
+            disabled={savingSuccess}
             aria-label="Toggle login email notifications"
+          />
+        </div>
+        <div className="border-t pt-4 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Email me on failed login attempts</p>
+            <p className="text-xs text-muted-foreground">
+              Get notified when someone enters the wrong password or tries to sign in while your account is locked. Each email includes the time, IP address, and browser.
+            </p>
+          </div>
+          <Switch
+            checked={enabledFailed}
+            onCheckedChange={handleToggleFailed}
+            disabled={savingFailed}
+            aria-label="Toggle failed login attempt notifications"
           />
         </div>
       </CardContent>

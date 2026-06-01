@@ -7221,6 +7221,8 @@ components:
           type: ["string", "null"]
         loginNotifyEmail:
           type: boolean
+        loginNotifyEmailFailed:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -7255,6 +7257,8 @@ components:
           maxLength: 30
           pattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
         loginNotifyEmail:
+          type: boolean
+        loginNotifyEmailFailed:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────

@@ -149,8 +149,49 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     const retryAfterSecs = Math.ceil((lockStatus.retryAfter.getTime() - Date.now()) / 1000);
     res.setHeader("Retry-After", String(retryAfterSecs));
     // Look up the merchant to attach merchantId to the lockout event if possible
-    const [lockedMerchant] = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(eq(merchantsTable.email, email));
+    const [lockedMerchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
     await db.insert(authEventsTable).values({ merchantId: lockedMerchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "locked" });
+    // Fire-and-forget failed-login notification for "tried while locked" events
+    if (lockedMerchant?.loginNotifyEmailFailed === "true") {
+      const failTime = new Date().toLocaleString("en-AU", {
+        timeZone: lockedMerchant.timezone ?? "Australia/Sydney",
+        dateStyle: "full",
+        timeStyle: "short",
+      });
+      const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
+      const ipLabel = ip ?? "Unknown";
+      void sendEmail(lockedMerchant.id, {
+        to: lockedMerchant.email,
+        subject: "Sign-in attempt on your locked KoaPOS account",
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+            <h2 style="margin-top:0;color:#dc2626">Sign-in attempt while account is locked</h2>
+            <p>Someone tried to sign in to your KoaPOS account while it is temporarily locked.</p>
+            <table style="border-collapse:collapse;width:100%;margin:16px 0">
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${failTime}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+              </tr>
+            </table>
+            <p style="color:#666;font-size:14px">
+              If this was you, you can safely ignore this email. If this wasn't you, we recommend changing your password once you regain access and reviewing your recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.
+            </p>
+            <p style="color:#666;font-size:14px">
+              To stop receiving these emails, turn off <strong>Failed login attempt notifications</strong> in your Account settings.
+            </p>
+          </div>
+        `,
+        text: `Sign-in attempt on locked KoaPOS account\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password once you regain access.`,
+      });
+    }
     const errorMsg = lockStatus.isAnomalyHold
       ? `Account temporarily locked due to suspicious sign-in activity from multiple locations. An email has been sent with instructions. If you have an active session, clear the hold in Account → Account Lock.`
       : `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`;
@@ -170,6 +211,47 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   if (!(await verifyPassword(password, merchant.passwordHash))) {
     const { attemptsRemaining } = await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
+    // Fire-and-forget failed-login notification email if opted in
+    if (merchant.loginNotifyEmailFailed === "true") {
+      const failTime = new Date().toLocaleString("en-AU", {
+        timeZone: merchant.timezone ?? "Australia/Sydney",
+        dateStyle: "full",
+        timeStyle: "short",
+      });
+      const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
+      const ipLabel = ip ?? "Unknown";
+      void sendEmail(merchant.id, {
+        to: merchant.email,
+        subject: "Failed sign-in attempt on your KoaPOS account",
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+            <h2 style="margin-top:0;color:#dc2626">Failed sign-in attempt detected</h2>
+            <p>Someone tried to sign in to your KoaPOS account with an incorrect password.</p>
+            <table style="border-collapse:collapse;width:100%;margin:16px 0">
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${failTime}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+              </tr>
+            </table>
+            <p style="color:#666;font-size:14px">
+              If this was you, you can safely ignore this email. If this wasn't you, we recommend changing your password immediately and reviewing your recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.
+            </p>
+            <p style="color:#666;font-size:14px">
+              To stop receiving these emails, turn off <strong>Failed login attempt notifications</strong> in your Account settings.
+            </p>
+          </div>
+        `,
+        text: `Failed sign-in attempt on KoaPOS\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
+      });
+    }
     // Check for multi-IP anomaly — fire-and-forget hold + email if threshold exceeded
     void (async () => {
       try {
