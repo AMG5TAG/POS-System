@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { LockKeyholeIcon, TriangleAlertIcon } from "lucide-react";
+import { CheckCircleIcon, LockKeyholeIcon, TriangleAlertIcon } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -40,6 +40,8 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const loginMutation = useLogin();
+
+  const holdCleared = new URLSearchParams(window.location.search).get("holdCleared") === "1";
 
   const [lockMessage, setLockMessage] = useState<string | null>(null);
   const [lockSecondsLeft, setLockSecondsLeft] = useState<number>(0);
@@ -139,6 +141,15 @@ export default function LoginPage() {
           <CardDescription>Enter your email below to log in to your account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {holdCleared && (
+            <Alert className="border-green-500 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100">
+              <CheckCircleIcon className="h-4 w-4 text-green-600" />
+              <AlertTitle>Account hold cleared</AlertTitle>
+              <AlertDescription>
+                Your account hold has been lifted. You can now log in below.
+              </AlertDescription>
+            </Alert>
+          )}
           {lockMessage && (
             <Alert variant="destructive">
               <LockKeyholeIcon className="h-4 w-4" />

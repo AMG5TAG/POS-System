@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes, createHash } from "crypto";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable } from "@workspace/db";
-import { eq, desc, and, gt } from "drizzle-orm";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable } from "@workspace/db";
+import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -259,6 +259,31 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
         if (holdTriggered) {
           await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "account_hold" });
           const holdHours = parseInt(process.env.LOGIN_ANOMALY_HOLD_HOURS ?? "24", 10);
+
+          // Generate a single-use, 1-hour token so the merchant can clear the hold without an active session
+          const rawToken = randomBytes(32).toString("hex");
+          const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+          const tokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+          // Invalidate any existing unused hold-clear tokens for this merchant
+          await db
+            .update(accountHoldTokensTable)
+            .set({ usedAt: new Date() })
+            .where(
+              and(
+                eq(accountHoldTokensTable.merchantId, merchant.id),
+                gt(accountHoldTokensTable.expiresAt, new Date())
+              )
+            );
+
+          await db.insert(accountHoldTokensTable).values({
+            merchantId: merchant.id,
+            tokenHash,
+            expiresAt: tokenExpiresAt,
+          });
+
+          const clearUrl = `${getAppBaseUrl()}/api/auth/account-hold/clear?token=${rawToken}`;
+
           void sendEmail(merchant.id, {
             to: merchant.email,
             subject: "Your KoaPOS account has been locked due to suspicious activity",
@@ -276,12 +301,19 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
                     <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${holdHours} hours (or until manually cleared)</td>
                   </tr>
                 </table>
-                <p><strong>If this was you</strong> — you may have mistyped your password from multiple devices. Sign in to KoaPOS and go to <strong>Account → Account Lock</strong> to confirm your identity and clear the hold.</p>
-                <p><strong>If this wasn't you</strong> — someone may be attempting to access your account. We recommend changing your password as soon as possible.</p>
+                <p><strong>If this was you</strong> — you may have mistyped your password from multiple devices. Click the button below to clear the hold immediately. The link expires in 1 hour.</p>
+                <p style="margin:24px 0">
+                  <a href="${clearUrl}"
+                     style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+                    Clear account hold
+                  </a>
+                </p>
+                <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${clearUrl}</p>
+                <p><strong>If this wasn't you</strong> — someone may be attempting to access your account. Do not click the link above. We recommend changing your password as soon as possible.</p>
                 <p style="color:#666;font-size:14px">You can review recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.</p>
               </div>
             `,
-            text: `Unusual sign-in activity detected on your KoaPOS account.\n\nMultiple failed login attempts from different locations have triggered an automatic account hold.\n\nIP: ${ip ?? "Unknown"}\nLock duration: ${holdHours} hours\n\nIf this was you, sign in to KoaPOS and go to Account > Account Lock to clear the hold.\nIf this wasn't you, change your password immediately.`,
+            text: `Unusual sign-in activity detected on your KoaPOS account.\n\nMultiple failed login attempts from different locations have triggered an automatic account hold.\n\nIP: ${ip ?? "Unknown"}\nLock duration: ${holdHours} hours\n\nIf this was you, clear the hold immediately using this link (expires in 1 hour):\n${clearUrl}\n\nIf this wasn't you, do NOT click the link above and change your password immediately.`,
           });
         }
       } catch (_err) {
@@ -732,6 +764,94 @@ router.delete("/auth/account-lock", requireAuth, async (req, res): Promise<void>
   }
   await clearFailedAttempts(merchant.email);
   res.json({ ok: true });
+});
+
+/**
+ * GET /auth/account-hold/clear?token=<raw-token>
+ *
+ * No active session required. Validates the single-use token issued when an
+ * anomaly hold was applied, clears the hold, and logs a `hold_cleared_via_email`
+ * auth event. The browser is redirected to the login page with a success flag
+ * so the merchant can sign in immediately.
+ */
+const holdClearLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many requests — please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const ip = req.ip ?? "";
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  },
+});
+
+router.get("/auth/account-hold/clear", holdClearLimiter, async (req, res): Promise<void> => {
+  const rawToken = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  if (!rawToken) {
+    res.status(400).json({ error: "Missing token." });
+    return;
+  }
+
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+  const [record] = await db
+    .select()
+    .from(accountHoldTokensTable)
+    .where(eq(accountHoldTokensTable.tokenHash, tokenHash));
+
+  if (!record) {
+    res.status(400).json({ error: "This link is invalid or has already expired." });
+    return;
+  }
+
+  if (record.usedAt) {
+    res.status(400).json({ error: "This link has already been used." });
+    return;
+  }
+
+  if (record.expiresAt < new Date()) {
+    res.status(400).json({ error: "This link has expired. Please contact support or wait for the hold to lift." });
+    return;
+  }
+
+  const [merchant] = await db
+    .select({ id: merchantsTable.id, email: merchantsTable.email })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, record.merchantId));
+
+  if (!merchant) {
+    res.status(400).json({ error: "Account not found." });
+    return;
+  }
+
+  // Mark token as used and clear the hold atomically
+  await db.transaction(async (tx) => {
+    await tx
+      .update(accountHoldTokensTable)
+      .set({ usedAt: new Date() })
+      .where(eq(accountHoldTokensTable.id, record.id));
+
+    await tx.execute(
+      sql`UPDATE login_attempts
+          SET account_hold_until = NULL, updated_at = NOW()
+          WHERE email = ${merchant.email.trim().toLowerCase()}`
+    );
+  });
+
+  // Log the hold-cleared event
+  const ip = req.ip ?? undefined;
+  const ua = req.headers["user-agent"] ?? undefined;
+  await db.insert(authEventsTable).values({
+    merchantId: merchant.id,
+    ipAddress: ip,
+    userAgent: ua,
+    outcome: "hold_cleared_via_email",
+  });
+
+  // Redirect to the login page with a query flag the UI can use to show a confirmation
+  const loginUrl = `${getAppBaseUrl()}/login?holdCleared=1`;
+  res.redirect(302, loginUrl);
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
