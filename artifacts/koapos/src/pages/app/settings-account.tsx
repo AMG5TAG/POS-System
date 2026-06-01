@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
@@ -98,6 +98,180 @@ function LoginNotifyCard() {
             aria-label="Toggle login email notifications"
           />
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type AuthEventItem = {
+  id: number;
+  outcome: string;
+  status: string;
+  createdAt: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
+  const qc = useQueryClient();
+  const updateEvent = useUpdateAuthEvent();
+  const [pending, setPending] = useState<Record<number, boolean>>({});
+
+  const handleStatus = (id: number, status: "acknowledged" | "flagged" | "new") => {
+    setPending((p) => ({ ...p, [id]: true }));
+    updateEvent.mutate(
+      { id, data: { status } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["auth-events"] });
+        },
+        onError: () => {
+          toast.error("Failed to update event");
+        },
+        onSettled: () => {
+          setPending((p) => {
+            const next = { ...p };
+            delete next[id];
+            return next;
+          });
+        },
+      }
+    );
+  };
+
+  return (
+    <Card id="recent-sign-ins">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
+        </CardTitle>
+        <CardDescription>
+          The last 10 login attempts to your account. Flag anything that looks suspicious.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!authEvents || authEvents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No sign-in events recorded yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {authEvents.slice(0, 10).map((ev) => {
+              const isFlagged = ev.status === "flagged";
+              const isAcknowledged = ev.status === "acknowledged";
+              const isLoading = !!pending[ev.id];
+              return (
+                <li
+                  key={ev.id}
+                  className={cn(
+                    "flex items-start gap-3 py-2.5 px-3 rounded-lg border",
+                    isFlagged
+                      ? "border-destructive/50 bg-destructive/5"
+                      : isAcknowledged
+                      ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/30"
+                      : "border-border bg-transparent"
+                  )}
+                >
+                  <div className="mt-0.5 shrink-0">
+                    {ev.outcome === "success" ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-destructive" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {ev.outcome === "success"
+                            ? "Successful sign-in"
+                            : ev.outcome === "bad_password"
+                            ? "Wrong password"
+                            : ev.outcome === "locked"
+                            ? "Account locked"
+                            : "Email not found"}
+                        </span>
+                        {isFlagged && (
+                          <Badge variant="destructive" className="text-xs py-0 px-1.5 h-4">
+                            Suspicious
+                          </Badge>
+                        )}
+                        {isAcknowledged && (
+                          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4 text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900">
+                            Dismissed
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatRelative(ev.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {parseUserAgent(ev.userAgent)}{ev.ipAddress ? ` · ${ev.ipAddress}` : ""}
+                    </p>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {isFlagged ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-xs px-2"
+                          disabled={isLoading}
+                          onClick={() => handleStatus(ev.id, "new")}
+                        >
+                          {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3 mr-1" />}
+                          Clear flag
+                        </Button>
+                      ) : isAcknowledged ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/60 hover:bg-destructive/5"
+                            disabled={isLoading}
+                            onClick={() => handleStatus(ev.id, "flagged")}
+                          >
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Flag className="w-3 h-3 mr-1" />}
+                            Flag
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs px-2 text-muted-foreground"
+                            disabled={isLoading}
+                            onClick={() => handleStatus(ev.id, "new")}
+                          >
+                            Undo
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
+                            disabled={isLoading}
+                            onClick={() => handleStatus(ev.id, "acknowledged")}
+                          >
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3 mr-1" />}
+                            Dismiss
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/60 hover:bg-destructive/5"
+                            disabled={isLoading}
+                            onClick={() => handleStatus(ev.id, "flagged")}
+                          >
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Flag className="w-3 h-3 mr-1" />}
+                            Flag as suspicious
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </CardContent>
     </Card>
   );
@@ -647,46 +821,7 @@ export default function SettingsAccountPage() {
         </Card>
 
         {/* Recent sign-ins */}
-        <Card id="recent-sign-ins">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
-            </CardTitle>
-            <CardDescription>
-              The last 10 login attempts to your account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!authEvents || authEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No sign-in events recorded yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {authEvents.slice(0, 10).map((ev) => (
-                  <li key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0">
-                    <div className="mt-0.5 shrink-0">
-                      {ev.outcome === "success" ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-destructive" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium capitalize">
-                          {ev.outcome === "success" ? "Successful sign-in" : ev.outcome === "bad_password" ? "Wrong password" : ev.outcome === "locked" ? "Account locked" : "Email not found"}
-                        </span>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelative(ev.createdAt)}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {parseUserAgent(ev.userAgent)}{ev.ipAddress ? ` · ${ev.ipAddress}` : ""}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <RecentSignInsCard authEvents={authEvents} />
 
         </div>{/* end right column */}
 

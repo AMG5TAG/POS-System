@@ -6,7 +6,8 @@ export const authEventsTable = pgTable("auth_events", {
   merchantId:  integer("merchant_id").references(() => merchantsTable.id),
   ipAddress:   text("ip_address"),
   userAgent:   text("user_agent"),
-  outcome:     text("outcome").notNull(), // success | bad_password | not_found
+  outcome:     text("outcome").notNull(), // success | bad_password | not_found | locked
+  status:      text("status").notNull().default("new"), // new | acknowledged | flagged
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

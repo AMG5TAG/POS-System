@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
-import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody } from "@workspace/api-zod";
+import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
 import { sendEmail } from "../services/email";
@@ -242,9 +242,46 @@ router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
       ipAddress: e.ipAddress,
       userAgent: e.userAgent,
       outcome: e.outcome,
+      status: e.status,
       createdAt: e.createdAt.toISOString(),
     }))
   );
+});
+
+router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const eventId = parseInt(String(req.params.id), 10);
+  if (isNaN(eventId)) {
+    res.status(400).json({ error: "Invalid event id" });
+    return;
+  }
+
+  const parsed = UpdateAuthEventBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [updated] = await db
+    .update(authEventsTable)
+    .set({ status: parsed.data.status })
+    .where(and(eq(authEventsTable.id, eventId), eq(authEventsTable.merchantId, merchantId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Event not found" });
+    return;
+  }
+
+  res.json({
+    id: updated.id,
+    merchantId: updated.merchantId,
+    ipAddress: updated.ipAddress,
+    userAgent: updated.userAgent,
+    outcome: updated.outcome,
+    status: updated.status,
+    createdAt: updated.createdAt.toISOString(),
+  });
 });
 
 router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {

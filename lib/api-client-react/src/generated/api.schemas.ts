@@ -34,13 +34,36 @@ export const AuthEventOutcome = {
   locked: 'locked',
 } as const;
 
+export type AuthEventStatus = typeof AuthEventStatus[keyof typeof AuthEventStatus];
+
+
+export const AuthEventStatus = {
+  new: 'new',
+  acknowledged: 'acknowledged',
+  flagged: 'flagged',
+} as const;
+
 export interface AuthEvent {
   id: number;
   merchantId?: number | null;
   ipAddress?: string | null;
   userAgent?: string | null;
   outcome: AuthEventOutcome;
+  status: AuthEventStatus;
   createdAt: string;
+}
+
+export type UpdateAuthEventStatusStatus = typeof UpdateAuthEventStatusStatus[keyof typeof UpdateAuthEventStatusStatus];
+
+
+export const UpdateAuthEventStatusStatus = {
+  new: 'new',
+  acknowledged: 'acknowledged',
+  flagged: 'flagged',
+} as const;
+
+export interface UpdateAuthEventStatus {
+  status: UpdateAuthEventStatusStatus;
 }
 
 export interface RegisterInput {

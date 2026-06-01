@@ -92,9 +92,32 @@ export const ListAuthEventsResponseItem = zod.object({
   "ipAddress": zod.string().nullish(),
   "userAgent": zod.string().nullish(),
   "outcome": zod.enum(['success', 'bad_password', 'not_found', 'locked']),
+  "status": zod.enum(['new', 'acknowledged', 'flagged']),
   "createdAt": zod.coerce.date()
 })
 export const ListAuthEventsResponse = zod.array(ListAuthEventsResponseItem)
+
+
+/**
+ * @summary Update the status of a sign-in event (flag or dismiss)
+ */
+export const UpdateAuthEventParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAuthEventBody = zod.object({
+  "status": zod.enum(['new', 'acknowledged', 'flagged'])
+})
+
+export const UpdateAuthEventResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number().nullish(),
+  "ipAddress": zod.string().nullish(),
+  "userAgent": zod.string().nullish(),
+  "outcome": zod.enum(['success', 'bad_password', 'not_found', 'locked']),
+  "status": zod.enum(['new', 'acknowledged', 'flagged']),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

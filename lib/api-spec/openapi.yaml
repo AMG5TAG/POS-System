@@ -195,6 +195,37 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/events/{id}:
+    patch:
+      operationId: updateAuthEvent
+      tags: [auth]
+      summary: Update the status of a sign-in event (flag or dismiss)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAuthEventStatus"
+      responses:
+        "200":
+          description: Updated auth event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthEvent"
+        "400":
+          description: Invalid status value
+        "401":
+          description: Unauthorized
+        "404":
+          description: Event not found
+
   # ── Merchants ─────────────────────────────────────────────────────────────
   /merchants/me:
     get:
@@ -7055,7 +7086,7 @@ components:
     # ── Auth ────────────────────────────────────────────────────────────────
     AuthEvent:
       type: object
-      required: [id, outcome, createdAt]
+      required: [id, outcome, status, createdAt]
       properties:
         id:
           type: integer
@@ -7071,9 +7102,20 @@ components:
         outcome:
           type: string
           enum: [success, bad_password, not_found, locked]
+        status:
+          type: string
+          enum: [new, acknowledged, flagged]
         createdAt:
           type: string
           format: date-time
+
+    UpdateAuthEventStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [new, acknowledged, flagged]
 
     RegisterInput:
       type: object

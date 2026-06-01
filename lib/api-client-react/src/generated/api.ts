@@ -361,6 +361,7 @@ import type {
   TransactionInput,
   TransactionList,
   UnlockAccountInput,
+  UpdateAuthEventStatus,
   UpdateLaybyBody,
   UpdateShippingCarrierBody,
   UploadUrlRequest,
@@ -834,6 +835,78 @@ export function useListAuthEvents<TData = Awaited<ReturnType<typeof listAuthEven
 
 
 
+
+export const getUpdateAuthEventUrl = (id: number,) => {
+
+
+
+
+  return `/api/auth/events/${id}`
+}
+
+/**
+ * @summary Update the status of a sign-in event (flag or dismiss)
+ */
+export const updateAuthEvent = async (id: number,
+    updateAuthEventStatus: UpdateAuthEventStatus, options?: RequestInit): Promise<AuthEvent> => {
+
+  return customFetch<AuthEvent>(getUpdateAuthEventUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateAuthEventStatus,)
+  }
+);}
+
+
+
+
+export const getUpdateAuthEventMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAuthEvent>>, TError,{id: number;data: BodyType<UpdateAuthEventStatus>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAuthEvent>>, TError,{id: number;data: BodyType<UpdateAuthEventStatus>}, TContext> => {
+
+const mutationKey = ['updateAuthEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAuthEvent>>, {id: number;data: BodyType<UpdateAuthEventStatus>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAuthEvent(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAuthEventMutationResult = NonNullable<Awaited<ReturnType<typeof updateAuthEvent>>>
+    export type UpdateAuthEventMutationBody = BodyType<UpdateAuthEventStatus>
+    export type UpdateAuthEventMutationError = ErrorType<void>
+
+    /**
+ * @summary Update the status of a sign-in event (flag or dismiss)
+ */
+export const useUpdateAuthEvent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAuthEvent>>, TError,{id: number;data: BodyType<UpdateAuthEventStatus>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAuthEvent>>,
+        TError,
+        {id: number;data: BodyType<UpdateAuthEventStatus>},
+        TContext
+      > => {
+      return useMutation(getUpdateAuthEventMutationOptions(options));
+    }
 
 export const getGetMerchantUrl = () => {
 
