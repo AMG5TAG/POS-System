@@ -6,6 +6,7 @@ import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
 import { scheduleLoginAttemptsCleanup } from "./services/loginAttemptsCleanupScheduler";
 import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
+import { schedulePasswordResetTokensCleanup } from "./services/passwordResetTokensCleanupScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 
 assertVaultKeyConfigured();
@@ -35,6 +36,7 @@ app.listen(port, (err) => {
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
   scheduleLowStockAlerts(logger);
+  schedulePasswordResetTokensCleanup(logger);
   ensureLoginCleanupFunction(logger).then(() => {
     scheduleLoginAttemptsCleanup(logger);
   }).catch((err) => {
