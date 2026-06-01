@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircleIcon, LockKeyholeIcon, TriangleAlertIcon } from "lucide-react";
+import { CheckCircleIcon, LockKeyholeIcon, TriangleAlertIcon, ArrowBigUpIcon } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -43,6 +43,7 @@ export default function LoginPage() {
 
   const holdCleared = new URLSearchParams(window.location.search).get("holdCleared") === "1";
 
+  const [capsLockOn, setCapsLockOn] = useState(false);
   const [lockMessage, setLockMessage] = useState<string | null>(null);
   const [lockSecondsLeft, setLockSecondsLeft] = useState<number>(0);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
@@ -210,8 +211,19 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input
+                        type="password"
+                        {...field}
+                        onKeyDown={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                        onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                      />
                     </FormControl>
+                    {capsLockOn && (
+                      <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+                        <ArrowBigUpIcon className="h-4 w-4 shrink-0" />
+                        Caps Lock is on
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
