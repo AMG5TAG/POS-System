@@ -392,17 +392,79 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   }
 
   await clearFailedAttempts(email);
-  await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "success" });
 
-  // Fire-and-forget login notification email (does not block the response)
-  if (merchant.loginNotifyEmail === "true") {
-    const loginTime = new Date().toLocaleString("en-AU", {
-      timeZone: merchant.timezone ?? "Australia/Sydney",
-      dateStyle: "full",
-      timeStyle: "short",
+  // Check if this IP has been seen before for this merchant (only when an IP is present)
+  let isNewIp = false;
+  if (ip) {
+    const [existingIpEvent] = await db
+      .select({ id: authEventsTable.id })
+      .from(authEventsTable)
+      .where(
+        and(
+          eq(authEventsTable.merchantId, merchant.id),
+          eq(authEventsTable.ipAddress, ip),
+          eq(authEventsTable.outcome, "success")
+        )
+      )
+      .limit(1);
+    isNewIp = !existingIpEvent;
+  }
+
+  const [insertedEvent] = await db
+    .insert(authEventsTable)
+    .values({
+      merchantId: merchant.id,
+      ipAddress: ip,
+      userAgent: ua,
+      outcome: "success",
+      ...(isNewIp ? { status: "flagged", flagReason: "new_ip" } : {}),
+    })
+    .returning();
+
+  const loginTime = new Date().toLocaleString("en-AU", {
+    timeZone: merchant.timezone ?? "Australia/Sydney",
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+  const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
+  const ipLabel = ip ?? "Unknown";
+
+  // Auto-flag alert: fire when a new IP is detected, regardless of notify preference
+  if (isNewIp) {
+    void sendEmail(merchant.id, {
+      to: merchant.email,
+      subject: "⚠️ Sign-in from a new location on your KoaPOS account",
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+          <h2 style="margin-top:0;color:#d97706">Sign-in from a new location</h2>
+          <p>Your KoaPOS account was signed in to from an IP address that has not been used before.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0">
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${loginTime}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+            </tr>
+          </table>
+          <p><strong>If this was you</strong> — you can dismiss this alert in <strong>Account → Recent Sign-ins</strong>.</p>
+          <p><strong>If this wasn't you</strong> — change your password immediately and review your recent sign-in activity.</p>
+          <p style="color:#666;font-size:14px">
+            To review recent sign-in events, go to <strong>Account → Recent Sign-ins</strong> in KoaPOS.
+          </p>
+        </div>
+      `,
+      text: `Sign-in from a new location on your KoaPOS account.\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this was you, you can dismiss the alert in Account → Recent Sign-ins.\nIf this wasn't you, change your password immediately.`,
     });
-    const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
-    const ipLabel = ip ?? "Unknown";
+  }
+
+  // Regular login notification email (opted-in, shown for all successful logins)
+  if (merchant.loginNotifyEmail === "true") {
     void sendEmail(merchant.id, {
       to: merchant.email,
       subject: "New sign-in to your KoaPOS account",
@@ -437,6 +499,8 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     });
   }
 
+  void insertedEvent;
+
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));
   });
@@ -462,6 +526,7 @@ router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
       userAgent: e.userAgent,
       outcome: e.outcome,
       status: e.status,
+      flagReason: e.flagReason ?? null,
       createdAt: e.createdAt.toISOString(),
     }))
   );
@@ -522,7 +587,10 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
 
   const [updated] = await db
     .update(authEventsTable)
-    .set({ status: parsed.data.status })
+    .set({
+      status: parsed.data.status,
+      ...(parsed.data.status === "flagged" ? { flagReason: "manual" } : parsed.data.status === "new" || parsed.data.status === "acknowledged" ? { flagReason: null } : {}),
+    })
     .where(and(eq(authEventsTable.id, eventId), eq(authEventsTable.merchantId, merchantId)))
     .returning();
 
@@ -586,6 +654,7 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
     userAgent: updated.userAgent,
     outcome: updated.outcome,
     status: updated.status,
+    flagReason: updated.flagReason ?? null,
     createdAt: updated.createdAt.toISOString(),
   });
 });

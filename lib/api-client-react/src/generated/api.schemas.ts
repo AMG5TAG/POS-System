@@ -43,6 +43,14 @@ export const AuthEventStatus = {
   flagged: 'flagged',
 } as const;
 
+export type AuthEventFlagReason = typeof AuthEventFlagReason[keyof typeof AuthEventFlagReason] | null;
+
+
+export const AuthEventFlagReason = {
+  manual: 'manual',
+  new_ip: 'new_ip',
+} as const;
+
 export interface AuthEvent {
   id: number;
   merchantId?: number | null;
@@ -50,6 +58,7 @@ export interface AuthEvent {
   userAgent?: string | null;
   outcome: AuthEventOutcome;
   status: AuthEventStatus;
+  flagReason?: AuthEventFlagReason;
   createdAt: string;
 }
 

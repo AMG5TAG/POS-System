@@ -8,6 +8,7 @@ export const authEventsTable = pgTable("auth_events", {
   userAgent:   text("user_agent"),
   outcome:     text("outcome").notNull(), // success | bad_password | not_found | locked | account_hold
   status:      text("status").notNull().default("new"), // new | acknowledged | flagged
+  flagReason:  text("flag_reason"), // null | "manual" | "new_ip"
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

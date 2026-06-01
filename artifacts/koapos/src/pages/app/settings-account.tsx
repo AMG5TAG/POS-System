@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal, MapPin } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
@@ -279,6 +279,7 @@ type AuthEventItem = {
   id: number;
   outcome: string;
   status: string;
+  flagReason?: string | null;
   createdAt: string;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -304,13 +305,14 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
 
   const handleDownloadCSV = () => {
     const events = (authEvents ?? []).slice(0, 50);
-    const header = ["Date/Time", "Outcome", "Browser", "IP Address", "Status"];
+    const header = ["Date/Time", "Outcome", "Browser", "IP Address", "Status", "Flag Reason"];
     const rows = events.map((ev) => [
       new Date(ev.createdAt).toLocaleString(),
       outcomeLabel(ev.outcome),
       parseUserAgent(ev.userAgent),
       ev.ipAddress ?? "",
       ev.status,
+      ev.flagReason === "new_ip" ? "New location" : ev.flagReason === "manual" ? "Manually flagged" : "",
     ]);
     const csv = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -374,6 +376,8 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           <ul className="space-y-2">
             {authEvents.slice(0, 20).map((ev) => {
               const isFlagged = ev.status === "flagged";
+              const isNewIp = ev.flagReason === "new_ip";
+              const isManualFlag = isFlagged && !isNewIp;
               const isAcknowledged = ev.status === "acknowledged";
               const isLoading = !!pending[ev.id];
               return (
@@ -381,8 +385,10 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                   key={ev.id}
                   className={cn(
                     "flex items-start gap-3 py-2.5 px-3 rounded-lg border",
-                    isFlagged
+                    isManualFlag
                       ? "border-destructive/50 bg-destructive/5"
+                      : isNewIp
+                      ? "border-amber-300/60 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/20"
                       : isAcknowledged
                       ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/30"
                       : "border-border bg-transparent"
@@ -390,7 +396,9 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                 >
                   <div className="mt-0.5 shrink-0">
                     {ev.outcome === "success" ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      isNewIp
+                        ? <MapPin className="w-4 h-4 text-amber-500" />
+                        : <CheckCircle2 className="w-4 h-4 text-green-500" />
                     ) : ev.outcome === "account_hold" ? (
                       <ShieldAlert className="w-4 h-4 text-amber-500" />
                     ) : (
@@ -411,7 +419,12 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                             ? "Suspicious activity hold"
                             : "Email not found"}
                         </span>
-                        {isFlagged && (
+                        {isNewIp && (
+                          <Badge className="text-xs py-0 px-1.5 h-4 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700 hover:bg-amber-100">
+                            New location
+                          </Badge>
+                        )}
+                        {isManualFlag && (
                           <Badge variant="destructive" className="text-xs py-0 px-1.5 h-4">
                             Suspicious
                           </Badge>

@@ -95,6 +95,7 @@ export const ListAuthEventsResponseItem = zod.object({
   "userAgent": zod.string().nullish(),
   "outcome": zod.enum(['success', 'bad_password', 'not_found', 'locked']),
   "status": zod.enum(['new', 'acknowledged', 'flagged']),
+  "flagReason": zod.enum(['manual', 'new_ip']).nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListAuthEventsResponse = zod.array(ListAuthEventsResponseItem)
@@ -142,6 +143,7 @@ export const UpdateAuthEventResponse = zod.object({
   "userAgent": zod.string().nullish(),
   "outcome": zod.enum(['success', 'bad_password', 'not_found', 'locked']),
   "status": zod.enum(['new', 'acknowledged', 'flagged']),
+  "flagReason": zod.enum(['manual', 'new_ip']).nullish(),
   "createdAt": zod.coerce.date()
 })
 
