@@ -46,35 +46,35 @@ const ACTIVITY_TABS: { id: ActivityPeriod; label: string; api: GetDashboardActiv
 
 const HUBS = [
   {
-    href: "/management/customers-hub",
+    href: "/management/customers",
     icon: Users,
     title: "Customers",
     description: "Customer settings, heard-from tracking, loyalty, gift cards, discounts, layby, and feedback.",
     color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600",
   },
   {
-    href: "/management/products-hub",
+    href: "/management/inventory",
     icon: Boxes,
     title: "Products & Inventory",
     description: "Inventory settings, product types, modifier groups, sale templates, labels, and calculators.",
     color: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600",
   },
   {
-    href: "/management/operations-hub",
+    href: "/management/staff",
     icon: UserSquare2,
     title: "Staff & Operations",
     description: "Employees, timesheets, cost summary, POS registers, floor plan, and cameras.",
     color: "bg-violet-100 dark:bg-violet-900/30 text-violet-600",
   },
   {
-    href: "/management/marketing-hub",
+    href: "/management/sales-overview",
     icon: BarChart2,
     title: "Marketing & Reports",
     description: "Sales overview, reports, KPIs, referrals, social feed, online store, email, forms, and AI assistant.",
     color: "bg-amber-100 dark:bg-amber-900/30 text-amber-600",
   },
   {
-    href: "/management/settings-hub",
+    href: "/management/account",
     icon: Settings,
     title: "Settings & Integrations",
     description: "Account & modules, business details, tax, integrations, import/export, and system settings.",
@@ -312,7 +312,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(totalSales)}
               sub={`${txCount} sale${txCount !== 1 ? "s" : ""} ${periodLabel}`}
               valueClass="text-emerald-600"
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="Revenue ex-GST"
@@ -321,7 +321,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst)}
               sub={`${gstRateStr} GST removed from revenue`}
               valueClass="text-teal-600"
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="Sales"
@@ -329,7 +329,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600"
               value={isLoading ? "—" : txCount.toString()}
               sub={`Transactions ${periodLabel}`}
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="Avg Sale"
@@ -337,7 +337,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600"
               value={isLoading ? "—" : formatCurrency(avgSale)}
               sub="Average transaction value"
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="New Customers"
@@ -345,7 +345,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600"
               value={isLoading ? "—" : newCustomers.toString()}
               sub={`Joined ${periodLabel}`}
-              href="/management/customers-hub"
+              href="/management/customers"
             />
             <KpiCard
               title="Loyalty Liability"
@@ -353,7 +353,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
               value={formatCurrency(loyaltyDollarValue)}
               sub={loyaltyEnabled ? `${totalPoints.toLocaleString()} pts across ${customers.filter((c) => (c.loyaltyPoints ?? 0) > 0).length} customers` : "Loyalty programme inactive"}
-              href="/management/customers-hub"
+              href="/management/loyalty"
             />
           </div>
 
@@ -366,7 +366,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(discountTotal)}
               sub="Total discounts given"
               valueClass={discountTotal > 0 ? "text-orange-500" : ""}
-              href="/management/customers-hub"
+              href="/management/discounts"
             />
             <KpiCard
               title="Refunds"
@@ -375,7 +375,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(refundTotal)}
               sub="Total refunded"
               valueClass={refundTotal > 0 ? "text-red-500" : ""}
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="GST Collected"
@@ -384,7 +384,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(gstCollected)}
               sub="1/11th of revenue (10% GST)"
               valueClass="text-amber-600"
-              href="/management/settings-hub"
+              href="/management/tax"
             />
             <KpiCard
               title="Items Sold"
@@ -392,7 +392,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
               value={isLoading ? "—" : itemsSold.toString()}
               sub={`Units sold ${periodLabel}`}
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="Net Profit"
@@ -401,7 +401,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(Math.max(0, revenueExGst - discountTotal - refundTotal))}
               sub="Revenue ex-GST, less discounts & refunds"
               valueClass="text-emerald-600"
-              href="/management/marketing-hub"
+              href="/management/sales-overview"
             />
             <KpiCard
               title="Cost"

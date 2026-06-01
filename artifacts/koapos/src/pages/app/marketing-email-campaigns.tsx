@@ -246,11 +246,11 @@ function CampaignRow({ campaign, onDelete }: { campaign: EmailCampaign; onDelete
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function MarketingEmailCampaignsPage() {
-  const { data: rawCampaigns = [], refetch } = useListEmailCampaigns({ query: { queryKey: ["email-campaigns"] } });
+  const { data: rawCampaigns, refetch } = useListEmailCampaigns({ query: { queryKey: ["email-campaigns"] } });
   const createCampaign = useCreateEmailCampaign();
   const deleteCampaignMutation = useDeleteEmailCampaign();
 
-  const campaigns: EmailCampaign[] = (rawCampaigns as ApiCampaign[]).map(apiToLocal);
+  const campaigns: EmailCampaign[] = ((rawCampaigns?.items ?? []) as unknown as ApiCampaign[]).map(apiToLocal);
 
   const [draft, setDraft] = useState(blankDraft);
   const [codesOpen, setCodesOpen] = useState(false);

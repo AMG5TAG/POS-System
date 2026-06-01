@@ -328,12 +328,12 @@ function TemplateCard({
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function MarketingEmailTemplatesPage() {
-  const { data: rawTemplates = [], isLoading, refetch } = useListEmailTemplates({ query: { queryKey: ["email-templates"] } });
+  const { data: rawTemplates, isLoading, refetch } = useListEmailTemplates({ query: { queryKey: ["email-templates"] } });
   const createTemplate = useCreateEmailTemplate();
   const updateTemplate = useUpdateEmailTemplate();
   const deleteTemplate = useDeleteEmailTemplate();
 
-  const templates: EmailTemplate[] = (rawTemplates as ApiTemplate[]).map(apiToLocal);
+  const templates: EmailTemplate[] = ((rawTemplates?.items ?? []) as unknown as ApiTemplate[]).map(apiToLocal);
 
   const [search, setSearch]       = useState("");
   const [category, setCategory]   = useState("All");
