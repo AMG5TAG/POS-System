@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
@@ -145,10 +145,43 @@ type AuthEventItem = {
   userAgent?: string | null;
 };
 
+function outcomeLabel(outcome: string): string {
+  if (outcome === "success") return "Successful sign-in";
+  if (outcome === "bad_password") return "Wrong password";
+  if (outcome === "locked") return "Account locked";
+  if (outcome === "account_hold") return "Suspicious activity hold";
+  return "Email not found";
+}
+
+function csvEscape(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
 function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
   const qc = useQueryClient();
   const updateEvent = useUpdateAuthEvent();
   const [pending, setPending] = useState<Record<number, boolean>>({});
+
+  const handleDownloadCSV = () => {
+    const events = (authEvents ?? []).slice(0, 50);
+    const header = ["Date/Time", "Outcome", "Browser", "IP Address", "Status"];
+    const rows = events.map((ev) => [
+      new Date(ev.createdAt).toLocaleString(),
+      outcomeLabel(ev.outcome),
+      parseUserAgent(ev.userAgent),
+      ev.ipAddress ?? "",
+      ev.status,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sign-in-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleStatus = (id: number, status: "acknowledged" | "flagged" | "new") => {
     setPending((p) => ({ ...p, [id]: true }));
@@ -175,9 +208,22 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
   return (
     <Card id="recent-sign-ins">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
+          </CardTitle>
+          {authEvents && authEvents.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs px-2 gap-1.5"
+              onClick={handleDownloadCSV}
+            >
+              <Download className="w-3 h-3" />
+              Download CSV
+            </Button>
+          )}
+        </div>
         <CardDescription>
           The last 10 login attempts to your account. Flag anything that looks suspicious.
         </CardDescription>
