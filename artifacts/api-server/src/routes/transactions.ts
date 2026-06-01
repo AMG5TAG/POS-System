@@ -831,6 +831,39 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
     </tr>`
   ).join("");
 
+  const subtotal = Number(tx.subtotal ?? 0);
+  const discountTotal = Number(tx.discountTotal ?? 0);
+  const taxTotal = Number(tx.taxTotal ?? 0);
+  const total = Number(tx.total ?? 0);
+  const discountPct = tx.discountPct != null ? parseFloat(tx.discountPct) : null;
+  const discountLabel = discountPct != null && discountPct > 0 ? `${discountPct}% discount` : "Discount";
+
+  const summaryRows = [
+    `<tr>
+      <td style="padding:4px 0;color:#555;">Subtotal</td>
+      <td style="padding:4px 0;text-align:right;">$${subtotal.toFixed(2)}</td>
+    </tr>`,
+    ...(discountTotal > 0 ? [`<tr>
+      <td style="padding:4px 0;color:#555;">${discountLabel}</td>
+      <td style="padding:4px 0;text-align:right;color:#e53e3e;">-$${discountTotal.toFixed(2)}</td>
+    </tr>`] : []),
+    ...(taxTotal > 0 ? [`<tr>
+      <td style="padding:4px 0;color:#555;">Tax</td>
+      <td style="padding:4px 0;text-align:right;">$${taxTotal.toFixed(2)}</td>
+    </tr>`] : []),
+    `<tr>
+      <td style="padding:8px 0 4px;border-top:2px solid #eee;font-weight:700;">Total</td>
+      <td style="padding:8px 0 4px;border-top:2px solid #eee;text-align:right;font-weight:700;">$${total.toFixed(2)}</td>
+    </tr>`,
+  ].join("");
+
+  const textSummaryLines = [
+    `Subtotal: $${subtotal.toFixed(2)}`,
+    ...(discountTotal > 0 ? [`${discountLabel}: -$${discountTotal.toFixed(2)}`] : []),
+    ...(taxTotal > 0 ? [`Tax: $${taxTotal.toFixed(2)}`] : []),
+    `Total: $${total.toFixed(2)}`,
+  ].join("\n");
+
   const html = `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#222;">
       <h2 style="margin:0 0 4px;">${bizName}</h2>
@@ -845,9 +878,9 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
-      <div style="margin-top:16px;text-align:right;font-size:15px;">
-        <strong>Total: $${Number(tx.total).toFixed(2)}</strong>
-      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:16px;">
+        <tbody>${summaryRows}</tbody>
+      </table>
       <p style="margin-top:32px;font-size:12px;color:#aaa;text-align:center;">Thank you for shopping with us!</p>
     </div>`;
 
@@ -855,7 +888,7 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
     to: email,
     subject: `Receipt from ${bizName} — #${tx.receiptNumber ?? tx.id}`,
     html,
-    text: `Receipt from ${bizName}\nReceipt #${tx.receiptNumber ?? tx.id}\nTotal: $${Number(tx.total).toFixed(2)}\n\nThank you for shopping with us!`,
+    text: `Receipt from ${bizName}\nReceipt #${tx.receiptNumber ?? tx.id}\n\n${textSummaryLines}\n\nThank you for shopping with us!`,
   });
 
   if (!result.success) {
