@@ -191,6 +191,7 @@ export default function POSPage() {
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
   ]);
+  const [clearCartConfirmOpen, setClearCartConfirmOpen] = useState(false);
   const [payDiscardConfirmOpen, setPayDiscardConfirmOpen] = useState(false);
   const paymentModalInitialMethodRef = useRef<PaymentMethodId | null>(null);
   const completeSaleRef = useRef<HTMLButtonElement>(null);
@@ -2357,7 +2358,7 @@ export default function POSPage() {
                   </span>
                 </button>
               )}
-              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={clearCart} disabled={cart.length === 0} title="Clear cart">
+              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }} disabled={cart.length === 0} title="Clear cart">
                 <Trash2 className="w-4 h-4 text-destructive" />
               </Button>
             </div>
@@ -4406,6 +4407,21 @@ export default function POSPage() {
       </AlertDialog>
 
       {/* ─── Zero-price discard confirmation ─── */}
+      <AlertDialog open={clearCartConfirmOpen} onOpenChange={(o) => { if (!o) setClearCartConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear cart?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cart has a sale note attached. Clearing the cart will permanently remove the note along with all items.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep cart</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setClearCartConfirmOpen(false); clearCart(); }}>Clear cart</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={zeroPriceDiscardConfirmOpen} onOpenChange={(o) => { if (!o) setZeroPriceDiscardConfirmOpen(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
