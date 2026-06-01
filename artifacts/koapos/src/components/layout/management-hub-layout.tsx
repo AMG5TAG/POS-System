@@ -63,14 +63,48 @@ function HubBreadcrumb({ title, tabs }: { title: string; tabs: HubTab[] }) {
   );
 }
 
+/** Horizontal scrollable pill strip shown on mobile (< md). */
+function MobileTabStrip({ title, tabs }: { title: string; tabs: HubTab[] }) {
+  const [location] = useLocation();
+
+  return (
+    <div className="md:hidden border-b bg-background">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 pt-3 pb-1">
+        {title}
+      </p>
+      <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = isTabActive(tab, location);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors shrink-0",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80",
+              )}
+            >
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span>{tab.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ManagementHubLayout({ title, tabs, children }: Props) {
   const [location] = useLocation();
 
   return (
     <AppLayout>
       <div className="flex h-full min-h-[calc(100vh-57px)]">
-        {/* ── Left vertical tab rail ── */}
-        <nav className="w-56 shrink-0 border-r bg-muted/20 flex flex-col gap-0.5 p-3">
+        {/* ── Left vertical tab rail — desktop only ── */}
+        <nav className="hidden md:flex w-56 shrink-0 border-r bg-muted/20 flex-col gap-0.5 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 pb-2 pt-1">
             {title}
           </p>
@@ -97,6 +131,8 @@ export function ManagementHubLayout({ title, tabs, children }: Props) {
 
         {/* ── Content area — sub-pages render here (AppLayout shell suppressed) ── */}
         <div className="flex-1 min-w-0 overflow-auto flex flex-col">
+          {/* Mobile pill strip — visible only on small screens */}
+          <MobileTabStrip title={title} tabs={tabs} />
           <HubBreadcrumb title={title} tabs={tabs} />
           <EmbeddedProvider>
             {children}
