@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, Transaction } from "@workspace/api-client-react";
+import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, useListStaff, Transaction, Staff } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -67,11 +67,14 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 /* ─── Receipt detail dialog ──────────────────────────────────────────────── */
 
 function ReceiptDialog({
-  tx, onClose, onRefund, loyaltyProgramType,
-}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyaltyProgramType?: string | null }) {
+  tx, onClose, onRefund, loyaltyProgramType, staffList,
+}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyaltyProgramType?: string | null; staffList?: Staff[] }) {
   if (!tx) return null;
 
   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
+  const cappedByStaff = tx.discountCapped && tx.staffId != null
+    ? staffList?.find((s) => s.id === tx.staffId)?.name ?? null
+    : null;
 
   return (
     <Dialog open={!!tx} onOpenChange={onClose}>
@@ -86,7 +89,7 @@ function ReceiptDialog({
             {tx.discountCapped && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800">
                 <AlertTriangle className="w-3 h-3" />
-                Discount capped
+                {cappedByStaff ? `Discount capped by ${cappedByStaff}` : "Discount capped"}
               </span>
             )}
           </DialogTitle>
@@ -186,6 +189,7 @@ export default function TransactionsPage() {
     { query: { queryKey: ["transactions", statusFilter] } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  const { data: staffData } = useListStaff({ query: { queryKey: ["staff-tx"] } });
   const refundMutation = useRefundTransaction();
   const transactions = txData?.items || [];
 
@@ -331,6 +335,7 @@ export default function TransactionsPage() {
         onClose={() => setSelectedTx(null)}
         onRefund={(tx) => { setRefundingTx(tx); setRefundDialogOpen(true); }}
         loyaltyProgramType={loyaltySettings?.programType}
+        staffList={staffData}
       />
 
       <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
