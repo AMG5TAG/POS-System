@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useFormDirty } from "@/hooks/use-form-dirty";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -107,9 +108,11 @@ export default function SettingsCustomersPage() {
   const [sourceForm, setSourceForm]               = useState({ name: "", requiresDetails: false });
   const [deleteSourceConfirm, setDeleteSourceConfirm] = useState<string | null>(null);
 
-  const [formTouched, setFormTouched] = useState(false);
+  const { isDirty: isGroupDirty, markClean: markGroupClean } = useFormDirty(groupForm);
+  const { isDirty: isSourceDirty, markClean: markSourceClean } = useFormDirty(sourceForm);
+  const isDirty = isGroupDirty || isSourceDirty;
 
-  const { ConfirmDialog: CustomerSettingsFormGuard } = useUnsavedChangesGuard(formTouched, {
+  const { ConfirmDialog: CustomerSettingsFormGuard } = useUnsavedChangesGuard(isDirty, {
     title: "Close settings form?",
     description: "The form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -149,16 +152,18 @@ export default function SettingsCustomersPage() {
     n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: n % 1 === 0 ? 0 : 2 });
 
   const openAdd = () => {
+    const f = { name: "", description: "", color: "#3b82f6" };
     setEditingGroup(null);
-    setGroupForm({ name: "", description: "", color: "#3b82f6" });
-    setFormTouched(false);
+    setGroupForm(f);
+    markGroupClean(f);
     setGroupDialogOpen(true);
   };
 
   const openEdit = (g: CustomerGroup) => {
+    const f = { name: g.name, description: g.description, color: g.color };
     setEditingGroup(g);
-    setGroupForm({ name: g.name, description: g.description, color: g.color });
-    setFormTouched(false);
+    setGroupForm(f);
+    markGroupClean(f);
     setGroupDialogOpen(true);
   };
 
@@ -173,7 +178,7 @@ export default function SettingsCustomersPage() {
     }
     save({ groups });
     toast.success(editingGroup ? "Group updated" : "Group added");
-    setFormTouched(false);
+    markGroupClean();
     setGroupDialogOpen(false);
   };
 
@@ -192,16 +197,18 @@ export default function SettingsCustomersPage() {
 
   // ── Heard From Sources handlers ────────────────────────────────────────────
   const openAddSource = () => {
+    const f = { name: "", requiresDetails: false };
     setEditingSource(null);
-    setSourceForm({ name: "", requiresDetails: false });
-    setFormTouched(false);
+    setSourceForm(f);
+    markSourceClean(f);
     setSourceDialogOpen(true);
   };
 
   const openEditSource = (s: HeardFromSource) => {
+    const f = { name: s.name, requiresDetails: s.requiresDetails };
     setEditingSource(s);
-    setSourceForm({ name: s.name, requiresDetails: s.requiresDetails });
-    setFormTouched(false);
+    setSourceForm(f);
+    markSourceClean(f);
     setSourceDialogOpen(true);
   };
 
@@ -216,7 +223,7 @@ export default function SettingsCustomersPage() {
     }
     save({ heardFromSources: sources });
     toast.success(editingSource ? "Source updated" : "Source added");
-    setFormTouched(false);
+    markSourceClean();
     setSourceDialogOpen(false);
   };
 
@@ -1284,7 +1291,7 @@ export default function SettingsCustomersPage() {
       </div>
 
       {/* Add / Edit Group Dialog */}
-      <Dialog open={groupDialogOpen} onOpenChange={(o) => { if (!o) setFormTouched(false); setGroupDialogOpen(o); }}>
+      <Dialog open={groupDialogOpen} onOpenChange={(o) => { if (!o) markGroupClean(); setGroupDialogOpen(o); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{editingGroup ? "Edit Group" : "Add Customer Group"}</DialogTitle>
@@ -1294,7 +1301,7 @@ export default function SettingsCustomersPage() {
               <Label>Group Name <span className="text-destructive">*</span></Label>
               <Input
                 value={groupForm.name}
-                onChange={(e) => { setFormTouched(true); setGroupForm(f => ({ ...f, name: e.target.value })); }}
+                onChange={(e) => { setGroupForm(f => ({ ...f, name: e.target.value })); }}
                 placeholder="e.g. Wholesale"
                 autoFocus
               />
@@ -1303,7 +1310,7 @@ export default function SettingsCustomersPage() {
               <Label>Description</Label>
               <Input
                 value={groupForm.description}
-                onChange={(e) => { setFormTouched(true); setGroupForm(f => ({ ...f, description: e.target.value })); }}
+                onChange={(e) => { setGroupForm(f => ({ ...f, description: e.target.value })); }}
                 placeholder="Brief description of this group"
               />
             </div>
@@ -1315,7 +1322,7 @@ export default function SettingsCustomersPage() {
                     key={c.value}
                     type="button"
                     title={c.label}
-                    onClick={() => { setFormTouched(true); setGroupForm(f => ({ ...f, color: c.value })); }}
+                    onClick={() => { setGroupForm(f => ({ ...f, color: c.value })); }}
                     className="w-7 h-7 rounded-full border-2 transition-all"
                     style={{
                       backgroundColor: c.value,
@@ -1325,7 +1332,7 @@ export default function SettingsCustomersPage() {
                   />
                 ))}
               </div>
-              <ColourPicker value={groupForm.color} onChange={(v) => { setFormTouched(true); setGroupForm(f => ({ ...f, color: v })); }} />
+              <ColourPicker value={groupForm.color} onChange={(v) => { setGroupForm(f => ({ ...f, color: v })); }} />
               <div className="flex items-center gap-2 pt-1">
                 <div
                   className="w-5 h-5 rounded-full border shrink-0"
@@ -1345,7 +1352,7 @@ export default function SettingsCustomersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormTouched(false); setGroupDialogOpen(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { markGroupClean(); setGroupDialogOpen(false); }}>Cancel</Button>
             <Button onClick={saveGroup} disabled={!groupForm.name.trim()}>
               {editingGroup ? "Update Group" : "Add Group"}
             </Button>
@@ -1371,7 +1378,7 @@ export default function SettingsCustomersPage() {
       </Dialog>
 
       {/* Add / Edit Source Dialog */}
-      <Dialog open={sourceDialogOpen} onOpenChange={(o) => { if (!o) setFormTouched(false); setSourceDialogOpen(o); }}>
+      <Dialog open={sourceDialogOpen} onOpenChange={(o) => { if (!o) markSourceClean(); setSourceDialogOpen(o); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{editingSource ? "Edit Source" : "Add Heard From Source"}</DialogTitle>
@@ -1381,7 +1388,7 @@ export default function SettingsCustomersPage() {
               <Label>Source Name <span className="text-destructive">*</span></Label>
               <Input
                 value={sourceForm.name}
-                onChange={(e) => { setFormTouched(true); setSourceForm(f => ({ ...f, name: e.target.value })); }}
+                onChange={(e) => { setSourceForm(f => ({ ...f, name: e.target.value })); }}
                 placeholder="e.g. Instagram, Walk-in, Radio"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && saveSource()}
@@ -1396,12 +1403,12 @@ export default function SettingsCustomersPage() {
               </div>
               <Switch
                 checked={sourceForm.requiresDetails}
-                onCheckedChange={(v) => { setFormTouched(true); setSourceForm(f => ({ ...f, requiresDetails: v })); }}
+                onCheckedChange={(v) => { setSourceForm(f => ({ ...f, requiresDetails: v })); }}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormTouched(false); setSourceDialogOpen(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { markSourceClean(); setSourceDialogOpen(false); }}>Cancel</Button>
             <Button onClick={saveSource} disabled={!sourceForm.name.trim()}>
               {editingSource ? "Update Source" : "Add Source"}
             </Button>

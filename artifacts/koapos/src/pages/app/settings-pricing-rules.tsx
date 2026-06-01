@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useFormDirty } from "@/hooks/use-form-dirty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,11 +36,11 @@ const defaultForm = () => ({
 export default function SettingsPricingRulesPage() {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formTouched, setFormTouched] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(defaultForm());
+  const { isDirty, markClean } = useFormDirty(form);
 
-  const { ConfirmDialog: PricingRuleFormGuard } = useUnsavedChangesGuard(formTouched, {
+  const { ConfirmDialog: PricingRuleFormGuard } = useUnsavedChangesGuard(isDirty, {
     title: "Close pricing rule form?",
     description: "The pricing rule form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -72,7 +73,7 @@ export default function SettingsPricingRulesPage() {
       if (!r.ok) throw new Error("Save failed");
       return r.json();
     },
-    onSuccess: () => { invalidate(); setDialogOpen(false); setFormTouched(false); toast.success(editingId ? "Rule updated" : "Rule created"); },
+    onSuccess: () => { invalidate(); setDialogOpen(false); markClean(); toast.success(editingId ? "Rule updated" : "Rule created"); },
     onError: () => toast.error("Failed to save rule"),
   });
 
@@ -97,16 +98,17 @@ export default function SettingsPricingRulesPage() {
     onSuccess: invalidate,
   });
 
-  const openCreate = () => { setEditingId(null); setForm(defaultForm()); setFormTouched(false); setDialogOpen(true); };
+  const openCreate = () => { const f = defaultForm(); setEditingId(null); setForm(f); markClean(f); setDialogOpen(true); };
   const openEdit = (r: PricingRule) => {
-    setEditingId(r.id);
-    setForm({
+    const f = {
       name: r.name, productId: r.productId, categoryId: r.categoryId,
       discountType: r.discountType, discountValue: r.discountValue,
       startTime: r.startTime, endTime: r.endTime, daysOfWeek: r.daysOfWeek,
       label: r.label ?? "", isActive: r.isActive === "true",
-    });
-    setFormTouched(false);
+    };
+    setEditingId(r.id);
+    setForm(f);
+    markClean(f);
     setDialogOpen(true);
   };
 
@@ -193,7 +195,7 @@ export default function SettingsPricingRulesPage() {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) setFormTouched(false); setDialogOpen(o); }}>
+      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) markClean(); setDialogOpen(o); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Pricing Rule" : "New Pricing Rule"}</DialogTitle>
@@ -202,11 +204,11 @@ export default function SettingsPricingRulesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label>Rule Name</Label>
-                <Input value={form.name} onChange={e => { setFormTouched(true); setForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Happy Hour" className="mt-1" />
+                <Input value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Happy Hour" className="mt-1" />
               </div>
               <div>
                 <Label>Discount Type</Label>
-                <Select value={form.discountType} onValueChange={v => { setFormTouched(true); setForm(f => ({ ...f, discountType: v as "percent" | "fixed" })); }}>
+                <Select value={form.discountType} onValueChange={v => { setForm(f => ({ ...f, discountType: v as "percent" | "fixed" })); }}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="percent">Percentage (%)</SelectItem>
@@ -219,17 +221,17 @@ export default function SettingsPricingRulesPage() {
                 <div className="relative mt-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{form.discountType === "percent" ? "%" : "$"}</span>
                   <Input type="number" min={0} max={form.discountType === "percent" ? 100 : undefined}
-                    value={form.discountValue} onChange={e => { setFormTouched(true); setForm(f => ({ ...f, discountValue: parseFloat(e.target.value) || 0 })); }}
+                    value={form.discountValue} onChange={e => { setForm(f => ({ ...f, discountValue: parseFloat(e.target.value) || 0 })); }}
                     className="pl-7" />
                 </div>
               </div>
               <div>
                 <Label>Start Time</Label>
-                <Input type="time" value={form.startTime} onChange={e => { setFormTouched(true); setForm(f => ({ ...f, startTime: e.target.value })); }} className="mt-1" />
+                <Input type="time" value={form.startTime} onChange={e => { setForm(f => ({ ...f, startTime: e.target.value })); }} className="mt-1" />
               </div>
               <div>
                 <Label>End Time</Label>
-                <Input type="time" value={form.endTime} onChange={e => { setFormTouched(true); setForm(f => ({ ...f, endTime: e.target.value })); }} className="mt-1" />
+                <Input type="time" value={form.endTime} onChange={e => { setForm(f => ({ ...f, endTime: e.target.value })); }} className="mt-1" />
               </div>
               <div className="col-span-2">
                 <Label>Applies On</Label>
@@ -237,13 +239,13 @@ export default function SettingsPricingRulesPage() {
                   {DAY_LABELS.map((d, i) => (
                     <button key={i} type="button"
                       className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${activeDays.includes(i + 1) ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
-                      onClick={() => { setFormTouched(true); toggleDay(i + 1); }}>{d}</button>
+                      onClick={() => { toggleDay(i + 1); }}>{d}</button>
                   ))}
                 </div>
               </div>
               <div>
                 <Label>Product (optional)</Label>
-                <Select value={String(form.productId ?? "")} onValueChange={v => { setFormTouched(true); setForm(f => ({ ...f, productId: v ? Number(v) : null, categoryId: v ? null : f.categoryId })); }}>
+                <Select value={String(form.productId ?? "")} onValueChange={v => { setForm(f => ({ ...f, productId: v ? Number(v) : null, categoryId: v ? null : f.categoryId })); }}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="All products" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All products</SelectItem>
@@ -253,7 +255,7 @@ export default function SettingsPricingRulesPage() {
               </div>
               <div>
                 <Label>Category (optional)</Label>
-                <Select value={String(form.categoryId ?? "")} onValueChange={v => { setFormTouched(true); setForm(f => ({ ...f, categoryId: v ? Number(v) : null, productId: v ? null : f.productId })); }}>
+                <Select value={String(form.categoryId ?? "")} onValueChange={v => { setForm(f => ({ ...f, categoryId: v ? Number(v) : null, productId: v ? null : f.productId })); }}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="All categories" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All categories</SelectItem>
@@ -263,12 +265,12 @@ export default function SettingsPricingRulesPage() {
               </div>
               <div className="col-span-2">
                 <Label>Display Label (optional)</Label>
-                <Input value={form.label} onChange={e => { setFormTouched(true); setForm(f => ({ ...f, label: e.target.value })); }} placeholder="e.g. Happy Hour — shown on receipt" className="mt-1" />
+                <Input value={form.label} onChange={e => { setForm(f => ({ ...f, label: e.target.value })); }} placeholder="e.g. Happy Hour — shown on receipt" className="mt-1" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormTouched(false); setDialogOpen(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { markClean(); setDialogOpen(false); }}>Cancel</Button>
             <Button onClick={() => saveMutation.mutate({ ...form, ...(editingId ? { id: editingId } : {}) })}
               disabled={!form.name || form.discountValue <= 0 || !form.daysOfWeek || saveMutation.isPending}>
               {saveMutation.isPending ? "Saving…" : editingId ? "Update Rule" : "Create Rule"}

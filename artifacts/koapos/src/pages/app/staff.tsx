@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useFormDirty } from "@/hooks/use-form-dirty";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff,
@@ -832,9 +833,9 @@ export default function StaffPage() {
     (registersData?.items ?? []).map((r) => [String(r.id), r.name])
   );
 
-  const [formTouched, setFormTouched] = useState(false);
+  const { isDirty, markClean, markDirty } = useFormDirty(null);
 
-  const { ConfirmDialog: StaffFormGuard } = useUnsavedChangesGuard(formTouched, {
+  const { ConfirmDialog: StaffFormGuard } = useUnsavedChangesGuard(isDirty, {
     title: "Close staff form?",
     description: "The staff form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -867,8 +868,8 @@ export default function StaffPage() {
     return sortedMembers;
   }, [members, sortKey, sortDir, registerMap]);
 
-  const openCreate = () => { setEditingStaff(null); setFormTouched(false); setDialogOpen(true); };
-  const openEdit   = (s: Staff) => { setEditingStaff(s); setFormTouched(false); setDialogOpen(true); };
+  const openCreate = () => { setEditingStaff(null); markClean(); setDialogOpen(true); };
+  const openEdit   = (s: Staff) => { setEditingStaff(s); markClean(); setDialogOpen(true); };
 
   const handleSave = (form: WizardForm) => {
     const payload = {
@@ -897,7 +898,7 @@ export default function StaffPage() {
       updateMutation.mutate(
         { id: editingStaff.id, data: payload as unknown as StaffUpdate },
         {
-          onSuccess: () => { toast.success("Staff member updated"); setDialogOpen(false); setFormTouched(false); invalidate(); },
+          onSuccess: () => { toast.success("Staff member updated"); setDialogOpen(false); markClean(); invalidate(); },
           onError:   () => toast.error("Failed to update staff member"),
         },
       );
@@ -905,7 +906,7 @@ export default function StaffPage() {
       createMutation.mutate(
         { data: payload as unknown as StaffInput },
         {
-          onSuccess: () => { toast.success("Staff member added"); setDialogOpen(false); setFormTouched(false); invalidate(); },
+          onSuccess: () => { toast.success("Staff member added"); setDialogOpen(false); markClean(); invalidate(); },
           onError:   () => toast.error("Failed to add staff member"),
         },
       );
@@ -1082,11 +1083,11 @@ export default function StaffPage() {
       {/* 4-step wizard */}
       <WizardDialog
         open={dialogOpen}
-        onClose={() => { setFormTouched(false); setDialogOpen(false); }}
+        onClose={() => { markClean(); setDialogOpen(false); }}
         editingStaff={editingStaff}
         onSave={handleSave}
         saving={isSaving}
-        onTouched={() => setFormTouched(true)}
+        onTouched={markDirty}
       />
 
       {/* Delete confirm */}

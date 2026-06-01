@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useFormDirty } from "@/hooks/use-form-dirty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,13 +24,15 @@ export default function SettingsModifierGroupsPage() {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [groupDialog, setGroupDialog] = useState(false);
-  const [formTouched, setFormTouched] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [groupForm, setGroupForm] = useState(defaultGroupForm());
   const [modDialog, setModDialog] = useState<{ open: boolean; groupId: number | null; editId: number | null }>({ open: false, groupId: null, editId: null });
   const [modForm, setModForm] = useState(defaultModForm());
+  const { isDirty: isGroupDirty, markClean: markGroupClean } = useFormDirty(groupForm);
+  const { isDirty: isModDirty, markClean: markModClean } = useFormDirty(modForm);
+  const isDirty = isGroupDirty || isModDirty;
 
-  const { ConfirmDialog: ModifierFormGuard } = useUnsavedChangesGuard(formTouched, {
+  const { ConfirmDialog: ModifierFormGuard } = useUnsavedChangesGuard(isDirty, {
     title: "Close modifier form?",
     description: "The modifier form has unsaved changes. If you leave now, your changes will be lost.",
     cancelLabel: "Stay on page",
@@ -58,7 +61,7 @@ export default function SettingsModifierGroupsPage() {
       if (!r.ok) throw new Error("Save failed");
       return r.json();
     },
-    onSuccess: () => { invalidate(); setGroupDialog(false); setFormTouched(false); toast.success(editingGroupId ? "Group updated" : "Group created"); },
+    onSuccess: () => { invalidate(); setGroupDialog(false); markGroupClean(); toast.success(editingGroupId ? "Group updated" : "Group created"); },
     onError: () => toast.error("Save failed"),
   });
 
@@ -82,7 +85,7 @@ export default function SettingsModifierGroupsPage() {
       if (!r.ok) throw new Error("Save failed");
       return r.json();
     },
-    onSuccess: () => { invalidate(); setModDialog({ open: false, groupId: null, editId: null }); setFormTouched(false); toast.success("Option saved"); },
+    onSuccess: () => { invalidate(); setModDialog({ open: false, groupId: null, editId: null }); markModClean(); toast.success("Option saved"); },
     onError: () => toast.error("Save failed"),
   });
 
@@ -95,17 +98,19 @@ export default function SettingsModifierGroupsPage() {
     onError: () => toast.error("Delete failed"),
   });
 
-  const openCreate = () => { setEditingGroupId(null); setGroupForm(defaultGroupForm()); setFormTouched(false); setGroupDialog(true); };
+  const openCreate = () => { const f = defaultGroupForm(); setEditingGroupId(null); setGroupForm(f); markGroupClean(f); setGroupDialog(true); };
   const openEditGroup = (g: ModifierGroup) => {
+    const f = { name: g.name, isRequired: g.isRequired, minSelections: g.minSelections, maxSelections: g.maxSelections };
     setEditingGroupId(g.id);
-    setGroupForm({ name: g.name, isRequired: g.isRequired, minSelections: g.minSelections, maxSelections: g.maxSelections });
-    setFormTouched(false);
+    setGroupForm(f);
+    markGroupClean(f);
     setGroupDialog(true);
   };
-  const openAddMod = (groupId: number) => { setModForm(defaultModForm()); setFormTouched(false); setModDialog({ open: true, groupId, editId: null }); };
+  const openAddMod = (groupId: number) => { const f = defaultModForm(); setModForm(f); markModClean(f); setModDialog({ open: true, groupId, editId: null }); };
   const openEditMod = (groupId: number, m: Modifier) => {
-    setModForm({ name: m.name, priceAdjustment: m.priceAdjustment, isDefault: m.isDefault });
-    setFormTouched(false);
+    const f = { name: m.name, priceAdjustment: m.priceAdjustment, isDefault: m.isDefault };
+    setModForm(f);
+    markModClean(f);
     setModDialog({ open: true, groupId, editId: m.id });
   };
   const toggleExpand = (id: number) => setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -203,33 +208,33 @@ export default function SettingsModifierGroupsPage() {
       </div>
 
       {/* Group dialog */}
-      <Dialog open={groupDialog} onOpenChange={(o) => { if (!o) setFormTouched(false); setGroupDialog(o); }}>
+      <Dialog open={groupDialog} onOpenChange={(o) => { if (!o) markGroupClean(); setGroupDialog(o); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{editingGroupId ? "Edit Group" : "New Modifier Group"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <Label>Group Name</Label>
-              <Input value={groupForm.name} onChange={e => { setFormTouched(true); setGroupForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Milk Type, Size" className="mt-1" />
+              <Input value={groupForm.name} onChange={e => { setGroupForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Milk Type, Size" className="mt-1" />
             </div>
             <div className="flex items-center gap-3">
-              <Switch checked={groupForm.isRequired} onCheckedChange={v => { setFormTouched(true); setGroupForm(f => ({ ...f, isRequired: v })); }} id="req-switch" />
+              <Switch checked={groupForm.isRequired} onCheckedChange={v => { setGroupForm(f => ({ ...f, isRequired: v })); }} id="req-switch" />
               <Label htmlFor="req-switch">Required selection</Label>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Min selections</Label>
                 <Input type="number" min={0} value={groupForm.minSelections}
-                  onChange={e => { setFormTouched(true); setGroupForm(f => ({ ...f, minSelections: parseInt(e.target.value) || 0 })); }} className="mt-1" />
+                  onChange={e => { setGroupForm(f => ({ ...f, minSelections: parseInt(e.target.value) || 0 })); }} className="mt-1" />
               </div>
               <div>
                 <Label>Max selections</Label>
                 <Input type="number" min={1} value={groupForm.maxSelections}
-                  onChange={e => { setFormTouched(true); setGroupForm(f => ({ ...f, maxSelections: parseInt(e.target.value) || 1 })); }} className="mt-1" />
+                  onChange={e => { setGroupForm(f => ({ ...f, maxSelections: parseInt(e.target.value) || 1 })); }} className="mt-1" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormTouched(false); setGroupDialog(false); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { markGroupClean(); setGroupDialog(false); }}>Cancel</Button>
             <Button onClick={() => saveGroup.mutate({ ...groupForm, ...(editingGroupId ? { id: editingGroupId } : {}) })}
               disabled={!groupForm.name || saveGroup.isPending}>
               {saveGroup.isPending ? "Saving…" : editingGroupId ? "Update" : "Create"}
@@ -239,31 +244,31 @@ export default function SettingsModifierGroupsPage() {
       </Dialog>
 
       {/* Modifier dialog */}
-      <Dialog open={modDialog.open} onOpenChange={o => { if (!o) setFormTouched(false); setModDialog(d => ({ ...d, open: o })); }}>
+      <Dialog open={modDialog.open} onOpenChange={o => { if (!o) markModClean(); setModDialog(d => ({ ...d, open: o })); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{modDialog.editId ? "Edit Option" : "Add Option"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <Label>Option Name</Label>
-              <Input value={modForm.name} onChange={e => { setFormTouched(true); setModForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Small, Oat Milk" className="mt-1" />
+              <Input value={modForm.name} onChange={e => { setModForm(f => ({ ...f, name: e.target.value })); }} placeholder="e.g. Small, Oat Milk" className="mt-1" />
             </div>
             <div>
               <Label>Price Adjustment</Label>
               <div className="relative mt-1">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                 <Input type="number" step="0.01" value={modForm.priceAdjustment}
-                  onChange={e => { setFormTouched(true); setModForm(f => ({ ...f, priceAdjustment: parseFloat(e.target.value) || 0 })); }}
+                  onChange={e => { setModForm(f => ({ ...f, priceAdjustment: parseFloat(e.target.value) || 0 })); }}
                   className="pl-7" placeholder="0.00 = no change" />
               </div>
               <p className="text-xs text-muted-foreground mt-1">Use negative for discounts (e.g. -0.50)</p>
             </div>
             <div className="flex items-center gap-3">
-              <Switch checked={modForm.isDefault} onCheckedChange={v => { setFormTouched(true); setModForm(f => ({ ...f, isDefault: v })); }} id="def-switch" />
+              <Switch checked={modForm.isDefault} onCheckedChange={v => { setModForm(f => ({ ...f, isDefault: v })); }} id="def-switch" />
               <Label htmlFor="def-switch">Pre-selected by default</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormTouched(false); setModDialog({ open: false, groupId: null, editId: null }); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { markModClean(); setModDialog({ open: false, groupId: null, editId: null }); }}>Cancel</Button>
             <Button
               onClick={() => modDialog.groupId && saveMod.mutate({ ...modForm, groupId: modDialog.groupId, ...(modDialog.editId ? { id: modDialog.editId } : {}) })}
               disabled={!modForm.name || saveMod.isPending}>
