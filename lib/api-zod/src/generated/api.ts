@@ -2939,6 +2939,7 @@ export const ListParkedSalesResponseItem = zod.object({
   "id": zod.number(),
   "reference": zod.string(),
   "note": zod.string().nullish(),
+  "saleNote": zod.string().nullish(),
   "customerId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
@@ -2958,6 +2959,7 @@ export const ListParkedSalesResponse = zod.array(ListParkedSalesResponseItem)
 export const CreateParkedSaleBody = zod.object({
   "reference": zod.string().optional(),
   "note": zod.string().optional(),
+  "saleNote": zod.string().optional(),
   "customerId": zod.number().optional(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
@@ -2992,6 +2994,7 @@ export const RestoreParkedSaleResponse = zod.object({
   "id": zod.number(),
   "reference": zod.string(),
   "note": zod.string().nullish(),
+  "saleNote": zod.string().nullish(),
   "customerId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),

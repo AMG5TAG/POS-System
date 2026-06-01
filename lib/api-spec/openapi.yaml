@@ -8975,6 +8975,7 @@ components:
         id: { type: integer }
         reference: { type: string }
         note: { type: string, nullable: true }
+        saleNote: { type: string, nullable: true }
         customerId: { type: integer, nullable: true }
         items:
           type: array
@@ -8988,6 +8989,7 @@ components:
       properties:
         reference: { type: string }
         note: { type: string }
+        saleNote: { type: string }
         customerId: { type: integer }
         items:
           type: array

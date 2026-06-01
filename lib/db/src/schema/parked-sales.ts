@@ -10,6 +10,7 @@ export const parkedSalesTable = pgTable("parked_sales", {
   customerId: integer("customer_id").references(() => customersTable.id),
   reference:  text("reference").notNull(),
   note:       text("note"),
+  saleNote:   text("sale_note"),
   items:      jsonb("items").notNull().default([]),
   total:      numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

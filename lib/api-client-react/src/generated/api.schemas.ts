@@ -1482,6 +1482,7 @@ export interface ParkedSale {
   id: number;
   reference: string;
   note?: string | null;
+  saleNote?: string | null;
   customerId?: number | null;
   items: ParkedSaleItem[];
   total: number;
@@ -1491,6 +1492,7 @@ export interface ParkedSale {
 export interface ParkedSaleInput {
   reference?: string;
   note?: string;
+  saleNote?: string;
   customerId?: number;
   items: ParkedSaleItem[];
   total: number;

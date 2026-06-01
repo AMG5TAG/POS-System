@@ -1443,7 +1443,7 @@ export default function POSPage() {
       customPrice: i.customPrice ?? null,
       itemNote: i.itemNote ?? null,
     }));
-    const noteParts = [customerLabel, saleNotes, overallDiscount ? `Discount:${overallDiscount}` : ""].filter(Boolean);
+    const noteParts = [customerLabel, overallDiscount ? `Discount:${overallDiscount}` : ""].filter(Boolean);
     try {
       await createParkedSaleMutation.mutateAsync({
         data: {
@@ -1451,6 +1451,7 @@ export default function POSPage() {
           items,
           total,
           note: noteParts.join(" | ") || undefined,
+          saleNote: saleNotes || undefined,
         },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
@@ -1473,6 +1474,7 @@ export default function POSPage() {
       itemDiscount?: number; customPrice?: number | null; itemNote?: string | null;
     }>;
     const saleNote = sale.note ?? null;
+    const saleSaleNote = sale.saleNote ?? null;
     const saleCustomerId = sale.customerId ?? null;
 
     try {
@@ -1498,6 +1500,7 @@ export default function POSPage() {
             items: currentItems,
             total,
             note: currentLabel,
+            saleNote: saleNotes || undefined,
           },
         });
       }
@@ -1527,17 +1530,26 @@ export default function POSPage() {
       setWalkIn(null);
       setDiscountExcessAmount(0);
 
-      /* Restore sale note / discount if encoded */
+      /* Restore sale note from dedicated field; fall back to parsing the legacy
+         composite note string for records parked before this field was added.
+         Discount is always encoded in the composite note field. */
       if (saleNote) {
         const parts = saleNote.split(" | ");
         const discountPart = parts.find(p => p.startsWith("Discount:"));
         if (discountPart) setOverallDiscount(discountPart.replace("Discount:", ""));
-        const noteParts = parts.filter(p =>
-          !p.startsWith("Discount:") &&
-          p !== "No customer" &&
-          (saleCustomerId == null || !p.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/))
-        );
-        if (noteParts.length > 0) setSaleNotes(noteParts.join(" | "));
+        /* Only extract saleNote from the composite string for legacy records
+           that don't have the dedicated saleSaleNote column populated. */
+        if (!saleSaleNote) {
+          const noteParts = parts.filter(p =>
+            !p.startsWith("Discount:") &&
+            p !== "No customer" &&
+            (saleCustomerId == null || !p.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/))
+          );
+          if (noteParts.length > 0) setSaleNotes(noteParts.join(" | "));
+        }
+      }
+      if (saleSaleNote) {
+        setSaleNotes(saleSaleNote);
       }
 
       /* Restore customer — fetch from already-loaded list if possible */
