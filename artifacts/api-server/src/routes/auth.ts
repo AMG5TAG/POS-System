@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
 
 const DEFAULT_PRODUCT_TYPES: Array<{ name: string; slug: string; sortOrder: number }> = [
   { name: "Standard", slug: "standard", sortOrder: 0 },
@@ -127,12 +128,26 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   }
 
   const { email, password } = parsed.data;
+
+  const lockStatus = await checkAccountLock(email);
+  if (lockStatus.locked && lockStatus.retryAfter) {
+    const retryAfterSecs = Math.ceil((lockStatus.retryAfter.getTime() - Date.now()) / 1000);
+    res.setHeader("Retry-After", String(retryAfterSecs));
+    res.status(429).json({
+      error: `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`,
+    });
+    return;
+  }
+
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
 
   if (!merchant || !(await verifyPassword(password, merchant.passwordHash))) {
+    await recordFailedAttempt(email);
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+
+  await clearFailedAttempts(email);
 
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));

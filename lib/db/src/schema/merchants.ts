@@ -80,6 +80,14 @@ export const merchantIntegrationsTable = pgTable("merchant_integrations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const loginAttemptsTable = pgTable("login_attempts", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  failCount: integer("fail_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertMerchantSchema = createInsertSchema(merchantsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMerchant = z.infer<typeof insertMerchantSchema>;
 export type Merchant = typeof merchantsTable.$inferSelect;
