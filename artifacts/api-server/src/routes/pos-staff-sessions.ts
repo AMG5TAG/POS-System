@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, posStaffSessionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
@@ -21,9 +22,18 @@ router.get("/pos-staff-sessions", requireAuth, async (req, res): Promise<void> =
   res.json({ items, total: items.length });
 });
 
+const CreatePosStaffSessionBody = z.object({
+  registerId: z.string().optional(),
+  staffId:    z.number().int().positive("staffId must be a positive integer"),
+  staffName:  z.string().optional(),
+  staffPin:   z.string().optional(),
+});
+
 router.post("/pos-staff-sessions", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { registerId = "default", staffId, staffName = "", staffPin = "" } = req.body;
+  const parsed = CreatePosStaffSessionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
+  const { registerId = "default", staffId, staffName = "", staffPin = "" } = parsed.data;
   const [row] = await db.insert(posStaffSessionsTable).values({
     merchantId, registerId, staffId, staffName, staffPin,
   }).returning();

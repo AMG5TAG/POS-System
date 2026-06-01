@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, giftCardsTable, giftCardLedgerTable, giftCardSettingsTable } from "@workspace/db";
 import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
@@ -38,14 +39,18 @@ router.get("/gift-card-settings", requireAuth, async (req, res): Promise<void> =
   res.json(row);
 });
 
+const GiftCardSettingsBody = z.object({
+  expiryMonths:            z.number().int().positive().nullable().optional(),
+  allowPartialRedemptions: z.string().optional(),
+  prefix:                  z.string().optional(),
+});
+
 /* ── PUT /api/gift-card-settings ────────────────────────────────────────── */
 router.put("/gift-card-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { expiryMonths, allowPartialRedemptions, prefix } = req.body as {
-    expiryMonths?: number | null;
-    allowPartialRedemptions?: string;
-    prefix?: string;
-  };
+  const parsed = GiftCardSettingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
+  const { expiryMonths, allowPartialRedemptions, prefix } = parsed.data;
   const updates: Partial<typeof giftCardSettingsTable.$inferInsert> = {};
   if (expiryMonths            !== undefined) updates.expiryMonths            = expiryMonths ?? null;
   if (allowPartialRedemptions !== undefined) updates.allowPartialRedemptions = allowPartialRedemptions;
@@ -98,19 +103,20 @@ router.get("/gift-cards", requireAuth, async (req, res): Promise<void> => {
   res.json({ items: items.map(formatCard), total: count });
 });
 
+const CreateGiftCardBody = z.object({
+  cardNumber:   z.string().min(1, "cardNumber is required"),
+  initialValue: z.number().positive("initialValue must be a positive number"),
+  expiryDate:   z.string().nullable().optional(),
+  issuedTo:     z.string().nullable().optional(),
+  note:         z.string().nullable().optional(),
+});
+
 /* ── POST /api/gift-cards ───────────────────────────────────────────────── */
 router.post("/gift-cards", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { cardNumber, initialValue, expiryDate, issuedTo, note } = req.body as {
-    cardNumber: string;
-    initialValue: number;
-    expiryDate?: string | null;
-    issuedTo?: string | null;
-    note?: string | null;
-  };
-  if (!cardNumber || initialValue == null) {
-    res.status(400).json({ error: "cardNumber and initialValue are required" }); return;
-  }
+  const parsed = CreateGiftCardBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
+  const { cardNumber, initialValue, expiryDate, issuedTo, note } = parsed.data;
 
   const [card] = await db.insert(giftCardsTable).values({
     merchantId,
@@ -136,11 +142,17 @@ router.post("/gift-cards", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(formatCard(card));
 });
 
+const ValidateGiftCardBody = z.object({
+  cardNumber: z.string().min(1, "cardNumber is required"),
+  saleTotal:  z.number().nonnegative("saleTotal must be a non-negative number").optional(),
+});
+
 /* ── POST /api/gift-cards/validate ──────────────────────────────────────── */
 router.post("/gift-cards/validate", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { cardNumber, saleTotal } = req.body as { cardNumber: string; saleTotal: number };
-  if (!cardNumber) { res.status(400).json({ error: "cardNumber is required" }); return; }
+  const parsed = ValidateGiftCardBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
+  const { cardNumber, saleTotal = 0 } = parsed.data;
 
   const [card] = await db.select().from(giftCardsTable)
     .where(and(
@@ -232,19 +244,23 @@ router.get("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(formatCard(card));
 });
 
+const PatchGiftCardBody = z.object({
+  status:          z.string().optional(),
+  currentBalance:  z.number().nonnegative("currentBalance must be a non-negative number").optional(),
+  expiryDate:      z.string().nullable().optional(),
+  issuedTo:        z.string().nullable().optional(),
+  note:            z.string().nullable().optional(),
+  adjustmentNote:  z.string().nullable().optional(),
+});
+
 /* ── PATCH /api/gift-cards/:id ──────────────────────────────────────────── */
 router.patch("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { status, currentBalance, expiryDate, issuedTo, note, adjustmentNote } = req.body as {
-    status?: string;
-    currentBalance?: number;
-    expiryDate?: string | null;
-    issuedTo?: string | null;
-    note?: string | null;
-    adjustmentNote?: string | null;
-  };
+  const bodyParsed = PatchGiftCardBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
+  const { status, currentBalance, expiryDate, issuedTo, note, adjustmentNote } = bodyParsed.data;
 
   const [card] = await db.select().from(giftCardsTable)
     .where(and(eq(giftCardsTable.id, id), eq(giftCardsTable.merchantId, merchantId))).limit(1);
