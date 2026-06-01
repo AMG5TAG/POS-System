@@ -6,7 +6,7 @@ import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold } from "../lib/accountLimiter";
+import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail } from "../services/email";
 
 
@@ -320,6 +320,50 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
         // Non-blocking — do not fail the login response
       }
     })();
+    // When a standard lockout is first triggered, schedule a delayed email to notify
+    // the merchant exactly when the cooldown expires so they know they can try again.
+    if (attemptsRemaining === 0) {
+      const lockedMerchantId = merchant.id;
+      const lockedMerchantEmail = merchant.email;
+      const lockedMerchantTimezone = merchant.timezone ?? "Australia/Sydney";
+      const loginUrl = `${getAppBaseUrl()}/login`;
+      setTimeout(() => {
+        const unlockTime = new Date().toLocaleString("en-AU", {
+          timeZone: lockedMerchantTimezone,
+          dateStyle: "full",
+          timeStyle: "short",
+        });
+        void sendEmail(lockedMerchantId, {
+          to: lockedMerchantEmail,
+          subject: "Your KoaPOS account is now unlocked",
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+              <h2 style="margin-top:0;color:#16a34a">Your account is unlocked</h2>
+              <p>The temporary lock on your KoaPOS account has expired. You can now sign in again.</p>
+              <table style="border-collapse:collapse;width:100%;margin:16px 0">
+                <tr>
+                  <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Unlocked at</td>
+                  <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${unlockTime}</td>
+                </tr>
+              </table>
+              <p style="margin:24px 0">
+                <a href="${loginUrl}"
+                   style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+                  Sign in to KoaPOS
+                </a>
+              </p>
+              <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${loginUrl}</p>
+              <p style="color:#666;font-size:14px">
+                If you didn't request any sign-ins and don't recognise this activity, we recommend changing your password after you log in and reviewing recent sign-in events in <strong>Account → Recent Sign-ins</strong>.
+              </p>
+            </div>
+          `,
+          text: `Your KoaPOS account is now unlocked.\n\nThe temporary lock has expired and you can sign in again.\n\nUnlocked at: ${unlockTime}\n\nSign in here: ${loginUrl}\n\nIf you don't recognise recent sign-in attempts, change your password after logging in.`,
+        }).catch(() => {
+          // Non-blocking — suppress errors from the delayed notification
+        });
+      }, LOCKOUT_MS);
+    }
     res.status(401).json({ error: "Invalid email or password", attemptsRemaining });
     return;
   }

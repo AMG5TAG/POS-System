@@ -3,7 +3,7 @@ import { sql, eq } from "drizzle-orm";
 
 const MAX_FAILURES = parseInt(process.env.LOGIN_MAX_FAILURES ?? "10", 10);
 const LOCKOUT_MINUTES = parseInt(process.env.LOGIN_LOCKOUT_MINUTES ?? "15", 10);
-const LOCKOUT_MS = LOCKOUT_MINUTES * 60 * 1000;
+export const LOCKOUT_MS = LOCKOUT_MINUTES * 60 * 1000;
 
 const DEFAULT_ANOMALY_IP_THRESHOLD = parseInt(process.env.LOGIN_ANOMALY_IP_THRESHOLD ?? "3", 10);
 const DEFAULT_ANOMALY_WINDOW_MINUTES = parseInt(process.env.LOGIN_ANOMALY_WINDOW_MINUTES ?? "10", 10);
