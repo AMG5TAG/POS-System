@@ -1,7 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLogin } from "@workspace/api-client-react";
+import { useLogin, ApiError } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LockKeyholeIcon } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,10 +27,46 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
+function formatCountdown(seconds: number): string {
+  if (seconds <= 0) return "0s";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0 && s > 0) return `${m}m ${s}s`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const loginMutation = useLogin();
+
+  const [lockMessage, setLockMessage] = useState<string | null>(null);
+  const [lockSecondsLeft, setLockSecondsLeft] = useState<number>(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCountdown = (seconds: number) => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setLockSecondsLeft(seconds);
+    countdownRef.current = setInterval(() => {
+      setLockSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          countdownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
+
+  const isLocked = lockSecondsLeft > 0;
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -42,12 +81,28 @@ export default function LoginPage() {
       { data: values },
       {
         onSuccess: (data) => {
+          setLockMessage(null);
+          setLockSecondsLeft(0);
           login(data);
           toast.success("Successfully logged in");
           setLocation("/dashboard");
         },
-        onError: () => {
-          toast.error("Invalid email or password");
+        onError: (err) => {
+          if (err instanceof ApiError && err.status === 429) {
+            const retryAfterHeader = err.headers?.get("Retry-After");
+            const retryAfterSecs = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 60;
+            const bodyMessage =
+              typeof err.data === "object" &&
+              err.data !== null &&
+              "error" in err.data &&
+              typeof (err.data as Record<string, unknown>).error === "string"
+                ? (err.data as Record<string, unknown>).error as string
+                : "Account temporarily locked. Please try again later.";
+            setLockMessage(bodyMessage);
+            startCountdown(isNaN(retryAfterSecs) ? 60 : retryAfterSecs);
+          } else {
+            toast.error("Invalid email or password");
+          }
         },
       }
     );
@@ -61,7 +116,25 @@ export default function LoginPage() {
           <CardTitle className="text-2xl font-bold tracking-tight">Log in to KoaPOS</CardTitle>
           <CardDescription>Enter your email below to log in to your account</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {lockMessage && (
+            <Alert variant="destructive">
+              <LockKeyholeIcon className="h-4 w-4" />
+              <AlertTitle>Account temporarily locked</AlertTitle>
+              <AlertDescription>
+                {lockMessage}
+                {isLocked && (
+                  <span className="block mt-1 font-medium">
+                    You can try again in{" "}
+                    <span className="tabular-nums">{formatCountdown(lockSecondsLeft)}</span>.
+                  </span>
+                )}
+                {!isLocked && (
+                  <span className="block mt-1">You may try again now.</span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -90,8 +163,16 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? "Logging in..." : "Log in"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loginMutation.isPending || isLocked}
+              >
+                {loginMutation.isPending
+                  ? "Logging in..."
+                  : isLocked
+                    ? `Locked — try in ${formatCountdown(lockSecondsLeft)}`
+                    : "Log in"}
               </Button>
             </form>
           </Form>
