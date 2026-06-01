@@ -302,6 +302,8 @@ import type {
   SalesTemplateListResponse,
   SaveAiSettings200,
   SaveFloorPlan200,
+  SecuritySettings,
+  SecuritySettingsUpdate,
   SendInvoiceEmailInput,
   SendPurchaseOrderEmail200,
   SendPurchaseOrderEmailBody,
@@ -26374,6 +26376,154 @@ export const useUnlockAccount = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUnlockAccountMutationOptions(options));
+    }
+
+export const getGetSecuritySettingsUrl = () => {
+
+
+
+
+  return `/api/auth/security-settings`
+}
+
+/**
+ * @summary Get merchant anomaly detection sensitivity settings
+ */
+export const getSecuritySettings = async ( options?: RequestInit): Promise<SecuritySettings> => {
+
+  return customFetch<SecuritySettings>(getGetSecuritySettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSecuritySettingsQueryKey = () => {
+    return [
+    `/api/auth/security-settings`
+    ] as const;
+    }
+
+
+export const getGetSecuritySettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSecuritySettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecuritySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSecuritySettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSecuritySettings>>> = ({ signal }) => getSecuritySettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSecuritySettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSecuritySettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSecuritySettings>>>
+export type GetSecuritySettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get merchant anomaly detection sensitivity settings
+ */
+
+export function useGetSecuritySettings<TData = Awaited<ReturnType<typeof getSecuritySettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecuritySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSecuritySettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateSecuritySettingsUrl = () => {
+
+
+
+
+  return `/api/auth/security-settings`
+}
+
+/**
+ * @summary Update merchant anomaly detection sensitivity settings
+ */
+export const updateSecuritySettings = async (securitySettingsUpdate: SecuritySettingsUpdate, options?: RequestInit): Promise<SecuritySettings> => {
+
+  return customFetch<SecuritySettings>(getUpdateSecuritySettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      securitySettingsUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateSecuritySettingsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecuritySettings>>, TError,{data: BodyType<SecuritySettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSecuritySettings>>, TError,{data: BodyType<SecuritySettingsUpdate>}, TContext> => {
+
+const mutationKey = ['updateSecuritySettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSecuritySettings>>, {data: BodyType<SecuritySettingsUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSecuritySettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSecuritySettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSecuritySettings>>>
+    export type UpdateSecuritySettingsMutationBody = BodyType<SecuritySettingsUpdate>
+    export type UpdateSecuritySettingsMutationError = ErrorType<void>
+
+    /**
+ * @summary Update merchant anomaly detection sensitivity settings
+ */
+export const useUpdateSecuritySettings = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecuritySettings>>, TError,{data: BodyType<SecuritySettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSecuritySettings>>,
+        TError,
+        {data: BodyType<SecuritySettingsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateSecuritySettingsMutationOptions(options));
     }
 
 export const getSubmitFeedbackUrl = () => {

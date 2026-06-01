@@ -4212,6 +4212,32 @@ export interface XeroSyncResult {
   message: string;
 }
 
+export interface SecuritySettings {
+  id: number;
+  merchantId: number;
+  anomalyIpThreshold: number;
+  anomalyWindowMinutes: number;
+  anomalyHoldHours: number;
+}
+
+export interface SecuritySettingsUpdate {
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  anomalyIpThreshold?: number;
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  anomalyWindowMinutes?: number;
+  /**
+     * @minimum 1
+     * @maximum 720
+     */
+  anomalyHoldHours?: number;
+}
+
 export type GetAuthEventsUnreadCount200 = {
   count: number;
 };

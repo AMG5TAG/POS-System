@@ -91,3 +91,4 @@ export * from "./pricing-rules";
 export * from "./modifier-groups";
 export * from "./auth-events";
 export * from "./password-reset-tokens";
+export * from "./merchant-security-settings";

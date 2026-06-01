@@ -6400,6 +6400,38 @@ paths:
         "403":
           description: Forbidden — caller is not the account owner
 
+  # ── Security Settings ─────────────────────────────────────────────────────
+  /auth/security-settings:
+    get:
+      operationId: getSecuritySettings
+      tags: [auth]
+      summary: Get merchant anomaly detection sensitivity settings
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Security settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecuritySettings" }
+    patch:
+      operationId: updateSecuritySettings
+      tags: [auth]
+      summary: Update merchant anomaly detection sensitivity settings
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecuritySettingsUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecuritySettings" }
+        "400":
+          description: Validation error
+
   # ── Feedback ──────────────────────────────────────────────────────────────
   /feedback:
     post:
@@ -12407,3 +12439,20 @@ components:
         synced:    { type: integer }
         message:   { type: string }
         error:     { type: string }
+
+    SecuritySettings:
+      type: object
+      required: [id, merchantId, anomalyIpThreshold, anomalyWindowMinutes, anomalyHoldHours]
+      properties:
+        id:                   { type: integer }
+        merchantId:           { type: integer }
+        anomalyIpThreshold:   { type: integer }
+        anomalyWindowMinutes: { type: integer }
+        anomalyHoldHours:     { type: integer }
+
+    SecuritySettingsUpdate:
+      type: object
+      properties:
+        anomalyIpThreshold:   { type: integer, minimum: 1, maximum: 100 }
+        anomalyWindowMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        anomalyHoldHours:     { type: integer, minimum: 1, maximum: 720 }

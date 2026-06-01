@@ -8105,6 +8105,44 @@ export const UnlockAccountResponse = zod.object({
 
 
 /**
+ * @summary Get merchant anomaly detection sensitivity settings
+ */
+export const GetSecuritySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "anomalyIpThreshold": zod.number(),
+  "anomalyWindowMinutes": zod.number(),
+  "anomalyHoldHours": zod.number()
+})
+
+
+/**
+ * @summary Update merchant anomaly detection sensitivity settings
+ */
+export const updateSecuritySettingsBodyAnomalyIpThresholdMax = 100;
+
+export const updateSecuritySettingsBodyAnomalyWindowMinutesMax = 1440;
+
+export const updateSecuritySettingsBodyAnomalyHoldHoursMax = 720;
+
+
+
+export const UpdateSecuritySettingsBody = zod.object({
+  "anomalyIpThreshold": zod.number().min(1).max(updateSecuritySettingsBodyAnomalyIpThresholdMax).optional(),
+  "anomalyWindowMinutes": zod.number().min(1).max(updateSecuritySettingsBodyAnomalyWindowMinutesMax).optional(),
+  "anomalyHoldHours": zod.number().min(1).max(updateSecuritySettingsBodyAnomalyHoldHoursMax).optional()
+})
+
+export const UpdateSecuritySettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "anomalyIpThreshold": zod.number(),
+  "anomalyWindowMinutes": zod.number(),
+  "anomalyHoldHours": zod.number()
+})
+
+
+/**
  * @summary Submit a bug report or feature request
  */
 export const SubmitFeedbackBody = zod.object({

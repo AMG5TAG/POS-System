@@ -90,6 +90,7 @@ import voidAuditRouter from "./void-audit";
 import pricingRulesRouter from "./pricing-rules";
 import modifierGroupsRouter from "./modifier-groups";
 import quickbooksRouter from "./quickbooks";
+import authSecuritySettingsRouter from "./auth-security-settings";
 
 const router: IRouter = Router();
 
@@ -184,5 +185,6 @@ router.use(voidAuditRouter);
 router.use(pricingRulesRouter);
 router.use(modifierGroupsRouter);
 router.use(quickbooksRouter);
+router.use(authSecuritySettingsRouter);
 
 export default router;

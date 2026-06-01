@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent, useMarkAuthEventsRead } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent, useMarkAuthEventsRead, useGetSecuritySettings, useUpdateSecuritySettings } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
@@ -46,6 +46,145 @@ const PORTAL_BASE = "www.koapos.com.au/b/";
 
 function formatUsernameInput(raw: string) {
   return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
+}
+
+function SecuritySettingsCard() {
+  const qc = useQueryClient();
+  const { data: settings, isLoading } = useGetSecuritySettings({ query: { queryKey: ["security-settings"] } });
+  const updateSettings = useUpdateSecuritySettings();
+
+  const [ipThreshold,    setIpThreshold]    = useState<string>("");
+  const [windowMinutes,  setWindowMinutes]   = useState<string>("");
+  const [holdHours,      setHoldHours]       = useState<string>("");
+  const [saving,         setSaving]          = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setIpThreshold(String(settings.anomalyIpThreshold));
+      setWindowMinutes(String(settings.anomalyWindowMinutes));
+      setHoldHours(String(settings.anomalyHoldHours));
+    }
+  }, [settings]);
+
+  const savedIp      = settings ? String(settings.anomalyIpThreshold)   : "";
+  const savedWindow  = settings ? String(settings.anomalyWindowMinutes)  : "";
+  const savedHold    = settings ? String(settings.anomalyHoldHours)      : "";
+
+  const isDirty = ipThreshold !== savedIp || windowMinutes !== savedWindow || holdHours !== savedHold;
+
+  const ipVal     = parseInt(ipThreshold, 10);
+  const winVal    = parseInt(windowMinutes, 10);
+  const holdVal   = parseInt(holdHours, 10);
+  const ipError   = ipThreshold.length > 0 && (isNaN(ipVal) || ipVal < 1 || ipVal > 100);
+  const winError  = windowMinutes.length > 0 && (isNaN(winVal) || winVal < 1 || winVal > 1440);
+  const holdError = holdHours.length > 0 && (isNaN(holdVal) || holdVal < 1 || holdVal > 720);
+  const canSave   = isDirty && !ipError && !winError && !holdError && ipThreshold.length > 0 && windowMinutes.length > 0 && holdHours.length > 0;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    setSaving(true);
+    updateSettings.mutate(
+      { data: { anomalyIpThreshold: ipVal, anomalyWindowMinutes: winVal, anomalyHoldHours: holdVal } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["security-settings"] });
+          toast.success("Security settings saved");
+        },
+        onError: () => {
+          toast.error("Failed to save security settings");
+        },
+        onSettled: () => setSaving(false),
+      }
+    );
+  };
+
+  return (
+    <Card id="security-settings">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4" /> Anomaly Detection Sensitivity
+        </CardTitle>
+        <CardDescription>
+          Control how aggressively KoaPOS flags suspicious login patterns. Lower thresholds trigger holds sooner; higher values are more permissive.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="ip-threshold">Distinct IPs</Label>
+                <Input
+                  id="ip-threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={ipThreshold}
+                  onChange={e => setIpThreshold(e.target.value)}
+                  className={ipError ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {ipError ? (
+                  <p className="text-xs text-destructive">Must be 1–100</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Hold after this many distinct IPs</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="window-minutes">Time window (min)</Label>
+                <Input
+                  id="window-minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={windowMinutes}
+                  onChange={e => setWindowMinutes(e.target.value)}
+                  className={winError ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {winError ? (
+                  <p className="text-xs text-destructive">Must be 1–1440</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Observation window for bad attempts</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="hold-hours">Hold duration (hr)</Label>
+                <Input
+                  id="hold-hours"
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={holdHours}
+                  onChange={e => setHoldHours(e.target.value)}
+                  className={holdError ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {holdError ? (
+                  <p className="text-xs text-destructive">Must be 1–720</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">How long the account hold lasts</p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-lg border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+              Current: hold account for <strong>{holdHours || "?"} hour{parseInt(holdHours) !== 1 ? "s" : ""}</strong> when{" "}
+              <strong>{ipThreshold || "?"}</strong> or more distinct IPs submit wrong passwords within{" "}
+              <strong>{windowMinutes || "?"} minute{parseInt(windowMinutes) !== 1 ? "s" : ""}</strong>.
+            </div>
+            <Button onClick={handleSave} disabled={!canSave || saving}>
+              {saving ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
+              ) : (
+                "Save Settings"
+              )}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function LoginNotifyCard() {
@@ -833,6 +972,9 @@ export default function SettingsAccountPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Anomaly Detection Sensitivity */}
+        <SecuritySettingsCard />
 
         {/* Login Email Notifications */}
         <LoginNotifyCard />
