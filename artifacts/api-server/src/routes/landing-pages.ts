@@ -35,8 +35,11 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
 router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof landingPagesTable.$inferInsert>;
-  const [row] = await db.update(landingPagesTable).set(body)
+  const { slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo, bgDir,
+    bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, links } = req.body;
+  const [row] = await db.update(landingPagesTable)
+    .set({ slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo, bgDir,
+      bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, links })
     .where(and(eq(landingPagesTable.id, id), eq(landingPagesTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

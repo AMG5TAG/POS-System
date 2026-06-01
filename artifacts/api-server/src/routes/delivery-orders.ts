@@ -27,8 +27,11 @@ router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => 
 router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof deliveryOrdersTable.$inferInsert>;
-  const [row] = await db.update(deliveryOrdersTable).set(body)
+  const { channel, customer, customerEmail, phone, address, city, postcode, state,
+    shippingMethod, status, placedAt, total, items, notes } = req.body;
+  const [row] = await db.update(deliveryOrdersTable)
+    .set({ channel, customer, customerEmail, phone, address, city, postcode, state,
+      shippingMethod, status, placedAt, total, items, notes })
     .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json({ ...row, total: parseFloat(row.total as unknown as string) });

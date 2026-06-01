@@ -24,8 +24,9 @@ router.post("/service-job-templates", requireAuth, async (req, res): Promise<voi
 router.patch("/service-job-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof serviceJobTemplatesTable.$inferInsert>;
-  const [row] = await db.update(serviceJobTemplatesTable).set(body)
+  const { name, category, body: bodyField, options, isActive } = req.body;
+  const [row] = await db.update(serviceJobTemplatesTable)
+    .set({ name, category, body: bodyField, options, isActive })
     .where(and(eq(serviceJobTemplatesTable.id, id), eq(serviceJobTemplatesTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

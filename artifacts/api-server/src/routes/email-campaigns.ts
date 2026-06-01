@@ -31,8 +31,11 @@ router.post("/email-campaigns", requireAuth, async (req, res): Promise<void> => 
 router.patch("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof emailCampaignsTable.$inferInsert>;
-  const [row] = await db.update(emailCampaignsTable).set(body)
+  const { name, audience, audienceLabel, subject, body: bodyField, ctaEnabled, ctaLabel, ctaUrl,
+    scheduled, scheduledAt, status, sentAt, opens, bounces, recipientCount, customerId } = req.body;
+  const [row] = await db.update(emailCampaignsTable)
+    .set({ name, audience, audienceLabel, subject, body: bodyField, ctaEnabled, ctaLabel, ctaUrl,
+      scheduled, scheduledAt, status, sentAt, opens, bounces, recipientCount, customerId })
     .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

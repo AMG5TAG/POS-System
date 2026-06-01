@@ -24,8 +24,9 @@ router.post("/marketing-generators", requireAuth, async (req, res): Promise<void
 router.patch("/marketing-generators/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof marketingGeneratorsTable.$inferInsert>;
-  const [row] = await db.update(marketingGeneratorsTable).set(body)
+  const { name, category, prompt, output } = req.body;
+  const [row] = await db.update(marketingGeneratorsTable)
+    .set({ name, category, prompt, output })
     .where(and(eq(marketingGeneratorsTable.id, id), eq(marketingGeneratorsTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

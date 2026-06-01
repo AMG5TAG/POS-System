@@ -32,8 +32,11 @@ router.post("/pos-register-sessions", requireAuth, async (req, res): Promise<voi
 router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof posRegisterSessionsTable.$inferInsert>;
-  const [row] = await db.update(posRegisterSessionsTable).set(body)
+  const { openedBy, openingFloat, openingNotes, sales, txCount,
+    closedAt, cashCounted, eftposDeclared, closingNotes } = req.body;
+  const [row] = await db.update(posRegisterSessionsTable)
+    .set({ openedBy, openingFloat, openingNotes, sales, txCount,
+      closedAt, cashCounted, eftposDeclared, closingNotes })
     .where(and(eq(posRegisterSessionsTable.id, id), eq(posRegisterSessionsTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

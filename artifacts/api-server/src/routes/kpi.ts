@@ -17,13 +17,16 @@ router.get("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
 
 router.put("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof kpiSettingsTable.$inferInsert>;
+  const { trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage } = req.body;
   const [existing] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
-    const [updated] = await db.update(kpiSettingsTable).set(body).where(eq(kpiSettingsTable.merchantId, merchantId)).returning();
+    const [updated] = await db.update(kpiSettingsTable)
+      .set({ trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage })
+      .where(eq(kpiSettingsTable.merchantId, merchantId)).returning();
     res.json(updated); return;
   }
-  const [created] = await db.insert(kpiSettingsTable).values({ merchantId, ...body }).returning();
+  const [created] = await db.insert(kpiSettingsTable)
+    .values({ merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage }).returning();
   res.json(created);
 });
 

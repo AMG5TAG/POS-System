@@ -24,8 +24,9 @@ router.post("/pos-templates", requireAuth, async (req, res): Promise<void> => {
 router.patch("/pos-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const body = req.body as Partial<typeof posTemplatesTable.$inferInsert>;
-  const [row] = await db.update(posTemplatesTable).set(body)
+  const { name, category, body: bodyField, options, isActive } = req.body;
+  const [row] = await db.update(posTemplatesTable)
+    .set({ name, category, body: bodyField, options, isActive })
     .where(and(eq(posTemplatesTable.id, id), eq(posTemplatesTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
