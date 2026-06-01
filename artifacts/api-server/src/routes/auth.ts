@@ -5,7 +5,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
+import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold } from "../lib/accountLimiter";
 import { sendEmail } from "../services/email";
 
 
@@ -150,9 +150,10 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     // Look up the merchant to attach merchantId to the lockout event if possible
     const [lockedMerchant] = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(eq(merchantsTable.email, email));
     await db.insert(authEventsTable).values({ merchantId: lockedMerchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "locked" });
-    res.status(429).json({
-      error: `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`,
-    });
+    const errorMsg = lockStatus.isAnomalyHold
+      ? `Account temporarily locked due to suspicious sign-in activity from multiple locations. An email has been sent with instructions. If you have an active session, clear the hold in Account → Account Lock.`
+      : `Account temporarily locked due to too many failed login attempts. Please try again in ${Math.ceil(retryAfterSecs / 60)} minute(s).`;
+    res.status(429).json({ error: errorMsg, isAnomalyHold: lockStatus.isAnomalyHold ?? false });
     return;
   }
 
@@ -168,6 +169,42 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   if (!(await verifyPassword(password, merchant.passwordHash))) {
     await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
+    // Check for multi-IP anomaly — fire-and-forget hold + email if threshold exceeded
+    void (async () => {
+      try {
+        const holdTriggered = await checkAndApplyAnomalyHold(email, merchant.id);
+        if (holdTriggered) {
+          await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "account_hold" });
+          const holdHours = parseInt(process.env.LOGIN_ANOMALY_HOLD_HOURS ?? "24", 10);
+          void sendEmail(merchant.id, {
+            to: merchant.email,
+            subject: "Your KoaPOS account has been locked due to suspicious activity",
+            html: `
+              <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+                <h2 style="margin-top:0;color:#dc2626">Unusual sign-in activity detected</h2>
+                <p>We detected multiple failed login attempts to your KoaPOS account from different locations and have temporarily locked your account as a precaution.</p>
+                <table style="border-collapse:collapse;width:100%;margin:16px 0">
+                  <tr>
+                    <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">IP address</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ip ?? "Unknown"}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Lock duration</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${holdHours} hours (or until manually cleared)</td>
+                  </tr>
+                </table>
+                <p><strong>If this was you</strong> — you may have mistyped your password from multiple devices. Sign in to KoaPOS and go to <strong>Account → Account Lock</strong> to confirm your identity and clear the hold.</p>
+                <p><strong>If this wasn't you</strong> — someone may be attempting to access your account. We recommend changing your password as soon as possible.</p>
+                <p style="color:#666;font-size:14px">You can review recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.</p>
+              </div>
+            `,
+            text: `Unusual sign-in activity detected on your KoaPOS account.\n\nMultiple failed login attempts from different locations have triggered an automatic account hold.\n\nIP: ${ip ?? "Unknown"}\nLock duration: ${holdHours} hours\n\nIf this was you, sign in to KoaPOS and go to Account > Account Lock to clear the hold.\nIf this wasn't you, change your password immediately.`,
+          });
+        }
+      } catch (_err) {
+        // Non-blocking — do not fail the login response
+      }
+    })();
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
@@ -338,6 +375,7 @@ router.get("/auth/account-lock", requireAuth, async (req, res): Promise<void> =>
   res.json({
     locked: status.locked,
     retryAfter: status.retryAfter ? status.retryAfter.toISOString() : null,
+    isAnomalyHold: status.isAnomalyHold ?? false,
   });
 });
 

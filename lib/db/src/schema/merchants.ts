@@ -86,6 +86,7 @@ export const loginAttemptsTable = pgTable("login_attempts", {
   email: text("email").notNull().unique(),
   failCount: integer("fail_count").notNull().default(0),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  accountHoldUntil: timestamp("account_hold_until", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

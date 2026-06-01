@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
@@ -173,6 +173,8 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                   <div className="mt-0.5 shrink-0">
                     {ev.outcome === "success" ? (
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    ) : ev.outcome === "account_hold" ? (
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
                     ) : (
                       <XCircle className="w-4 h-4 text-destructive" />
                     )}
@@ -187,6 +189,8 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                             ? "Wrong password"
                             : ev.outcome === "locked"
                             ? "Account locked"
+                            : ev.outcome === "account_hold"
+                            ? "Suspicious activity hold"
                             : "Email not found"}
                         </span>
                         {isFlagged && (
@@ -749,30 +753,36 @@ export default function SettingsAccountPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {lockStatus?.locked ? (
-                <Lock className="w-4 h-4 text-destructive" />
+                lockStatus.isAnomalyHold
+                  ? <ShieldAlert className="w-4 h-4 text-amber-500" />
+                  : <Lock className="w-4 h-4 text-destructive" />
               ) : (
                 <LockOpen className="w-4 h-4 text-green-500" />
               )}
               Account Lock
             </CardTitle>
             <CardDescription>
-              After too many failed login attempts your account is temporarily locked. You can clear the lockout here if you have an active session.
+              {lockStatus?.isAnomalyHold
+                ? "Your account has been automatically held due to suspicious sign-in activity from multiple locations."
+                : "After too many failed login attempts your account is temporarily locked. You can clear the lockout here if you have an active session."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {lockStatus?.locked ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-4">
+              <div className={`rounded-lg border p-4 space-y-4 ${lockStatus.isAnomalyHold ? "border-amber-300/50 bg-amber-50/50 dark:border-amber-700/50 dark:bg-amber-950/20" : "border-destructive/30 bg-destructive/5"}`}>
                 <div className="flex items-start gap-3">
-                  <Lock className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+                  {lockStatus.isAnomalyHold
+                    ? <ShieldAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    : <Lock className="w-4 h-4 text-destructive mt-0.5 shrink-0" />}
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-destructive">Account is currently locked</p>
+                    <p className={`text-sm font-medium ${lockStatus.isAnomalyHold ? "text-amber-700 dark:text-amber-400" : "text-destructive"}`}>
+                      {lockStatus.isAnomalyHold ? "Account hold — suspicious activity detected" : "Account is currently locked"}
+                    </p>
                     {lockStatus.retryAfter && (
                       <p className="text-xs text-muted-foreground">
-                        Lockout expires at{" "}
-                        <span className="font-mono">
-                          {new Date(lockStatus.retryAfter).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                        {" "}— or enter your password below to unlock it now.
+                        {lockStatus.isAnomalyHold
+                          ? `Hold expires ${new Date(lockStatus.retryAfter).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} — or confirm your password below to clear it now.`
+                          : <>Lockout expires at{" "}<span className="font-mono">{new Date(lockStatus.retryAfter).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{" "}— or enter your password below to unlock it now.</>}
                       </p>
                     )}
                   </div>

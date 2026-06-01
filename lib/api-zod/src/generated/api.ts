@@ -8037,7 +8037,8 @@ export const ChangeEmailResponse = zod.object({
  */
 export const GetAccountLockStatusResponse = zod.object({
   "locked": zod.boolean().describe('Whether the account is currently locked out'),
-  "retryAfter": zod.coerce.date().nullish().describe('ISO timestamp when the lockout expires (only present when locked)')
+  "retryAfter": zod.coerce.date().nullish().describe('ISO timestamp when the lockout expires (only present when locked)'),
+  "isAnomalyHold": zod.boolean().optional().describe('When true the lock was triggered by suspicious multi-IP activity rather than simple brute-force')
 })
 
 

@@ -3728,6 +3728,8 @@ export interface AccountLockStatus {
   locked: boolean;
   /** ISO timestamp when the lockout expires (only present when locked) */
   retryAfter?: string | null;
+  /** When true the lock was triggered by suspicious multi-IP activity rather than simple brute-force */
+  isAnomalyHold?: boolean;
 }
 
 export interface UnlockAccountInput {
