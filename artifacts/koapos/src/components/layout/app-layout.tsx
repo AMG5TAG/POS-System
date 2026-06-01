@@ -18,7 +18,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard,
+  CreditCard, Plug,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -120,17 +120,77 @@ const INVENTORY_SUBNAV = [
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
-type NavLeaf  = { name: string; href: string;  icon: React.ComponentType<{ className?: string }> };
+type NavLeaf  = { name: string; href: string; icon: React.ComponentType<{ className?: string }>; matchPaths?: string[] };
 type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }>; defaultHref?: string };
 type NavItem  = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
-  { name: "Overview",                href: "/management/overview",      icon: LayoutDashboard },
-  { name: "Customers",               href: "/management/customers-hub", icon: Users           },
-  { name: "Products & Inventory",    href: "/management/products-hub",  icon: Boxes           },
-  { name: "Staff & Operations",      href: "/management/operations-hub",icon: UserSquare2     },
-  { name: "Marketing & Reports",     href: "/management/marketing-hub", icon: TrendingUp      },
-  { name: "Settings & Integrations", href: "/management/settings-hub",  icon: Settings        },
+  { name: "Overview", href: "/management/overview", icon: LayoutDashboard },
+  {
+    name: "Customers", icon: Users, defaultHref: "/management/customers",
+    children: [
+      { name: "Settings",            href: "/management/customers",            icon: Users         },
+      { name: "Heard From",          href: "/management/customers/heard-from", icon: Radio         },
+      { name: "Loyalty",             href: "/management/loyalty",              icon: Gift,
+        matchPaths: ["/management/loyalty/leaderboard"] },
+      { name: "Gift Cards",          href: "/management/gift-cards",           icon: Gift          },
+      { name: "Discounts & Pricing", href: "/management/discounts",            icon: Percent,
+        matchPaths: ["/management/pricing-rules", "/management/layby"] },
+      { name: "Feedback",            href: "/management/feedback",             icon: MessageSquare },
+    ],
+  },
+  {
+    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/inventory",
+    children: [
+      { name: "Stock & Inventory",  href: "/management/inventory",               icon: Boxes          },
+      { name: "Product Types",      href: "/management/product-types",           icon: Tag            },
+      { name: "Modifier Groups",    href: "/management/modifier-groups",         icon: Layers         },
+      { name: "Sale Templates",     href: "/management/templates",               icon: LayoutTemplate },
+      { name: "Labels & Stickers",  href: "/management/stickers",               icon: Printer,
+        matchPaths: ["/management/sticker-templates"] },
+      { name: "Calculators",        href: "/management/calculators",             icon: Calculator     },
+    ],
+  },
+  {
+    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff",
+    children: [
+      { name: "Employees",     href: "/management/staff",              icon: UserSquare2 },
+      { name: "Timesheets",    href: "/management/staff/timesheet",    icon: Clock       },
+      { name: "Cost Summary",  href: "/management/staff/cost-summary", icon: Coins       },
+      { name: "POS Registers", href: "/management/registers",          icon: Monitor     },
+      { name: "Floor Plan",    href: "/management/floor-plan",         icon: Map         },
+      { name: "Cameras",       href: "/management/cameras",            icon: Camera      },
+    ],
+  },
+  {
+    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/sales-overview",
+    children: [
+      { name: "Sales Overview", href: "/management/sales-overview",       icon: BarChart2  },
+      { name: "Reports",        href: "/management/reports",              icon: TrendingUp,
+        matchPaths: ["/management/daily-reports"] },
+      { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
+      { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
+      { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
+      { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
+      { name: "Email",          href: "/management/email",                icon: Mail       },
+      { name: "Forms & Files",  href: "/management/forms",                icon: FileText   },
+      { name: "AI Assistant",   href: "/management/ai",                   icon: Brain      },
+    ],
+  },
+  {
+    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/account",
+    children: [
+      { name: "Account & Modules", href: "/management/account",       icon: UserCircle     },
+      { name: "Business Details",  href: "/management/business",       icon: Building2,
+        matchPaths: ["/management/regional"] },
+      { name: "Tax",               href: "/management/tax",            icon: Receipt        },
+      { name: "Integrations",      href: "/management/integrations",   icon: Plug,
+        matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
+      { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
+      { name: "System",            href: "/management/koapos",         icon: Sparkles,
+        matchPaths: ["/management/misc"] },
+    ],
+  },
 ];
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
@@ -475,11 +535,17 @@ function Breadcrumbs({ location }: { location: string }) {
 
 /* ─── Nested nav group (level 3, sidebar only) ───────────────────────────── */
 
+function isLeafActive(child: NavLeaf, location: string): boolean {
+  if (location === child.href || location.startsWith(child.href + "/")) return true;
+  if (child.matchPaths) return child.matchPaths.some((p) => location === p || location.startsWith(p + "/"));
+  return false;
+}
+
 function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, navigate }: {
   name: string; icon: React.ComponentType<{ className?: string }>; children: NavLeaf[]; location: string;
   defaultHref?: string; navigate?: (href: string) => void;
 }) {
-  const isChildActive = children.some((c) => location === c.href);
+  const isChildActive = children.some((c) => isLeafActive(c, location));
   const [open, setOpen] = useState(isChildActive);
   const handleClick = () => {
     if (defaultHref && navigate) navigate(defaultHref);
@@ -495,7 +561,7 @@ function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, nav
       {open && (
         <SidebarMenuSub>
           {children.map((child) => {
-            const active = location === child.href;
+            const active = isLeafActive(child, location);
             return (
               <SidebarMenuSubItem key={child.href}>
                 <SidebarMenuSubButton asChild isActive={active}>
