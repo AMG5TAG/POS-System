@@ -64,7 +64,6 @@ import {
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
   Archive, X as XIcon, Upload,
 } from "lucide-react";
-import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -845,7 +844,6 @@ export default function ProductsPage() {
   const [bulkActionPending, setBulkActionPending] = useState<BulkActionPending | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen]     = useState(false);
   const [bulkSubmitting, setBulkSubmitting]       = useState(false);
-  const [csvImportOpen, setCsvImportOpen]         = useState(false);
   const [bulkPriceInput, setBulkPriceInput]       = useState("");
   const [bulkPricePopover, setBulkPricePopover]   = useState<"percent" | "flat" | null>(null);
   const [bulkCatPopover, setBulkCatPopover]       = useState(false);
@@ -1296,33 +1294,6 @@ export default function ProductsPage() {
     ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
     : null;
 
-  const exportProductsCsv = () => {
-    const headers = ["Name", "SKU", "Barcode", "Type", "Category", "Price", "Cost Price", "Stock", "Active", "Tags"];
-    const rows = filtered.map((p) => {
-      const ep = p as Product & { productType?: string; productTypeName?: string | null; tags?: string[] };
-      const typeName = ep.productTypeName
-        ?? PRODUCT_TYPES.find((t) => t.value === (ep.productType ?? "standard"))?.label
-        ?? ep.productType ?? "";
-      return [
-        p.name,
-        p.sku ?? "",
-        (p as Product & { barcode?: string }).barcode ?? "",
-        typeName,
-        p.category?.name ?? "",
-        p.price.toFixed(2),
-        p.costPrice?.toFixed(2) ?? "",
-        (p.stockQuantity ?? 0).toString(),
-        p.isActive !== false ? "Yes" : "No",
-        (ep.tags ?? []).join("; "),
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
-    });
-    const csv = [headers.join(","), ...rows].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "products.csv";
-    a.click();
-  };
-
   const exportGroupPriceSheet = (groupId: string, groupName: string) => {
     setGroupExportOpen(false);
 
@@ -1456,17 +1427,6 @@ export default function ProductsPage() {
             </Button>
           )}
 
-          {/* CSV Import */}
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCsvImportOpen(true)}>
-            <Upload className="w-4 h-4" />
-            Import CSV
-          </Button>
-
-          {/* CSV Export */}
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={exportProductsCsv} title="Export current product list to CSV">
-            <Download className="w-4 h-4" />
-            Export CSV
-          </Button>
 
           {/* Group Export */}
           <Popover open={groupExportOpen} onOpenChange={setGroupExportOpen}>
@@ -2939,13 +2899,6 @@ export default function ProductsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ─── CSV Import ────────────────────────────────────────────────────── */}
-      <CsvImportDialog
-        entity="product"
-        open={csvImportOpen}
-        onOpenChange={setCsvImportOpen}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["products"] })}
-      />
 
       {/* ─── Category manager ──────────────────────────────────────────────── */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>

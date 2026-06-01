@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import {
-  ShieldAlert, Download, RefreshCw, Package, User, Clock, CalendarDays,
+  ShieldAlert, RefreshCw, Package, User, Clock, CalendarDays,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -72,29 +72,6 @@ export default function ManagementReportsVoidAuditPage() {
   }
   const topStaff = [...staffMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-  function handleExport() {
-    const rows = [
-      ["Date", "Action", "Product", "Qty", "Unit Price", "Value", "Staff", "Reason"],
-      ...filtered.map(e => [
-        new Date(e.createdAt).toLocaleString("en-AU"),
-        ACTION_LABELS[e.action] ?? e.action,
-        e.productName,
-        String(e.quantity),
-        e.unitPrice != null ? `$${e.unitPrice.toFixed(2)}` : "",
-        e.unitPrice != null ? `$${(e.unitPrice * e.quantity).toFixed(2)}` : "",
-        e.staffName ?? "",
-        e.reason ?? "",
-      ]),
-    ];
-    const csv = rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
-      download: `void-audit-${days}d.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
@@ -112,9 +89,6 @@ export default function ManagementReportsVoidAuditPage() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-            </Button>
-            <Button size="sm" onClick={handleExport} disabled={isLoading || filtered.length === 0}>
-              <Download className="w-4 h-4" /> Export CSV
             </Button>
           </div>
         </div>

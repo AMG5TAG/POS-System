@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { Moon, Receipt, Banknote, TrendingDown, RotateCcw, Download, RefreshCw, CreditCard, ScanLine } from "lucide-react";
+import { Moon, Receipt, Banknote, TrendingDown, RotateCcw, RefreshCw, CreditCard, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 
 interface ZReportData {
@@ -43,30 +43,6 @@ export default function ManagementReportsZReportPage() {
     },
   });
 
-  const handleExport = () => {
-    if (!data) return;
-    const lines = [
-      ["Z-REPORT", data.date],
-      [],
-      ["Gross Sales", data.grossSales],
-      ["Discounts", `-${data.discountTotal}`],
-      ["Refunds", `-${data.refundAmount}`],
-      ["Net Sales", data.netSales],
-      ["Tax Collected (GST)", data.taxCollected],
-      ["Transaction Count", data.transactionCount],
-      ["Refund Count", data.refundCount],
-      [],
-      ["Payment Method", "Count", "Total"],
-      ...data.byPaymentMethod.map(m => [m.method, m.count, m.total]),
-    ];
-    const csv = lines.map(r => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `z-report-${date}.csv`;
-    a.click();
-    toast.success("Z-Report exported");
-  };
-
   const kpis = [
     { label: "Gross Sales",       value: formatCurrency(data?.grossSales ?? 0),       icon: TrendingDown, color: "text-emerald-600 dark:text-emerald-400" },
     { label: "Discounts Given",   value: formatCurrency(data?.discountTotal ?? 0),     icon: TrendingDown, color: "text-amber-600 dark:text-amber-400" },
@@ -93,9 +69,6 @@ export default function ManagementReportsZReportPage() {
             <Input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} className="w-40" />
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-            <Button variant="outline" onClick={handleExport} disabled={!data}>
-              <Download className="w-4 h-4 mr-2" /> Export CSV
             </Button>
           </div>
         </div>

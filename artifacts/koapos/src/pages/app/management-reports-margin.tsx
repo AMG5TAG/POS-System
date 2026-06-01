@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  TrendingUp, Download, CalendarDays, Boxes, DollarSign,
+  TrendingUp, CalendarDays, Boxes, DollarSign,
   Percent, BarChart3, RefreshCw, ArrowUpDown,
 } from "lucide-react";
 import {
@@ -116,24 +116,6 @@ export default function ManagementReportsMarginPage() {
     revenue: i.totalRevenue,
   }));
 
-  function handleExportCsv() {
-    const rows = tab === "performance"
-      ? [
-          ["Product", "SKU", "Qty Sold", "Revenue", "COGS", "Gross Profit", "Margin %"],
-          ...perfItems.map(i => [i.name, i.sku ?? "", i.quantitySold, i.totalRevenue, i.totalCogs, i.grossProfit, i.marginPct]),
-        ]
-      : [
-          ["Product", "SKU", "Stock", "Cost Price", "Retail Price", "Cost Value", "Retail Value", "Margin %"],
-          ...valItems.map(i => [i.name, i.sku ?? "", i.stockQuantity, i.costPrice, i.retailPrice, i.costValue, i.retailValue, i.marginPct]),
-        ];
-    const csv = rows.map(r => r.join(",")).join("\n");
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
-      download: `margin-report-${tab}-${toISO(new Date())}.csv`,
-    });
-    a.click(); URL.revokeObjectURL(a.href);
-  }
-
   function SortTh({ label, k }: { label: string; k: SortKey }) {
     return (
       <th className="p-3 text-right font-medium whitespace-nowrap cursor-pointer select-none hover:text-foreground"
@@ -167,9 +149,6 @@ export default function ManagementReportsMarginPage() {
               onClick={() => tab === "performance" ? refetchPerf() : refetchVal()}
               disabled={isLoading}>
               <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-            </Button>
-            <Button size="sm" onClick={handleExportCsv} disabled={isLoading}>
-              <Download className="w-4 h-4" /> Export CSV
             </Button>
           </div>
         </div>

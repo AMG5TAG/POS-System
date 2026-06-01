@@ -126,12 +126,6 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   );
 }
 
-const ExportBtn = () => (
-  <Button variant="outline" size="sm" className="gap-1.5">
-    <Download className="w-3.5 h-3.5" /> Export CSV
-  </Button>
-);
-
 const PAYMENT_COLORS: Record<string, string> = {
   card: "#6366f1", cash: "#22c55e", split: "#f59e0b",
   voucher: "#ec4899", store_credit: "#8b5cf6", loyalty: "#06b6d4",
@@ -158,7 +152,7 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
         <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Daily Sales" action={<ExportBtn />} />
+        <SectionHeader title="Daily Sales" />
         <div className="p-5">
           {chartLoading ? (
             <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Loading chart…</div>
@@ -246,7 +240,7 @@ function PaymentsTab({ startDate, endDate }: { startDate: string; endDate: strin
       {/* Daily revenue trend */}
       {(dailyChart.length > 0 || isLoading) && (
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Daily Revenue Trend" action={<ExportBtn />} />
+          <SectionHeader title="Daily Revenue Trend" />
           <div className="p-5">
             {isLoading ? (
               <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
@@ -272,7 +266,7 @@ function PaymentsTab({ startDate, endDate }: { startDate: string; endDate: strin
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Method breakdown table */}
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Breakdown by Method" action={<ExportBtn />} />
+          <SectionHeader title="Breakdown by Method" />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : breakdown.length === 0 ? (
@@ -376,7 +370,7 @@ function InventoryTab() {
       )}
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Inventory Valuation" action={<ExportBtn />} />
+        <SectionHeader title="Inventory Valuation" />
         {isLoading ? (
           <div className="flex items-center justify-center py-14 gap-3 text-muted-foreground text-sm">
             <RefreshCw className="w-4 h-4 animate-spin" /> Loading inventory…
@@ -466,7 +460,7 @@ function RegisterClosuresTab() {
         <KpiTile label="Total Out" value={isLoading ? "—" : formatCurrency(byDate.reduce((s, r) => s + r.out, 0))} sub="Cash counted out" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Daily Register Summary" action={<ExportBtn />} />
+        <SectionHeader title="Daily Register Summary" />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
         ) : byDate.length === 0 ? (
@@ -570,7 +564,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
         <>
           {/* ── Daily P&L trend chart ─────────────────────────────────────── */}
           <div className="rounded-xl border bg-card overflow-hidden">
-            <SectionHeader title="Daily Revenue vs Net Profit" action={<ExportBtn />} />
+            <SectionHeader title="Daily Revenue vs Net Profit" />
             <div className="p-5">
               {isLoading ? (
                 <div className="h-44 flex items-center justify-center text-muted-foreground text-sm gap-2">
@@ -598,7 +592,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* ── P&L Summary table ──────────────────────────────────────── */}
             <div className="rounded-xl border bg-card overflow-hidden">
-              <SectionHeader title="P&L Summary" action={<ExportBtn />} />
+              <SectionHeader title="P&L Summary" />
               {isLoading ? (
                 <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2">
                   <RefreshCw className="w-4 h-4 animate-spin" /> Loading…
@@ -710,7 +704,7 @@ function CustomerInsightsTab() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Top Customers by Spend" action={<ExportBtn />} />
+          <SectionHeader title="Top Customers by Spend" />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : topBySpend.length === 0 ? (
@@ -785,7 +779,7 @@ function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod })
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Top Products by Revenue" action={<ExportBtn />} />
+          <SectionHeader title="Top Products by Revenue" />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : products.length === 0 ? (
@@ -872,7 +866,7 @@ function UserActivityTab({ fromDate }: { fromDate: string }) {
         <KpiTile label="Top Performer" value={isLoading || !staffSales[0] ? "—" : staffSales[0].name.split(" ")[0]} sub={staffSales[0] ? formatCurrency(staffSales[0].total) : "—"} />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Sales by Staff Member" action={<ExportBtn />} />
+        <SectionHeader title="Sales by Staff Member" />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
         ) : staffSales.length === 0 ? (
@@ -923,7 +917,7 @@ function CashMovementsTab() {
         <KpiTile label="Cash Out" value={isLoading ? "—" : formatCurrency(cashOut)} sub="Counted out" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Cash Movement Log" action={<ExportBtn />} />
+        <SectionHeader title="Cash Movement Log" />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
         ) : entries.length === 0 ? (
@@ -976,7 +970,7 @@ function AdjustmentsTab() {
         <KpiTile label="Est. Cost Impact" value={isLoading ? "—" : formatCurrency(totalCost)} sub="At cost price" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Inventory Adjustments" action={<ExportBtn />} />
+        <SectionHeader title="Inventory Adjustments" />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
         ) : records.length === 0 ? (
@@ -1091,7 +1085,6 @@ function ReportBuilderTab() {
                   className="w-full h-9 rounded-lg border bg-background px-3 text-sm">
                   <option value="table">Table</option>
                   <option value="chart">Chart</option>
-                  <option value="csv">CSV Export</option>
                   <option value="pdf">PDF</option>
                 </select>
               </div>
@@ -1179,7 +1172,7 @@ function GstBasTab({ summary, summaryLoading }: {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="BAS Quarters" action={<ExportBtn />} />
+          <SectionHeader title="BAS Quarters" />
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/30 border-b">
@@ -1558,7 +1551,7 @@ function AnalyticsTab() {
       {/* ── Shortlinks table ── */}
       {links.length > 0 && (
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="All Shortlinks" action={<ExportBtn />} />
+          <SectionHeader title="All Shortlinks" />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1597,7 +1590,7 @@ function AnalyticsTab() {
       {/* ── QR codes table ── */}
       {qr.length > 0 && (
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="QR Code History" action={<ExportBtn />} />
+          <SectionHeader title="QR Code History" />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 import {
   ReceiptText, TrendingDown, TrendingUp, Minus, Banknote,
   CreditCard, Gift, MoreHorizontal, ChevronRight,
-  ShoppingCart, CalendarDays, Printer, Download,
+  ShoppingCart, CalendarDays, Printer,
 } from "lucide-react";
-import { printDailyClose, exportDailyClosesCSV } from "@/lib/print-daily-close";
+import { printDailyClose } from "@/lib/print-daily-close";
 
 const fmt$ = (n: number) =>
   `$${Math.abs(n).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -199,17 +199,6 @@ export default function ManagementDailyReportsPage() {
               End-of-day cash reconciliation records.
             </p>
           </div>
-          {closes && closes.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 self-start sm:self-auto"
-              onClick={() => exportDailyClosesCSV(closes)}
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </Button>
-          )}
         </div>
 
         {/* KPI strip */}

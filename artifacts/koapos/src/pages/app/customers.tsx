@@ -29,7 +29,6 @@ import {
   ServiceJob,
 } from "@workspace/api-client-react";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
-import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -2422,7 +2421,6 @@ export default function CustomersPage() {
   const [page, setPage]                     = useState(1);
   const [pageSize, setPageSize]             = useState<number | "all">(25);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-  const [csvImportOpen, setCsvImportOpen]         = useState(false);
 
   /* ── Duplicate detection state ── */
   const [dismissedPairs,    setDismissedPairs]    = useState<Set<string>>(() => loadDismissed());
@@ -2581,9 +2579,6 @@ export default function CustomersPage() {
             <p className="text-sm text-muted-foreground">Manage your customer database, contacts, and loyalty activity.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" onClick={() => setCsvImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-2" /> Import CSV
-            </Button>
             <Button onClick={openCreate}>
               <Plus className="w-4 h-4 mr-2" /> Add Customer
             </Button>
@@ -3032,14 +3027,6 @@ export default function CustomersPage() {
           setMultiMergeCustomers([]);
           setChecked(new Set());
         }}
-      />
-
-      {/* ── CSV Import ── */}
-      <CsvImportDialog
-        entity="customer"
-        open={csvImportOpen}
-        onOpenChange={setCsvImportOpen}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() })}
       />
 
     </AppLayout>
