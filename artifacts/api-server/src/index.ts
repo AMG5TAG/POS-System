@@ -5,6 +5,7 @@ import { scheduleMarketingAutomation } from "./services/marketingAutomationSched
 import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
 import { scheduleLoginAttemptsCleanup } from "./services/loginAttemptsCleanupScheduler";
+import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 
 assertVaultKeyConfigured();
@@ -34,7 +35,12 @@ app.listen(port, (err) => {
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
   scheduleLowStockAlerts(logger);
-  scheduleLoginAttemptsCleanup(logger);
+  ensureLoginCleanupFunction(logger).then(() => {
+    scheduleLoginAttemptsCleanup(logger);
+  }).catch((err) => {
+    logger.error({ err }, "Failed to ensure login cleanup DB function; starting scheduler anyway");
+    scheduleLoginAttemptsCleanup(logger);
+  });
   // Migrate any tokens encrypted under VAULT_ENCRYPTION_KEY_PREVIOUS to the
   // current key first, then invalidate whatever is still unreadable.
   reEncryptVaultEntries()
