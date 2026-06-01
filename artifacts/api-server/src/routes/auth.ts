@@ -111,6 +111,9 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
 
   await seedProductTypes(merchant.id);
 
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
   req.session.merchantId = merchant.id;
   req.session.staffRole = "owner";
   res.status(201).json(formatMerchant(merchant, "owner"));
@@ -131,6 +134,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
   req.session.merchantId = merchant.id;
   req.session.staffRole = "owner";
   res.json(formatMerchant(merchant, "owner"));

@@ -32,9 +32,27 @@ app.use(
   }),
 );
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const allowedOrigins: Set<string> = new Set();
+if (isProduction && process.env.REPLIT_DOMAINS) {
+  for (const domain of process.env.REPLIT_DOMAINS.split(",")) {
+    const d = domain.trim();
+    if (d) allowedOrigins.add(`https://${d}`);
+  }
+}
+
 app.use(
   cors({
-    origin: true,
+    origin: isProduction
+      ? (origin, callback) => {
+          if (!origin || allowedOrigins.has(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error("Not allowed by CORS"));
+          }
+        }
+      : true,
     credentials: true,
   })
 );
@@ -50,8 +68,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })
