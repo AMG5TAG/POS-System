@@ -2388,6 +2388,7 @@ export default function POSPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{label}</p>
                         <p className="text-[10px] text-muted-foreground">{time} · {itemCount} item{itemCount !== 1 ? "s" : ""} · {formatCurrency(sale.total ?? 0)}</p>
+                        {sale.saleNote && <p className="text-[10px] text-muted-foreground italic truncate">{sale.saleNote}</p>}
                       </div>
                       <button
                         onClick={() => void retrieveParkedSale(sale)}
