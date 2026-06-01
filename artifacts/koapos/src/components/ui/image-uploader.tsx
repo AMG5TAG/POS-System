@@ -34,6 +34,13 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
       const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
       const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       if (!putRes.ok) throw new Error("Upload to storage failed");
+      const confirmRes = await fetch("/api/storage/uploads/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectPath }),
+        credentials: "include",
+      });
+      if (!confirmRes.ok) throw new Error("Failed to confirm upload");
       onChange(`/api/storage${objectPath}`);
       toast.success("Image uploaded");
     } catch (e) {

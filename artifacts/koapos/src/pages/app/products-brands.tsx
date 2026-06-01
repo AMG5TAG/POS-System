@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import {
-  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl,
+  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl, useConfirmUpload,
   useListProducts, getListProductsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -57,6 +57,7 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
   const [urlInput, setUrlInput] = useState("");
 
   const requestUploadUrlMutation = useRequestUploadUrl();
+  const confirmUploadMutation = useConfirmUpload();
 
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
@@ -65,6 +66,7 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
       const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
       const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       if (!putRes.ok) throw new Error("Upload to storage failed");
+      await confirmUploadMutation.mutateAsync({ data: { objectPath: result.objectPath } });
       onChange(`/api/storage${result.objectPath}`);
       toast.success("Logo uploaded");
     } catch (e) {

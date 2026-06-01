@@ -51,6 +51,8 @@ import type {
   CategoryUpdate,
   ChangeEmailInput,
   ChangePasswordInput,
+  ConfirmUploadBody,
+  ConfirmUploadResponse,
   CreateDailyCloseInput,
   CreateLaybyBody,
   CsvImportResult,
@@ -4287,6 +4289,79 @@ export const useRequestUploadUrl = <TError = ErrorType<ErrorEnvelope>,
         TContext
       > => {
       return useMutation(getRequestUploadUrlMutationOptions(options));
+    }
+
+export const getConfirmUploadUrl = () => {
+
+
+
+
+  return `/api/storage/uploads/confirm`
+}
+
+/**
+ * Called by the client after a direct-to-storage upload completes. The server sets an ACL policy on the object (owner = authenticated merchant, visibility = private) so that ACL-based access checks can enforce ownership independently of the path-prefix check.
+
+ * @summary Confirm a completed upload and tag the file with an ACL policy
+ */
+export const confirmUpload = async (confirmUploadBody: ConfirmUploadBody, options?: RequestInit): Promise<ConfirmUploadResponse> => {
+
+  return customFetch<ConfirmUploadResponse>(getConfirmUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      confirmUploadBody,)
+  }
+);}
+
+
+
+
+export const getConfirmUploadMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: BodyType<ConfirmUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: BodyType<ConfirmUploadBody>}, TContext> => {
+
+const mutationKey = ['confirmUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmUpload>>, {data: BodyType<ConfirmUploadBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmUploadMutationResult = NonNullable<Awaited<ReturnType<typeof confirmUpload>>>
+    export type ConfirmUploadMutationBody = BodyType<ConfirmUploadBody>
+    export type ConfirmUploadMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Confirm a completed upload and tag the file with an ACL policy
+ */
+export const useConfirmUpload = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmUpload>>, TError,{data: BodyType<ConfirmUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmUpload>>,
+        TError,
+        {data: BodyType<ConfirmUploadBody>},
+        TContext
+      > => {
+      return useMutation(getConfirmUploadMutationOptions(options));
     }
 
 export const getGetPublicObjectUrl = (filePath: string,) => {

@@ -17,6 +17,7 @@ import {
   useCreateCustomerFile,
   useDeleteCustomerFile,
   useRequestUploadUrl,
+  useConfirmUpload,
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
@@ -1124,6 +1125,7 @@ function CustomerDetailInner({
   const createFileMutation = useCreateCustomerFile();
   const deleteFileMutation = useDeleteCustomerFile();
   const requestUploadMutation = useRequestUploadUrl();
+  const confirmUploadMutation = useConfirmUpload();
   const loyaltyUpdateMutation = useUpdateCustomer();
 
   const programType     = loyaltySettings?.programType ?? "cashback";
@@ -1228,11 +1230,13 @@ function CustomerDetailInner({
           { onSuccess: (d) => resolve(d as { uploadURL: string; objectPath: string }), onError: reject }
         );
       });
-      await fetch(urlResp.uploadURL, {
+      const putRes = await fetch(urlResp.uploadURL, {
         method: "PUT",
         body: file,
         headers: { "Content-Type": file.type || "application/octet-stream" },
       });
+      if (!putRes.ok) throw new Error("Upload to storage failed");
+      await confirmUploadMutation.mutateAsync({ data: { objectPath: urlResp.objectPath } });
       await new Promise<void>((resolve, reject) => {
         createFileMutation.mutate(
           { id: customer.id, data: { filename: file.name, fileKey: urlResp.objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },

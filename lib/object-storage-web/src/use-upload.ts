@@ -100,6 +100,22 @@ export function useUpload(options: UseUploadOptions = {}) {
     []
   );
 
+  const confirmUpload = useCallback(
+    async (objectPath: string): Promise<void> => {
+      const response = await fetch(`${basePath}/uploads/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ objectPath }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to confirm upload");
+      }
+    },
+    [basePath]
+  );
+
   const uploadFile = useCallback(
     async (file: File): Promise<UploadResponse | null> => {
       setIsUploading(true);
@@ -113,6 +129,9 @@ export function useUpload(options: UseUploadOptions = {}) {
         setProgress(30);
         await uploadToPresignedUrl(file, uploadResponse.uploadURL);
 
+        setProgress(70);
+        await confirmUpload(uploadResponse.objectPath);
+
         setProgress(100);
         options.onSuccess?.(uploadResponse);
         return uploadResponse;
@@ -125,7 +144,7 @@ export function useUpload(options: UseUploadOptions = {}) {
         setIsUploading(false);
       }
     },
-    [requestUploadUrl, uploadToPresignedUrl, options]
+    [requestUploadUrl, uploadToPresignedUrl, confirmUpload, options]
   );
 
   const getUploadParameters = useCallback(
@@ -164,6 +183,7 @@ export function useUpload(options: UseUploadOptions = {}) {
 
   return {
     uploadFile,
+    confirmUpload,
     getUploadParameters,
     isUploading,
     error,

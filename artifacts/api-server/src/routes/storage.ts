@@ -3,6 +3,8 @@ import { Readable } from "stream";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  ConfirmUploadBody,
+  ConfirmUploadResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
@@ -59,6 +61,47 @@ router.post("/storage/uploads/request-url", requireActiveAuth, async (req: Reque
 });
 
 /**
+ * POST /storage/uploads/confirm
+ *
+ * Called by the client after a direct-to-GCS upload completes.
+ * Sets an ACL policy on the uploaded object (owner = authenticated merchant,
+ * visibility = private) so ACL-based access checks can enforce ownership
+ * independently of the path-prefix check on GET /storage/objects/*.
+ */
+router.post("/storage/uploads/confirm", requireActiveAuth, async (req: Request, res: Response) => {
+  const parsed = ConfirmUploadBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Missing or invalid objectPath" });
+    return;
+  }
+
+  const { objectPath } = parsed.data;
+  const merchantId = String(req.session.merchantId);
+
+  const expectedPrefix = `/objects/merchants/${merchantId}/`;
+  if (!objectPath.startsWith(expectedPrefix)) {
+    res.status(403).json({ error: "Forbidden: objectPath does not belong to your account" });
+    return;
+  }
+
+  try {
+    const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+      owner: merchantId,
+      visibility: "private",
+    });
+
+    res.json(ConfirmUploadResponse.parse({ objectPath: normalizedPath }));
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Object not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error setting ACL policy on uploaded object");
+    res.status(500).json({ error: "Failed to confirm upload" });
+  }
+});
+
+/**
  * GET /storage/public-objects/*
  *
  * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
@@ -96,15 +139,19 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * GET /storage/objects/*
  *
  * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ * Access is gated by two independent checks:
+ *   1. Path-prefix check — the object path must start with merchants/<merchantId>/
+ *      so a merchant can never even attempt to address another merchant's files.
+ *   2. ACL policy check — once the file is located, canAccessObjectEntity verifies
+ *      that the ACL policy owner matches the authenticated merchant. Files that
+ *      were uploaded but never confirmed (no ACL tag yet) are denied here.
  */
 router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
 
-    const merchantId = req.session.merchantId;
+    const merchantId = String(req.session.merchantId);
     const allowedPrefix = `merchants/${merchantId}/`;
     if (!wildcardPath.startsWith(allowedPrefix)) {
       res.status(403).json({ error: "Forbidden" });
@@ -113,6 +160,16 @@ router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res
 
     const objectPath = `/objects/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+
+    const canAccess = await objectStorageService.canAccessObjectEntity({
+      userId: merchantId,
+      objectFile,
+      requestedPermission: ObjectPermission.READ,
+    });
+    if (!canAccess) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
 
     const response = await objectStorageService.downloadObject(objectFile);
 

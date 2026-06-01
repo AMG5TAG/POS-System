@@ -1143,6 +1143,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /storage/uploads/confirm:
+    post:
+      tags: [Storage]
+      operationId: confirmUpload
+      summary: Confirm a completed upload and tag the file with an ACL policy
+      description: >
+        Called by the client after a direct-to-storage upload completes.
+        The server sets an ACL policy on the object (owner = authenticated merchant,
+        visibility = private) so that ACL-based access checks can enforce
+        ownership independently of the path-prefix check.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmUploadBody'
+      responses:
+        '200':
+          description: ACL policy set successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmUploadResponse'
+        '400':
+          description: Missing or invalid objectPath.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: objectPath does not belong to the authenticated merchant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Object not found in storage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Failed to set ACL policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /storage/public-objects/{filePath}:
     get:
       tags: [Storage]
@@ -8794,6 +8842,23 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
+
+    ConfirmUploadBody:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath:
+          type: string
+          minLength: 1
+          description: The normalized objectPath returned by POST /storage/uploads/request-url.
+
+    ConfirmUploadResponse:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath:
+          type: string
+          description: The confirmed, normalized object path with ACL policy applied.
 
     LoyaltyLeaderboardEntry:
       type: object

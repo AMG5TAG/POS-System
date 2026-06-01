@@ -1287,6 +1287,19 @@ export interface UploadUrlResponse {
   metadata?: UploadUrlRequest;
 }
 
+export interface ConfirmUploadBody {
+  /**
+     * The normalized objectPath returned by POST /storage/uploads/request-url.
+     * @minLength 1
+     */
+  objectPath: string;
+}
+
+export interface ConfirmUploadResponse {
+  /** The confirmed, normalized object path with ACL policy applied. */
+  objectPath: string;
+}
+
 export interface LoyaltyLeaderboardEntry {
   rank: number;
   customer: Customer;

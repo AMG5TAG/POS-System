@@ -1451,6 +1451,23 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * Called by the client after a direct-to-storage upload completes. The server sets an ACL policy on the object (owner = authenticated merchant, visibility = private) so that ACL-based access checks can enforce ownership independently of the path-prefix check.
+
+ * @summary Confirm a completed upload and tag the file with an ACL policy
+ */
+
+
+
+export const ConfirmUploadBody = zod.object({
+  "objectPath": zod.string().min(1).describe('The normalized objectPath returned by POST \/storage\/uploads\/request-url.')
+})
+
+export const ConfirmUploadResponse = zod.object({
+  "objectPath": zod.string().describe('The confirmed, normalized object path with ACL policy applied.')
+})
+
+
+/**
  * @summary Serve a public asset
  */
 export const GetPublicObjectParams = zod.object({
