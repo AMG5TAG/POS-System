@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BirthdayBanner } from "@/components/birthday-banner";
+import { SecurityAlertBanner } from "@/components/security-alert-banner";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DashboardClockBar } from "@/components/dashboard/DashboardClockBar";
 import { CloseDayDialog } from "@/components/dashboard/CloseDayDialog";
@@ -88,6 +89,7 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <BirthdayBanner />
+        <SecurityAlertBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}
           onCloseDay={() => setCloseDayOpen(true)}

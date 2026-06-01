@@ -101,6 +101,14 @@ export const ListAuthEventsResponse = zod.array(ListAuthEventsResponseItem)
 
 
 /**
+ * @summary Get count of auth events currently in "flagged" status
+ */
+export const GetAuthEventsFlaggedCountResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
  * @summary Get count of new auth events since the last time the merchant viewed them
  */
 export const GetAuthEventsUnreadCountResponse = zod.object({

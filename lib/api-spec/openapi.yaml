@@ -195,6 +195,25 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/events/flagged-count:
+    get:
+      operationId: getAuthEventsFlaggedCount
+      tags: [auth]
+      summary: Get count of auth events currently in "flagged" status
+      responses:
+        "200":
+          description: Flagged count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+        "401":
+          description: Unauthorized
+
   /auth/events/unread-count:
     get:
       operationId: getAuthEventsUnreadCount

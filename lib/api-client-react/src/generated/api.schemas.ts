@@ -4238,6 +4238,10 @@ export interface SecuritySettingsUpdate {
   anomalyHoldHours?: number;
 }
 
+export type GetAuthEventsFlaggedCount200 = {
+  count: number;
+};
+
 export type GetAuthEventsUnreadCount200 = {
   count: number;
 };

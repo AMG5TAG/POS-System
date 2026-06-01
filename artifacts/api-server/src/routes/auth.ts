@@ -467,6 +467,15 @@ router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+router.get("/auth/events/flagged-count", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const rows = await db
+    .select({ id: authEventsTable.id })
+    .from(authEventsTable)
+    .where(and(eq(authEventsTable.merchantId, merchantId), eq(authEventsTable.status, "flagged")));
+  res.json({ count: rows.length });
+});
+
 router.get("/auth/events/unread-count", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [merchant] = await db

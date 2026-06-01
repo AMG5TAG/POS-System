@@ -103,6 +103,7 @@ import type {
   FloorZone,
   ForgotPasswordInput,
   GenerateMissingReferralCodes200,
+  GetAuthEventsFlaggedCount200,
   GetAuthEventsUnreadCount200,
   GetDashboardActivityParams,
   GetDashboardCalendarParams,
@@ -830,6 +831,83 @@ export function useListAuthEvents<TData = Awaited<ReturnType<typeof listAuthEven
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAuthEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetAuthEventsFlaggedCountUrl = () => {
+
+
+
+
+  return `/api/auth/events/flagged-count`
+}
+
+/**
+ * @summary Get count of auth events currently in "flagged" status
+ */
+export const getAuthEventsFlaggedCount = async ( options?: RequestInit): Promise<GetAuthEventsFlaggedCount200> => {
+
+  return customFetch<GetAuthEventsFlaggedCount200>(getGetAuthEventsFlaggedCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthEventsFlaggedCountQueryKey = () => {
+    return [
+    `/api/auth/events/flagged-count`
+    ] as const;
+    }
+
+
+export const getGetAuthEventsFlaggedCountQueryOptions = <TData = Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthEventsFlaggedCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>> = ({ signal }) => getAuthEventsFlaggedCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthEventsFlaggedCountQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>>
+export type GetAuthEventsFlaggedCountQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get count of auth events currently in "flagged" status
+ */
+
+export function useGetAuthEventsFlaggedCount<TData = Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthEventsFlaggedCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthEventsFlaggedCountQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
