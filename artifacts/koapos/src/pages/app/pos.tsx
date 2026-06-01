@@ -260,6 +260,7 @@ export default function POSPage() {
   const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [notesOpen, setNotesOpen] = useState(false);
+  const [noteShake, setNoteShake] = useState(false);
   const [pendingPaymentAfterPin, setPendingPaymentAfterPin] = useState(false);
   const forceStaffLogin = false;
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
@@ -3730,7 +3731,14 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── Sale Note dialog ─── */}
-      <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+      <Dialog open={notesOpen} onOpenChange={(open) => {
+        if (!open && saleNotes.trim()) {
+          setNoteShake(true);
+          setTimeout(() => setNoteShake(false), 500);
+          return;
+        }
+        setNotesOpen(open);
+      }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -3743,7 +3751,7 @@ export default function POSPage() {
             value={saleNotes}
             onChange={(e) => setSaleNotes(e.target.value)}
             rows={4}
-            className="resize-none"
+            className={cn("resize-none", noteShake && "animate-shake")}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => { if (saleNotes) setClearNoteConfirm(true); else setNotesOpen(false); }} disabled={!saleNotes}>Clear</Button>
