@@ -22,6 +22,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
     username: m.username ?? null,
+    loginNotifyEmail: m.loginNotifyEmail === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
   };
 }
@@ -47,7 +48,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { username, ...rest } = parsed.data as typeof parsed.data & { username?: string };
+  const { username, loginNotifyEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean };
 
   // Validate username format if provided
   if (username !== undefined) {
@@ -68,7 +69,11 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const updateData = username !== undefined ? { ...rest, username } : rest;
+  const updateData = {
+    ...rest,
+    ...(username !== undefined && { username }),
+    ...(loginNotifyEmail !== undefined && { loginNotifyEmail: loginNotifyEmail ? "true" : "false" }),
+  };
 
   const [merchant] = await db
     .update(merchantsTable)

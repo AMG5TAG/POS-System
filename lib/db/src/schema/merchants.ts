@@ -16,6 +16,7 @@ export const merchantsTable = pgTable("merchants", {
   timezone: text("timezone").default("Australia/Sydney"),
   logoUrl: text("logo_url"),
   username: text("username").unique(),
+  loginNotifyEmail: text("login_notify_email").notNull().default("false"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -45,6 +46,61 @@ const PORTAL_BASE = "www.koapos.com.au/b/";
 
 function formatUsernameInput(raw: string) {
   return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
+}
+
+function LoginNotifyCard() {
+  const qc = useQueryClient();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const updateMerchant = useUpdateMerchant();
+  const [saving, setSaving] = useState(false);
+
+  const enabled = (merchant as { loginNotifyEmail?: boolean } | undefined)?.loginNotifyEmail ?? false;
+
+  const handleToggle = (checked: boolean) => {
+    setSaving(true);
+    updateMerchant.mutate(
+      { data: { loginNotifyEmail: checked } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success(checked ? "Login notifications enabled" : "Login notifications disabled");
+        },
+        onError: () => {
+          toast.error("Failed to update notification setting");
+        },
+        onSettled: () => setSaving(false),
+      }
+    );
+  };
+
+  return (
+    <Card id="login-notifications">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="w-4 h-4" /> Login Email Notifications
+        </CardTitle>
+        <CardDescription>
+          Receive an email whenever someone successfully signs in to your account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Email me on sign-in</p>
+            <p className="text-xs text-muted-foreground">
+              Each email includes the time, IP address, and browser. Requires a configured email provider in Management → Email.
+            </p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={handleToggle}
+            disabled={saving}
+            aria-label="Toggle login email notifications"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function SettingsAccountPage() {
@@ -510,6 +566,9 @@ export default function SettingsAccountPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Login Email Notifications */}
+        <LoginNotifyCard />
 
         {/* Account Lock Status */}
         <Card id="account-lock">

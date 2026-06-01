@@ -7134,6 +7134,8 @@ components:
           type: ["string", "null"]
         username:
           type: ["string", "null"]
+        loginNotifyEmail:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -7167,6 +7169,8 @@ components:
           minLength: 3
           maxLength: 30
           pattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
+        loginNotifyEmail:
+          type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────
     Plan:

@@ -6,7 +6,17 @@ import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
+import { sendEmail } from "../services/email";
 
+
+function parseUserAgent(ua: string): string {
+  if (/Chrome\//.test(ua) && !/Chromium|Edg\/|OPR\//.test(ua)) return "Chrome";
+  if (/Edg\//.test(ua)) return "Edge";
+  if (/Firefox\//.test(ua)) return "Firefox";
+  if (/Safari\//.test(ua) && !/Chrome/.test(ua)) return "Safari";
+  if (/OPR\//.test(ua)) return "Opera";
+  return "Browser";
+}
 
 const DEFAULT_PRODUCT_TYPES: Array<{ name: string; slug: string; sortOrder: number }> = [
   { name: "Standard", slug: "standard", sortOrder: 0 },
@@ -164,6 +174,49 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   await clearFailedAttempts(email);
   await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "success" });
+
+  // Fire-and-forget login notification email (does not block the response)
+  if (merchant.loginNotifyEmail === "true") {
+    const loginTime = new Date().toLocaleString("en-AU", {
+      timeZone: merchant.timezone ?? "Australia/Sydney",
+      dateStyle: "full",
+      timeStyle: "short",
+    });
+    const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
+    const ipLabel = ip ?? "Unknown";
+    void sendEmail(merchant.id, {
+      to: merchant.email,
+      subject: "New sign-in to your KoaPOS account",
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+          <h2 style="margin-top:0">New sign-in detected</h2>
+          <p>Someone (hopefully you) just signed in to your KoaPOS account.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0">
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${loginTime}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+            </tr>
+          </table>
+          <p style="color:#666;font-size:14px">
+            If this wasn't you, change your password immediately and check your recent sign-ins in
+            <strong>Account → Recent Sign-ins</strong>.
+          </p>
+          <p style="color:#666;font-size:14px">
+            To stop receiving these emails, turn off <strong>Login email notifications</strong> in your Account settings.
+          </p>
+        </div>
+      `,
+      text: `New sign-in to KoaPOS\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
+    });
+  }
 
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));

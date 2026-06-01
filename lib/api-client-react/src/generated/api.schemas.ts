@@ -89,6 +89,7 @@ export interface Merchant {
   logoUrl?: string | null;
   /** @nullable */
   username?: string | null;
+  loginNotifyEmail?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
 }
@@ -109,6 +110,7 @@ export interface MerchantUpdate {
      * @pattern ^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$
      */
   username?: string;
+  loginNotifyEmail?: boolean;
 }
 
 export interface Plan {
