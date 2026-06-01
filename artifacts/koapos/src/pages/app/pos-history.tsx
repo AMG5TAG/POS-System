@@ -25,7 +25,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   History, Eye, CreditCard, Banknote, Search,
   Send, Printer, Mail, MessageSquare, Check, X,
-  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown,
+  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -260,6 +260,15 @@ function ReceiptDialog({ tx, txDetail, onClose }: ReceiptDialogProps) {
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(txDetail.subtotal ?? 0)}</span></div>
+              {discountLabel(txDetail) && (
+                <div className="flex justify-between items-center text-emerald-700">
+                  <span className="flex items-center gap-1">
+                    <Tag className="w-3 h-3" />
+                    Discount ({discountLabel(txDetail)})
+                  </span>
+                  <span>−{formatCurrency(txDetail.discountTotal ?? 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(txDetail.taxTotal ?? 0)}</span></div>
               <div className="flex justify-between font-semibold text-foreground text-sm border-t pt-1">
                 <span>Total</span><span>{formatCurrency(txDetail.total ?? 0)}</span>
@@ -347,6 +356,12 @@ function customerName(tx: Transaction): string {
   const c = tx.customer;
   if (!c) return "";
   return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+}
+
+function discountLabel(tx: { discountPct?: number | null; discountTotal?: number }): string | null {
+  if (tx.discountPct != null && tx.discountPct > 0) return `${tx.discountPct}% off`;
+  if ((tx.discountTotal ?? 0) > 0) return `${formatCurrency(tx.discountTotal!)} off`;
+  return null;
 }
 
 function SortHeaderButton({
@@ -575,7 +590,17 @@ export default function POSHistoryPage() {
                         {tx.status}
                       </Badge>
                     </td>
-                    <td className="p-3 text-right font-medium">{formatCurrency(tx.total ?? 0)}</td>
+                    <td className="p-3 text-right">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-medium">{formatCurrency(tx.total ?? 0)}</span>
+                        {discountLabel(tx) && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5 leading-none">
+                            <Tag className="w-2.5 h-2.5" />
+                            {discountLabel(tx)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-3">
                       <div className="flex items-center justify-end gap-1">
                         <Button
