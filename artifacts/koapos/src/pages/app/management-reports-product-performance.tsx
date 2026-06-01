@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Package, RefreshCw, TrendingUp, ArrowUpDown } from "lucide-react";
+import { Package, Download, RefreshCw, TrendingUp, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProductRow {
@@ -49,6 +49,18 @@ export default function ManagementReportsProductPerformancePage() {
     profit: acc.profit + r.grossProfit,
   }), { qty: 0, revenue: 0, profit: 0 }), [sorted]);
 
+  const handleExport = () => {
+    if (!data) return;
+    const header = ["Product", "SKU", "Qty Sold", "Revenue", "COGS", "Gross Profit", "Margin %"];
+    const rows = sorted.map(r => [r.name, r.sku ?? "", r.quantitySold, r.totalRevenue, r.totalCogs, r.grossProfit, r.marginPct]);
+    const csv = [header, ...rows].map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `product-performance-${startDate}-to-${endDate}.csv`;
+    a.click();
+    toast.success("Report exported");
+  };
+
   const sortButtons: Array<{ key: SortKey; label: string }> = [
     { key: "totalRevenue",  label: "Revenue" },
     { key: "quantitySold", label: "Qty Sold" },
@@ -75,6 +87,9 @@ export default function ManagementReportsProductPerformancePage() {
             <Input type="date" value={endDate} min={startDate} max={today} onChange={e => setEndDate(e.target.value)} className="w-36" />
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="outline" onClick={handleExport} disabled={!sorted.length}>
+              <Download className="w-4 h-4 mr-2" /> Export
             </Button>
           </div>
         </div>

@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields } from "@/lib/customer-settings";
-import { exportCustomerGroupsXLSX, exportCustomerGroupsPDF } from "@/lib/customer-groups-export";
+import { exportCustomerGroupsCSV, exportCustomerGroupsXLSX, exportCustomerGroupsPDF } from "@/lib/customer-groups-export";
 import {
   useListCustomers,
   getListCustomersQueryKey,
@@ -283,6 +283,10 @@ export default function SettingsCustomersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportCustomerGroupsCSV(settings.groups, groupCounts, total)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    CSV
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={async () => {
                       try {

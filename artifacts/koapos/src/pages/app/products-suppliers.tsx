@@ -15,7 +15,7 @@ import {
   Plus, Truck, Pencil, Trash2, Search, Globe, Mail, Phone,
   Check, ChevronRight, ChevronLeft, Building2, MapPin, Users,
   FileText, CreditCard, ImageIcon, X, LayoutGrid, Table2, BarChart3,
-  Download, ChevronUp, ChevronDown, ChevronsUpDown, Upload,
+  ChevronUp, ChevronDown, ChevronsUpDown, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -638,12 +638,9 @@ export default function ProductsSuppliersPage() {
             </div>
           </div>
 
-          {/* Right: count + export + add */}
+          {/* Right: count + add */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-sm text-muted-foreground">{suppliers.length} supplier{suppliers.length !== 1 ? "s" : ""}</span>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Download className="w-3.5 h-3.5" /> Export
-            </Button>
             <Button size="sm" onClick={openCreate} className="gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Add Supplier
             </Button>

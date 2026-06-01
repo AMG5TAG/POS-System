@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Trophy, RefreshCw, TrendingUp, ShoppingCart, Percent } from "lucide-react";
+import { Trophy, Download, RefreshCw, TrendingUp, ShoppingCart, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 interface StaffRow {
@@ -36,6 +36,18 @@ export default function ManagementReportsStaffLeaderboardPage() {
 
   const topEarner = useMemo(() => data?.staff[0], [data]);
 
+  const handleExport = () => {
+    if (!data) return;
+    const header = ["Name", "Role", "Transactions", "Revenue", "Avg Basket", "Discounts"];
+    const rows = data.staff.map(s => [s.staffName, s.staffRole, s.transactionCount, s.totalRevenue, s.avgBasket, s.totalDiscounts]);
+    const csv = [header, ...rows].map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `staff-leaderboard-${startDate}-to-${endDate}.csv`;
+    a.click();
+    toast.success("Leaderboard exported");
+  };
+
   const totalRevenue = useMemo(() => data?.staff.reduce((s, r) => s + r.totalRevenue, 0) ?? 0, [data]);
 
   return (
@@ -57,6 +69,9 @@ export default function ManagementReportsStaffLeaderboardPage() {
             <Input type="date" value={endDate} min={startDate} max={today} onChange={e => setEndDate(e.target.value)} className="w-36" />
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="outline" onClick={handleExport} disabled={!data?.staff.length}>
+              <Download className="w-4 h-4 mr-2" /> Export
             </Button>
           </div>
         </div>

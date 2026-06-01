@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  Receipt, CalendarDays, Info, TrendingUp, DollarSign,
+  Receipt, Download, CalendarDays, Info, TrendingUp, DollarSign,
   Percent, BarChart3, RefreshCw,
 } from "lucide-react";
 import {
@@ -109,6 +109,28 @@ export default function ManagementReportsBasPage() {
     refund:  d.refundTotal,
   }));
 
+  const canExport = !isLoading && !isError && grossRevenue > 0;
+
+  function handleExportCsv() {
+    const rows = [
+      ["BAS Field", "Description", "Amount (AUD)"],
+      ["G1",  "Total Sales (including GST)",  grossRevenue.toFixed(2)],
+      ["1A",  "GST on Sales",                 taxCollected.toFixed(2)],
+      ["G2",  "Export Sales (GST-free)",       "0.00"],
+      ["Net", "Net Sales excluding GST",       exGstRevenue.toFixed(2)],
+      ["",    "Total Refunds",                 refundTotal.toFixed(2)],
+      ["",    "Transaction Count",             txCount.toString()],
+      ["",    "Period",                        `${from} to ${to}`],
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+      download: `bas-report-${from}-${to}.csv`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
@@ -126,6 +148,9 @@ export default function ManagementReportsBasPage() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+            </Button>
+            <Button size="sm" onClick={handleExportCsv} disabled={!canExport}>
+              <Download className="w-4 h-4" /> Export CSV
             </Button>
           </div>
         </div>

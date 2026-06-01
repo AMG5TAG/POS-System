@@ -15,7 +15,7 @@ import {
   type HeardFromMetric,
   type HeardFromCustomer,
 } from "@/lib/heard-from-analytics";
-import { exportHeardFromXLSX, exportHeardFromPDF } from "@/lib/heard-from-export";
+import { exportHeardFromCSV, exportHeardFromXLSX, exportHeardFromPDF } from "@/lib/heard-from-export";
 import {
   useListCustomers,
   useSendReferralDigestNow,
@@ -263,6 +263,10 @@ export default function ManagementCustomersHeardFromPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportHeardFromCSV(heardFromData, heardFromPeriod)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    CSV
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={async () => {
                       try {

@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
-  ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Calendar, Receipt,
+  ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Download, Calendar, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -601,6 +601,34 @@ function SalesReportView() {
     </button>
   );
 
+  const exportCsv = () => {
+    const headers = ["Staff", "Role", "Sales", "Gross Revenue", "Refunds", "Refund Amount", "Net Revenue", "Avg Basket", "Top Product"];
+    const csvRows = [
+      headers.join(","),
+      ...sorted.map((r) =>
+        [
+          `"${r.staffName}"`,
+          `"${r.role ?? ""}"`,
+          r.transactionCount,
+          r.grossRevenue.toFixed(2),
+          r.refundCount,
+          r.refundAmount.toFixed(2),
+          r.netRevenue.toFixed(2),
+          r.avgBasket.toFixed(2),
+          `"${r.topProduct ?? ""}"`,
+        ].join(","),
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvRows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `staff-sales-report_${from}_${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* Drill-down state */
   const [drillOpen, setDrillOpen] = useState(false);
   const [drillStaff, setDrillStaff] = useState<{ staffId: number | null; staffName: string } | null>(null);
@@ -664,7 +692,11 @@ function SalesReportView() {
           </div>
         )}
 
-        <div className="sm:ml-auto" />
+        <div className="sm:ml-auto">
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Summary KPI cards */}
