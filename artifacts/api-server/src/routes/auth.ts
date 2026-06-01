@@ -423,6 +423,54 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  // Send suspicious sign-in alert when an event is flagged and the merchant has login notifications enabled
+  if (parsed.data.status === "flagged") {
+    void (async () => {
+      try {
+        const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+        if (merchant?.loginNotifyEmail === "true") {
+          const eventTime = updated.createdAt.toLocaleString("en-AU", {
+            timeZone: merchant.timezone ?? "Australia/Sydney",
+            dateStyle: "full",
+            timeStyle: "short",
+          });
+          const browserLabel = updated.userAgent ? parseUserAgent(updated.userAgent) : "Unknown browser";
+          const ipLabel = updated.ipAddress ?? "Unknown";
+          await sendEmail(merchantId, {
+            to: merchant.email,
+            subject: "⚠️ Suspicious sign-in flagged on your KoaPOS account",
+            html: `
+              <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+                <h2 style="margin-top:0;color:#dc2626">Suspicious sign-in flagged</h2>
+                <p>You (or a team member) flagged a sign-in on your KoaPOS account as suspicious.</p>
+                <table style="border-collapse:collapse;width:100%;margin:16px 0">
+                  <tr>
+                    <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${eventTime}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+                  </tr>
+                </table>
+                <p><strong>If this sign-in was not you</strong>, we strongly recommend changing your password immediately to secure your account.</p>
+                <p style="color:#666;font-size:14px">You can review all recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.</p>
+                <p style="color:#666;font-size:14px">To stop receiving these emails, turn off <strong>Login email notifications</strong> in your Account settings.</p>
+              </div>
+            `,
+            text: `Suspicious sign-in flagged on your KoaPOS account.\n\nTime: ${eventTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this sign-in was not you, change your password immediately.\n\nReview recent sign-ins in Account → Recent Sign-ins.`,
+          });
+        }
+      } catch (_err) {
+        // Non-blocking — do not fail the flag response
+      }
+    })();
+  }
+
   res.json({
     id: updated.id,
     merchantId: updated.merchantId,
