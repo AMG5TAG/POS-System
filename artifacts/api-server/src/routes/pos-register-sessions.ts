@@ -1,7 +1,17 @@
 import { Router, type IRouter } from "express";
 import { db, posRegisterSessionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const PatchPosRegisterSession = z.object({
+  openedBy: z.string(), openingFloat: z.string(),
+  openingNotes: z.string(), sales: z.string(), txCount: z.number().int(),
+  closedAt: z.coerce.date().nullable(),
+  cashCounted: z.string().nullable(),
+  eftposDeclared: z.string().nullable(),
+  closingNotes: z.string().nullable(),
+}).partial();
 
 const router: IRouter = Router();
 
@@ -32,11 +42,10 @@ router.post("/pos-register-sessions", requireAuth, async (req, res): Promise<voi
 router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const { openedBy, openingFloat, openingNotes, sales, txCount,
-    closedAt, cashCounted, eftposDeclared, closingNotes } = req.body;
+  const parsed = PatchPosRegisterSession.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(posRegisterSessionsTable)
-    .set({ openedBy, openingFloat, openingNotes, sales, txCount,
-      closedAt, cashCounted, eftposDeclared, closingNotes })
+    .set(parsed.data)
     .where(and(eq(posRegisterSessionsTable.id, id), eq(posRegisterSessionsTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

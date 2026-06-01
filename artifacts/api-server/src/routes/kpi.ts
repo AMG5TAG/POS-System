@@ -1,7 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db, kpiSettingsTable, kpiTargetsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const PatchKpiSettings = z.object({
+  trackCategories: z.string(), trackAppointments: z.string(),
+  trackServices: z.string(), trackSuppliers: z.string(), trackWastage: z.string(),
+}).partial();
 
 const router: IRouter = Router();
 
@@ -17,16 +23,17 @@ router.get("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
 
 router.put("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage } = req.body;
+  const parsed = PatchKpiSettings.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [existing] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(kpiSettingsTable)
-      .set({ trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage })
+      .set(parsed.data)
       .where(eq(kpiSettingsTable.merchantId, merchantId)).returning();
     res.json(updated); return;
   }
   const [created] = await db.insert(kpiSettingsTable)
-    .values({ merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage }).returning();
+    .values({ merchantId, ...parsed.data }).returning();
   res.json(created);
 });
 

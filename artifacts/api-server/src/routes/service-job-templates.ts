@@ -1,7 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db, serviceJobTemplatesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const PatchServiceJobTemplate = z.object({
+  name: z.string(), category: z.string(), body: z.string(),
+  options: z.string(), isActive: z.string(),
+}).partial();
 
 const router: IRouter = Router();
 
@@ -24,9 +30,11 @@ router.post("/service-job-templates", requireAuth, async (req, res): Promise<voi
 router.patch("/service-job-templates/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const { name, category, body: bodyField, options, isActive } = req.body;
+  const parsed = PatchServiceJobTemplate.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { body: bodyField, ...rest } = parsed.data;
   const [row] = await db.update(serviceJobTemplatesTable)
-    .set({ name, category, body: bodyField, options, isActive })
+    .set({ ...rest, body: bodyField })
     .where(and(eq(serviceJobTemplatesTable.id, id), eq(serviceJobTemplatesTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

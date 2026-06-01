@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, staffLinksTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const PatchStaffLink = z.object({
+  label: z.string(), url: z.string(), category: z.string(),
+}).partial();
 
 const router: IRouter = Router();
 
@@ -24,9 +29,10 @@ router.post("/staff-links", requireAuth, async (req, res): Promise<void> => {
 router.patch("/staff-links/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const { label, url, category } = req.body;
+  const parsed = PatchStaffLink.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(staffLinksTable)
-    .set({ label, url, category })
+    .set(parsed.data)
     .where(and(eq(staffLinksTable.id, id), eq(staffLinksTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);

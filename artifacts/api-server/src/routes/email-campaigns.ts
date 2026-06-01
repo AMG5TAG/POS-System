@@ -1,7 +1,17 @@
 import { Router, type IRouter } from "express";
 import { db, emailCampaignsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+
+const PatchEmailCampaign = z.object({
+  name: z.string(), audience: z.string(), audienceLabel: z.string(),
+  subject: z.string(), body: z.string(), ctaEnabled: z.string(),
+  ctaLabel: z.string(), ctaUrl: z.string(), scheduled: z.string(),
+  scheduledAt: z.string(), status: z.string(), sentAt: z.string(),
+  opens: z.number(), bounces: z.number(), recipientCount: z.number(),
+  customerId: z.number().nullable(),
+}).partial();
 
 const router: IRouter = Router();
 
@@ -31,11 +41,11 @@ router.post("/email-campaigns", requireAuth, async (req, res): Promise<void> => 
 router.patch("/email-campaigns/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
-  const { name, audience, audienceLabel, subject, body: bodyField, ctaEnabled, ctaLabel, ctaUrl,
-    scheduled, scheduledAt, status, sentAt, opens, bounces, recipientCount, customerId } = req.body;
+  const parsed = PatchEmailCampaign.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { body: bodyField, ...rest } = parsed.data;
   const [row] = await db.update(emailCampaignsTable)
-    .set({ name, audience, audienceLabel, subject, body: bodyField, ctaEnabled, ctaLabel, ctaUrl,
-      scheduled, scheduledAt, status, sentAt, opens, bounces, recipientCount, customerId })
+    .set({ ...rest, body: bodyField })
     .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
