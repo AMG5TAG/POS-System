@@ -123,8 +123,9 @@ export default function POSPage() {
   /* cart */
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  /* navigation guard — warn before leaving mid-sale */
-  const { ConfirmDialog: LeaveSaleDialog } = useUnsavedChangesGuard(cart.length > 0, {
+  /* navigation guard — warn before leaving mid-sale or mid-form */
+  const [formTouched, setFormTouched] = useState(false);
+  const { ConfirmDialog: LeaveSaleDialog } = useUnsavedChangesGuard(cart.length > 0 || formTouched, {
     title: "Leave sale?",
     description: "You have items in the cart. Leaving now will discard the current sale.",
     cancelLabel: "Stay",
@@ -1060,6 +1061,7 @@ export default function POSPage() {
     } else {
       setGcIssueOpen(false);
       setGcIssueForm({ cardNumber: "", amount: "" });
+      setFormTouched(false);
     }
   };
 
@@ -1067,6 +1069,7 @@ export default function POSPage() {
     setGcIssueDiscardConfirmOpen(false);
     setGcIssueOpen(false);
     setGcIssueForm({ cardNumber: "", amount: "" });
+    setFormTouched(false);
   };
 
   const walkInDirty = walkInForm.firstName.trim() !== "" || walkInForm.lastName.trim() !== "";
@@ -1077,6 +1080,7 @@ export default function POSPage() {
     } else {
       setWalkInDialogOpen(false);
       setWalkInForm({ firstName: "", lastName: "" });
+      setFormTouched(false);
     }
   };
 
@@ -1084,6 +1088,7 @@ export default function POSPage() {
     setWalkInDiscardConfirmOpen(false);
     setWalkInDialogOpen(false);
     setWalkInForm({ firstName: "", lastName: "" });
+    setFormTouched(false);
   };
 
   const tempItemDirty = tempItemForm.name.trim() !== "" || tempItemForm.price !== "" || tempItemForm.cost !== "";
@@ -1094,6 +1099,7 @@ export default function POSPage() {
     } else {
       setTempItemOpen(false);
       setTempItemForm({ name: "", price: "", cost: "" });
+      setFormTouched(false);
     }
   };
 
@@ -1101,6 +1107,7 @@ export default function POSPage() {
     setTempItemDiscardConfirmOpen(false);
     setTempItemOpen(false);
     setTempItemForm({ name: "", price: "", cost: "" });
+    setFormTouched(false);
   };
 
   const zeroPriceDirty = zeroPriceForm.price.trim() !== "" || zeroPriceForm.note.trim() !== "";
@@ -1111,6 +1118,7 @@ export default function POSPage() {
     } else {
       setZeroPricePending(null);
       setZeroPriceForm({ price: "", note: "" });
+      setFormTouched(false);
     }
   };
 
@@ -1118,6 +1126,7 @@ export default function POSPage() {
     setZeroPriceDiscardConfirmOpen(false);
     setZeroPricePending(null);
     setZeroPriceForm({ price: "", note: "" });
+    setFormTouched(false);
   };
 
   /* Clear numpad when switching to a method that doesn't use it;
@@ -1285,6 +1294,7 @@ export default function POSPage() {
     setCart(prev => [...prev, { product: tempProduct, quantity: 1, itemDiscount: 0 }]);
     setTempItemOpen(false);
     setTempItemForm({ name: "", price: "", cost: "" });
+    setFormTouched(false);
   };
 
   const addToCart = (product: Product) => {
@@ -1357,6 +1367,7 @@ export default function POSPage() {
       return [...prev, { product: zeroPricePending!, quantity: 1, itemDiscount: 0, customPrice: price, itemNote: zeroPriceForm.note || undefined }];
     });
     setZeroPricePending(null);
+    setFormTouched(false);
   };
 
   const updateQuantity = (productId: number, delta: number) => {
@@ -1767,7 +1778,7 @@ export default function POSPage() {
   const confirmWalkIn = () => {
     if (!walkInForm.firstName.trim()) { toast.error("Please enter a first name"); return; }
     setWalkIn({ firstName: walkInForm.firstName.trim(), lastName: walkInForm.lastName.trim() });
-    setSelectedCustomer(null); setWalkInDialogOpen(false); setWalkInForm({ firstName: "", lastName: "" });
+    setSelectedCustomer(null); setWalkInDialogOpen(false); setWalkInForm({ firstName: "", lastName: "" }); setFormTouched(false);
   };
 
   const handlePinSubmit = () => {
@@ -3615,8 +3626,8 @@ export default function POSPage() {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="w-4 h-4" /> Walk-in Customer</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Enter the customer's name. They won't be added to the system and won't earn loyalty rewards.</p>
           <div className="space-y-3">
-            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => setWalkInForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Jane" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
-            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => setWalkInForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, firstName: e.target.value })); }} placeholder="Jane" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, lastName: e.target.value })); }} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={tryCloseWalkIn}>Cancel</Button>
@@ -3647,8 +3658,8 @@ export default function POSPage() {
           <DialogHeader><DialogTitle>Set Sale Price</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground"><span className="font-semibold">{zeroPricePending?.name}</span> has a $0.00 price. Please enter a price and a reason before adding it to the sale.</p>
           <div className="space-y-3">
-            <div><Label className="text-xs">Sale Price ($) *</Label><Input type="number" min="0" step="0.01" value={zeroPriceForm.price} onChange={e => setZeroPriceForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" className="mt-1" autoFocus /></div>
-            <div><Label className="text-xs">Reason / Note</Label><Input value={zeroPriceForm.note} onChange={e => setZeroPriceForm(f => ({ ...f, note: e.target.value }))} placeholder="e.g. Staff discount, warranty replacement..." className="mt-1" onKeyDown={e => e.key === "Enter" && addZeroPriceProduct()} /></div>
+            <div><Label className="text-xs">Sale Price ($) *</Label><Input type="number" min="0" step="0.01" value={zeroPriceForm.price} onChange={e => { setFormTouched(true); setZeroPriceForm(f => ({ ...f, price: e.target.value })); }} placeholder="0.00" className="mt-1" autoFocus /></div>
+            <div><Label className="text-xs">Reason / Note</Label><Input value={zeroPriceForm.note} onChange={e => { setFormTouched(true); setZeroPriceForm(f => ({ ...f, note: e.target.value })); }} placeholder="e.g. Staff discount, warranty replacement..." className="mt-1" onKeyDown={e => e.key === "Enter" && addZeroPriceProduct()} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={tryCloseZeroPrice}>Cancel</Button>
@@ -4182,7 +4193,7 @@ export default function POSPage() {
                 id="temp-name"
                 placeholder="e.g. Delivery fee"
                 value={tempItemForm.name}
-                onChange={(e) => setTempItemForm(f => ({ ...f, name: e.target.value }))}
+                onChange={(e) => { setFormTouched(true); setTempItemForm(f => ({ ...f, name: e.target.value })); }}
                 onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
                 autoFocus
               />
@@ -4196,7 +4207,7 @@ export default function POSPage() {
                 step="0.01"
                 placeholder="0.00"
                 value={tempItemForm.price}
-                onChange={(e) => setTempItemForm(f => ({ ...f, price: e.target.value }))}
+                onChange={(e) => { setFormTouched(true); setTempItemForm(f => ({ ...f, price: e.target.value })); }}
                 onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
               />
             </div>
@@ -4209,7 +4220,7 @@ export default function POSPage() {
                 step="0.01"
                 placeholder="0.00"
                 value={tempItemForm.cost}
-                onChange={(e) => setTempItemForm(f => ({ ...f, cost: e.target.value }))}
+                onChange={(e) => { setFormTouched(true); setTempItemForm(f => ({ ...f, cost: e.target.value })); }}
                 onKeyDown={(e) => e.key === "Enter" && addTempToCart()}
               />
             </div>
@@ -4242,7 +4253,7 @@ export default function POSPage() {
                   className="pl-9 uppercase font-mono tracking-widest"
                   placeholder="GC-XXXXXXXX"
                   value={gcIssueForm.cardNumber}
-                  onChange={e => setGcIssueForm(f => ({ ...f, cardNumber: e.target.value.toUpperCase() }))}
+                  onChange={e => { setFormTouched(true); setGcIssueForm(f => ({ ...f, cardNumber: e.target.value.toUpperCase() })); }}
                 />
               </div>
               <p className="text-[11px] text-muted-foreground">Leave blank to auto-generate a card number after sale</p>
@@ -4255,7 +4266,7 @@ export default function POSPage() {
                 step="0.01"
                 placeholder="50.00"
                 value={gcIssueForm.amount}
-                onChange={e => setGcIssueForm(f => ({ ...f, amount: e.target.value }))}
+                onChange={e => { setFormTouched(true); setGcIssueForm(f => ({ ...f, amount: e.target.value })); }}
               />
             </div>
           </div>
@@ -4294,6 +4305,7 @@ export default function POSPage() {
                 toast.success(`Gift card ${cardNumber} added to cart`);
                 setGcIssueOpen(false);
                 setGcIssueForm({ cardNumber: "", amount: "" });
+                setFormTouched(false);
               }}
             >
               <Plus className="w-4 h-4 mr-1" />

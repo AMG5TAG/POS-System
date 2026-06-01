@@ -805,6 +805,7 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [pendingProductClose, setPendingProductClose] = useState(false);
+  const [formTouched, setFormTouched] = useState(false);
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
@@ -990,7 +991,7 @@ export default function ProductsPage() {
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: floorPlanZones } = useListFloorPlanZones();
   const createMutation   = useCreateProduct();
-  const isDirtyProduct = dialogOpen && JSON.stringify(form) !== JSON.stringify(initialProductFormRef.current);
+  const isDirtyProduct = formTouched;
   const { ConfirmDialog: ProductNavGuard } = useUnsavedChangesGuard(isDirtyProduct);
 
   const updateMutation   = useUpdateProduct();
@@ -1051,7 +1052,7 @@ export default function ProductsPage() {
 
   const openCreate = () => {
     initialProductFormRef.current = defaultForm;
-    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setDialogOpen(true);
+    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
@@ -1092,6 +1093,7 @@ export default function ProductsPage() {
     setPcSocket(_c?.socket || "");
     setPcCompatNotes(_c?.specs || "");
     setFormTab("details");
+    setFormTouched(false);
     setDialogOpen(true);
   };
 
@@ -1141,7 +1143,7 @@ export default function ProductsPage() {
               { onSettled: invCompat },
             );
           }
-          toast.success("Product updated"); setDialogOpen(false); inv();
+          toast.success("Product updated"); setDialogOpen(false); setFormTouched(false); inv();
         },
         onError: () => toast.error("Failed to update product"),
       });
@@ -1155,7 +1157,7 @@ export default function ProductsPage() {
               { onError: () => toast.error("Failed to save compatibility data"), onSettled: invCompat },
             );
           }
-          toast.success("Product created"); setDialogOpen(false); inv();
+          toast.success("Product created"); setDialogOpen(false); setFormTouched(false); inv();
         },
         onError: () => toast.error("Failed to create product"),
       });
@@ -1273,8 +1275,10 @@ export default function ProductsPage() {
   };
   const isLastTab = formTab === FORM_TABS[FORM_TABS.length - 1].key;
 
-  const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) =>
+  const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) => {
+    setFormTouched(true);
     setForm((f) => ({ ...f, [k]: v }));
+  };
 
   const handleGenerateSKU = () => {
     setField("sku", generateSKU(skuPrefix));
@@ -2658,7 +2662,7 @@ export default function ProductsPage() {
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => { setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); }}
+                      onClick={() => { setFormTouched(true); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); }}
                       className={cn(
                         "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                         !pcPartType
@@ -2673,7 +2677,7 @@ export default function ProductsPage() {
                       <button
                         key={id}
                         type="button"
-                        onClick={() => setPcPartType(id)}
+                        onClick={() => { setFormTouched(true); setPcPartType(id); }}
                         className={cn(
                           "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                           pcPartType === id
@@ -2694,7 +2698,7 @@ export default function ProductsPage() {
                       <Label className="text-xs text-muted-foreground">Socket / Interface</Label>
                       <Input
                         value={pcSocket}
-                        onChange={(e) => setPcSocket(e.target.value)}
+                        onChange={(e) => { setFormTouched(true); setPcSocket(e.target.value); }}
                         placeholder={
                           pcPartType === "cpu" || pcPartType === "motherboard" ? "e.g. AM5, LGA1700"
                           : pcPartType === "memory" ? "e.g. DDR5, DDR4"
@@ -2710,7 +2714,7 @@ export default function ProductsPage() {
                       <Label className="text-xs text-muted-foreground">Additional Specs</Label>
                       <Input
                         value={pcCompatNotes}
-                        onChange={(e) => setPcCompatNotes(e.target.value)}
+                        onChange={(e) => { setFormTouched(true); setPcCompatNotes(e.target.value); }}
                         placeholder="e.g. 32GB, 3200MHz, 850W, 6-core"
                         className="mt-1.5"
                       />
@@ -2930,7 +2934,7 @@ export default function ProductsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingProductClose(false)}>Stay on page</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setPendingProductClose(false); setDialogOpen(false); }}>Discard changes</AlertDialogAction>
+            <AlertDialogAction onClick={() => { setPendingProductClose(false); setDialogOpen(false); setFormTouched(false); }}>Discard changes</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

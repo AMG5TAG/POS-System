@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import {
   useListInventory, useUpdateInventory, useListSuppliers,
   useListStockTakes, useCreateStockTake, useSaveStockTakeProgress, useSubmitStockTake,
@@ -659,6 +660,7 @@ export default function InventoryPage() {
   const [page, setPage]                 = useState(1);
   const [editingItem, setEditingItem]   = useState<InventoryItem | null>(null);
   const [editForm, setEditForm]         = useState({ stockQuantity: "", lowStockThreshold: "" });
+  const [formTouched, setFormTouched]   = useState(false);
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
@@ -728,6 +730,7 @@ export default function InventoryPage() {
         onSuccess: () => {
           toast.success("Inventory updated");
           setEditingItem(null);
+          setFormTouched(false);
           queryClient.invalidateQueries({ queryKey: ["inventory"] });
           queryClient.invalidateQueries({ queryKey: ["inventory-low-stock"] });
         },
@@ -771,20 +774,28 @@ export default function InventoryPage() {
     setReorderLines(initial);
     setReorderSupplier("");
     setReorderNotes("");
+    setFormTouched(false);
     setReorderDlg(true);
   }
 
   function setLineQty(productId: number, qty: number) {
+    setFormTouched(true);
     setReorderLines(prev => ({ ...prev, [productId]: { ...prev[productId], qty: Math.max(1, qty) } }));
   }
 
   function toggleLine(productId: number) {
+    setFormTouched(true);
     setReorderLines(prev => ({ ...prev, [productId]: { ...prev[productId], selected: !prev[productId].selected } }));
   }
 
   const selectedLines = Object.entries(reorderLines)
     .filter(([, v]) => v.selected)
     .map(([k, v]) => ({ productId: Number(k), quantity: v.qty, unitCost: parseFloat(v.unitCost) || 0 }));
+
+  const { ConfirmDialog: InventoryFormGuard } = useUnsavedChangesGuard(formTouched, {
+    title: "Close form?",
+    description: "You have unsaved changes in an open form. If you leave now, your changes will be lost.",
+  });
 
   const createPOMutation = useCreatePurchaseOrder();
 
@@ -800,6 +811,7 @@ export default function InventoryPage() {
         onSuccess: () => {
           toast.success("Draft purchase order created — visit Purchase Orders to review");
           setReorderDlg(false);
+          setFormTouched(false);
         },
         onError: () => toast.error("Failed to create purchase order"),
         onSettled: () => setPoSaving(false),
@@ -818,6 +830,7 @@ export default function InventoryPage() {
           setView("stocktake");
           setStartDlg(false);
           setStartNotes("");
+          setFormTouched(false);
           queryClient.invalidateQueries({ queryKey: ["stock-takes"] });
         },
         onError: (err: unknown) => {
@@ -1056,7 +1069,7 @@ export default function InventoryPage() {
       </div>
 
       {/* ── Edit stock dialog ── */}
-      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+      <Dialog open={!!editingItem} onOpenChange={(open) => { if (!open) { setEditingItem(null); setFormTouched(false); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1070,7 +1083,7 @@ export default function InventoryPage() {
               <Input
                 type="number"
                 value={editForm.stockQuantity}
-                onChange={(e) => setEditForm({ ...editForm, stockQuantity: e.target.value })}
+                onChange={(e) => { setFormTouched(true); setEditForm({ ...editForm, stockQuantity: e.target.value }); }}
                 min={0}
               />
             </div>
@@ -1079,21 +1092,21 @@ export default function InventoryPage() {
               <Input
                 type="number"
                 value={editForm.lowStockThreshold}
-                onChange={(e) => setEditForm({ ...editForm, lowStockThreshold: e.target.value })}
+                onChange={(e) => { setFormTouched(true); setEditForm({ ...editForm, lowStockThreshold: e.target.value }); }}
                 min={0}
               />
               <p className="text-xs text-muted-foreground mt-1">Alert when stock falls to or below this number.</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingItem(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditingItem(null); setFormTouched(false); }}>Cancel</Button>
             <Button onClick={handleSave} disabled={updateMutation.isPending}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ── Reorder PO dialog ── */}
-      <Dialog open={reorderDlg} onOpenChange={setReorderDlg}>
+      <Dialog open={reorderDlg} onOpenChange={(open) => { if (!open) setFormTouched(false); setReorderDlg(open); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1107,7 +1120,7 @@ export default function InventoryPage() {
             {/* Supplier */}
             <div>
               <Label>Supplier (optional)</Label>
-              <Select value={reorderSupplier} onValueChange={setReorderSupplier}>
+              <Select value={reorderSupplier} onValueChange={(v) => { setFormTouched(true); setReorderSupplier(v); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="No supplier selected" />
                 </SelectTrigger>
@@ -1169,11 +1182,11 @@ export default function InventoryPage() {
             <div>
               <Label>Notes (optional)</Label>
               <Textarea rows={2} placeholder="Any notes for the supplier…"
-                value={reorderNotes} onChange={e => setReorderNotes(e.target.value)} />
+                value={reorderNotes} onChange={e => { setFormTouched(true); setReorderNotes(e.target.value); }} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReorderDlg(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setReorderDlg(false); setFormTouched(false); }}>Cancel</Button>
             <Button onClick={handleCreatePO} disabled={poSaving || selectedLines.length === 0}>
               <ShoppingCart className="w-4 h-4" />
               Create Draft PO
@@ -1183,7 +1196,7 @@ export default function InventoryPage() {
       </Dialog>
 
       {/* ── Start stock take dialog ── */}
-      <Dialog open={startDlg} onOpenChange={setStartDlg}>
+      <Dialog open={startDlg} onOpenChange={(open) => { if (!open) setFormTouched(false); setStartDlg(open); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1200,12 +1213,12 @@ export default function InventoryPage() {
                 rows={2}
                 placeholder="e.g. End of month count, post-stockroom tidy…"
                 value={startNotes}
-                onChange={e => setStartNotes(e.target.value)}
+                onChange={e => { setFormTouched(true); setStartNotes(e.target.value); }}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStartDlg(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setStartDlg(false); setFormTouched(false); }}>Cancel</Button>
             <Button onClick={handleStartStockTake} disabled={createStockTakeMutation.isPending}>
               <ClipboardList className="w-4 h-4" />
               {createStockTakeMutation.isPending ? "Starting…" : "Start Stock Take"}
@@ -1213,6 +1226,8 @@ export default function InventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <InventoryFormGuard />
     </AppLayout>
   );
 }
