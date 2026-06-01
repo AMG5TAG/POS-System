@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -26,6 +27,42 @@ function isTabActive(tab: HubTab, location: string): boolean {
     }
   }
   return false;
+}
+
+const LS_PREFIX = "koapos:hub-last-tab:";
+
+/**
+ * Persists the last-visited tab for a hub in localStorage and restores it
+ * when the user navigates back to the hub root (no tab is active).
+ */
+function useHubLastTab(title: string, tabs: HubTab[], location: string) {
+  const [, navigate] = useLocation();
+  const lsKey = `${LS_PREFIX}${title}`;
+
+  const activeTab = tabs.find((t) => isTabActive(t, location));
+
+  useEffect(() => {
+    if (activeTab) {
+      try {
+        localStorage.setItem(lsKey, activeTab.href);
+      } catch {
+        // localStorage may be unavailable in some environments
+      }
+    }
+  }, [lsKey, activeTab?.href]);
+
+  useEffect(() => {
+    if (!activeTab) {
+      let target = tabs[0]?.href;
+      try {
+        const stored = localStorage.getItem(lsKey);
+        if (stored && tabs.some((t) => t.href === stored)) target = stored;
+      } catch {
+        // ignore
+      }
+      if (target) navigate(target, { replace: true });
+    }
+  }, [location]);
 }
 
 function HubBreadcrumb({ title, tabs }: { title: string; tabs: HubTab[] }) {
@@ -99,6 +136,7 @@ function MobileTabStrip({ title, tabs }: { title: string; tabs: HubTab[] }) {
 
 export function ManagementHubLayout({ title, tabs, children }: Props) {
   const [location] = useLocation();
+  useHubLastTab(title, tabs, location);
 
   return (
     <AppLayout>
