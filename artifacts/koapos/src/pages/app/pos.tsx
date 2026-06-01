@@ -139,6 +139,10 @@ export default function POSPage() {
   const [expandedDiscounts, setExpandedDiscounts] = useState<Set<number>>(new Set());
   const [overallDiscountFlash, setOverallDiscountFlash] = useState(false);
   const [flashingItemIds, setFlashingItemIds] = useState<Set<number>>(new Set());
+  const [itemClampMsgs, setItemClampMsgs] = useState<Map<number, string>>(new Map());
+  const [itemClampFading, setItemClampFading] = useState<Set<number>>(new Set());
+  const [overallClampMsg, setOverallClampMsg] = useState("");
+  const [overallClampFading, setOverallClampFading] = useState(false);
   const [itemDiscountModes, setItemDiscountModes] = useState<Map<number, "percent">>(new Map());
   const [itemDiscountPctInputs, setItemDiscountPctInputs] = useState<Map<number, string>>(new Map());
   const [overallDiscountMode, setOverallDiscountMode] = useState<"dollar" | "percent">("dollar");
@@ -1389,6 +1393,13 @@ export default function POSPage() {
         setFlashingItemIds(prev2 => { const n = new Set(prev2); n.add(productId); return n; });
         setTimeout(() => setFlashingItemIds(prev2 => { const n = new Set(prev2); n.delete(productId); return n; }), 600);
         setDiscountExcessAmount(prev => prev + (amt - clamped));
+        if (maxDiscountPct != null) {
+          const msg = `Capped at your role limit of ${maxDiscountPct}%`;
+          setItemClampMsgs(prev2 => new Map(prev2).set(productId, msg));
+          setItemClampFading(prev2 => { const n = new Set(prev2); n.delete(productId); return n; });
+          setTimeout(() => setItemClampFading(prev2 => new Set(prev2).add(productId)), 2400);
+          setTimeout(() => setItemClampMsgs(prev2 => { const n = new Map(prev2); n.delete(productId); return n; }), 3000);
+        }
       }
       return { ...i, itemDiscount: clamped };
     }));
@@ -2556,7 +2567,8 @@ export default function POSPage() {
                         </div>
                       </div>
                       {discExpanded && (
-                        <div className="px-2.5 pb-2 pt-1.5 flex items-center gap-2 border-t bg-muted/20">
+                        <div className="px-2.5 pb-2 pt-1.5 border-t bg-muted/20 space-y-1">
+                        <div className="flex items-center gap-2">
                           <Label className="text-[10px] shrink-0 text-muted-foreground">Discount</Label>
                           {maxDiscountPct != null && (
                             <span className="text-[10px] text-muted-foreground/60 shrink-0 -ml-1">Max {maxDiscountPct}%</span>
@@ -2605,6 +2617,11 @@ export default function POSPage() {
                                 if (exceeds) {
                                   setFlashingItemIds(prev => { const n = new Set(prev); n.add(item.product.id); return n; });
                                   setTimeout(() => setFlashingItemIds(prev => { const n = new Set(prev); n.delete(item.product.id); return n; }), 600);
+                                  const clampMsg = `Capped at your role limit of ${maxPct}%`;
+                                  setItemClampMsgs(prev => new Map(prev).set(item.product.id, clampMsg));
+                                  setItemClampFading(prev => { const n = new Set(prev); n.delete(item.product.id); return n; });
+                                  setTimeout(() => setItemClampFading(prev => new Set(prev).add(item.product.id)), 2400);
+                                  setTimeout(() => setItemClampMsgs(prev => { const n = new Map(prev); n.delete(item.product.id); return n; }), 3000);
                                 }
                                 setItemDiscount(item.product.id, String(dollarAmt));
                               }}
@@ -2635,6 +2652,12 @@ export default function POSPage() {
                               className={cn("h-6 text-xs transition-colors", flashingItemIds.has(item.product.id) && "ring-2 ring-destructive border-destructive")}
                             />
                           )}
+                        </div>
+                        {itemClampMsgs.has(item.product.id) && (
+                          <p className={cn("text-[10px] text-destructive pl-0.5 transition-opacity duration-500", itemClampFading.has(item.product.id) ? "opacity-0" : "opacity-100")}>
+                            {itemClampMsgs.get(item.product.id)}
+                          </p>
+                        )}
                         </div>
                       )}
                     </div>
@@ -2755,6 +2778,10 @@ export default function POSPage() {
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
                       setDiscountExcessAmount(prev => prev + (rawPct - maxPct) / 100 * maxOverall);
+                      setOverallClampMsg(`Capped at your role limit of ${maxPct}%`);
+                      setOverallClampFading(false);
+                      setTimeout(() => setOverallClampFading(true), 2400);
+                      setTimeout(() => setOverallClampMsg(""), 3000);
                     }
                     setOverallDiscount(String(dollarAmt));
                   }}
@@ -2787,6 +2814,12 @@ export default function POSPage() {
                       setOverallDiscountFlash(true);
                       setTimeout(() => setOverallDiscountFlash(false), 600);
                       setDiscountExcessAmount(prev => prev + (val - effectiveMax));
+                      if (maxDiscountPct != null) {
+                        setOverallClampMsg(`Capped at your role limit of ${maxDiscountPct}%`);
+                        setOverallClampFading(false);
+                        setTimeout(() => setOverallClampFading(true), 2400);
+                        setTimeout(() => setOverallClampMsg(""), 3000);
+                      }
                     } else {
                       setOverallDiscount(e.target.value);
                     }
@@ -2797,6 +2830,11 @@ export default function POSPage() {
                 />
               )}
             </div>
+            {overallClampMsg && (
+              <p className={cn("text-[10px] text-destructive transition-opacity duration-500", overallClampFading ? "opacity-0" : "opacity-100")}>
+                {overallClampMsg}
+              </p>
+            )}
 
             <div className="flex justify-between text-base font-bold pt-1 border-t">
               <span>Total</span>
