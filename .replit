@@ -69,3 +69,6 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
+
+[userenv.shared]
+SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"
