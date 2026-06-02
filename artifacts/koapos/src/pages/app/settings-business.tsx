@@ -4,7 +4,6 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant, useUpdateMerchant,
   useGetRegionalExtSettings, useUpdateRegionalExtSettings,
-  useGetLowStockAlertSettings, useUpdateLowStockAlertSettings, useListLowStockAlertLog,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
@@ -23,7 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload, X, Plus, Trash2, Globe, Facebook, Instagram, Youtube, Linkedin, Twitter,
   Building2, Tag, Image, Palette, Phone, MapPin, Clock, Umbrella, CreditCard, Share2,
-  Hash, DollarSign, Calendar, Bell, History,
+  Hash, DollarSign, Calendar,
 } from "lucide-react";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { FontPicker } from "@/components/ui/font-picker";
@@ -38,7 +37,6 @@ const BUSINESS_TABS = [
   { href: "#hours",          label: "Hours",          icon: Clock       },
   { href: "#payments",       label: "Payments",       icon: CreditCard  },
   { href: "#social",         label: "Social",         icon: Share2      },
-  { href: "#low-stock-alerts", label: "Low-stock Alerts", icon: Bell      },
 ];
 
 /* ─── Social handle helper ───────────────────────────────────────────────── */
@@ -289,8 +287,7 @@ export default function SettingsBusinessPage() {
 
   const [dirtyBusiness, setDirtyBusiness] = useState(false);
   const [dirtyRegional, setDirtyRegional] = useState(false);
-  const [dirtyAlerts, setDirtyAlerts] = useState(false);
-  const isDirty = dirtyBusiness || dirtyRegional || dirtyAlerts;
+  const isDirty = dirtyBusiness || dirtyRegional;
 
   /* API-backed fields */
   const [apiForm, setApiForm] = useState({
@@ -308,53 +305,6 @@ export default function SettingsBusinessPage() {
 
   /* Extended fields */
   const [ext, setExt] = useState<BusinessProfile>(profile);
-
-  /* Low-stock alert settings */
-  const [alertEnabled, setAlertEnabled] = useState(false);
-  const [alertEmails, setAlertEmails] = useState<string[]>([]);
-  const [alertEmailInput, setAlertEmailInput] = useState("");
-  const [alertMode, setAlertMode] = useState<"immediate" | "digest">("immediate");
-  const [alertThreshold, setAlertThreshold] = useState<string>("");
-  const { data: alertSettingsData } = useGetLowStockAlertSettings({ query: { queryKey: ["low-stock-alert-settings"] } });
-  const updateAlertMutation = useUpdateLowStockAlertSettings();
-  const { data: alertLogData } = useListLowStockAlertLog({ limit: 10, offset: 0 }, { query: { queryKey: ["low-stock-alert-log"] } });
-
-  useEffect(() => {
-    if (alertSettingsData) {
-      setAlertEnabled(alertSettingsData.enabled === "true");
-      setAlertEmails(alertSettingsData.emailAddresses ?? []);
-      setAlertMode((alertSettingsData.mode as "immediate" | "digest") ?? "immediate");
-      setAlertThreshold(alertSettingsData.globalThreshold != null ? String(alertSettingsData.globalThreshold) : "");
-    }
-  }, [alertSettingsData]);
-
-  const handleAlertSave = () => {
-    const threshold = alertThreshold.trim() !== "" ? parseInt(alertThreshold, 10) : null;
-    updateAlertMutation.mutate({
-      data: {
-        enabled: alertEnabled ? "true" : "false",
-        emailAddresses: alertEmails,
-        mode: alertMode,
-        globalThreshold: threshold !== null && !isNaN(threshold) ? threshold : null,
-      },
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["low-stock-alert-settings"] });
-        toast.success("Low-stock alert settings saved");
-        setDirtyAlerts(false);
-      },
-      onError: () => toast.error("Failed to save low-stock alert settings"),
-    });
-  };
-
-  const addAlertEmail = () => {
-    const email = alertEmailInput.trim();
-    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !alertEmails.includes(email)) {
-      setAlertEmails([...alertEmails, email]);
-      setDirtyAlerts(true);
-    }
-    setAlertEmailInput("");
-  };
 
   /* Regional settings */
   const [regCurrency, setRegCurrency] = useState("AUD");
@@ -493,21 +443,6 @@ export default function SettingsBusinessPage() {
   const handleRegTimezoneChange = useCallback((val: string) => {
     setRegTimezone(val);
     setDirtyRegional(true);
-  }, []);
-
-  const handleAlertEnabledChange = useCallback((val: boolean) => {
-    setAlertEnabled(val);
-    setDirtyAlerts(true);
-  }, []);
-
-  const handleAlertModeChange = useCallback((val: "immediate" | "digest") => {
-    setAlertMode(val);
-    setDirtyAlerts(true);
-  }, []);
-
-  const handleAlertThresholdChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setAlertThreshold(e.target.value);
-    setDirtyAlerts(true);
   }, []);
 
   /* Save regional */
@@ -918,123 +853,6 @@ export default function SettingsBusinessPage() {
           </CardContent>
         </Card>
 
-
-        {/* ── Low-stock Alerts ─────────────────────────────────────────────── */}
-        <Card id="low-stock-alerts">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Low-stock Alerts
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  Get notified when products drop at or below their stock threshold.
-                </CardDescription>
-              </div>
-              <Switch checked={alertEnabled} onCheckedChange={handleAlertEnabledChange} />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* Email addresses */}
-            <div>
-              <Label className="mb-1.5 block">Notify email addresses</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={alertEmailInput}
-                  onChange={(e) => setAlertEmailInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAlertEmail(); } }}
-                  placeholder="email@example.com"
-                  type="email"
-                  className="flex-1"
-                />
-                <Button type="button" variant="outline" size="sm" onClick={addAlertEmail}><Plus className="h-4 w-4" /></Button>
-              </div>
-              {alertEmails.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {alertEmails.map((email) => (
-                    <Badge key={email} variant="secondary" className="flex items-center gap-1 pr-1">
-                      {email}
-                      <button onClick={() => { setAlertEmails(alertEmails.filter((e) => e !== email)); setDirtyAlerts(true); }} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Frequency */}
-            <div>
-              <Label className="mb-1.5 block">Alert frequency</Label>
-              <Select value={alertMode} onValueChange={(v) => handleAlertModeChange(v as "immediate" | "digest")}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="immediate">Immediate — alert for each product as it crosses threshold</SelectItem>
-                  <SelectItem value="digest">Daily digest — one email per day with all low-stock items</SelectItem>
-                </SelectContent>
-              </Select>
-              {alertMode === "digest" && (
-                <p className="text-xs text-muted-foreground mt-1.5">The digest runs once every 24 hours and lists all products currently at or below threshold.</p>
-              )}
-            </div>
-
-            {/* Global threshold override */}
-            <div>
-              <Label className="mb-1.5 block">Global threshold fallback</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  type="number"
-                  min={0}
-                  value={alertThreshold}
-                  onChange={handleAlertThresholdChange}
-                  placeholder="5"
-                  className="w-28"
-                />
-                <p className="text-sm text-muted-foreground">Used when a product has no per-product threshold set. Defaults to 5 if left blank.</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <Button onClick={handleAlertSave} disabled={updateAlertMutation.isPending} size="sm" className="bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold">
-                {updateAlertMutation.isPending ? "Saving…" : "Save Alert Settings"}
-              </Button>
-            </div>
-
-            {/* Alert history */}
-            {(alertLogData?.items?.length ?? 0) > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <p className="text-sm font-medium mb-3 flex items-center gap-2"><History className="h-4 w-4" /> Recent alert history</p>
-                  <div className="space-y-2">
-                    {alertLogData!.items.map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between gap-3 rounded-md border p-3 text-sm">
-                        <div>
-                          <p className="font-medium">{entry.itemCount} {entry.itemCount === 1 ? "product" : "products"} alerted</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {entry.mode === "digest" ? "Daily digest" : "Immediate"} · sent to {(entry.emailAddresses as string[]).join(", ")}
-                          </p>
-                          {(entry.items as Array<{ productName: string; stockQuantity: number }>).slice(0, 3).map((item, i) => (
-                            <p key={i} className="text-xs text-muted-foreground">{item.productName} ({item.stockQuantity} left)</p>
-                          ))}
-                          {(entry.items as unknown[]).length > 3 && (
-                            <p className="text-xs text-muted-foreground">+{(entry.items as unknown[]).length - 3} more</p>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                          {new Date(entry.sentAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Save */}
         <div className="pb-8 flex justify-end">
