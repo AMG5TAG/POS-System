@@ -111,6 +111,7 @@ import OnlineShippingPage from "@/pages/app/online-shipping";
 import OnlineMarketplacePage from "@/pages/app/online-marketplace";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import ManagementMiscPage from "@/pages/app/management-misc";
+import ManagementBackupPage from "@/pages/app/management-backup";
 import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import CamerasPage from "@/pages/app/cameras";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
@@ -527,6 +528,9 @@ function Router() {
       </Route>
       <Route path="/management/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
+      </Route>
+      <Route path="/management/backup">
+        <ManagementProtectedRoute component={ManagementBackupPage} />
       </Route>
       <Route path="/management/koapos">
         <ManagementProtectedRoute component={ManagementKoaPOSPage} />

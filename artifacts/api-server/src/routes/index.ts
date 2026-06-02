@@ -91,6 +91,7 @@ import pricingRulesRouter from "./pricing-rules";
 import modifierGroupsRouter from "./modifier-groups";
 import quickbooksRouter from "./quickbooks";
 import authSecuritySettingsRouter from "./auth-security-settings";
+import backupsRouter from "./backups";
 
 const router: IRouter = Router();
 
@@ -186,5 +187,6 @@ router.use(pricingRulesRouter);
 router.use(modifierGroupsRouter);
 router.use(quickbooksRouter);
 router.use(authSecuritySettingsRouter);
+router.use(backupsRouter);
 
 export default router;

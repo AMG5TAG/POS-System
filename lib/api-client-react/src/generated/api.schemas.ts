@@ -5,6 +5,123 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export type BackupLocationsItem = {
+  type: string;
+  ref: string;
+};
+
+export interface Backup {
+  id: number;
+  merchantId: number;
+  startedAt: string;
+  completedAt?: string | null;
+  status: string;
+  trigger: string;
+  storageType?: string | null;
+  filePath?: string | null;
+  fileSizeBytes?: number | null;
+  errorMessage?: string | null;
+  locations: BackupLocationsItem[];
+}
+
+export interface BackupList {
+  items: Backup[];
+  total: number;
+}
+
+export type BackupStorageDestinationType = typeof BackupStorageDestinationType[keyof typeof BackupStorageDestinationType];
+
+
+export const BackupStorageDestinationType = {
+  local: 'local',
+  s3: 's3',
+  gcs: 'gcs',
+  sftp: 'sftp',
+} as const;
+
+export interface BackupStorageDestination {
+  id: string;
+  type: BackupStorageDestinationType;
+  directory?: string | null;
+  bucket?: string | null;
+  region?: string | null;
+  accessKeyId?: string | null;
+  secretAccessKeySet?: boolean;
+  projectId?: string | null;
+  gcsBucket?: string | null;
+  serviceAccountJsonSet?: boolean;
+  host?: string | null;
+  port?: number | null;
+  username?: string | null;
+  remotePath?: string | null;
+  passwordSet?: boolean;
+}
+
+export type BackupConfigFrequency = typeof BackupConfigFrequency[keyof typeof BackupConfigFrequency];
+
+
+export const BackupConfigFrequency = {
+  disabled: 'disabled',
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export interface BackupConfig {
+  frequency: BackupConfigFrequency;
+  passwordIsSet: boolean;
+  lastBackupAt?: string | null;
+  destinations: BackupStorageDestination[];
+}
+
+export type BackupStorageDestinationInputType = typeof BackupStorageDestinationInputType[keyof typeof BackupStorageDestinationInputType];
+
+
+export const BackupStorageDestinationInputType = {
+  local: 'local',
+  s3: 's3',
+  gcs: 'gcs',
+  sftp: 'sftp',
+} as const;
+
+export interface BackupStorageDestinationInput {
+  id?: string;
+  type: BackupStorageDestinationInputType;
+  directory?: string;
+  bucket?: string;
+  region?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  projectId?: string;
+  gcsBucket?: string;
+  serviceAccountJson?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  remotePath?: string;
+  password?: string;
+}
+
+export type BackupConfigInputFrequency = typeof BackupConfigInputFrequency[keyof typeof BackupConfigInputFrequency];
+
+
+export const BackupConfigInputFrequency = {
+  disabled: 'disabled',
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export interface BackupConfigInput {
+  frequency?: BackupConfigInputFrequency;
+  password?: string;
+  destinations?: BackupStorageDestinationInput[];
+}
+
+export interface RestoreBackupInput {
+  password: string;
+}
+
 export type CsvImportResultErrorsItem = {
   /** 1-based row number in the uploaded CSV */
   row: number;
@@ -4620,4 +4737,13 @@ export const ListInvoicesStatus = {
   overdue: 'overdue',
   cancelled: 'cancelled',
 } as const;
+
+export type ListBackupsParams = {
+limit?: number;
+offset?: number;
+};
+
+export type RestoreBackup200 = {
+  ok: boolean;
+};
 

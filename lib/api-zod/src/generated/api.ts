@@ -9098,3 +9098,124 @@ export const GetXeroSyncLogResponseItem = zod.object({
 export const GetXeroSyncLogResponse = zod.array(GetXeroSyncLogResponseItem)
 
 
+/**
+ * @summary List backup history for the authenticated merchant (paginated)
+ */
+export const ListBackupsQueryParams = zod.object({
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListBackupsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish(),
+  "status": zod.string(),
+  "trigger": zod.string(),
+  "storageType": zod.string().nullish(),
+  "filePath": zod.string().nullish(),
+  "fileSizeBytes": zod.number().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "locations": zod.array(zod.object({
+  "type": zod.string(),
+  "ref": zod.string()
+}))
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Get the current backup configuration
+ */
+export const GetBackupConfigResponse = zod.object({
+  "frequency": zod.enum(['disabled', 'daily', 'weekly', 'monthly']),
+  "passwordIsSet": zod.boolean(),
+  "lastBackupAt": zod.coerce.date().nullish(),
+  "destinations": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "directory": zod.string().nullish(),
+  "bucket": zod.string().nullish(),
+  "region": zod.string().nullish(),
+  "accessKeyId": zod.string().nullish(),
+  "secretAccessKeySet": zod.boolean().optional(),
+  "projectId": zod.string().nullish(),
+  "gcsBucket": zod.string().nullish(),
+  "serviceAccountJsonSet": zod.boolean().optional(),
+  "host": zod.string().nullish(),
+  "port": zod.number().nullish(),
+  "username": zod.string().nullish(),
+  "remotePath": zod.string().nullish(),
+  "passwordSet": zod.boolean().optional()
+}))
+})
+
+
+/**
+ * @summary Update backup frequency, storage destinations, and/or encryption password
+ */
+export const UpdateBackupConfigBody = zod.object({
+  "frequency": zod.enum(['disabled', 'daily', 'weekly', 'monthly']).optional(),
+  "password": zod.string().optional(),
+  "destinations": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "directory": zod.string().optional(),
+  "bucket": zod.string().optional(),
+  "region": zod.string().optional(),
+  "accessKeyId": zod.string().optional(),
+  "secretAccessKey": zod.string().optional(),
+  "projectId": zod.string().optional(),
+  "gcsBucket": zod.string().optional(),
+  "serviceAccountJson": zod.string().optional(),
+  "host": zod.string().optional(),
+  "port": zod.number().optional(),
+  "username": zod.string().optional(),
+  "remotePath": zod.string().optional(),
+  "password": zod.string().optional()
+})).optional()
+})
+
+export const UpdateBackupConfigResponse = zod.object({
+  "frequency": zod.enum(['disabled', 'daily', 'weekly', 'monthly']),
+  "passwordIsSet": zod.boolean(),
+  "lastBackupAt": zod.coerce.date().nullish(),
+  "destinations": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "directory": zod.string().nullish(),
+  "bucket": zod.string().nullish(),
+  "region": zod.string().nullish(),
+  "accessKeyId": zod.string().nullish(),
+  "secretAccessKeySet": zod.boolean().optional(),
+  "projectId": zod.string().nullish(),
+  "gcsBucket": zod.string().nullish(),
+  "serviceAccountJsonSet": zod.boolean().optional(),
+  "host": zod.string().nullish(),
+  "port": zod.number().nullish(),
+  "username": zod.string().nullish(),
+  "remotePath": zod.string().nullish(),
+  "passwordSet": zod.boolean().optional()
+}))
+})
+
+
+/**
+ * @summary Restore a previous backup (replaces all current merchant data)
+ */
+export const RestoreBackupParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreBackupBody = zod.object({
+  "password": zod.string()
+})
+
+export const RestoreBackupResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+

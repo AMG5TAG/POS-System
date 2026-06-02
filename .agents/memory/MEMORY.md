@@ -3,3 +3,5 @@
 - [Orval hook query options](orval-query-options.md) — all useXxx query hooks require queryKey in the query options object; omitting it causes TS2741.
 - [merchantIntegrationsTable columns](merchant-integrations-columns.md) — correct column names: integrationKey/status/credentials(JSON text)/accessToken/refreshToken — never key/connected/meta/vaultKey.
 - [Express 5 + Drizzle patterns](express5-drizzle-patterns.md) — Express 5 params are string|string[]; use String(req.params.id). Drizzle partial update: conditional spread {...(d.field !== undefined && { field: d.field })} not Record<string,unknown> cast.
+- [esbuild externalized transitive deps](esbuild-externalized-transitive-deps.md) — api-server externalizes native pkgs (ssh2 etc); transitive ones must be added as DIRECT deps or boot crashes "Cannot find module" though build passes.
+- [Drizzle JSON snapshot restore](drizzle-json-snapshot-restore.md) — reinserting JSON rows into Drizzle date-mode timestamp cols needs new Date(v); detect via getTableColumns dataType==='date'.

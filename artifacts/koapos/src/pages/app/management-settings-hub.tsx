@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles } from "lucide-react";
+import { UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, DatabaseBackup } from "lucide-react";
 
 import SettingsAccountPage from "@/pages/app/settings-account";
 import SettingsBusinessPage from "@/pages/app/settings-business";
@@ -12,6 +12,7 @@ import ManagementXeroPage from "@/pages/app/management-xero";
 import ManagementImportExportPage from "@/pages/app/management-import-export";
 import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import ManagementMiscPage from "@/pages/app/management-misc";
+import ManagementBackupPage from "@/pages/app/management-backup";
 
 const TABS: HubTab[] = [
   { label: "Account & Modules",  href: "/management/account",       icon: UserCircle     },
@@ -29,6 +30,7 @@ const TABS: HubTab[] = [
     matchPaths: ["/management/tyro-eftpos", "/management/xero"],
   },
   { label: "Import / Export",    href: "/management/import-export",  icon: ArrowLeftRight },
+  { label: "Backup & Restore",   href: "/management/backup",         icon: DatabaseBackup },
   {
     label: "System",
     href: "/management/koapos",
@@ -47,6 +49,7 @@ function HubContent() {
   if (location === "/management/tyro-eftpos")   return <SettingsTyroEftposPage />;
   if (location === "/management/xero")          return <ManagementXeroPage />;
   if (location === "/management/import-export") return <ManagementImportExportPage />;
+  if (location === "/management/backup")        return <ManagementBackupPage />;
   if (location === "/management/koapos")        return <ManagementKoaPOSPage />;
   if (location === "/management/misc")          return <ManagementMiscPage />;
   return <SettingsAccountPage />;

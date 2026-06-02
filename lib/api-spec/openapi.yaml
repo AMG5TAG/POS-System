@@ -96,6 +96,8 @@ tags:
     description: Invoice management and payment collection
   - name: xero
     description: Xero accounting integration
+  - name: backups
+    description: Per-merchant data backup and restore
 
 paths:
   /healthz:
@@ -7183,8 +7185,220 @@ paths:
                 items:
                   $ref: "#/components/schemas/XeroSyncLogEntry"
 
+  # ── Backups ───────────────────────────────────────────────────────────────
+  /backups:
+    get:
+      operationId: listBackups
+      tags: [backups]
+      summary: List backup history for the authenticated merchant (paginated)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Backup history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupList"
+        "401":
+          description: Unauthorized
+    post:
+      operationId: triggerBackup
+      tags: [backups]
+      summary: Trigger an immediate backup (runs asynchronously)
+      responses:
+        "202":
+          description: Backup accepted and started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
+        "400":
+          description: No encryption password configured
+        "401":
+          description: Unauthorized
+
+  /backups/config:
+    get:
+      operationId: getBackupConfig
+      tags: [backups]
+      summary: Get the current backup configuration
+      responses:
+        "200":
+          description: Backup configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupConfig"
+        "401":
+          description: Unauthorized
+    put:
+      operationId: updateBackupConfig
+      tags: [backups]
+      summary: Update backup frequency, storage destinations, and/or encryption password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupConfigInput"
+      responses:
+        "200":
+          description: Updated configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupConfig"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /backups/{id}/restore:
+    post:
+      operationId: restoreBackup
+      tags: [backups]
+      summary: Restore a previous backup (replaces all current merchant data)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreBackupInput"
+      responses:
+        "200":
+          description: Restore completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          description: Invalid password or unauthorized
+        "404":
+          description: Backup not found
+
 components:
   schemas:
+    # ── Backups ───────────────────────────────────────────────────────────────
+    Backup:
+      type: object
+      required: [id, merchantId, startedAt, status, trigger, locations]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        status: { type: string }
+        trigger: { type: string }
+        storageType: { type: string, nullable: true }
+        filePath: { type: string, nullable: true }
+        fileSizeBytes: { type: integer, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        locations:
+          type: array
+          items:
+            type: object
+            required: [type, ref]
+            properties:
+              type: { type: string }
+              ref: { type: string }
+
+    BackupList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backup"
+        total:
+          type: integer
+
+    BackupStorageDestination:
+      type: object
+      required: [id, type]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [local, s3, gcs, sftp] }
+        directory: { type: string, nullable: true }
+        bucket: { type: string, nullable: true }
+        region: { type: string, nullable: true }
+        accessKeyId: { type: string, nullable: true }
+        secretAccessKeySet: { type: boolean }
+        projectId: { type: string, nullable: true }
+        gcsBucket: { type: string, nullable: true }
+        serviceAccountJsonSet: { type: boolean }
+        host: { type: string, nullable: true }
+        port: { type: integer, nullable: true }
+        username: { type: string, nullable: true }
+        remotePath: { type: string, nullable: true }
+        passwordSet: { type: boolean }
+
+    BackupConfig:
+      type: object
+      required: [frequency, passwordIsSet, destinations]
+      properties:
+        frequency: { type: string, enum: [disabled, daily, weekly, monthly] }
+        passwordIsSet: { type: boolean }
+        lastBackupAt: { type: string, format: date-time, nullable: true }
+        destinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupStorageDestination"
+
+    BackupStorageDestinationInput:
+      type: object
+      required: [type]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [local, s3, gcs, sftp] }
+        directory: { type: string }
+        bucket: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        projectId: { type: string }
+        gcsBucket: { type: string }
+        serviceAccountJson: { type: string }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        remotePath: { type: string }
+        password: { type: string }
+
+    BackupConfigInput:
+      type: object
+      properties:
+        frequency: { type: string, enum: [disabled, daily, weekly, monthly] }
+        password: { type: string }
+        destinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackupStorageDestinationInput"
+
+    RestoreBackupInput:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string }
+
     CsvImportResult:
       type: object
       required: [imported, skipped, errors]
