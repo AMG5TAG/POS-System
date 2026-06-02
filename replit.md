@@ -143,6 +143,7 @@ Each integration is "feature disabled if missing" — the API hides the connect 
 ## User Preferences
 
 - **Full-width layouts**: All app pages must use the full window width — never add `max-w-*` to page-level containers. Where a page has multiple cards/sections, place them in a responsive grid (`grid-cols-1 lg:grid-cols-2 gap-6 items-start`) so they sit side by side on large screens and stack on mobile. Dialog widths (`max-w-md`, `max-w-lg`, etc.) are fine to keep.
+- **Data-loss warning required**: Before actioning any feature addition or fix that could destroy, overwrite, or permanently alter existing data (including DB migrations, seeding, schema changes, file deletions, or data backfills), stop and explain in full what data will be lost and why, then wait for explicit confirmation before proceeding.
 
 ## Pointers
 
