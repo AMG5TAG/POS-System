@@ -59,7 +59,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare, Loader2,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
-  WifiOff, ShieldCheck,
+  WifiOff, ShieldCheck, ArrowBigUp,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -355,6 +355,8 @@ export default function POSPage() {
 
   /* staff PIN */
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  const [pinCapsLockOn, setPinCapsLockOn] = useState(false);
+  const [approvalCapsLockOn, setApprovalCapsLockOn] = useState(false);
 
   /* accumulated excess from discount clamping this sale (requested minus applied) */
   const [discountExcessAmount, setDiscountExcessAmount] = useState(0);
@@ -3954,14 +3956,20 @@ export default function POSPage() {
       />
 
       {/* ─── Staff PIN dialog ─── */}
-      <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinDialogOpen(false); } }}>
+      <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinCapsLockOn(false); setPinDialogOpen(false); } }}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Staff Login</DialogTitle></DialogHeader>
           {currentStaff && <p className="text-sm text-muted-foreground text-center">Currently: <span className="font-semibold text-foreground">{currentStaff.name}</span></p>}
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Enter PIN</Label>
-              <Input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(""); }} placeholder="••••" className="mt-1 text-center tracking-widest text-lg" autoFocus onKeyDown={e => e.key === "Enter" && handlePinSubmit()} />
+              <Input type="password" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(""); }} placeholder="••••" className="mt-1 text-center tracking-widest text-lg" autoFocus onKeyDown={e => { setPinCapsLockOn(e.getModifierState("CapsLock")); if (e.key === "Enter") handlePinSubmit(); }} onKeyUp={e => setPinCapsLockOn(e.getModifierState("CapsLock"))} />
+              {pinCapsLockOn && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  <ArrowBigUp className="h-3.5 w-3.5 shrink-0" />
+                  Caps Lock is on
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
@@ -3988,6 +3996,7 @@ export default function POSPage() {
           setPendingApproval(null);
           setApprovalPin("");
           setApprovalPinError("");
+          setApprovalCapsLockOn(false);
         }
       }}>
         <DialogContent className="sm:max-w-xs">
@@ -4015,8 +4024,15 @@ export default function POSPage() {
                 placeholder="••••"
                 className="mt-1 text-center tracking-widest text-lg"
                 autoFocus
-                onKeyDown={e => e.key === "Enter" && handleDiscountApprovalSubmit()}
+                onKeyDown={e => { setApprovalCapsLockOn(e.getModifierState("CapsLock")); if (e.key === "Enter") handleDiscountApprovalSubmit(); }}
+                onKeyUp={e => setApprovalCapsLockOn(e.getModifierState("CapsLock"))}
               />
+              {approvalCapsLockOn && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  <ArrowBigUp className="h-3.5 w-3.5 shrink-0" />
+                  Caps Lock is on
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
