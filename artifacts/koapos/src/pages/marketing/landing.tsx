@@ -689,7 +689,10 @@ function FeatureOutline({ sections }: { sections: FeatureSection[] }) {
               >
                 <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
                   <span className="text-3xl">{section.emoji}</span>
-                  {section.title}
+                  <span>{section.title}</span>
+                  <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
+                    {section.features.length} features
+                  </span>
                 </h3>
                 <div
                   className={`grid grid-cols-1 lg:grid-cols-2 gap-8 items-start ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}
@@ -715,7 +718,10 @@ function FeatureOutline({ sections }: { sections: FeatureSection[] }) {
             >
               <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
                 <span className="text-3xl">{section.emoji}</span>
-                {section.title}
+                <span>{section.title}</span>
+                <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
+                  {section.features.length} features
+                </span>
               </h3>
               <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
                 {section.features.map((feature) => (
@@ -732,6 +738,9 @@ function FeatureOutline({ sections }: { sections: FeatureSection[] }) {
     </div>
   );
 }
+
+const TOTAL_FEATURE_COUNT = FEATURE_SECTIONS.reduce((sum, s) => sum + s.features.length, 0);
+const TOTAL_SECTION_COUNT = FEATURE_SECTIONS.length;
 
 export default function LandingPage() {
   return (
@@ -764,7 +773,9 @@ export default function LandingPage() {
               Complete feature outline
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Every capability included in KoaPOS — built for Australian retailers who need professional tools, not compromises.
+              <span className="font-semibold text-foreground">{TOTAL_FEATURE_COUNT}+ features</span> across{" "}
+              <span className="font-semibold text-foreground">{TOTAL_SECTION_COUNT} categories</span> — every capability
+              included in KoaPOS, built for Australian retailers who need professional tools, not compromises.
             </p>
           </div>
 
