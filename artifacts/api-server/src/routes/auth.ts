@@ -437,8 +437,8 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   const browserLabel = ua ? parseUserAgent(ua) : "Unknown browser";
   const ipLabel = ip ?? "Unknown";
 
-  // Auto-flag alert: fire when a new IP is detected, regardless of notify preference
-  if (isNewIp) {
+  // Auto-flag alert: fire when a new IP is detected; email is gated on merchant preference
+  if (isNewIp && merchant.loginNotifyEmailNewLocation !== "false") {
     void sendEmail(merchant.id, {
       to: merchant.email,
       subject: "⚠️ Sign-in from a new location on your KoaPOS account",

@@ -7316,6 +7316,8 @@ components:
           type: boolean
         loginNotifyEmailFailed:
           type: boolean
+        loginNotifyEmailNewLocation:
+          type: boolean
         securityAlertEmail:
           type: boolean
         createdAt:
@@ -7354,6 +7356,8 @@ components:
         loginNotifyEmail:
           type: boolean
         loginNotifyEmailFailed:
+          type: boolean
+        loginNotifyEmailNewLocation:
           type: boolean
         securityAlertEmail:
           type: boolean

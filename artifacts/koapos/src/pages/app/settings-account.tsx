@@ -196,7 +196,9 @@ function LoginNotifyCard() {
 
   const enabledSuccess = (merchant as { loginNotifyEmail?: boolean } | undefined)?.loginNotifyEmail ?? false;
   const enabledFailed = (merchant as { loginNotifyEmailFailed?: boolean } | undefined)?.loginNotifyEmailFailed ?? false;
+  const enabledNewLocation = (merchant as { loginNotifyEmailNewLocation?: boolean } | undefined)?.loginNotifyEmailNewLocation ?? true;
   const enabledSecurity = (merchant as { securityAlertEmail?: boolean } | undefined)?.securityAlertEmail ?? true;
+  const [savingNewLocation, setSavingNewLocation] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
 
   const handleToggleSuccess = (checked: boolean) => {
@@ -229,6 +231,23 @@ function LoginNotifyCard() {
           toast.error("Failed to update notification setting");
         },
         onSettled: () => setSavingFailed(false),
+      }
+    );
+  };
+
+  const handleToggleNewLocation = (checked: boolean) => {
+    setSavingNewLocation(true);
+    updateMerchant.mutate(
+      { data: { loginNotifyEmailNewLocation: checked } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success(checked ? "New-location alerts enabled" : "New-location alerts disabled");
+        },
+        onError: () => {
+          toast.error("Failed to update notification setting");
+        },
+        onSettled: () => setSavingNewLocation(false),
       }
     );
   };
@@ -287,6 +306,20 @@ function LoginNotifyCard() {
             onCheckedChange={handleToggleFailed}
             disabled={savingFailed}
             aria-label="Toggle failed login attempt notifications"
+          />
+        </div>
+        <div className="border-t pt-4 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Email me on new-location sign-in</p>
+            <p className="text-xs text-muted-foreground">
+              Get an email whenever your account is accessed from an IP address we haven't seen before. The in-app alert is always shown regardless of this setting.
+            </p>
+          </div>
+          <Switch
+            checked={enabledNewLocation}
+            onCheckedChange={handleToggleNewLocation}
+            disabled={savingNewLocation}
+            aria-label="Toggle new-location sign-in email alerts"
           />
         </div>
         <div className="border-t pt-4 flex items-center justify-between gap-4">
