@@ -86,16 +86,14 @@ const SelectContent = React.forwardRef<
       <SelectScrollUpButton className="shrink-0" />
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1 flex-1 overflow-y-scroll min-h-0",
+          "p-1 flex-1 overflow-y-auto min-h-0",
           position === "popper" &&
             "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
         onWheel={(e) => {
-          /* Allow mouse-wheel scrolling inside the dropdown without closing it
-             or accidentally scrolling the page / dialog behind it. */
+          /* Stop the wheel event from bubbling up to the dialog / page so
+             the dropdown stays open and the background doesn't scroll. */
           e.stopPropagation();
-          const el = e.currentTarget as HTMLElement;
-          el.scrollTop += e.deltaY;
         }}
       >
         {children}
