@@ -126,12 +126,13 @@ const ENTITIES: EntityConfig[] = [
     updateUrl: "/api/customers",
     fetchAllUrl: "/api/customers?limit=10000",
     dedupeBy: (p, e) => {
+      const emailMatch = !!p.email && !!e.email && String(p.email).toLowerCase() === String(e.email).toLowerCase();
       const pFull = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim().toLowerCase();
       const eFull = `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim().toLowerCase();
       const nameMatch  = pFull.length > 0 && pFull === eFull;
       const phoneMatch = !!p.phone && !!e.phone && String(p.phone) === String(e.phone);
       return {
-        match: nameMatch && phoneMatch,
+        match: emailMatch || (nameMatch && phoneMatch),
         id: e.id as number,
         label: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || String(e.email ?? ""),
       };
@@ -150,7 +151,7 @@ const ENTITIES: EntityConfig[] = [
       { key: "abn",                label: "ABN"                   },
       { key: "dateOfBirth",        label: "Date of Birth",        hint: "Format: YYYY-MM-DD" },
       { key: "notes",              label: "Notes"                 },
-      { key: "group",              label: "Customer Group",       hint: "e.g. Wholesale, Retail, VIP" },
+      { key: "customerGroup",      label: "Customer Group",       hint: "e.g. Wholesale, Retail, VIP" },
       { key: "shippingStreet",     label: "Shipping Street"       },
       { key: "shippingCity",       label: "Shipping City / Suburb" },
       { key: "shippingState",      label: "Shipping State"        },
@@ -158,12 +159,12 @@ const ENTITIES: EntityConfig[] = [
       { key: "shippingCountry",    label: "Shipping Country"      },
       { key: "referralCode",       label: "Referral Code",        hint: "This customer's shareable referral code" },
       { key: "referredBy",         label: "Referred By",          hint: "Referral code of the person who referred them" },
-      { key: "marketingConsent",   label: "Marketing Consent",    type: "boolean", hint: "true or false" },
+      { key: "agreedToMarketing",  label: "Marketing Consent",    hint: "true or false" },
     ],
     sampleRows: [
-      { firstName: "Sarah",  lastName: "Johnson", email: "sarah@example.com",  phone: "0412 345 678", billingStreet: "123 George St",    billingCity: "Sydney",    billingState: "NSW", billingPostcode: "2000", billingCountry: "Australia", company: "Johnson Group",  abn: "12 345 678 901", dateOfBirth: "1985-06-15", notes: "VIP customer",       group: "VIP",       shippingStreet: "123 George St",  shippingCity: "Sydney",    shippingState: "NSW", shippingPostcode: "2000", shippingCountry: "Australia", referralCode: "SARAH10",  referredBy: "",       marketingConsent: "true"  },
-      { firstName: "Mike",   lastName: "Chen",    email: "mike@example.com",   phone: "0423 456 789", billingStreet: "456 Collins St",   billingCity: "Melbourne", billingState: "VIC", billingPostcode: "3000", billingCountry: "Australia", company: "",               abn: "",               dateOfBirth: "1990-03-20", notes: "",                    group: "Retail",    shippingStreet: "",               shippingCity: "",          shippingState: "",    shippingPostcode: "",     shippingCountry: "",          referralCode: "MIKE10",   referredBy: "SARAH10", marketingConsent: "false" },
-      { firstName: "Priya",  lastName: "Patel",   email: "priya@example.com",  phone: "0434 567 890", billingStreet: "789 Bourke St",    billingCity: "Brisbane",  billingState: "QLD", billingPostcode: "4000", billingCountry: "Australia", company: "Patel Pty Ltd",  abn: "98 765 432 109", dateOfBirth: "1978-11-08", notes: "Wholesale account",  group: "Wholesale", shippingStreet: "789 Bourke St",  shippingCity: "Brisbane",  shippingState: "QLD", shippingPostcode: "4000", shippingCountry: "Australia", referralCode: "PRIYA10",  referredBy: "",       marketingConsent: "true"  },
+      { firstName: "Sarah",  lastName: "Johnson", email: "sarah@example.com",  phone: "0412 345 678", billingStreet: "123 George St",    billingCity: "Sydney",    billingState: "NSW", billingPostcode: "2000", billingCountry: "Australia", company: "Johnson Group",  abn: "12 345 678 901", dateOfBirth: "1985-06-15", notes: "VIP customer",       customerGroup: "VIP",       shippingStreet: "123 George St",  shippingCity: "Sydney",    shippingState: "NSW", shippingPostcode: "2000", shippingCountry: "Australia", referralCode: "SARAH10",  referredBy: "",       agreedToMarketing: "true"  },
+      { firstName: "Mike",   lastName: "Chen",    email: "mike@example.com",   phone: "0423 456 789", billingStreet: "456 Collins St",   billingCity: "Melbourne", billingState: "VIC", billingPostcode: "3000", billingCountry: "Australia", company: "",               abn: "",               dateOfBirth: "1990-03-20", notes: "",                    customerGroup: "Retail",    shippingStreet: "",               shippingCity: "",          shippingState: "",    shippingPostcode: "",     shippingCountry: "",          referralCode: "MIKE10",   referredBy: "SARAH10", agreedToMarketing: "false" },
+      { firstName: "Priya",  lastName: "Patel",   email: "priya@example.com",  phone: "0434 567 890", billingStreet: "789 Bourke St",    billingCity: "Brisbane",  billingState: "QLD", billingPostcode: "4000", billingCountry: "Australia", company: "Patel Pty Ltd",  abn: "98 765 432 109", dateOfBirth: "1978-11-08", notes: "Wholesale account",  customerGroup: "Wholesale", shippingStreet: "789 Bourke St",  shippingCity: "Brisbane",  shippingState: "QLD", shippingPostcode: "4000", shippingCountry: "Australia", referralCode: "PRIYA10",  referredBy: "",       agreedToMarketing: "true"  },
     ],
     toExportRow: (item) => ({
       firstName:       String(item.firstName       ?? ""),
@@ -178,8 +179,8 @@ const ENTITIES: EntityConfig[] = [
       billingState:    String(item.billingState    ?? ""),
       billingPostcode: String(item.billingPostcode ?? ""),
       billingCountry:  String(item.billingCountry  ?? ""),
-      notes:           String(item.notes           ?? ""),
-      group:            String((item as Record<string, unknown>).customerGroup      ?? ""),
+      notes:            String(item.notes           ?? ""),
+      customerGroup:    String((item as Record<string, unknown>).customerGroup     ?? ""),
       shippingStreet:   String((item as Record<string, unknown>).shippingStreet    ?? ""),
       shippingCity:     String((item as Record<string, unknown>).shippingCity      ?? ""),
       shippingState:    String((item as Record<string, unknown>).shippingState     ?? ""),
@@ -187,7 +188,7 @@ const ENTITIES: EntityConfig[] = [
       shippingCountry:  String((item as Record<string, unknown>).shippingCountry   ?? ""),
       referralCode:     String((item as Record<string, unknown>).referralCode      ?? ""),
       referredBy:       String((item as Record<string, unknown>).referredBy        ?? ""),
-      marketingConsent: String((item as Record<string, unknown>).marketingConsent  ?? "false"),
+      agreedToMarketing: String((item as Record<string, unknown>).agreedToMarketing ?? ""),
     }),
   },
   {
@@ -494,7 +495,8 @@ const ALIASES: Record<string, string[]> = {
   lastName:           ["lastname", "last", "surname", "family", "familyname"],
   email:              ["email", "emailaddress", "mail", "emailid"],
   phone:              ["phone", "mobile", "cell", "telephone", "tel", "phonenumber"],
-  group:              ["group", "customergroup", "tier", "segment", "category"],
+  customerGroup:      ["customergroup", "group", "customer_group", "tier", "segment"],
+  agreedToMarketing:  ["agreedtomarketing", "marketingconsent", "marketing", "consent", "emailconsent", "emailmarketing", "subscribed", "optedin"],
   shippingStreet:     ["shippingstreet", "shipstreet", "deliverystreet", "shipaddress"],
   shippingCity:       ["shippingcity", "shipcity", "deliverycity", "shipsuburb"],
   shippingState:      ["shippingstate", "shipstate", "deliverystate"],
@@ -821,8 +823,10 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (r.ok) { res.success++; }
         else {
           res.failed++;
-          const d = await r.json().catch(() => ({})) as Record<string, unknown>;
-          res.errors.push(`Row ${i + 1}: ${String(d.error ?? r.statusText)}`);
+          const text = await r.text().catch(() => "");
+          let apiError = "";
+          try { apiError = String((JSON.parse(text) as Record<string, unknown>).error ?? ""); } catch { apiError = ""; }
+          res.errors.push(`Row ${i + 1}: ${apiError || `HTTP ${r.status}`}`);
         }
       } catch {
         res.failed++;

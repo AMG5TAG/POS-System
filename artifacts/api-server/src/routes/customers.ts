@@ -187,6 +187,9 @@ const CUSTOMER_HEADER_MAP: Record<string, string> = {
   loyalty_points: "loyaltyPoints", loyaltypoints: "loyaltyPoints", points: "loyaltyPoints",
   group: "customerGroup",   customer_group: "customerGroup",  customergroup: "customerGroup",
   notes: "notes",           note: "notes",  comments: "notes",
+  marketing_consent: "agreedToMarketing", marketingconsent: "agreedToMarketing",
+  agreed_to_marketing: "agreedToMarketing", agreedtomarketing: "agreedToMarketing",
+  marketing: "agreedToMarketing", opted_in: "agreedToMarketing", optedin: "agreedToMarketing",
 };
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -216,26 +219,30 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     res.status(400).json({ error: "Failed to parse CSV file" }); return;
   }
 
-  // ── Load existing emails for deduplication ─────────────────────────────────
+  // ── Load existing customers by email for upsert ────────────────────────────
   const existingEmailRows = await db
-    .select({ email: customersTable.email })
+    .select({ email: customersTable.email, id: customersTable.id })
     .from(customersTable)
     .where(eq(customersTable.merchantId, merchantId));
-  const existingEmails = new Set(
-    existingEmailRows.map((r) => r.email?.toLowerCase().trim()).filter(Boolean) as string[],
+  // Map: lowercase email → existing customer id (for upsert)
+  const existingByEmail = new Map<string, number>(
+    existingEmailRows
+      .filter((r) => r.email)
+      .map((r) => [r.email!.toLowerCase().trim(), r.id]),
   );
 
-  // ── Validate & build insert set ────────────────────────────────────────────
+  // ── Validate & build insert/update sets ────────────────────────────────────
   const errors: { row: number; message: string }[] = [];
   const seenEmails = new Set<string>(); // within-file duplicate tracking
 
-  type InsertRow = {
+  type CustomerRow = {
     rowNum: number;
     firstName: string | null; lastName: string | null; email: string | null;
     phone: string | null; address: string | null; notes: string | null;
-    customerGroup: string; loyaltyPoints: number;
+    customerGroup: string; loyaltyPoints: number; agreedToMarketing: string | null;
   };
-  const toInsert: InsertRow[] = [];
+  const toInsert: CustomerRow[] = [];
+  const toUpdate: (CustomerRow & { existingId: number })[] = [];
 
   for (let i = 0; i < rawRows.length; i++) {
     const row       = rawRows[i];
@@ -248,13 +255,12 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     const notes     = (row.notes     ?? "").trim();
     const customerGroup = (row.customerGroup ?? "Standard").trim() || "Standard";
     const loyaltyPoints = Math.max(0, parseInt(row.loyaltyPoints ?? "0") || 0);
+    const rawMarketing  = (row.agreedToMarketing ?? "").trim().toLowerCase();
+    const agreedToMarketing = rawMarketing === "" ? null
+      : (rawMarketing === "true" || rawMarketing === "1" || rawMarketing === "yes") ? "true" : "false";
 
     if (!firstName && !lastName && !email && !phone) {
       errors.push({ row: rowNum, message: "At least one of first name, last name, email, or phone is required" });
-      continue;
-    }
-    if (email && existingEmails.has(email)) {
-      errors.push({ row: rowNum, message: `Email already exists: ${email}` });
       continue;
     }
     if (email && seenEmails.has(email)) {
@@ -263,14 +269,47 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     }
     if (email) seenEmails.add(email);
 
-    toInsert.push({ rowNum, firstName: firstName || null, lastName: lastName || null,
+    const baseRow: CustomerRow = {
+      rowNum, firstName: firstName || null, lastName: lastName || null,
       email: email || null, phone: phone || null, address: address || null,
-      notes: notes || null, customerGroup, loyaltyPoints });
-    if (email) existingEmails.add(email); // prevent later rows in same file from matching
+      notes: notes || null, customerGroup, loyaltyPoints, agreedToMarketing,
+    };
+
+    if (email && existingByEmail.has(email)) {
+      // Upsert: update the existing customer instead of inserting a duplicate
+      toUpdate.push({ ...baseRow, existingId: existingByEmail.get(email)! });
+    } else {
+      toInsert.push(baseRow);
+      if (email) existingByEmail.set(email, -1); // block later duplicates in same file
+    }
+  }
+
+  // ── Apply updates to existing customers ────────────────────────────────────
+  let updated = 0;
+  for (const r of toUpdate) {
+    try {
+      await db.update(customersTable)
+        .set({
+          firstName:         r.firstName ?? undefined,
+          lastName:          r.lastName  ?? undefined,
+          phone:             r.phone     ?? undefined,
+          address:           r.address   ?? undefined,
+          notes:             r.notes     ?? undefined,
+          customerGroup:     r.customerGroup,
+          loyaltyPoints:     r.loyaltyPoints,
+          ...(r.agreedToMarketing !== null && { agreedToMarketing: r.agreedToMarketing }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(customersTable.id, r.existingId), eq(customersTable.merchantId, merchantId)));
+      updated++;
+    } catch (err) {
+      req.log.error({ err }, "Customer CSV upsert update failed");
+      errors.push({ row: r.rowNum, message: `Failed to update existing customer (${r.email ?? "no email"})` });
+    }
   }
 
   if (toInsert.length === 0) {
-    res.json({ imported: 0, skipped: rawRows.length, errors }); return;
+    res.json({ imported: 0, updated, skipped: rawRows.length - toUpdate.length - toInsert.length, errors }); return;
   }
 
   // ── Generate referral codes, then bulk insert ──────────────────────────────
@@ -289,21 +328,22 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     code! ??= `KOA${crypto.randomBytes(3).toString("hex").toUpperCase().slice(0, 5)}`;
     insertValues.push({
       merchantId,
-      firstName:    r.firstName,
-      lastName:     r.lastName,
-      email:        r.email,
-      phone:        r.phone,
-      address:      r.address,
-      notes:        r.notes,
-      customerGroup: r.customerGroup,
-      loyaltyPoints: r.loyaltyPoints,
-      portalToken:  crypto.randomUUID(),
-      referralCode: code!,
+      firstName:         r.firstName,
+      lastName:          r.lastName,
+      email:             r.email,
+      phone:             r.phone,
+      address:           r.address,
+      notes:             r.notes,
+      customerGroup:     r.customerGroup,
+      loyaltyPoints:     r.loyaltyPoints,
+      agreedToMarketing: r.agreedToMarketing,
+      portalToken:       crypto.randomUUID(),
+      referralCode:      code!,
     });
   }
 
   let imported = 0;
-  const skipped = rawRows.length - toInsert.length;
+  const skipped = rawRows.length - toInsert.length - toUpdate.length;
 
   try {
     await db.insert(customersTable).values(insertValues);
@@ -313,7 +353,7 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     res.status(500).json({ error: "Database error during bulk insert" }); return;
   }
 
-  res.json({ imported, skipped, errors });
+  res.json({ imported, updated, skipped, errors });
 });
 
 /* ── GET /customers/expiring-points ─────────────────────────────────────── */

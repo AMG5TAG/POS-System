@@ -88,6 +88,9 @@ const ENTITY_CONFIG: Record<"customer" | "product", EntityConfig> = {
       loyalty_points: "loyaltyPoints",  loyaltypoints: "loyaltyPoints",  points: "loyaltyPoints",
       group: "customerGroup",  customer_group: "customerGroup",  customergroup: "customerGroup",
       notes: "notes",  note: "notes",  comments: "notes",
+      marketing_consent: "agreedToMarketing",  marketingconsent: "agreedToMarketing",
+      agreed_to_marketing: "agreedToMarketing",  agreedtomarketing: "agreedToMarketing",
+      marketing: "agreedToMarketing",  opted_in: "agreedToMarketing",
     },
     validate(row) {
       const errors: string[] = [];
@@ -297,13 +300,21 @@ export function CsvImportDialog({ entity, open, onOpenChange, onSuccess }: CsvIm
         const body = await response.text().catch(() => "");
         throw new Error(body || `HTTP ${response.status}`);
       }
-      const result = await response.json() as { imported: number; skipped: number; errors: { row: number; message: string }[] };
+      const result = await response.json() as { imported: number; updated?: number; skipped: number; errors: { row: number; message: string }[] };
       onSuccess?.();
       onOpenChange(false);
       const label = config.entity;
-      const msg   = `Imported ${result.imported} ${label}${result.imported !== 1 ? "s" : ""}`;
-      const extra = result.skipped > 0 ? ` · ${result.skipped} skipped` : "";
-      toast.success(`${msg}${extra}`);
+      const parts: string[] = [];
+      if (result.imported > 0)               parts.push(`${result.imported} added`);
+      if ((result.updated ?? 0) > 0)         parts.push(`${result.updated} updated`);
+      if (result.skipped > 0)                parts.push(`${result.skipped} skipped`);
+      const msg = parts.length ? parts.join(" · ") : `0 ${label}s imported`;
+      toast.success(msg);
+      if (result.errors?.length) {
+        const preview = result.errors.slice(0, 3).map((e) => `Row ${e.row}: ${e.message}`).join("; ");
+        const more    = result.errors.length > 3 ? ` (+${result.errors.length - 3} more)` : "";
+        toast.warning(`${result.errors.length} row${result.errors.length !== 1 ? "s" : ""} had issues: ${preview}${more}`);
+      }
     } catch {
       toast.error("Import failed — please try again");
       setStep("preview");
