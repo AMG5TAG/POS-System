@@ -36,6 +36,28 @@ Tokens in `oauth_token_vault` are encrypted with `VAULT_ENCRYPTION_KEY`. To rota
 
 Any rows that cannot be decrypted under **either** key are invalidated on startup (`disconnectedReason: "key_rotated"`); those merchants must reconnect the affected integrations.
 
+### System email env vars
+
+Used as a platform-level fallback when a merchant has no email provider configured in Management → Email. Essential for auth emails (password reset, login alerts) to reach merchants who haven't yet set up their own SMTP/Resend/SendGrid settings.
+
+Set **one** of these two options:
+
+**Option A — Resend (recommended):**
+- `SYSTEM_RESEND_API_KEY` — Resend API key; used as the platform default sender.
+- `SYSTEM_FROM_EMAIL` — Required sender address when using Resend (e.g. `noreply@koapos.com`).
+- `SYSTEM_FROM_NAME` — Display name shown in emails (optional, defaults to `KoaPOS`).
+
+**Option B — SMTP:**
+- `SYSTEM_SMTP_HOST` — SMTP server hostname.
+- `SYSTEM_SMTP_PORT` — SMTP port (optional, defaults to `587`).
+- `SYSTEM_SMTP_USER` — SMTP username / login.
+- `SYSTEM_SMTP_PASS` — SMTP password.
+- `SYSTEM_SMTP_SECURE` — Set to `"true"` for SSL/TLS on port 465; defaults to `"false"`.
+- `SYSTEM_FROM_EMAIL` — Sender address shown in the From field (optional, falls back to SMTP user).
+- `SYSTEM_FROM_NAME` — Display name (optional, defaults to `KoaPOS`).
+
+If neither option is configured, auth emails (password reset, etc.) are silently dropped and a warning is logged.
+
 ### Integration env vars
 
 Each integration is "feature disabled if missing" — the API hides the connect button and the OAuth callback returns an error. Set the client id and secret together.

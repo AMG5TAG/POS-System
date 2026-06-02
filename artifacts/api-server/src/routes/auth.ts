@@ -760,6 +760,12 @@ router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Pro
       </div>
     `,
     text: `Reset your KoaPOS password\n\nClick the link below to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request a password reset, ignore this email.`,
+  }).then((result) => {
+    if (!result.success) {
+      req.log.warn({ provider: result.provider, error: result.error }, "Password reset email delivery failed — configure SYSTEM_SMTP_* or SYSTEM_RESEND_API_KEY env vars, or set up email in Management → Email");
+    }
+  }).catch((err: unknown) => {
+    req.log.error({ err }, "Password reset email threw unexpectedly");
   });
 
   res.json({ ok: true });
