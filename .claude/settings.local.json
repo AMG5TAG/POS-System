@@ -16,7 +16,9 @@
       "Bash(node_modules/.bin/tsx enable-all-modules-lifetime.ts)",
       "Bash(NODE_PATH=/home/runner/workspace/node_modules/.pnpm/pg@8.20.0/node_modules node *)",
       "Bash(npx tsc *)",
-      "Bash(pnpm --filter @workspace/db run build)"
+      "Bash(pnpm --filter @workspace/db run build)",
+      "Bash(pnpm db:push *)",
+      "Bash(node *)"
     ]
   }
 }
