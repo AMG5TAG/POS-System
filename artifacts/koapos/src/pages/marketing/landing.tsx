@@ -9,6 +9,7 @@ import {
   ServiceJobsVisual,
   ReportsVisual,
 } from "@/components/marketing/feature-visuals";
+import { useEffect, useRef, useState } from "react";
 
 interface FeatureSection {
   title: string;
@@ -62,7 +63,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
     ],
   },
   {
-    title: "Register & End-of-Day Management",
+    title: "Register & End-of-Day",
     emoji: "🏧",
     features: [
       "Open a register session with an opening float amount and notes",
@@ -553,6 +554,185 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   },
 ];
 
+function toSectionId(title: string): string {
+  return "feature-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function scrollToSection(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const offset = 80;
+  const top = el.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top, behavior: "smooth" });
+}
+
+function FeatureNav({ sections, activeId }: { sections: FeatureSection[]; activeId: string }) {
+  const mobileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mobileRef.current) return;
+    const activeBtn = mobileRef.current.querySelector<HTMLElement>("[data-active='true']");
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }
+  }, [activeId]);
+
+  return (
+    <>
+      {/* Mobile: sticky horizontal scrollable tabs */}
+      <div className="lg:hidden sticky top-14 z-30 bg-background/95 backdrop-blur border-b border-border -mx-4 px-4 py-2">
+        <div ref={mobileRef} className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {sections.map((s) => {
+            const id = toSectionId(s.title);
+            const isActive = activeId === id;
+            return (
+              <button
+                key={id}
+                data-active={isActive ? "true" : "false"}
+                onClick={() => scrollToSection(id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                }`}
+              >
+                <span>{s.emoji}</span>
+                <span>{s.title}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Desktop: sticky sidebar */}
+      <nav className="hidden lg:block sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 px-2">
+          Jump to section
+        </p>
+        <ul className="space-y-0.5">
+          {sections.map((s) => {
+            const id = toSectionId(s.title);
+            const isActive = activeId === id;
+            return (
+              <li key={id}>
+                <button
+                  onClick={() => scrollToSection(id)}
+                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <span className="text-base leading-none">{s.emoji}</span>
+                  <span className="leading-snug">{s.title}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </>
+  );
+}
+
+function FeatureOutline({ sections }: { sections: FeatureSection[] }) {
+  const [activeId, setActiveId] = useState(() => toSectionId(sections[0]?.title ?? ""));
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    const ids = sections.map((s) => toSectionId(s.title));
+    const ratioMap = new Map<string, number>();
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          ratioMap.set(entry.target.id, entry.intersectionRatio);
+        }
+        let bestId = "";
+        let bestRatio = -1;
+        for (const [id, ratio] of ratioMap.entries()) {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestId = id;
+          }
+        }
+        if (bestId) setActiveId(bestId);
+      },
+      { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1], rootMargin: "-80px 0px -20% 0px" }
+    );
+
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) observerRef.current.observe(el);
+    }
+
+    return () => observerRef.current?.disconnect();
+  }, [sections]);
+
+  let visualIndex = 0;
+
+  return (
+    <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-10 lg:items-start">
+      <FeatureNav sections={sections} activeId={activeId} />
+
+      <div className="space-y-8 mt-4 lg:mt-0">
+        {sections.map((section) => {
+          const id = toSectionId(section.title);
+          if (section.visual) {
+            const flip = visualIndex % 2 !== 0;
+            visualIndex++;
+            return (
+              <div
+                id={id}
+                key={section.title}
+                className="bg-background rounded-2xl border border-border p-8 scroll-mt-24"
+              >
+                <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                  <span className="text-3xl">{section.emoji}</span>
+                  {section.title}
+                </h3>
+                <div
+                  className={`grid grid-cols-1 lg:grid-cols-2 gap-8 items-start ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}
+                >
+                  <div className="w-full">{section.visual}</div>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                    {section.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div
+              id={id}
+              key={section.title}
+              className="bg-background rounded-2xl border border-border p-8 scroll-mt-24"
+            >
+              <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                <span className="text-3xl">{section.emoji}</span>
+                {section.title}
+              </h3>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                {section.features.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   return (
     <MarketingLayout>
@@ -588,52 +768,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="space-y-12">
-            {(() => {
-              let visualIndex = 0;
-              return FEATURE_SECTIONS.map((section) => {
-                if (section.visual) {
-                  const flip = visualIndex % 2 !== 0;
-                  visualIndex++;
-                  return (
-                    <div key={section.title} className="bg-background rounded-2xl border border-border p-8">
-                      <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                        <span className="text-3xl">{section.emoji}</span>
-                        {section.title}
-                      </h3>
-                      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 items-start ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}>
-                        <div className="w-full">{section.visual}</div>
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                          {section.features.map((feature) => (
-                            <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                              <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
-                              {feature}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={section.title} className="bg-background rounded-2xl border border-border p-8">
-                    <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                      <span className="text-3xl">{section.emoji}</span>
-                      {section.title}
-                    </h3>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                      {section.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              });
-            })()}
-          </div>
+          <FeatureOutline sections={FEATURE_SECTIONS} />
 
           <div className="text-center mt-16">
             <p className="text-muted-foreground mb-6 text-lg">Ready to see it in action?</p>

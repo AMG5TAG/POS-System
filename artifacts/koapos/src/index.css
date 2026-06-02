@@ -248,3 +248,11 @@ html.dark.high-contrast {
 .animate-shake {
   animation: shake 0.45s ease-in-out;
 }
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
