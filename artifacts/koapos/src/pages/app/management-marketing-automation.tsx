@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -567,7 +568,7 @@ export default function ManagementMarketingAutomationPage() {
                 <p className="text-xs"><span className="font-medium">Subject:</span> {selectedTemplate.subject}</p>
                 <div
                   className="text-xs text-muted-foreground line-clamp-3 border-t pt-1.5 mt-1.5 prose prose-sm max-w-none [&>*]:text-xs [&>*]:text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: selectedTemplate.body }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTemplate.body) }}
                 />
               </div>
             )}

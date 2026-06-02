@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '/key:.*purchases|key:.*suppliers|key:.*categories|key:.*brands|key:.*tags|key:.*transactions/{found=1} found{print; if\\(/\\\\},/\\) {print \"---\"; found=0}}' /home/runner/workspace/artifacts/koapos/src/pages/app/management-import-export.tsx)",
+      "Bash(awk *)",
+      "Bash(xargs ls -la)",
+      "Bash(cat)",
+      "Bash(bash /tmp/audit_search.sh)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm tsc *)",
+      "Bash(printenv DATABASE_URL)",
+      "Bash(npx tsx *)",
+      "Bash(tsx scripts/enable-all-modules-lifetime.ts)",
+      "Bash(node_modules/.pnpm/node_modules/.bin/tsx scripts/enable-all-modules-lifetime.ts)",
+      "Bash(cp /home/runner/workspace/scripts/enable-all-modules-lifetime.ts /home/runner/workspace/artifacts/api-server/enable-all-modules-lifetime.ts)",
+      "Bash(node_modules/.bin/tsx enable-all-modules-lifetime.ts)",
+      "Bash(NODE_PATH=/home/runner/workspace/node_modules/.pnpm/pg@8.20.0/node_modules node *)"
+    ]
+  }
+}

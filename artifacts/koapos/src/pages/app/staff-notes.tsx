@@ -21,16 +21,15 @@ import {
   getListStaffNotesQueryKey,
   type StaffNoteItem, type StaffNoteInput,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/use-auth";
 import {
   Pin, Star, Trash2, Pencil, Plus, StickyNote,
   ShieldCheck, AlertCircle, Eye,
 } from "lucide-react";
 
-/* ─── Role simulation ────────────────────────────────────────────────────── */
+/* ─── Role ───────────────────────────────────────────────────────────────── */
 
 type StaffRole = "owner" | "manager" | "cashier" | "staff";
-
-function getSimRole(): StaffRole { return "manager"; }
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   owner:   "Owner",
@@ -223,6 +222,7 @@ function NoteDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffNotesPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: notesData, isLoading } = useListStaffNotes();
   const notes: StaffNoteItem[] = notesData?.items ?? [];
@@ -231,7 +231,7 @@ export default function StaffNotesPage() {
   const deleteMutation  = useDeleteStaffNote();
   const inv = () => queryClient.invalidateQueries({ queryKey: getListStaffNotesQueryKey() });
 
-  const [role, setRole]             = useState<StaffRole>(getSimRole);
+  const role: StaffRole = (user?.staffRole as StaffRole) ?? "staff";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing]       = useState<StaffNoteItem | null>(null);
   const [filterImportant, setFilterImportant] = useState(false);
@@ -306,21 +306,6 @@ export default function StaffNotesPage() {
             <p className="text-sm text-muted-foreground mt-1">Team notes, announcements and reminders.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Viewing as:</span>
-              <Select value={role} onValueChange={(v) => setRole(v as StaffRole)}>
-                <SelectTrigger className="h-6 text-xs border-0 p-0 shadow-none w-24 focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="owner">Owner</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="cashier">Cashier</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             {canManage && (
               <Button onClick={() => { setEditing(null); setDialogOpen(true); }} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="h-4 w-4 mr-1" />New Note

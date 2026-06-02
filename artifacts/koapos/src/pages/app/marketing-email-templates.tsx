@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -244,7 +245,7 @@ function TemplateEditorDialog({
                 </div>
                 <div className="bg-white dark:bg-background px-6 py-6 max-h-[350px] overflow-y-auto">
                   <div className="text-sm prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: previewBody }} />
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewBody) }} />
                 </div>
                 <div className="bg-muted/30 border-t px-6 py-2 text-center">
                   <p className="text-[10px] text-muted-foreground">© Your Business · <span className="underline">Unsubscribe</span></p>

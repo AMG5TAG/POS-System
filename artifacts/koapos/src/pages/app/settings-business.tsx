@@ -369,6 +369,7 @@ export default function SettingsBusinessPage() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setExtField("logo", reader.result as string);
+    reader.onerror = () => toast.error("Failed to read image file");
     reader.readAsDataURL(file);
   };
 

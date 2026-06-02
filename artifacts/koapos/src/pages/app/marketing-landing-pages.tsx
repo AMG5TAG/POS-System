@@ -276,6 +276,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => set(field, reader.result as string);
+        reader.onerror = () => toast.error("Failed to read image file");
         reader.readAsDataURL(file);
       };
     }

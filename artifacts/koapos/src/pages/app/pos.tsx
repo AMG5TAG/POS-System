@@ -1300,6 +1300,7 @@ export default function POSPage() {
             cartItems: cart.map(i => ({ productId: i.product.id, name: i.product.name })),
           }),
         });
+        if (!r.ok) { setUpsellSugs([]); setUpsellOpen(false); return; }
         const data = await r.json() as { suggestions: typeof upsellSugs };
         if (data.suggestions?.length) { setUpsellSugs(data.suggestions); setUpsellOpen(true); }
         else { setUpsellSugs([]); setUpsellOpen(false); }
@@ -1346,7 +1347,7 @@ export default function POSPage() {
     window.addEventListener("keydown", handler);
     return () => { window.removeEventListener("keydown", handler); if (timer) clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productsData?.items, paymentModalOpen, pinDialogOpen, quickAddOpen]);
+  }, [productsData?.items, paymentModalOpen, pinDialogOpen, quickAddOpen, discountApprovalOpen]);
 
   /* Click-outside closes customer dropdown */
   useEffect(() => {
@@ -1432,9 +1433,12 @@ export default function POSPage() {
   const fetchModifiersAndShow = async (product: Product) => {
     try {
       const r = await fetch(`/api/products/${product.id}/modifier-groups`, { credentials: "include" });
+      if (!r.ok) { addToCart(product); return; }
       const j = await r.json() as { groupIds: number[] };
       if (!j.groupIds?.length) { addToCart(product); return; }
-      const all = await fetch("/api/modifier-groups", { credentials: "include" }).then(r => r.json()) as { groups: ModifierGroup[] };
+      const allRes = await fetch("/api/modifier-groups", { credentials: "include" });
+      if (!allRes.ok) { addToCart(product); return; }
+      const all = await allRes.json() as { groups: ModifierGroup[] };
       const groups = all.groups.filter(g => j.groupIds.includes(g.id) && g.isActive === "true" && g.modifiers.length > 0);
       if (!groups.length) { addToCart(product); return; }
       const defaults: Record<number, number[]> = {};
@@ -1685,8 +1689,7 @@ export default function POSPage() {
 
       /* Invalidate AFTER state updates to avoid flicker */
       queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
-    } catch (err) {
-      console.error("retrieveParkedSale failed:", err);
+    } catch {
       toast.error("Failed to retrieve parked sale");
     }
   };
@@ -2207,7 +2210,6 @@ export default function POSPage() {
         setTimeout(() => setReceiptOpen(true), 250);
       },
       onError: (err: unknown) => {
-        console.error("createTransaction failed:", err);
         const isNetworkError = err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Failed to fetch") || !navigator.onLine);
         if (isNetworkError || !navigator.onLine) {
           queueSale("/api/transactions", JSON.stringify({

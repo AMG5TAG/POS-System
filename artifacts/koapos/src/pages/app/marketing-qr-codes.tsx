@@ -810,6 +810,7 @@ export default function MarketingQRCodesPage() {
       if (settings.level === "L" || settings.level === "M") set("level", "Q");
       toast.success("Logo uploaded");
     };
+    reader.onerror = () => toast.error("Failed to read image file");
     reader.readAsDataURL(file);
     e.target.value = "";
   }, [settings.level]);

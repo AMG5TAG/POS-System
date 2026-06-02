@@ -137,13 +137,12 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Gift Cards",          href: "/management/gift-cards",           icon: Gift          },
       { name: "Discounts & Pricing", href: "/management/discounts",            icon: Percent,
         matchPaths: ["/management/pricing-rules", "/management/layby"] },
-      { name: "Feedback",            href: "/management/feedback",             icon: MessageSquare },
     ],
   },
   {
     name: "Products & Inventory", icon: Boxes, defaultHref: "/management/inventory",
     children: [
-      { name: "Stock & Inventory",  href: "/management/inventory",               icon: Boxes          },
+      { name: "Inventory",  href: "/management/inventory",               icon: Boxes          },
       { name: "Product Types",      href: "/management/product-types",           icon: Tag            },
       { name: "Modifier Groups",    href: "/management/modifier-groups",         icon: Layers         },
       { name: "Sale Templates",     href: "/management/templates",               icon: LayoutTemplate },
@@ -188,6 +187,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Integrations",      href: "/management/integrations",   icon: Plug,
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
       { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
+      { name: "Feedback",          href: "/management/feedback",        icon: MessageSquare  },
       { name: "System",            href: "/management/koapos",         icon: Sparkles,
         matchPaths: ["/management/misc"] },
     ],

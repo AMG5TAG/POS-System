@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { Users, Radio, Gift, Percent, MessageSquare } from "lucide-react";
+import { Users, Radio, Gift, Percent } from "lucide-react";
 
 import SettingsCustomersPage from "@/pages/app/settings-customers";
 import ManagementCustomersHeardFromPage from "@/pages/app/management-customers-heard-from";
@@ -8,7 +8,6 @@ import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
 import ManagementLoyaltyLeaderboardPage from "@/pages/app/management-loyalty-leaderboard";
 import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
-import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import ManagementLaybyPage from "@/pages/app/management-layby";
 import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
 
@@ -24,7 +23,6 @@ const TABS: HubTab[] = [
     icon: Percent,
     matchPaths: ["/management/pricing-rules", "/management/layby"],
   },
-  { label: "Feedback",            href: "/management/feedback",             icon: MessageSquare },
 ];
 
 function HubContent() {
@@ -37,7 +35,6 @@ function HubContent() {
   if (location === "/management/discounts")             return <ManagementDiscountsPage />;
   if (location === "/management/pricing-rules")         return <SettingsPricingRulesPage />;
   if (location === "/management/layby")                 return <ManagementLaybyPage />;
-  if (location === "/management/feedback")              return <ManagementFeedbackPage />;
   return <SettingsCustomersPage />;
 }
 

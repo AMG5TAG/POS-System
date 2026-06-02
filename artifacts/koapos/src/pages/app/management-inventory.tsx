@@ -26,15 +26,15 @@ export default function ManagementInventoryPage() {
   const { data: settings, isLoading } = useGetInventorySettings();
   const update = useUpdateInventorySettings();
 
-  const [showHideCostsBtn, setShowHideCostsBtnState] = useState(false);
-  const [enableGroupPricing, setEnableGroupPricingState] = useState(false);
+  const [showHideCostsBtn, setShowHideCostsBtnState] = useState(true);
+  const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
   const [skuPrefix, setSkuPrefix] = useState("KP");
   const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
 
   useEffect(() => {
     if (settings) {
-      setShowHideCostsBtnState(settings.showCosts === "true");
-      setEnableGroupPricingState(settings.groupPricing === "true");
+      setShowHideCostsBtnState(settings.showCosts !== "false");
+      setEnableGroupPricingState(settings.groupPricing !== "false");
       setSkuPrefix(settings.skuPrefix || "KP");
       setSkuPreview(previewSKU(settings.skuPrefix || "KP"));
     }

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search, Upload, X, Check, Type } from "lucide-react";
+import { toast } from "sonner";
 
 /* ── Font catalogue ────────────────────────────────────────────────────── */
 
@@ -126,6 +127,7 @@ export function FontPicker({ value, onChange, className }: FontPickerProps) {
       return;
     }
     const reader = new FileReader();
+    reader.onerror = () => toast.error("Failed to read font file");
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       const fontName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

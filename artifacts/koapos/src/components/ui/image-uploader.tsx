@@ -54,7 +54,14 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
 
   const handleUrlConfirm = () => {
     const trimmed = urlInput.trim();
-    if (trimmed) { onChange(trimmed); setUrlMode(false); setUrlInput(""); }
+    if (!trimmed) return;
+    if (!trimmed.startsWith("https://") && !trimmed.startsWith("/")) {
+      toast.error("URL must start with https:// or be a relative path");
+      return;
+    }
+    onChange(trimmed);
+    setUrlMode(false);
+    setUrlInput("");
   };
 
   const aspectClass =

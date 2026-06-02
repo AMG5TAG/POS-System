@@ -194,6 +194,10 @@ function ManagementProtectedRoute({ component: Component }: { component: React.C
     return <Redirect to="/login" />;
   }
 
+  if (!["owner", "manager"].includes(user.staffRole ?? "")) {
+    return <Redirect to="/dashboard" />;
+  }
+
   return (
     <ManagementErrorBoundary key={path}>
       <Component />

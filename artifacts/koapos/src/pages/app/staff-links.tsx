@@ -24,14 +24,11 @@ import {
   useDeleteStaffLink,
   type StaffLink as ApiStaffLink,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/use-auth";
 
-/* ─── Role simulation ────────────────────────────────────────────────────── */
+/* ─── Role ───────────────────────────────────────────────────────────────── */
 
 type StaffRole = "owner" | "manager" | "cashier" | "staff";
-const SIM_ROLE_KEY = "koapos_sim_role";
-function getSimRole(): StaffRole {
-  return "manager";
-}
 
 function canManageLinks(role: StaffRole) {
   return role === "owner" || role === "manager";
@@ -104,13 +101,14 @@ function LinkDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffLinksPage() {
+  const { user } = useAuth();
   const { data: response, isLoading } = useListStaffLinks();
   const links = response?.items ?? [];
   const createLink = useCreateStaffLink();
   const updateLink = useUpdateStaffLink();
   const deleteLink = useDeleteStaffLink();
 
-  const [role, setRole] = useState<StaffRole>(getSimRole);
+  const role: StaffRole = (user?.staffRole as StaffRole) ?? "staff";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ApiStaffLink | null>(null);
 
@@ -149,21 +147,6 @@ export default function StaffLinksPage() {
             <p className="text-sm text-muted-foreground mt-1">Helpful links and resources for your team.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Viewing as:</span>
-              <Select value={role} onValueChange={(v) => { const r = v as StaffRole; setRole(r); }}>
-                <SelectTrigger className="h-6 text-xs border-0 p-0 shadow-none w-24 focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="owner">Owner</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="cashier">Cashier</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             {canManage && (
               <Button onClick={() => { setEditing(null); setDialogOpen(true); }} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Plus className="h-4 w-4 mr-1" />Add Link

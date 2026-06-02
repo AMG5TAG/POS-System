@@ -157,6 +157,7 @@ function PhotoSlot({ index, value, onChange, onSizeChange, icon, label, accept =
     reader.onload = (ev) => {
       onChange(ev.target?.result as string ?? "");
     };
+    reader.onerror = () => toast.error("Failed to read file");
     reader.readAsDataURL(file);
     e.target.value = "";
   };

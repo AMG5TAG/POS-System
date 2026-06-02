@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,7 +194,7 @@ function PreviewDialog({ open, onClose, subject, body, ctaEnabled, ctaLabel }: {
             <p className="font-semibold text-sm">{subject || "(no subject)"}</p>
           </div>
           <div className="bg-white dark:bg-background px-6 py-6 space-y-4 max-h-[400px] overflow-y-auto">
-            <div className="text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: preview }} />
+            <div className="text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview) }} />
             {ctaEnabled && ctaLabel && (
               <div className="text-center pt-2">
                 <span className="inline-block bg-primary text-primary-foreground text-sm font-semibold px-6 py-2.5 rounded-lg">{ctaLabel}</span>

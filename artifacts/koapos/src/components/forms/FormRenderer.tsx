@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ function SignatureCanvas({ value, onChange }: { value: string; onChange: (v: str
       };
       img.src = value;
     }
-  }, []);
+  }, [value]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
@@ -266,7 +267,7 @@ export function FormRenderer({
     const missing = required.filter(f => !values[f.id]);
     if (missing.length > 0) {
       const names = missing.map(f => f.label || f.type).join(", ");
-      alert(`Please fill in required fields: ${names}`);
+      toast.error(`Please fill in required fields: ${names}`);
       return;
     }
     onSubmit(values);

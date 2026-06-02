@@ -16,7 +16,6 @@ import {
   Mail, Activity, MapPin, Monitor, AlertCircle,
   RotateCcw, Receipt, Package, Percent, Package2, Calendar,
   ArrowUp, ArrowDown, Minus,
-  Boxes, UserSquare2, Settings, BarChart2, ChevronRight,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
@@ -40,46 +39,6 @@ const ACTIVITY_TABS: { id: ActivityPeriod; label: string; api: GetDashboardActiv
   { id: "week",  label: "Week",  api: "week"  },
   { id: "month", label: "Month", api: "month" },
   { id: "year",  label: "Year",  api: "year"  },
-];
-
-/* ─── Hub cards ───────────────────────────────────────────────────────────── */
-
-const HUBS = [
-  {
-    href: "/management/customers",
-    icon: Users,
-    title: "Customers",
-    description: "Customer settings, heard-from tracking, loyalty, gift cards, discounts, layby, and feedback.",
-    color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600",
-  },
-  {
-    href: "/management/inventory",
-    icon: Boxes,
-    title: "Products & Inventory",
-    description: "Inventory settings, product types, modifier groups, sale templates, labels, and calculators.",
-    color: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600",
-  },
-  {
-    href: "/management/staff",
-    icon: UserSquare2,
-    title: "Staff & Operations",
-    description: "Employees, timesheets, cost summary, POS registers, floor plan, and cameras.",
-    color: "bg-violet-100 dark:bg-violet-900/30 text-violet-600",
-  },
-  {
-    href: "/management/sales-overview",
-    icon: BarChart2,
-    title: "Marketing & Reports",
-    description: "Sales overview, reports, KPIs, referrals, social feed, online store, email, forms, and AI assistant.",
-    color: "bg-amber-100 dark:bg-amber-900/30 text-amber-600",
-  },
-  {
-    href: "/management/account",
-    icon: Settings,
-    title: "Settings & Integrations",
-    description: "Account & modules, business details, tax, integrations, import/export, and system settings.",
-    color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600",
-  },
 ];
 
 /* ─── KPI card ────────────────────────────────────────────────────────────── */
@@ -236,38 +195,6 @@ export default function ManagementOverviewPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
-
-        {/* ── Hub navigation cards ───────────────────────────────────────── */}
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">Management</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Select a section to manage your business</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {HUBS.map((hub) => {
-              const Icon = hub.icon;
-              return (
-                <button
-                  key={hub.href}
-                  onClick={() => navigate(hub.href)}
-                  className="rounded-2xl border bg-card text-left p-5 hover:shadow-md transition-all hover:border-primary/30 flex flex-col gap-3 w-full group"
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", hub.color)}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{hub.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{hub.description}</p>
-                  </div>
-                  <div className="flex items-center text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                    <span>Open</span>
-                    <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
 
         {/* ── Sales Overview ─────────────────────────────────────────────── */}
         <section className="space-y-4">

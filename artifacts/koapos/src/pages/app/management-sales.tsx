@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import {
   useListQrCodes,
@@ -27,6 +27,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
   TrendingUp, CreditCard, Package2, Monitor, DollarSign, Users,
@@ -35,7 +44,7 @@ import {
   ShoppingCart, AlertCircle, CheckCircle2, Package, UserSquare2,
   ArrowUpRight, ArrowDownRight, Percent, Hash, Mail, Clock, Plus,
   FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
-  MousePointerClick,
+  MousePointerClick, Trash2,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
@@ -1125,25 +1134,218 @@ function ReportBuilderTab() {
 
 /* ─── Tab: Scheduled ─────────────────────────────────────────────────────── */
 
+interface ScheduledReport {
+  id: string;
+  name: string;
+  reportType: string;
+  frequency: string;
+  format: string;
+  email: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+const SCHED_LS_KEY = "koapos_scheduled_reports";
+
+function loadSchedules(): ScheduledReport[] {
+  try { return JSON.parse(localStorage.getItem(SCHED_LS_KEY) ?? "[]") as ScheduledReport[]; }
+  catch { return []; }
+}
+
+const REPORT_TYPES = [
+  { value: "daily_sales",    label: "Daily Sales Summary" },
+  { value: "weekly_summary", label: "Weekly Business Summary" },
+  { value: "monthly_report", label: "Monthly Report" },
+  { value: "top_products",   label: "Top Products" },
+  { value: "staff_sales",    label: "Staff Sales Leaderboard" },
+];
+
+const FREQUENCIES = [
+  { value: "daily",   label: "Daily" },
+  { value: "weekly",  label: "Weekly (Monday)" },
+  { value: "monthly", label: "Monthly (1st)" },
+];
+
+const FORMATS = [
+  { value: "pdf", label: "PDF" },
+  { value: "csv", label: "CSV" },
+];
+
+function NewScheduleDialog({
+  open, onOpenChange, onSave,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (r: ScheduledReport) => void;
+}) {
+  const [name, setName]           = useState("");
+  const [reportType, setType]     = useState("daily_sales");
+  const [frequency, setFrequency] = useState("daily");
+  const [format, setFormat]       = useState("pdf");
+  const [email, setEmail]         = useState("");
+
+  const reset = () => { setName(""); setType("daily_sales"); setFrequency("daily"); setFormat("pdf"); setEmail(""); };
+
+  const handleSave = () => {
+    if (!name.trim()) { toast.error("Enter a report name"); return; }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Enter a valid email address"); return;
+    }
+    onSave({
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      reportType,
+      frequency,
+      format,
+      email: email.trim(),
+      enabled: true,
+      createdAt: new Date().toISOString(),
+    });
+    reset();
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>New Scheduled Report</DialogTitle>
+          <DialogDescription>Automatically email a report on a recurring schedule.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="space-y-1.5">
+            <Label>Report Name</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Daily Sales Email" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Report Type</Label>
+            <Select value={reportType} onValueChange={setType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REPORT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Frequency</Label>
+              <Select value={frequency} onValueChange={setFrequency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FREQUENCIES.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Format</Label>
+              <Select value={format} onValueChange={setFormat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FORMATS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Send To (Email)</Label>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="owner@example.com" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+          <Button onClick={handleSave}>Create Schedule</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ScheduledTab() {
+  const [schedules, setSchedules] = useState<ScheduledReport[]>(loadSchedules);
+  const [newOpen, setNewOpen] = useState(false);
+
+  const save = useCallback((updated: ScheduledReport[]) => {
+    setSchedules(updated);
+    localStorage.setItem(SCHED_LS_KEY, JSON.stringify(updated));
+  }, []);
+
+  const handleAdd = (r: ScheduledReport) => { save([...schedules, r]); toast.success("Schedule created"); };
+
+  const handleToggle = (id: string) =>
+    save(schedules.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
+
+  const handleDelete = (id: string) => { save(schedules.filter(s => s.id !== id)); toast.success("Schedule removed"); };
+
+  const FREQ_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">0 scheduled reports</p>
-        <Button size="sm" className="gap-1.5" disabled><Plus className="w-4 h-4" /> New Schedule</Button>
+        <p className="text-sm text-muted-foreground">
+          {schedules.length === 0 ? "No scheduled reports" : `${schedules.length} schedule${schedules.length !== 1 ? "s" : ""}`}
+        </p>
+        <Button size="sm" className="gap-1.5" onClick={() => setNewOpen(true)}>
+          <Plus className="w-4 h-4" /> New Schedule
+        </Button>
       </div>
-      <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-          <CalendarDays className="w-7 h-7 text-muted-foreground/50" />
+
+      {schedules.length === 0 ? (
+        <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+            <CalendarDays className="w-7 h-7 text-muted-foreground/50" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold">No scheduled reports</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+              Create a schedule to automatically email sales reports on a daily, weekly, or monthly basis.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setNewOpen(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Create your first schedule
+          </Button>
         </div>
-        <div className="text-center">
-          <p className="font-semibold">No scheduled reports</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            Scheduled report delivery is coming soon. You'll be able to automatically email daily, weekly, or monthly reports in PDF or CSV format.
-          </p>
+      ) : (
+        <div className="rounded-xl border overflow-hidden">
+          {schedules.map((s, i) => {
+            const typeLabel = REPORT_TYPES.find(t => t.value === s.reportType)?.label ?? s.reportType;
+            return (
+              <div key={s.id} className={cn("flex items-center gap-4 px-5 py-4", i > 0 && "border-t")}>
+                <div className="p-2 rounded-lg bg-muted shrink-0">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm">{s.name}</p>
+                    <Badge variant="outline" className="text-xs">{s.format.toUpperCase()}</Badge>
+                    <Badge variant="secondary" className="text-xs">{FREQ_LABEL[s.frequency]}</Badge>
+                    {!s.enabled && <Badge variant="outline" className="text-xs text-muted-foreground">Paused</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {typeLabel} · Sent to {s.email}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Switch
+                    checked={s.enabled}
+                    onCheckedChange={() => handleToggle(s.id)}
+                    title={s.enabled ? "Pause schedule" : "Resume schedule"}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(s.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-      </div>
+      )}
+
+      <NewScheduleDialog open={newOpen} onOpenChange={setNewOpen} onSave={handleAdd} />
     </div>
   );
 }

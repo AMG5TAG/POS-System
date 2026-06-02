@@ -64,7 +64,9 @@ function getStatus(s: string) {
 
 function formatDate(d: string) {
   if (!d) return "—";
-  const [y, m, day] = d.split("-");
+  const parts = d.split("-");
+  if (parts.length !== 3) return d;
+  const [y, m, day] = parts;
   return `${day}/${m}/${y}`;
 }
 
