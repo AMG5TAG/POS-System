@@ -1,17 +1,27 @@
 import { MarketingLayout } from "@/components/layout/marketing-layout";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import {
+  POSVisual,
+  DashboardVisual,
+  ProductsVisual,
+  CustomersVisual,
+  ServiceJobsVisual,
+  ReportsVisual,
+} from "@/components/marketing/feature-visuals";
 
 interface FeatureSection {
   title: string;
   emoji: string;
   features: string[];
+  visual?: React.ReactNode;
 }
 
 const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Point of Sale",
     emoji: "🖥️",
+    visual: <POSVisual />,
     features: [
       "Product browsing with category tabs and favourites grid",
       "Search by product name, SKU, or barcode",
@@ -112,6 +122,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Dashboard",
     emoji: "📊",
+    visual: <DashboardVisual />,
     features: [
       "Fully configurable dashboard layout",
       "Drag-and-drop widget reordering and resizing",
@@ -139,6 +150,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Products",
     emoji: "📦",
+    visual: <ProductsVisual />,
     features: [
       "Standard products with full attribute set",
       "Variant products (size, colour, or any custom option)",
@@ -203,6 +215,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Customers & CRM",
     emoji: "👥",
+    visual: <CustomersVisual />,
     features: [
       "Full customer profile: name, email, phone, address",
       "ABN field for business customers",
@@ -286,6 +299,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Service Jobs",
     emoji: "🔧",
+    visual: <ServiceJobsVisual />,
     features: [
       "Create service and repair tickets",
       "Ticket statuses: Pending, In Progress, Awaiting Customer, Awaiting Stock, Completed",
@@ -320,6 +334,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Reports",
     emoji: "📈",
+    visual: <ReportsVisual />,
     features: [
       "Z-Report: full POS close report for any session",
       "Daily reports hub with close-of-day summaries",
@@ -574,22 +589,50 @@ export default function LandingPage() {
           </div>
 
           <div className="space-y-12">
-            {FEATURE_SECTIONS.map((section) => (
-              <div key={section.title} className="bg-background rounded-2xl border border-border p-8">
-                <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                  <span className="text-3xl">{section.emoji}</span>
-                  {section.title}
-                </h3>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                  {section.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {(() => {
+              let visualIndex = 0;
+              return FEATURE_SECTIONS.map((section) => {
+                if (section.visual) {
+                  const flip = visualIndex % 2 !== 0;
+                  visualIndex++;
+                  return (
+                    <div key={section.title} className="bg-background rounded-2xl border border-border p-8">
+                      <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                        <span className="text-3xl">{section.emoji}</span>
+                        {section.title}
+                      </h3>
+                      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 items-start ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}>
+                        <div className="w-full">{section.visual}</div>
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                          {section.features.map((feature) => (
+                            <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                              <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
+                              {feature}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={section.title} className="bg-background rounded-2xl border border-border p-8">
+                    <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                      <span className="text-3xl">{section.emoji}</span>
+                      {section.title}
+                    </h3>
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                      {section.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           <div className="text-center mt-16">
