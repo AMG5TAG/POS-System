@@ -5,8 +5,9 @@ import type { Logger } from "pino";
 
 /**
  * Delete password_reset_tokens rows that expired more than 7 days ago.
- * This covers both used and unused tokens — once they are well past their
- * expiry window there is no reason to keep them.
+ * Used tokens are deleted immediately on use (in the reset-password handler),
+ * so this job is primarily a safety net for unused tokens that were never
+ * redeemed and have long since expired.
  */
 async function cleanupPasswordResetTokens(logger: Logger): Promise<void> {
   const result = await db

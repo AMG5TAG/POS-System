@@ -813,7 +813,7 @@ router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Prom
 
   const passwordHash = await hashPassword(newPassword);
 
-  // Update password, clear account lock, mark token as used — all atomically
+  // Update password, clear account lock, delete the used token — all atomically
   await db.transaction(async (tx) => {
     await tx
       .update(merchantsTable)
@@ -821,8 +821,7 @@ router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Prom
       .where(eq(merchantsTable.id, record.merchantId));
 
     await tx
-      .update(passwordResetTokensTable)
-      .set({ usedAt: new Date() })
+      .delete(passwordResetTokensTable)
       .where(eq(passwordResetTokensTable.id, record.id));
   });
 
