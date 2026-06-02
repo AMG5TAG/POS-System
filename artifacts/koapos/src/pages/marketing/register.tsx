@@ -76,7 +76,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 py-12 px-4">
       <Card className="w-full max-w-2xl">
         <CardHeader className="space-y-1 text-center">
-          <img src="/logo.png" alt="KoaPOS" className="mx-auto w-16 h-16 object-contain mb-2" />
+          <img src="/logo.png" alt="KoaPOS" className="mx-auto w-24 h-24 object-contain mb-3 rounded-full ring-2 ring-primary/20" />
           <CardTitle className="text-2xl font-bold tracking-tight">Create an account</CardTitle>
           <CardDescription>Enter your details to start using KoaPOS</CardDescription>
         </CardHeader>
