@@ -15,18 +15,28 @@ const FAILED_LOGIN_NOTIFY_COOLDOWN_MS = parseInt(
   10
 );
 
-// Per-merchant timestamp of the last failed-login notification sent.
-// Prevents inbox flooding when an attacker hammers the login endpoint.
-const failedLoginNotifyLastSent = new Map<number, number>();
-
-function shouldSendFailedLoginNotify(merchantId: number): boolean {
-  const last = failedLoginNotifyLastSent.get(merchantId);
-  if (last === undefined) return true;
-  return Date.now() - last >= FAILED_LOGIN_NOTIFY_COOLDOWN_MS;
-}
-
-function recordFailedLoginNotifySent(merchantId: number): void {
-  failedLoginNotifyLastSent.set(merchantId, Date.now());
+/**
+ * Atomically claims the failed-login notification slot for a merchant.
+ * Performs a single conditional UPDATE that only succeeds when no email has
+ * been sent within the cooldown window (loginNotifyFailedLastSentAt IS NULL
+ * or older than FAILED_LOGIN_NOTIFY_COOLDOWN_MS).  Returns true if the slot
+ * was claimed (i.e. an email should be sent), false if still within cooldown.
+ * Because this is a single statement, concurrent requests cannot both claim
+ * the slot — only one UPDATE wins and gets rows back.
+ */
+async function claimFailedLoginNotifySlot(merchantId: number): Promise<boolean> {
+  const cooldownInterval = sql`make_interval(secs => ${FAILED_LOGIN_NOTIFY_COOLDOWN_MS / 1000})`;
+  const result = await db
+    .update(merchantsTable)
+    .set({ loginNotifyFailedLastSentAt: new Date() })
+    .where(
+      and(
+        eq(merchantsTable.id, merchantId),
+        sql`(${merchantsTable.loginNotifyFailedLastSentAt} IS NULL OR ${merchantsTable.loginNotifyFailedLastSentAt} <= now() - ${cooldownInterval})`
+      )
+    )
+    .returning({ id: merchantsTable.id });
+  return result.length > 0;
 }
 
 function parseUserAgent(ua: string): string {
@@ -172,8 +182,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     await db.insert(authEventsTable).values({ merchantId: lockedMerchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "locked" });
     // Fire-and-forget failed-login notification for "tried while locked" events
     // Guarded by a per-merchant cooldown to prevent inbox flooding.
-    if (lockedMerchant?.loginNotifyEmailFailed === "true" && shouldSendFailedLoginNotify(lockedMerchant.id)) {
-      recordFailedLoginNotifySent(lockedMerchant.id);
+    if (lockedMerchant?.loginNotifyEmailFailed === "true" && await claimFailedLoginNotifySlot(lockedMerchant.id)) {
       const failTime = new Date().toLocaleString("en-AU", {
         timeZone: lockedMerchant.timezone ?? "Australia/Sydney",
         dateStyle: "full",
@@ -234,8 +243,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     await db.insert(authEventsTable).values({ merchantId: merchant.id, ipAddress: ip, userAgent: ua, outcome: "bad_password" });
     // Fire-and-forget failed-login notification email if opted in.
     // Guarded by a per-merchant cooldown to prevent inbox flooding.
-    if (merchant.loginNotifyEmailFailed === "true" && shouldSendFailedLoginNotify(merchant.id)) {
-      recordFailedLoginNotifySent(merchant.id);
+    if (merchant.loginNotifyEmailFailed === "true" && await claimFailedLoginNotifySlot(merchant.id)) {
       const failTime = new Date().toLocaleString("en-AU", {
         timeZone: merchant.timezone ?? "Australia/Sydney",
         dateStyle: "full",
