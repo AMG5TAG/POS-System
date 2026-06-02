@@ -55,7 +55,6 @@ export {
 const REGISTER_TABS = [
   { href: "#registers",    label: "Registers",    icon: Monitor    },
   { href: "#pos-settings", label: "POS Settings", icon: CreditCard },
-  { href: "#hardware",     label: "Hardware",     icon: HardDrive  },
   { href: "#shortcuts",    label: "Shortcuts",    icon: Keyboard   },
 ];
 void REGISTER_TABS; // referenced in UI anchor links
@@ -946,16 +945,16 @@ export default function ManagementRegistersPage() {
               </div>
             )}
             <PaymentMethodsSection />
-          </div>
-
-          <div id="pos-settings" className="space-y-3">
-            <GridLayoutSection />
             <div className="rounded-xl border divide-y">
               <ForceStaffLoginToggle />
               <StaffLoginMessageToggle />
             </div>
-            <RoleDiscountLimitsSection />
             <div id="hardware"><HardwareSection /></div>
+          </div>
+
+          <div id="pos-settings" className="space-y-3">
+            <GridLayoutSection />
+            <RoleDiscountLimitsSection />
           </div>
         </div>
 
