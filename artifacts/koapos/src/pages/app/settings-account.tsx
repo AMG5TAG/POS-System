@@ -198,8 +198,10 @@ function LoginNotifyCard() {
   const enabledFailed = (merchant as { loginNotifyEmailFailed?: boolean } | undefined)?.loginNotifyEmailFailed ?? false;
   const enabledNewLocation = (merchant as { loginNotifyEmailNewLocation?: boolean } | undefined)?.loginNotifyEmailNewLocation ?? true;
   const enabledSecurity = (merchant as { securityAlertEmail?: boolean } | undefined)?.securityAlertEmail ?? true;
+  const enabledPasswordChange = (merchant as { passwordChangeAlertEmail?: boolean } | undefined)?.passwordChangeAlertEmail ?? true;
   const [savingNewLocation, setSavingNewLocation] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
+  const [savingPasswordChange, setSavingPasswordChange] = useState(false);
 
   const handleToggleSuccess = (checked: boolean) => {
     setSavingSuccess(true);
@@ -269,6 +271,23 @@ function LoginNotifyCard() {
     );
   };
 
+  const handleTogglePasswordChange = (checked: boolean) => {
+    setSavingPasswordChange(true);
+    updateMerchant.mutate(
+      { data: { passwordChangeAlertEmail: checked } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["merchant"] });
+          toast.success(checked ? "Password change alerts enabled" : "Password change alerts disabled");
+        },
+        onError: () => {
+          toast.error("Failed to update notification setting");
+        },
+        onSettled: () => setSavingPasswordChange(false),
+      }
+    );
+  };
+
   return (
     <Card id="login-notifications">
       <CardHeader>
@@ -334,6 +353,20 @@ function LoginNotifyCard() {
             onCheckedChange={handleToggleSecurity}
             disabled={savingSecurity}
             aria-label="Toggle security alert emails"
+          />
+        </div>
+        <div className="border-t pt-4 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Email me when my password changes</p>
+            <p className="text-xs text-muted-foreground">
+              Get an immediate alert whenever your account password is changed. Strongly recommended — this is one of the fastest ways to detect account takeover.
+            </p>
+          </div>
+          <Switch
+            checked={enabledPasswordChange}
+            onCheckedChange={handleTogglePasswordChange}
+            disabled={savingPasswordChange}
+            aria-label="Toggle password change email alerts"
           />
         </div>
       </CardContent>

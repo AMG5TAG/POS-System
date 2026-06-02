@@ -125,6 +125,7 @@ export interface Merchant {
   loginNotifyEmailFailed?: boolean;
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
+  passwordChangeAlertEmail?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
 }
@@ -149,6 +150,7 @@ export interface MerchantUpdate {
   loginNotifyEmailFailed?: boolean;
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
+  passwordChangeAlertEmail?: boolean;
 }
 
 export interface Plan {

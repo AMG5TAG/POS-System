@@ -854,6 +854,28 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
   }
   const passwordHash = await hashPassword(newPassword);
   await db.update(merchantsTable).set({ passwordHash }).where(eq(merchantsTable.id, merchantId));
+
+  if (merchant.passwordChangeAlertEmail === "true") {
+    const changeTime = new Date().toLocaleString("en-AU", { timeZone: merchant.timezone ?? "Australia/Sydney", hour12: true });
+    void sendEmail(merchant.id, {
+      to: merchant.email,
+      subject: "Your KoaPOS password was changed",
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+          <h2 style="margin-top:0">Password changed</h2>
+          <p>The password for your KoaPOS account (<strong>${merchant.email}</strong>) was just changed.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0">
+            <tr><td style="padding:6px 12px;font-weight:600;width:120px">Time</td><td style="padding:6px 12px">${changeTime}</td></tr>
+          </table>
+          <p><strong>If this was you</strong> — no action is needed.</p>
+          <p><strong>If this wasn't you</strong> — someone may have access to your account. Use "Forgot password" on the login page to regain control immediately and review your recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.</p>
+          <p style="color:#666;font-size:13px">You can turn off these alerts in <strong>Account Settings → Login Email Notifications</strong>.</p>
+        </div>
+      `,
+      text: `Your KoaPOS password was changed\n\nThe password for ${merchant.email} was just changed.\n\nTime: ${changeTime}\n\nIf this was you, no action is needed.\n\nIf this wasn't you, use "Forgot password" on the login page to regain control immediately and review recent sign-ins in Account → Recent Sign-ins.`,
+    });
+  }
+
   res.json({ ok: true });
 });
 

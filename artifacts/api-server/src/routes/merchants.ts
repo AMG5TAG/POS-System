@@ -26,6 +26,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     loginNotifyEmailFailed: m.loginNotifyEmailFailed === "true" ? true : false,
     loginNotifyEmailNewLocation: m.loginNotifyEmailNewLocation === "true" ? true : false,
     securityAlertEmail: m.securityAlertEmail === "true" ? true : false,
+    passwordChangeAlertEmail: m.passwordChangeAlertEmail === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
   };
 }
@@ -51,7 +52,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean };
+  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean };
 
   // Validate username format if provided
   if (username !== undefined) {
@@ -79,6 +80,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ...(loginNotifyEmailFailed !== undefined && { loginNotifyEmailFailed: loginNotifyEmailFailed ? "true" : "false" }),
     ...(loginNotifyEmailNewLocation !== undefined && { loginNotifyEmailNewLocation: loginNotifyEmailNewLocation ? "true" : "false" }),
     ...(securityAlertEmail !== undefined && { securityAlertEmail: securityAlertEmail ? "true" : "false" }),
+    ...(passwordChangeAlertEmail !== undefined && { passwordChangeAlertEmail: passwordChangeAlertEmail ? "true" : "false" }),
   };
 
   const [merchant] = await db

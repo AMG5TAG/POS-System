@@ -7320,6 +7320,8 @@ components:
           type: boolean
         securityAlertEmail:
           type: boolean
+        passwordChangeAlertEmail:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -7360,6 +7362,8 @@ components:
         loginNotifyEmailNewLocation:
           type: boolean
         securityAlertEmail:
+          type: boolean
+        passwordChangeAlertEmail:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────

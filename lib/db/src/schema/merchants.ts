@@ -21,6 +21,7 @@ export const merchantsTable = pgTable("merchants", {
   loginNotifyEmailNewLocation: text("login_notify_email_new_location").notNull().default("true"),
   loginNotifyFailedLastSentAt: timestamp("login_notify_failed_last_sent_at", { withTimezone: true }),
   securityAlertEmail: text("security_alert_email").notNull().default("true"),
+  passwordChangeAlertEmail: text("password_change_alert_email").notNull().default("true"),
   lastAuthEventsViewedAt: timestamp("last_auth_events_viewed_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

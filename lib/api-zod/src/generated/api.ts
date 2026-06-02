@@ -36,6 +36,7 @@ export const GetMeResponse = zod.object({
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
+  "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -84,6 +85,7 @@ export const LoginResponse = zod.object({
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
+  "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -172,6 +174,7 @@ export const GetMerchantResponse = zod.object({
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
+  "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
@@ -201,7 +204,8 @@ export const UpdateMerchantBody = zod.object({
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
-  "securityAlertEmail": zod.boolean().optional()
+  "securityAlertEmail": zod.boolean().optional(),
+  "passwordChangeAlertEmail": zod.boolean().optional()
 })
 
 export const UpdateMerchantResponse = zod.object({
@@ -221,6 +225,7 @@ export const UpdateMerchantResponse = zod.object({
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
+  "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
 })
