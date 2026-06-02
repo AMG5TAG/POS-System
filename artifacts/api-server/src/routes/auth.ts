@@ -154,7 +154,8 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  const { email, password, businessName, ownerName, phone, planId } = parsed.data;
+  const { email: rawEmail, password, businessName, ownerName, phone, planId } = parsed.data;
+  const email = rawEmail.trim().toLowerCase();
 
   const [existing] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
   if (existing) {
@@ -200,7 +201,8 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  const { email, password } = parsed.data;
+  const { email: rawEmail, password } = parsed.data;
+  const email = rawEmail.trim().toLowerCase();
 
   const ip = req.ip ?? undefined;
   const ua = req.headers["user-agent"] ?? undefined;
@@ -263,9 +265,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
 
-  if (!merchant) {
+  if (!merchant || merchant.status !== "active") {
     const { attemptsRemaining } = await recordFailedAttempt(email);
-    await db.insert(authEventsTable).values({ merchantId: null, ipAddress: ip, userAgent: ua, outcome: "not_found" });
+    await db.insert(authEventsTable).values({ merchantId: merchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "not_found" });
     res.status(401).json({ error: "Invalid email or password", attemptsRemaining });
     return;
   }
@@ -857,7 +859,7 @@ router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Prom
   await db.transaction(async (tx) => {
     await tx
       .update(merchantsTable)
-      .set({ passwordHash })
+      .set({ passwordHash, updatedAt: new Date() })
       .where(eq(merchantsTable.id, record.merchantId));
 
     await tx
@@ -885,7 +887,7 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
     return;
   }
   const passwordHash = await hashPassword(newPassword);
-  await db.update(merchantsTable).set({ passwordHash }).where(eq(merchantsTable.id, merchantId));
+  await db.update(merchantsTable).set({ passwordHash, updatedAt: new Date() }).where(eq(merchantsTable.id, merchantId));
 
   if (merchant.passwordChangeAlertEmail === "true") {
     const changeTime = new Date().toLocaleString("en-AU", { timeZone: merchant.timezone ?? "Australia/Sydney", hour12: true });
