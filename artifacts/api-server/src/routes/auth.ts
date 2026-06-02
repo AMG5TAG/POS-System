@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes, createHash } from "crypto";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable } from "@workspace/db";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
@@ -63,6 +63,22 @@ async function seedProductTypes(merchantId: number): Promise<void> {
       sortOrder: t.sortOrder,
     }))
   );
+}
+
+async function seedDefaultRegister(merchantId: number): Promise<void> {
+  const existing = await db
+    .select({ id: posRegistersTable.id })
+    .from(posRegistersTable)
+    .where(eq(posRegistersTable.merchantId, merchantId))
+    .limit(1);
+  if (existing.length === 0) {
+    await db.insert(posRegistersTable).values({
+      merchantId,
+      registerId: "MAIN",
+      name: "Main Register",
+      type: "Cash",
+    });
+  }
 }
 
 const router: IRouter = Router();
@@ -152,6 +168,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   }
 
   await seedProductTypes(merchant.id);
+  await seedDefaultRegister(merchant.id);
 
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));

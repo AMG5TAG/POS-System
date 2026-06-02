@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "seed-calendar": "tsx ./src/seed-calendar.ts",
     "seed-product-types": "tsx ./src/seed-product-types.ts",
+    "seed-default-register": "tsx ./src/seed-default-register.ts",
     "setup-login-cleanup": "tsx ./src/setup-login-cleanup.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
