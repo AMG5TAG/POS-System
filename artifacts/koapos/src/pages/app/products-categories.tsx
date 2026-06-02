@@ -277,7 +277,13 @@ export default function ProductsCategoriesPage() {
 
   const openCreate = (parentId?: number) => {
     setEditingCat(null);
-    setForm({ ...EMPTY_FORM, parentId: parentId?.toString() ?? "" });
+    const parent = parentId ? cats.find((c) => c.id === parentId) : null;
+    setForm({
+      name: "",
+      color: parent?.color ?? COLORS[0],
+      icon: parent?.icon ?? "Tag",
+      parentId: parentId?.toString() ?? "",
+    });
     setDialogOpen(true);
   };
 
