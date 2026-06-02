@@ -181,15 +181,23 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
     .offset(offset)
     .orderBy(productsTable.name);
 
-  const [categories, productTypes] = await Promise.all([
+  const [categories, productTypes, digitalCodeCounts] = await Promise.all([
     db.select().from(categoriesTable).where(eq(categoriesTable.merchantId, req.session.merchantId!)),
     db.select().from(productTypesTable).where(eq(productTypesTable.merchantId, req.session.merchantId!)),
+    db.select({ productId: digitalCodesTable.productId, count: sql<number>`count(*)::int` })
+      .from(digitalCodesTable)
+      .where(and(eq(digitalCodesTable.merchantId, req.session.merchantId!), eq(digitalCodesTable.isUsed, "false")))
+      .groupBy(digitalCodesTable.productId),
   ]);
   const catMap = new Map(categories.map((c) => [c.id, c]));
   const ptMap = new Map(productTypes.map((t) => [t.id, t]));
+  const digitalCodeMap = new Map(digitalCodeCounts.map((r) => [r.productId, r.count]));
 
   res.json({
-    items: products.map((p) => formatProduct(p, p.categoryId ? catMap.get(p.categoryId) : null, p.productTypeId ? ptMap.get(p.productTypeId) : null)),
+    items: products.map((p) => {
+      const f = formatProduct(p, p.categoryId ? catMap.get(p.categoryId) : null, p.productTypeId ? ptMap.get(p.productTypeId) : null);
+      return { ...f, digitalCodesCount: digitalCodeMap.get(p.id) ?? 0 };
+    }),
     total: Number(countResult.count),
   });
 });
@@ -481,11 +489,14 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
     .from(productsTable)
     .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
-  const [category, ptRecord] = await Promise.all([
+  const [category, ptRecord, digitalCodeCount] = await Promise.all([
     product.categoryId ? db.select().from(categoriesTable).where(eq(categoriesTable.id, product.categoryId)).then(([c]) => c ?? null) : Promise.resolve(null),
     product.productTypeId ? db.select().from(productTypesTable).where(eq(productTypesTable.id, product.productTypeId)).then(([t]) => t ?? null) : Promise.resolve(null),
+    db.select({ count: sql<number>`count(*)::int` }).from(digitalCodesTable).where(
+      and(eq(digitalCodesTable.productId, product.id), eq(digitalCodesTable.merchantId, req.session.merchantId!), eq(digitalCodesTable.isUsed, "false"))
+    ).then(([r]) => r?.count ?? 0),
   ]);
-  res.json(formatProduct(product, category, ptRecord));
+  res.json({ ...formatProduct(product, category, ptRecord), digitalCodesCount: digitalCodeCount });
 });
 
 // ── Bulk update ────────────────────────────────────────────────────────────────

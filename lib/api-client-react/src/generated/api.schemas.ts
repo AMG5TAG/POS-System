@@ -338,6 +338,11 @@ export interface ProductType {
   trackStock: boolean;
   printCode: boolean;
   isActive: boolean;
+  requiresShipping: boolean;
+  hasVariants: boolean;
+  isDigital: boolean;
+  isService: boolean;
+  isComposite: boolean;
   sortOrder: number;
   createdAt: string;
 }
@@ -350,6 +355,11 @@ export interface ProductTypeInput {
   trackStock?: boolean;
   printCode?: boolean;
   isActive?: boolean;
+  requiresShipping?: boolean;
+  hasVariants?: boolean;
+  isDigital?: boolean;
+  isService?: boolean;
+  isComposite?: boolean;
   sortOrder?: number;
 }
 
@@ -425,6 +435,8 @@ export interface Product {
   stockLocation?: string | null;
   /** @nullable */
   overflowLocation?: string | null;
+  /** @nullable */
+  digitalCodesCount?: number | null;
   createdAt: string;
 }
 
@@ -717,6 +729,8 @@ export interface TransactionItem {
   giftCardIssue?: boolean;
   /** Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item. */
   giftCardNumber?: string;
+  /** Digital codes assigned to this line item during checkout. Populated in the response for products of type "digital_code" with unassigned codes available in inventory. One code per unit sold. */
+  digitalCodes?: string[];
 }
 
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];

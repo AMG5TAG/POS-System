@@ -41,6 +41,11 @@ type FormState = {
   trackStock: boolean;
   printCode: boolean;
   isActive: boolean;
+  requiresShipping: boolean;
+  hasVariants: boolean;
+  isDigital: boolean;
+  isService: boolean;
+  isComposite: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -50,6 +55,11 @@ const EMPTY_FORM: FormState = {
   trackStock: true,
   printCode: false,
   isActive: true,
+  requiresShipping: true,
+  hasVariants: false,
+  isDigital: false,
+  isService: false,
+  isComposite: false,
 };
 
 /* ─── Slug helper ─────────────────────────────────────────────────────────── */
@@ -132,7 +142,7 @@ function ProductTypeRow({
           {type.description && (
             <span className="text-xs text-muted-foreground truncate max-w-xs">{type.description}</span>
           )}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {type.trackStock && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Package className="w-3 h-3" /> Track Stock
@@ -141,6 +151,31 @@ function ProductTypeRow({
             {type.printCode && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Barcode className="w-3 h-3" /> Print Code
+              </span>
+            )}
+            {type.isDigital && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-blue-400/20" /> Digital
+              </span>
+            )}
+            {type.isService && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-purple-400/20" /> Service
+              </span>
+            )}
+            {type.isComposite && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-amber-400/20" /> Composite
+              </span>
+            )}
+            {type.hasVariants && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-emerald-400/20" /> Variants
+              </span>
+            )}
+            {type.requiresShipping && !type.isDigital && !type.isService && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-orange-400/20" /> Ships
               </span>
             )}
           </div>
@@ -272,6 +307,11 @@ export default function SettingsProductTypesPage() {
       trackStock: type.trackStock,
       printCode: type.printCode,
       isActive: type.isActive,
+      requiresShipping: type.requiresShipping,
+      hasVariants: type.hasVariants,
+      isDigital: type.isDigital,
+      isService: type.isService,
+      isComposite: type.isComposite,
     };
     setEditingType(type);
     setForm(f);
@@ -305,6 +345,11 @@ export default function SettingsProductTypesPage() {
       trackStock: form.trackStock,
       printCode: form.printCode,
       isActive: form.isActive,
+      requiresShipping: form.requiresShipping,
+      hasVariants: form.hasVariants,
+      isDigital: form.isDigital,
+      isService: form.isService,
+      isComposite: form.isComposite,
     };
 
     if (editingType) {
@@ -521,6 +566,60 @@ export default function SettingsProductTypesPage() {
                 <Switch
                   checked={form.isActive}
                   onCheckedChange={(v) => { setForm((f) => ({ ...f, isActive: v })); }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1 border-t mt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Semantics</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Requires Shipping</p>
+                  <p className="text-xs text-muted-foreground">Physical dispatch / courier</p>
+                </div>
+                <Switch
+                  checked={form.requiresShipping}
+                  onCheckedChange={(v) => { setForm((f) => ({ ...f, requiresShipping: v })); }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Has Variants</p>
+                  <p className="text-xs text-muted-foreground">Sizes, colours, attributes</p>
+                </div>
+                <Switch
+                  checked={form.hasVariants}
+                  onCheckedChange={(v) => { setForm((f) => ({ ...f, hasVariants: v })); }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Is Digital</p>
+                  <p className="text-xs text-muted-foreground">Download / code delivery, no shipping</p>
+                </div>
+                <Switch
+                  checked={form.isDigital}
+                  onCheckedChange={(v) => { setForm((f) => ({ ...f, isDigital: v })); }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Is Service</p>
+                  <p className="text-xs text-muted-foreground">Time-based or labour-based</p>
+                </div>
+                <Switch
+                  checked={form.isService}
+                  onCheckedChange={(v) => { setForm((f) => ({ ...f, isService: v })); }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Is Composite</p>
+                  <p className="text-xs text-muted-foreground">Bundle or kit made from items</p>
+                </div>
+                <Switch
+                  checked={form.isComposite}
+                  onCheckedChange={(v) => { setForm((f) => ({ ...f, isComposite: v })); }}
                 />
               </div>
             </div>

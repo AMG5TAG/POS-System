@@ -7709,7 +7709,7 @@ components:
     # ── Product Types ─────────────────────────────────────────────────────────
     ProductType:
       type: object
-      required: [id, merchantId, name, slug, description, trackStock, printCode, isActive, sortOrder, createdAt]
+      required: [id, merchantId, name, slug, description, trackStock, printCode, isActive, requiresShipping, hasVariants, isDigital, isService, isComposite, sortOrder, createdAt]
       properties:
         id:
           type: integer
@@ -7726,6 +7726,16 @@ components:
         printCode:
           type: boolean
         isActive:
+          type: boolean
+        requiresShipping:
+          type: boolean
+        hasVariants:
+          type: boolean
+        isDigital:
+          type: boolean
+        isService:
+          type: boolean
+        isComposite:
           type: boolean
         sortOrder:
           type: integer
@@ -7749,6 +7759,16 @@ components:
         printCode:
           type: boolean
         isActive:
+          type: boolean
+        requiresShipping:
+          type: boolean
+        hasVariants:
+          type: boolean
+        isDigital:
+          type: boolean
+        isService:
+          type: boolean
+        isComposite:
           type: boolean
         sortOrder:
           type: integer
@@ -7840,6 +7860,8 @@ components:
           type: ["string", "null"]
         overflowLocation:
           type: ["string", "null"]
+        digitalCodesCount:
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -8335,6 +8357,14 @@ components:
             Card number for the issued gift card. The client may provide a
             pre-generated code; if omitted or blank, the server generates one.
             Populated in the response for every giftCardIssue item.
+        digitalCodes:
+          type: array
+          items:
+            type: string
+          description: >-
+            Digital codes assigned to this line item during checkout. Populated
+            in the response for products of type "digital_code" with unassigned
+            codes available in inventory. One code per unit sold.
 
     Transaction:
       type: object

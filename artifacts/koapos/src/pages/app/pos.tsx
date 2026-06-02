@@ -1875,7 +1875,22 @@ export default function POSPage() {
           <p class="gray small" style="margin-top:2px">Keep this receipt to retrieve your card number.</p>
         </div>`
       : "";
-    const extras = `${gcPrintHtml}${loyaltyHtml}${customMsgHtml}${qrHtml}`;
+    const dcPrintHtml = completedTx?.items?.some((i) => (i as { digitalCodes?: string[] }).digitalCodes?.length)
+      ? `<div class="bdr-t pt mt">
+          <p class="small bold upper mb" style="color:#2563eb">Digital Code${completedTx!.items!.filter((i) => (i as { digitalCodes?: string[] }).digitalCodes?.length).length > 1 ? "s" : ""}</p>
+          ${completedTx!.items!.flatMap((i) => {
+            const codes = (i as { digitalCodes?: string[] }).digitalCodes ?? [];
+            return codes.map((c: string) =>
+              `<div class="row" style="margin-bottom:4px">
+                <span class="mono bold" style="letter-spacing:2px;font-size:11px">${esc(c)}</span>
+                <span class="gray small">${esc(i.productName ?? "Item")}</span>
+              </div>`
+            );
+          }).join("")}
+          <p class="gray small" style="margin-top:2px">Keep this receipt for your code(s).</p>
+        </div>`
+      : "";
+    const extras = `${gcPrintHtml}${dcPrintHtml}${loyaltyHtml}${customMsgHtml}${qrHtml}`;
     body = body.includes("<!--EXTRAS-->")
       ? body.replace("<!--EXTRAS-->", extras)
       : `${body}${extras}`;

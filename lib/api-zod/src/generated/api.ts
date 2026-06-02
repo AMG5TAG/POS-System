@@ -412,6 +412,7 @@ export const ListProductsResponse = zod.object({
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -540,6 +541,7 @@ export const GetProductResponse = zod.object({
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -623,6 +625,7 @@ export const UpdateProductResponse = zod.object({
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -648,6 +651,11 @@ export const ListProductTypesResponse = zod.object({
   "trackStock": zod.boolean(),
   "printCode": zod.boolean(),
   "isActive": zod.boolean(),
+  "requiresShipping": zod.boolean(),
+  "hasVariants": zod.boolean(),
+  "isDigital": zod.boolean(),
+  "isService": zod.boolean(),
+  "isComposite": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date()
 })),
@@ -668,6 +676,11 @@ export const CreateProductTypeBody = zod.object({
   "trackStock": zod.boolean().optional(),
   "printCode": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
+  "requiresShipping": zod.boolean().optional(),
+  "hasVariants": zod.boolean().optional(),
+  "isDigital": zod.boolean().optional(),
+  "isService": zod.boolean().optional(),
+  "isComposite": zod.boolean().optional(),
   "sortOrder": zod.number().optional()
 })
 
@@ -697,6 +710,11 @@ export const UpdateProductTypeBody = zod.object({
   "trackStock": zod.boolean().optional(),
   "printCode": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
+  "requiresShipping": zod.boolean().optional(),
+  "hasVariants": zod.boolean().optional(),
+  "isDigital": zod.boolean().optional(),
+  "isService": zod.boolean().optional(),
+  "isComposite": zod.boolean().optional(),
   "sortOrder": zod.number().optional()
 })
 
@@ -709,6 +727,11 @@ export const UpdateProductTypeResponse = zod.object({
   "trackStock": zod.boolean(),
   "printCode": zod.boolean(),
   "isActive": zod.boolean(),
+  "requiresShipping": zod.boolean(),
+  "hasVariants": zod.boolean(),
+  "isDigital": zod.boolean(),
+  "isService": zod.boolean(),
+  "isComposite": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date()
 })
@@ -1225,7 +1248,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -1665,7 +1689,8 @@ export const ListTransactionsResponse = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -1697,7 +1722,8 @@ export const CreateTransactionBody = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty']),
   "subtotal": zod.number(),
@@ -1797,7 +1823,8 @@ export const GetTransactionResponse = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -1898,7 +1925,8 @@ export const RefundTransactionResponse = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -2596,7 +2624,8 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
-  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.')
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),

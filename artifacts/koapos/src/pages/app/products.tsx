@@ -612,9 +612,12 @@ function ProductDetailDialog({
               </div>
               {product.trackInventory ? (
                 <>
-                  <InfoRow icon={Boxes} label="In Stock" value={product.stockQuantity}
+                  <InfoRow icon={Boxes} label="In Stock" value={(product as Product & { digitalCodesCount?: number | null }).digitalCodesCount ?? product.stockQuantity ?? 0}
                     valueClass={isLowStock ? "text-amber-600" : undefined} />
                   <InfoRow icon={Boxes} label="Low Stock Alert" value={product.lowStockThreshold ?? 5} />
+                  {(product as Product & { digitalCodesCount?: number | null }).digitalCodesCount != null && (
+                    <InfoRow icon={KeyRound} label="Digital Codes" value={(product as Product & { digitalCodesCount?: number | null }).digitalCodesCount ?? 0} />
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-3 px-4 py-3">

@@ -138,7 +138,7 @@ export function printReceipt(
   const dateStr = new Date(tx.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timeStr = new Date(tx.createdAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[] }>;
 
   const itemRows = items.map((item) => {
     const name = esc(item.productName ?? "Item");
@@ -210,6 +210,21 @@ export function printReceipt(
         ${customMsg ? `<p style="line-height:1.5;margin-top:4px">${customMsg}</p>` : ""}
         ${socialHtml}
       </div>
+      ${items.some((i) => i.digitalCodes?.length)
+        ? `<div class="bdr-t pt mt">
+            <p class="bold upper small" style="color:#2563eb;margin-bottom:4px">Digital Code${items.filter((i) => i.digitalCodes?.length).length > 1 ? "s" : ""}</p>
+            ${items.flatMap((i) => {
+              const codes = i.digitalCodes ?? [];
+              return codes.map((c) =>
+                `<div class="row" style="margin-bottom:2px">
+                  <span class="mono bold" style="letter-spacing:2px;font-size:11px">${esc(c)}</span>
+                  <span class="gray small">${esc(i.productName ?? "Item")}</span>
+                </div>`
+              );
+            }).join("")}
+            <p class="gray small" style="margin-top:2px">Keep this receipt for your code(s).</p>
+          </div>`
+        : ""}
     </div>`;
 
   const css = `
@@ -301,7 +316,7 @@ export function printA4Invoice(
     : "";
   const customerEmail = customer ? esc(customer.email ?? "") : "";
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[] }>;
 
   const itemRows = items.map((item, i) => {
     const name = esc(item.productName ?? "Item");
@@ -514,7 +529,7 @@ export function printA4Receipt(
   const customerEmail = customer ? esc(customer.email ?? "") : "";
   const customerPhone = customer ? esc((customer as { phone?: string }).phone ?? "") : "";
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[] }>;
 
   const subtotal = tx.subtotal ?? 0;
   const taxTotal = tx.taxTotal ?? 0;
@@ -601,6 +616,18 @@ export function printA4Receipt(
       ${socialHtml}
     </div>`;
 
+  const digitalCodesHtml = items.some((i) => i.digitalCodes?.length)
+    ? `<div class="digital-codes">
+        <p class="muted-label">Digital Code${items.filter((i) => i.digitalCodes?.length).length > 1 ? "s" : ""}</p>
+        ${items.flatMap((i) => {
+          const codes = i.digitalCodes ?? [];
+          return codes.map((c) =>
+            `<div class="dc-row"><span class="dc-name">${esc(i.productName ?? "Item")}</span><span class="dc-code">${esc(c)}</span></div>`
+          );
+        }).join("")}
+      </div>`
+    : "";
+
   /* ─── per-style item rows ──────────────────────────────────────────── */
   const itemRowsPro = items.map((item) => {
     const name = esc(item.productName ?? "Item");
@@ -669,6 +696,7 @@ export function printA4Receipt(
       </div>
       <div class="badge-row">${paidBadge}</div>
       ${loyaltyHtml}
+      ${digitalCodesHtml}
       ${paymentHtml}
       ${barcodeHtml}
       ${footerBlock}
@@ -710,6 +738,7 @@ export function printA4Receipt(
       </div>
       <div class="badge-row">${paidBadge}</div>
       ${loyaltyHtml}
+      ${digitalCodesHtml}
       ${paymentHtml}
       ${barcodeHtml}
       ${footerBlock}
@@ -736,6 +765,7 @@ export function printA4Receipt(
       <div class="min-row strong"><span>TOTAL (AUD)</span><span>${fmtAUD(total)}</span></div>
       <div class="min-paid">${paidBadge}</div>
       ${loyaltyHtml}
+      ${digitalCodesHtml}
       ${paymentHtml}
       ${footerBlock}
       ${barcodeHtml}
@@ -784,6 +814,12 @@ export function printA4Receipt(
     .badge-row { margin-top: 18px; }
     .paid { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 99px; }
     .loyalty { display: flex; justify-content: space-between; max-width: 300px; margin-top: 12px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; }
+
+    .digital-codes { margin-top: 14px; border: 1px solid #e0e7ff; border-radius: 6px; padding: 10px 12px; background: #f5f7ff; }
+    .digital-codes .muted-label { margin-bottom: 6px; color: #2563eb; }
+    .dc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .dc-name { font-size: 12px; color: #374151; }
+    .dc-code { font-family: monospace; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #1d4ed8; }
 
     .paybox { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }

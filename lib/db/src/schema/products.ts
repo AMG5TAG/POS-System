@@ -56,16 +56,18 @@ export const productsTable = pgTable("products", {
 ]);
 
 export const digitalCodesTable = pgTable("digital_codes", {
-  id:         serial("id").primaryKey(),
-  merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
-  productId:  integer("product_id").notNull().references(() => productsTable.id),
-  code:       text("code").notNull(),
-  isUsed:     text("is_used").notNull().default("false"),
-  usedAt:     timestamp("used_at", { withTimezone: true }),
-  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  id:            serial("id").primaryKey(),
+  merchantId:    integer("merchant_id").notNull().references(() => merchantsTable.id),
+  productId:     integer("product_id").notNull().references(() => productsTable.id),
+  code:          text("code").notNull(),
+  isUsed:        text("is_used").notNull().default("false"),
+  usedAt:        timestamp("used_at", { withTimezone: true }),
+  transactionId: integer("transaction_id"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("digital_codes_merchant_id_idx").on(t.merchantId),
   index("digital_codes_product_id_idx").on(t.productId),
+  index("digital_codes_transaction_id_idx").on(t.transactionId),
 ]);
 
 export const productVariantsTable = pgTable("product_variants", {

@@ -38,7 +38,7 @@ router.post("/product-types/reorder", requireAuth, async (req, res): Promise<voi
 });
 
 router.post("/product-types", requireAuth, async (req, res): Promise<void> => {
-  const { name, slug, description, trackStock, printCode, isActive, sortOrder } = req.body;
+  const { name, slug, description, trackStock, printCode, isActive, sortOrder, requiresShipping, hasVariants, isDigital, isService, isComposite } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
 
   const [{ maxOrder }] = await db
@@ -53,6 +53,11 @@ router.post("/product-types", requireAuth, async (req, res): Promise<void> => {
     trackStock: trackStock === true || trackStock === "true",
     printCode: printCode === true || printCode === "true",
     isActive: isActive === undefined || isActive === "" ? true : isActive === true || isActive === "true",
+    requiresShipping: requiresShipping === true || requiresShipping === "true",
+    hasVariants: hasVariants === true || hasVariants === "true",
+    isDigital: isDigital === true || isDigital === "true",
+    isService: isService === true || isService === "true",
+    isComposite: isComposite === true || isComposite === "true",
     sortOrder: sortOrder !== undefined ? Number(sortOrder) : (maxOrder ?? 0) + 1,
     merchantId: req.session.merchantId!,
   }).returning();
@@ -63,7 +68,7 @@ router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> 
   const paramsResult = UpdateProductTypeParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
-  const { name, slug, description, trackStock, printCode, isActive, sortOrder } = req.body;
+  const { name, slug, description, trackStock, printCode, isActive, sortOrder, requiresShipping, hasVariants, isDigital, isService, isComposite } = req.body;
   const updates: Partial<typeof productTypesTable.$inferInsert> = {};
   if (name !== undefined) updates.name = name;
   if (slug !== undefined) updates.slug = slug;
@@ -71,6 +76,11 @@ router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> 
   if (trackStock !== undefined) updates.trackStock = trackStock === true || trackStock === "true";
   if (printCode !== undefined) updates.printCode = printCode === true || printCode === "true";
   if (isActive !== undefined) updates.isActive = isActive === true || isActive === "true";
+  if (requiresShipping !== undefined) updates.requiresShipping = requiresShipping === true || requiresShipping === "true";
+  if (hasVariants !== undefined) updates.hasVariants = hasVariants === true || hasVariants === "true";
+  if (isDigital !== undefined) updates.isDigital = isDigital === true || isDigital === "true";
+  if (isService !== undefined) updates.isService = isService === true || isService === "true";
+  if (isComposite !== undefined) updates.isComposite = isComposite === true || isComposite === "true";
   if (sortOrder !== undefined) updates.sortOrder = Number(sortOrder);
   const [type] = await db.update(productTypesTable).set(updates).where(and(eq(productTypesTable.id, id), eq(productTypesTable.merchantId, req.session.merchantId!))).returning();
   if (!type) { res.status(404).json({ error: "Product type not found" }); return; }

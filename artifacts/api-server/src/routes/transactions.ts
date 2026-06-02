@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -218,12 +218,20 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Product type lookup for digital code validation
+  const productTypeIds = [...new Set(dbProducts.map((p) => p.productTypeId).filter((id): id is number => id != null))];
+  const dbProductTypes = productTypeIds.length > 0
+    ? await db.select().from(productTypesTable).where(and(inArray(productTypesTable.id, productTypeIds as number[]), eq(productTypesTable.merchantId, req.session.merchantId!)))
+    : [];
+  const productTypeMap = new Map(dbProductTypes.map((pt) => [pt.id, pt]));
+
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const computedItems: {
     productId: number; productName: string; quantity: number;
     unitPrice: number; totalPrice: number; taxAmount: number;
     discount?: number;
     giftCardIssue?: boolean; giftCardNumber?: string;
+    digitalCodes?: string[];
   }[] = [];
   for (const i of clientItems) {
     if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
@@ -633,6 +641,53 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         note:        `Issued on receipt ${receiptNumber}`,
         transactionId: row.id,
       });
+    }
+
+    // ── Atomic digital code assignment ──────────────────────────────────────────
+    // Each line for a product whose type is "digital_code" gets exactly one
+    // unassigned code per unit sold. We lock the pool via FOR UPDATE skip locked
+    // so concurrent sales for the same product don't double-assign. On retry the
+    // items JSONB already contains the assigned codes, making the operation
+    // idempotent.
+    for (const item of computedItems) {
+      if (item.digitalCodes && item.digitalCodes.length > 0) continue; // already assigned on retry
+      const product = productMap.get(item.productId);
+      if (!product || !product.productTypeId) continue;
+      const pt = productTypeMap.get(product.productTypeId);
+      if (!pt || !pt.isDigital || !pt.printCode) continue; // digital_code type
+      // Reserve one code per unit sold
+      const needed = item.quantity;
+      const codes = await tx
+        .select()
+        .from(digitalCodesTable)
+        .where(and(
+          eq(digitalCodesTable.productId, product.id),
+          eq(digitalCodesTable.merchantId, req.session.merchantId!),
+          eq(digitalCodesTable.isUsed, "false"),
+        ))
+        .orderBy(digitalCodesTable.id)
+        .limit(needed)
+        .for("update", { skipLocked: true });
+      if (codes.length < needed) {
+        throw new HttpError(400, `Insufficient digital codes for "${product.name}" (need ${needed}, have ${codes.length})`);
+      }
+      const assignedCodes: string[] = [];
+      for (const code of codes) {
+        await tx
+          .update(digitalCodesTable)
+          .set({ isUsed: "true", usedAt: new Date(), transactionId: row.id })
+          .where(eq(digitalCodesTable.id, code.id));
+        assignedCodes.push(code.code);
+      }
+      item.digitalCodes = assignedCodes;
+    }
+    // If any codes were assigned, the items JSONB needs updating so the
+    // transaction row records the codes and the response is idempotent.
+    if (computedItems.some((i) => i.digitalCodes && i.digitalCodes.length > 0)) {
+      await tx
+        .update(transactionsTable)
+        .set({ items: computedItems })
+        .where(eq(transactionsTable.id, row.id));
     }
 
     for (const [productId, qty] of qtyByProduct) {
