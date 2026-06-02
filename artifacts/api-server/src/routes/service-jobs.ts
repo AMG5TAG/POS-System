@@ -1,13 +1,14 @@
 import { Router, type IRouter } from "express";
-import { db, serviceJobsTable, customersTable } from "@workspace/db";
+import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { sendSms } from "../services/sms";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-interface CustomerInfo { name: string | null; phone: string | null; email: string | null; }
+interface CustomerInfo { name: string | null; phone: string | null; email: string | null; portalToken: string | null; }
 
 function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: CustomerInfo | null) {
   return {
@@ -72,6 +73,7 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       name:  `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
       phone: c.phone ?? null,
       email: c.email ?? null,
+      portalToken: c.portalToken ?? null,
     }])
   );
 
@@ -129,7 +131,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null } : null)
+        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   res.status(201).json(formatJob(job, customer));
@@ -183,8 +185,34 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null } : null)
+        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
+
+  // Auto-send SMS on key status transitions
+  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "completed"]);
+  if (typeof body.status === "string" && SMS_NOTIFY_STATUSES.has(body.status) && customer?.phone && customer.portalToken) {
+    const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
+      .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+    const bizName = merchant?.businessName ?? "Your repair shop";
+    const domain  = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+    const portalUrl = merchant?.portalDomain
+      ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
+      : merchant?.username
+        ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
+        : null;
+
+    const statusLabel: Record<string, string> = {
+      "in-progress":      "In Progress",
+      "awaiting-customer": "Ready — awaiting your decision",
+      "completed":         "Completed & ready for pickup",
+    };
+    const label = statusLabel[body.status] ?? body.status;
+    const smsBody = portalUrl
+      ? `${bizName}: Your repair #${job.jobNumber} is now ${label}. Track it here: ${portalUrl}`
+      : `${bizName}: Your repair #${job.jobNumber} is now ${label}.`;
+
+    sendSms({ to: customer.phone, body: smsBody }).catch(() => {});
+  }
 
   res.json(formatJob(job, customer));
 });
@@ -197,6 +225,67 @@ router.delete("/service-jobs/:id", requireAuth, async (req, res): Promise<void> 
     .delete(serviceJobsTable)
     .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, req.session.merchantId!)));
   res.sendStatus(204);
+});
+
+// POST /service-jobs/:id/sms
+router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = SendServiceJobEmailParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+
+  const [job] = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)));
+  if (!job) { res.status(404).json({ error: "Service job not found" }); return; }
+
+  const customer: CustomerInfo | null = job.customerId
+    ? await db.select().from(customersTable)
+        .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
+        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+    : null;
+
+  const bodyPhone = (req.body as { phone?: string } | undefined)?.phone?.trim() || null;
+  const toPhone   = bodyPhone ?? customer?.phone ?? null;
+
+  if (!toPhone) { res.status(400).json({ error: "No phone number on file" }); return; }
+
+  const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
+    .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const bizName   = merchant?.businessName ?? "Your repair shop";
+  const domain    = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const portalUrl = customer?.portalToken
+    ? merchant?.portalDomain
+      ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
+      : merchant?.username
+        ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
+        : null
+    : null;
+
+  const statusLabel: Record<string, string> = {
+    "pending":                     "Pending",
+    "in-progress":                 "In Progress",
+    "awaiting-partner-approval":   "Awaiting Partner Approval",
+    "awaiting-stock":              "Awaiting Stock",
+    "awaiting-customer":           "Awaiting Your Decision",
+    "completed":                   "Completed & ready for pickup",
+    "partner-replacement":         "Partner Replacement",
+    "cancelled":                   "Cancelled",
+  };
+  const label = statusLabel[job.status] ?? job.status;
+  const smsBody = portalUrl
+    ? `${bizName}: Your repair #${job.jobNumber} (${job.deviceDescription ?? job.deviceType ?? "device"}) is ${label}. Track it: ${portalUrl}`
+    : `${bizName}: Your repair #${job.jobNumber} is ${label}.`;
+
+  const result = await sendSms({ to: toPhone, body: smsBody });
+
+  if (!result.success) {
+    req.log.warn({ serviceJobId: id, to: toPhone, error: result.error }, "Service job SMS failed");
+    res.status(400).json({ error: result.error ?? "Failed to send SMS" });
+    return;
+  }
+
+  req.log.info({ serviceJobId: id, to: toPhone, provider: result.provider }, "Service job SMS sent");
+  res.json({ success: true });
 });
 
 // POST /service-jobs/:id/email
@@ -220,6 +309,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
           name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
           phone: c.phone ?? null,
           email: c.email ?? null,
+          portalToken: c.portalToken ?? null,
         } : null)
     : null;
 

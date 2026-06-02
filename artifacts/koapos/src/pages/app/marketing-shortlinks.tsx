@@ -37,12 +37,12 @@ function buildShortUrl(entry: ShortlinkFromApi): string {
 }
 
 export default function MarketingShortlinksPage() {
-  const { data: linksRaw = [], refetch } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
+  const { data: shortlinksResponse, refetch } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
   const { data: settingsRaw } = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
   const createShortlink = useCreateShortlink();
   const deleteShortlink = useDeleteShortlink();
 
-  const links = linksRaw as ShortlinkFromApi[];
+  const links = (shortlinksResponse?.items ?? []) as ShortlinkFromApi[];
   const settings = settingsRaw as Record<string, unknown> | undefined;
   const baseDomain = (settings?.baseDomain as string) || "go.koapos.com";
   const prefix = (settings?.prefix as string) || "s";

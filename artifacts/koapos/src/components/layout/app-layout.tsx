@@ -188,8 +188,8 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
       { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
       { name: "Feedback",          href: "/management/feedback",        icon: MessageSquare  },
-      { name: "System",            href: "/management/koapos",         icon: Sparkles,
-        matchPaths: ["/management/misc"] },
+      { name: "Misc",              href: "/management/misc",            icon: MoreHorizontal },
+      { name: "System",            href: "/management/koapos",          icon: Sparkles       },
     ],
   },
 ];

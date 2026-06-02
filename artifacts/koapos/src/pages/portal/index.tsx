@@ -87,15 +87,24 @@ function usePortalServices(token: string, enabled: boolean) {
 /* ── Status helpers ─────────────────────────────────────────────────────────── */
 
 const JOB_COLORS: Record<string, string> = {
-  pending:     "bg-amber-100 text-amber-800 border-amber-200",
-  in_progress: "bg-blue-100  text-blue-800  border-blue-200",
-  ready:       "bg-green-100 text-green-800 border-green-200",
-  completed:   "bg-gray-100  text-gray-700  border-gray-200",
-  cancelled:   "bg-red-100   text-red-700   border-red-200",
+  pending:                     "bg-amber-100  text-amber-800  border-amber-200",
+  "in-progress":               "bg-blue-100   text-blue-800   border-blue-200",
+  "awaiting-partner-approval": "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "awaiting-stock":            "bg-purple-100 text-purple-800 border-purple-200",
+  "awaiting-customer":         "bg-orange-100 text-orange-800 border-orange-200",
+  completed:                   "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "partner-replacement":       "bg-teal-100   text-teal-800   border-teal-200",
+  cancelled:                   "bg-red-100    text-red-700    border-red-200",
 };
 const JOB_LABEL: Record<string, string> = {
-  pending: "Pending", in_progress: "In Progress", ready: "Ready for Pickup",
-  completed: "Completed", cancelled: "Cancelled",
+  pending:                     "Pending",
+  "in-progress":               "In Progress",
+  "awaiting-partner-approval": "Awaiting Partner",
+  "awaiting-stock":            "Awaiting Parts",
+  "awaiting-customer":         "Awaiting Your Decision",
+  completed:                   "Completed — Ready for Pickup",
+  "partner-replacement":       "Partner Replacement",
+  cancelled:                   "Cancelled",
 };
 const APPT_COLORS: Record<string, string> = {
   scheduled:  "bg-blue-100  text-blue-800",
@@ -107,8 +116,11 @@ const APPT_COLORS: Record<string, string> = {
 
 /* ── Loyalty Tab ────────────────────────────────────────────────────────────── */
 
-function LoyaltyTab({ data, token, businessUsername }: { data: PortalData; token: string; businessUsername: string }) {
-  const portalUrl = `${window.location.origin}/b/${businessUsername}/c/${token}`;
+function LoyaltyTab({ data, token, businessUsername }: { data: PortalData; token: string; businessUsername: string | undefined }) {
+  // On custom domains businessUsername is absent; the current URL is already canonical.
+  const portalUrl = businessUsername
+    ? `${window.location.origin}/b/${businessUsername}/c/${token}`
+    : `${window.location.origin}/c/${token}`;
   const [copied, setCopied] = useState(false);
   const [walletLoading, setWalletLoading] = useState<"apple" | "google" | null>(null);
   const qrRef = useRef<SVGSVGElement>(null);
@@ -490,12 +502,25 @@ const TABS = [
 type PortalTab = typeof TABS[number]["id"];
 
 export default function PortalPage() {
-  const { businessUsername, token } = useParams<{ businessUsername: string; token: string }>();
+  const { businessUsername, token } = useParams<{ businessUsername?: string; token: string }>();
   const [tab, setTab] = useState<PortalTab>("loyalty");
+
+  // Custom domain: resolve businessUsername from hostname if not in URL
+  const isCustomDomain = !businessUsername;
+  const { data: resolvedDomain, isLoading: domainLoading, error: domainError } = useQuery<{ username: string | null; businessName: string }>({
+    queryKey: ["resolve-domain", window.location.hostname],
+    queryFn: async () => {
+      const r = await fetch(`/api/portal/resolve-domain?host=${encodeURIComponent(window.location.hostname)}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Domain not found");
+      return r.json();
+    },
+    enabled: isCustomDomain,
+    retry: false,
+  });
 
   const { data, isLoading, error } = usePortalData(token ?? "");
 
-  if (!token || !businessUsername) {
+  if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
         <div>
@@ -506,6 +531,28 @@ export default function PortalPage() {
       </div>
     );
   }
+
+  if (isCustomDomain && domainLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  if (isCustomDomain && (domainError || !resolvedDomain)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        <div>
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="font-semibold text-gray-800">Portal not found</p>
+          <p className="text-sm text-gray-500 mt-1">This domain is not connected to a customer portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const effectiveUsername = businessUsername ?? resolvedDomain?.username ?? undefined;
 
   if (isLoading) {
     return (
@@ -542,7 +589,7 @@ export default function PortalPage() {
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-20 max-w-md mx-auto w-full">
-        {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} businessUsername={businessUsername} />}
+        {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} businessUsername={effectiveUsername} />}
         {tab === "profile"      && <ProfileTab      data={data} token={token} />}
         {tab === "appointments" && <AppointmentsTab token={token} />}
         {tab === "repairs"      && <ServicesTab     token={token} />}

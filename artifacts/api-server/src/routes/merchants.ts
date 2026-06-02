@@ -6,7 +6,8 @@ import { UpdateMerchantBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+const USERNAME_RE    = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+const DOMAIN_RE      = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
 
 function formatMerchant(m: typeof merchantsTable.$inferSelect) {
   return {
@@ -22,6 +23,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
     username: m.username ?? null,
+    portalDomain: m.portalDomain ?? null,
     loginNotifyEmail: m.loginNotifyEmail === "true" ? true : false,
     loginNotifyEmailFailed: m.loginNotifyEmailFailed === "true" ? true : false,
     loginNotifyEmailNewLocation: m.loginNotifyEmailNewLocation === "true" ? true : false,
@@ -52,7 +54,11 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const body = req.body as Record<string, unknown>;
   const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean };
+  const portalDomain: string | null | undefined = typeof body.portalDomain === "string"
+    ? (body.portalDomain.trim() || null)
+    : body.portalDomain === null ? null : undefined;
 
   // Validate username format if provided
   if (username !== undefined) {
@@ -73,9 +79,27 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // Validate and check uniqueness of portal domain
+  if (portalDomain !== undefined && portalDomain !== null) {
+    const domain = portalDomain.toLowerCase().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    if (!DOMAIN_RE.test(domain)) {
+      res.status(400).json({ error: "Invalid domain format. Enter a plain hostname like portal.mybusiness.com.au" });
+      return;
+    }
+    const [existingDomain] = await db
+      .select({ id: merchantsTable.id })
+      .from(merchantsTable)
+      .where(and(eq(merchantsTable.portalDomain, domain), ne(merchantsTable.id, req.session.merchantId!)));
+    if (existingDomain) {
+      res.status(409).json({ error: "This domain is already registered with another account." });
+      return;
+    }
+  }
+
   const updateData = {
     ...rest,
     ...(username !== undefined && { username }),
+    ...(portalDomain !== undefined && { portalDomain: portalDomain === null ? null : portalDomain.toLowerCase().replace(/^https?:\/\//i, "").replace(/\/.*$/, "") }),
     ...(loginNotifyEmail !== undefined && { loginNotifyEmail: loginNotifyEmail ? "true" : "false" }),
     ...(loginNotifyEmailFailed !== undefined && { loginNotifyEmailFailed: loginNotifyEmailFailed ? "true" : "false" }),
     ...(loginNotifyEmailNewLocation !== undefined && { loginNotifyEmailNewLocation: loginNotifyEmailNewLocation ? "true" : "false" }),

@@ -36,6 +36,33 @@ import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
+function parseDateToISO(raw: string): string | undefined {
+  const s = raw.trim();
+  if (!s) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD/MM/YYYY, D/M/YYYY, DD-MM-YYYY, DD.MM.YYYY (Australian / British)
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return undefined;
+}
+
+function sanitiseCustomerBody(raw: Record<string, unknown>): Record<string, unknown> {
+  const body = { ...raw };
+  if (typeof body.email === "string") {
+    body.email = body.email.trim().toLowerCase() || undefined;
+  }
+  if (typeof body.dateOfBirth === "string") {
+    body.dateOfBirth = parseDateToISO(body.dateOfBirth) ?? undefined;
+  }
+  return body;
+}
+
+function zodErrorMessage(err: { issues: Array<{ path: (string | number)[]; message: string }> }): string {
+  return err.issues
+    .map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message))
+    .join("; ");
+}
+
 function generateReferralCode(firstName?: string | null, lastName?: string | null): string {
   const f = (firstName ?? "X")[0].toUpperCase();
   const l = (lastName ?? "X")[0].toUpperCase();
@@ -142,20 +169,27 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/customers", requireAuth, async (req, res): Promise<void> => {
-  const parsed = CreateCustomerBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = CreateCustomerBody.safeParse(sanitiseCustomerBody(req.body));
+  if (!parsed.success) { res.status(400).json({ error: zodErrorMessage(parsed.error) }); return; }
   const merchantId = req.session.merchantId!;
-  const code = parsed.data.referralCode ?? await uniqueReferralCode(merchantId, parsed.data.firstName, parsed.data.lastName);
-  const [customer] = await db.insert(customersTable).values({
-    ...parsed.data,
-    merchantId,
-    portalToken: crypto.randomUUID(),
-    referralCode: code,
-    heardFrom: parsed.data.heardFrom ?? null,
-    heardFromDetails: parsed.data.heardFromDetails ?? null,
-    referredByCustomerId: parsed.data.referredByCustomerId ?? null,
-  }).returning();
-  res.status(201).json(formatCustomer(customer));
+  try {
+    const code = parsed.data.referralCode ?? await uniqueReferralCode(merchantId, parsed.data.firstName, parsed.data.lastName);
+    const [customer] = await db.insert(customersTable).values({
+      ...parsed.data,
+      merchantId,
+      portalToken: crypto.randomUUID(),
+      referralCode: code,
+      heardFrom: parsed.data.heardFrom ?? null,
+      heardFromDetails: parsed.data.heardFromDetails ?? null,
+      referredByCustomerId: parsed.data.referredByCustomerId ?? null,
+    }).returning();
+    res.status(201).json(formatCustomer(customer));
+  } catch (err) {
+    req.log.error({ err }, "Customer create failed");
+    const msg = err instanceof Error ? err.message : String(err);
+    const isDateErr = /invalid.*date|date.*invalid|invalid input syntax.*date/i.test(msg);
+    res.status(400).json({ error: isDateErr ? "dateOfBirth: Invalid date — use YYYY-MM-DD" : "Failed to create customer" });
+  }
 });
 
 router.post("/customers/generate-referral-codes", requireAuth, async (req, res): Promise<void> => {
@@ -426,20 +460,27 @@ router.get("/customers/:id", requireAuth, async (req, res): Promise<void> => {
 router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateCustomerParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const parsed = UpdateCustomerBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = UpdateCustomerBody.safeParse(sanitiseCustomerBody(req.body));
+  if (!parsed.success) { res.status(400).json({ error: zodErrorMessage(parsed.error) }); return; }
   const merchantId = req.session.merchantId!;
-  const patch = { ...parsed.data };
-  if (patch.referralCode) {
-    patch.referralCode = patch.referralCode.toUpperCase().replace(/[^A-Z0-9-]/g, "");
-    const existing = await db.select({ id: customersTable.id }).from(customersTable).where(
-      and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, patch.referralCode), sql`${customersTable.id} != ${params.data.id}`)
-    ).limit(1);
-    if (existing.length > 0) { res.status(409).json({ error: "Referral code already in use" }); return; }
+  try {
+    const patch = { ...parsed.data };
+    if (patch.referralCode) {
+      patch.referralCode = patch.referralCode.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+      const existing = await db.select({ id: customersTable.id }).from(customersTable).where(
+        and(eq(customersTable.merchantId, merchantId), eq(customersTable.referralCode, patch.referralCode), sql`${customersTable.id} != ${params.data.id}`)
+      ).limit(1);
+      if (existing.length > 0) { res.status(409).json({ error: "Referral code already in use" }); return; }
+    }
+    const [customer] = await db.update(customersTable).set(patch).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId))).returning();
+    if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+    res.json(formatCustomer(customer));
+  } catch (err) {
+    req.log.error({ err }, "Customer update failed");
+    const msg = err instanceof Error ? err.message : String(err);
+    const isDateErr = /invalid.*date|date.*invalid|invalid input syntax.*date/i.test(msg);
+    res.status(400).json({ error: isDateErr ? "dateOfBirth: Invalid date — use YYYY-MM-DD" : "Failed to update customer" });
   }
-  const [customer] = await db.update(customersTable).set(patch).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId))).returning();
-  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
-  res.json(formatCustomer(customer));
 });
 
 router.delete("/customers/:id", requireAuth, async (req, res): Promise<void> => {

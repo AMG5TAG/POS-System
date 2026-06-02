@@ -16,6 +16,7 @@ export const merchantsTable = pgTable("merchants", {
   timezone: text("timezone").default("Australia/Sydney"),
   logoUrl: text("logo_url"),
   username: text("username").unique(),
+  portalDomain: text("portal_domain").unique(),
   loginNotifyEmail: text("login_notify_email").notNull().default("false"),
   loginNotifyEmailFailed: text("login_notify_email_failed").notNull().default("false"),
   loginNotifyEmailNewLocation: text("login_notify_email_new_location").notNull().default("true"),

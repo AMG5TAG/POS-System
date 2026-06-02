@@ -102,7 +102,8 @@ function calculateQuotes(
 
 export default function OnlineShippingPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const { data: rawCarriers = [], refetch } = useListShippingCarriers({ query: { queryKey: ["shipping-carriers"] } });
+  const { data: carriersResponse, refetch } = useListShippingCarriers({ query: { queryKey: ["shipping-carriers"] } });
+  const rawCarriers = carriersResponse?.items ?? [];
   const updateCarrier = useUpdateShippingCarrier();
 
   const originCity     = merchant?.city    || "—";

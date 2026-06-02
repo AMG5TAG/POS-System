@@ -149,7 +149,7 @@ const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password"
 setOnUnauthorized(() => {
   queryClient.clear();
   const path = window.location.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/"));
+  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/") || path.startsWith("/c/"));
   if (!isPublic) {
     window.location.replace("/login");
   }
@@ -239,6 +239,9 @@ function Router() {
         <PublicRoute component={CustomerDisplayPage} />
       </Route>
       <Route path="/b/:businessUsername/c/:token">
+        <PublicRoute component={PortalPage} />
+      </Route>
+      <Route path="/c/:token">
         <PublicRoute component={PortalPage} />
       </Route>
 

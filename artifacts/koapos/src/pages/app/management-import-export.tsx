@@ -736,7 +736,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   const coerce = (value: string, type?: string) => {
     if (type === "number")  return value === "" ? undefined : parseFloat(value);
     if (type === "boolean") return value.toLowerCase() === "true" || value === "1";
-    return value || undefined;
+    return value.trim() || undefined;
   };
 
   const buildPayload = (row: Record<string, string>) => {

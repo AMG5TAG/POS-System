@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
 import { sendEmail } from "./email";
+import { sendSms } from "./sms";
 import type { Logger } from "pino";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
@@ -77,9 +78,12 @@ async function dispatchMessage(
   subject: string,
   html: string,
   text: string,
+  toPhone?: string | null,
 ): Promise<{ success: boolean; error?: string }> {
   if (rule.channel === "sms") {
-    return { success: false, error: "SMS gateway not configured. Please set up an SMS provider." };
+    if (!toPhone) return { success: false, error: "No phone number on file" };
+    const result = await sendSms({ to: toPhone, body: text });
+    return { success: result.success, error: result.error };
   }
   if (!toEmail) {
     return { success: false, error: "No email address on file" };
@@ -130,7 +134,7 @@ async function runBirthday(
     const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${bizName}!`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
     const text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
-    const result = await dispatchMessage(merchantId, rule, c.email!, subject, html, text);
+    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
     logger.info({ ruleId: rule.id, customerId: c.id, trigger: "birthday" }, "Automation: birthday message dispatched");
@@ -171,7 +175,7 @@ async function runAnniversary(
     const subject = applyVars(rule.templateSubject ?? `Happy ${years > 0 ? `${years}-year` : ""} Anniversary, {{first_name}}!`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Happy anniversary! It's been ${years > 0 ? `${years} year${years > 1 ? "s" : ""}` : "a while"} since you joined us. We appreciate your loyalty! 🎉</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, happy anniversary! Thank you for being a part of {{business_name}}.`, vars);
-    const result = await dispatchMessage(merchantId, rule, c.email!, subject, html, text);
+    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
   }
@@ -212,7 +216,7 @@ async function runNewProduct(
       const subject = applyVars(rule.templateSubject ?? `New arrival: {{product_name}}`, vars);
       const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>We just added <strong>{{product_name}}</strong> to our range at {{business_name}}. Check it out!</p>`, vars);
       const text = applyVars(`Hi {{first_name}}, we just added {{product_name}} at {{business_name}}. Come check it out!`, vars);
-      const result = await dispatchMessage(merchantId, rule, c.email!, subject, html, text);
+      const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
       await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "product", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
       if (result.success) sent++;
     }
@@ -237,6 +241,7 @@ async function runNewServiceJob(
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
       customerId: customersTable.id,
     })
     .from(serviceJobsTable)
@@ -246,7 +251,8 @@ async function runNewServiceJob(
   let sent = 0;
   for (const row of jobs) {
     const email = row.customerEmail;
-    if (!email) continue;
+    const phone = row.customerPhone ?? null;
+    if (!email && !phone) continue;
     const dedupeKey = `job-${row.job.id}`;
     if (await alreadySent(rule.id, dedupeKey, 48 * 3600 * 1000)) continue;
     const firstName = row.customerFirstName ?? "Valued Customer";
@@ -254,7 +260,7 @@ async function runNewServiceJob(
     const subject = applyVars(rule.templateSubject ?? `Your service job {{job_number}} has been received`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thank you for bringing your <strong>{{device}}</strong> to <strong>{{business_name}}</strong>. Your service job <strong>{{job_number}}</strong> has been received and is now in our queue.</p><p>We'll keep you updated on the progress. Thank you for choosing us!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, your service job {{job_number}} has been received at {{business_name}}. We'll keep you updated!`, vars);
-    const result = await dispatchMessage(merchantId, rule, email, subject, html, text);
+    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, phone);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId ?? null, recordType: "service_job", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
   }
@@ -277,6 +283,7 @@ async function runInvoiceOverdue(
       customerFirstName: customersTable.firstName,
       customerLastName: customersTable.lastName,
       customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
       customerId: customersTable.id,
     })
     .from(invoicesTable)
@@ -296,7 +303,8 @@ async function runInvoiceOverdue(
   let sent = 0;
   for (const row of overdue) {
     const email = row.customerEmail;
-    if (!email) continue;
+    const phone = row.customerPhone ?? null;
+    if (!email && !phone) continue;
     const dedupeKey = `invoice-overdue-${row.invoice.id}`;
     // Re-send at most once per 7 days per invoice
     if (await alreadySent(rule.id, dedupeKey, 7 * 24 * 3600 * 1000)) continue;
@@ -307,7 +315,7 @@ async function runInvoiceOverdue(
     const subject = applyVars(rule.templateSubject ?? `Reminder: Invoice {{invoice_number}} is overdue`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that Invoice <strong>{{invoice_number}}</strong> for <strong>{{total}}</strong> was due on <strong>{{due_date}}</strong> and remains unpaid.</p><p>Please contact <strong>{{business_name}}</strong> at your earliest convenience to arrange payment. Thank you!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, Invoice {{invoice_number}} for {{total}} was due {{due_date}} and is still unpaid. Please contact {{business_name}} to arrange payment.`, vars);
-    const result = await dispatchMessage(merchantId, rule, email, subject, html, text);
+    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, phone);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId ?? null, recordType: "invoice", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
     logger.info({ ruleId: rule.id, invoiceId: row.invoice.id, trigger: "invoice_overdue" }, "Automation: overdue reminder sent");

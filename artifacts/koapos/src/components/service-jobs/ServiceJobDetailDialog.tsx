@@ -16,7 +16,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
-  Mail, Loader2, Printer, Trash2, Eye,
+  Mail, MessageSquare, Loader2, Printer, Trash2, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -119,6 +119,7 @@ export function ServiceJobDetailDialog({
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [smsLoading, setSmsLoading] = useState(false);
   const [uploading,   setUploading]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
@@ -544,6 +545,36 @@ export function ServiceJobDetailDialog({
               >
                 {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                 Email
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={smsLoading || !job?.customerPhone}
+                title={job?.customerPhone ? "Send SMS status update to customer" : "No customer phone on file"}
+                onClick={async () => {
+                  if (!job?.customerPhone || smsLoading) return;
+                  setSmsLoading(true);
+                  try {
+                    const res = await fetch(`/api/service-jobs/${job.id}/sms`, {
+                      method: "POST",
+                      credentials: "include",
+                    });
+                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+                    if (res.ok && data.success) {
+                      toast.success(`SMS sent to ${job.customerPhone}`);
+                    } else {
+                      toast.error(data.error ?? "Failed to send SMS");
+                    }
+                  } catch {
+                    toast.error("Network error — SMS not sent");
+                  } finally {
+                    setSmsLoading(false);
+                  }
+                }}
+              >
+                {smsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                SMS
               </Button>
               {onPrint && (
                 <>

@@ -728,9 +728,9 @@ function QRContentEditor({ type, content, onChange }: {
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 export default function MarketingQRCodesPage() {
-  const { data: rawCodes = [],     refetch: refetchCodes }     = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
+  const { data: codesResponse,     refetch: refetchCodes }     = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
   const { data: rawSettings }                                   = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
-  const { data: rawTemplates = [], refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
+  const { data: templatesResponse, refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
 
   const createCode     = useCreateQrCode();
   const deleteCode     = useDeleteQrCode();
@@ -738,8 +738,8 @@ export default function MarketingQRCodesPage() {
   const createTemplate = useCreateQrSavedTemplate();
   const deleteTemplate = useDeleteQrSavedTemplate();
 
-  const history:        QREntry[]          = (rawCodes     as Record<string, unknown>[]).map(apiToEntry);
-  const savedTemplates: SavedQRTemplate[]  = (rawTemplates as Record<string, unknown>[]).map(apiToTemplate);
+  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as Record<string, unknown>[]).map(apiToEntry);
+  const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as Record<string, unknown>[]).map(apiToTemplate);
 
   const [qrType,       setQrType]       = useState<QRCodeType>("website");
   const [content,      setContent]      = useState<QRTypeContent>({ url: "https://" });

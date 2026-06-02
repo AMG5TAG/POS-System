@@ -104,10 +104,10 @@ function SyncSelect({ value, onChange }: { value: SyncDirection; onChange: (v: S
 }
 
 export default function OnlineMarketplacePage() {
-  const { data: rawConnections = [], refetch } = useListMarketplaceConnections({ query: { queryKey: ["marketplace-connections"] } });
+  const { data: connectionsResponse, refetch } = useListMarketplaceConnections({ query: { queryKey: ["marketplace-connections"] } });
   const upsertConnection = useUpsertMarketplaceConnection();
 
-  const apiConnections = rawConnections as ApiConnection[];
+  const apiConnections = (connectionsResponse?.items ?? []) as ApiConnection[];
   const connectionMap: Record<string, ApiConnection & { parsedConfig: MarketplaceConfig }> = {};
   for (const c of apiConnections) {
     if (c.marketplaceId) {

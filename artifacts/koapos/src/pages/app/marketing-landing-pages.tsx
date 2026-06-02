@@ -538,12 +538,12 @@ function PagesListView({ pages, onSelect, onCreate, onDelete }: {
 /* ── Main page ─────────────────────────────────────────────────────────── */
 
 export default function MarketingLandingPagesPage() {
-  const { data: rawPages = [], refetch } = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
+  const { data: pagesResponse, refetch } = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
   const createMutation = useCreateLandingPage();
   const updateMutation = useUpdateLandingPage();
   const deleteMutation = useDeleteLandingPage();
 
-  const serverPages: LandingPage[] = (rawPages as Record<string, unknown>[]).map(apiToLocal);
+  const serverPages: LandingPage[] = ((pagesResponse?.items ?? []) as Record<string, unknown>[]).map(apiToLocal);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [localPage, setLocalPage] = useState<LandingPage | null>(null);

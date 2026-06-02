@@ -221,7 +221,41 @@ function buildGoogleWalletSaveUrl(opts: {
   return `https://pay.google.com/gp/v/save/${input}.${sign.sign(privateKey, "base64url")}`;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function buildPortalUrl(opts: {
+  req: import("express").Request;
+  merchantUsername: string | null;
+  merchantPortalDomain: string | null;
+  customerPortalToken: string;
+}): string {
+  const { req, merchantUsername, merchantPortalDomain, customerPortalToken } = opts;
+  if (merchantPortalDomain) {
+    return `https://${merchantPortalDomain}/c/${customerPortalToken}`;
+  }
+  const platformDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  if (merchantUsername) {
+    return `https://${platformDomain}/b/${merchantUsername}/c/${customerPortalToken}`;
+  }
+  // Fallback: legacy token-only path
+  return `https://${platformDomain}/portal/${customerPortalToken}`;
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+// Resolve a custom portal domain to its merchant's username (public, no auth)
+router.get("/portal/resolve-domain", async (req, res): Promise<void> => {
+  const host = typeof req.query.host === "string" ? req.query.host.toLowerCase().trim() : null;
+  if (!host) { res.status(400).json({ error: "host query param required" }); return; }
+
+  const [merchant] = await db
+    .select({ username: merchantsTable.username, businessName: merchantsTable.businessName })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.portalDomain, host));
+
+  if (!merchant) { res.status(404).json({ error: "Domain not found" }); return; }
+  res.json({ username: merchant.username, businessName: merchant.businessName });
+});
 
 router.get("/portal/:token", async (req, res): Promise<void> => {
   const customer = await findCustomerByToken(req.params.token);
@@ -393,12 +427,11 @@ router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
   }
 
   const [merchant] = await db
-    .select({ businessName: merchantsTable.businessName })
+    .select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, customer.merchantId));
 
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
-  const portalUrl = `https://${domain}/portal/${customer.portalToken}`;
+  const portalUrl = buildPortalUrl({ req, merchantUsername: merchant?.username ?? null, merchantPortalDomain: merchant?.portalDomain ?? null, customerPortalToken: customer.portalToken! });
   const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Valued Customer";
 
   const passJson = buildPassJson({
@@ -435,12 +468,11 @@ router.get("/portal/:token/google-wallet", async (req, res): Promise<void> => {
   }
 
   const [merchant] = await db
-    .select({ businessName: merchantsTable.businessName })
+    .select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, customer.merchantId));
 
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
-  const portalUrl = `https://${domain}/portal/${customer.portalToken}`;
+  const portalUrl = buildPortalUrl({ req, merchantUsername: merchant?.username ?? null, merchantPortalDomain: merchant?.portalDomain ?? null, customerPortalToken: customer.portalToken! });
   const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Valued Customer";
 
   const saveUrl = buildGoogleWalletSaveUrl({
