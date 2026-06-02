@@ -98,6 +98,8 @@ tags:
     description: Xero accounting integration
   - name: backups
     description: Per-merchant data backup and restore
+  - name: partner-referrals
+    description: Partner referral program
 
 paths:
   /healthz:
@@ -7294,6 +7296,43 @@ paths:
         "404":
           description: Backup not found
 
+  # ── Partner Referrals ─────────────────────────────────────────────────────
+  /partner-referrals:
+    get:
+      operationId: listPartnerReferrals
+      tags: [partner-referrals]
+      summary: Get the authenticated merchant's referral code and list of referred businesses
+      responses:
+        "200":
+          description: Partner referral data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerReferralListResponse"
+        "401":
+          description: Unauthorized
+    post:
+      operationId: createPartnerReferral
+      tags: [partner-referrals]
+      summary: Create a new partner referral for the authenticated merchant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePartnerReferralBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerReferral"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
 components:
   schemas:
     # ── Backups ───────────────────────────────────────────────────────────────
@@ -12705,3 +12744,36 @@ components:
         anomalyIpThreshold:   { type: integer, minimum: 1, maximum: 100 }
         anomalyWindowMinutes: { type: integer, minimum: 1, maximum: 1440 }
         anomalyHoldHours:     { type: integer, minimum: 1, maximum: 720 }
+
+    # ── Partner Referrals ─────────────────────────────────────────────────────
+    PartnerReferral:
+      type: object
+      required: [id, referredBusinessName, contactName, contactEmail, referredAt, status, bonusEarned]
+      properties:
+        id:                   { type: integer }
+        referredBusinessName: { type: string }
+        contactName:          { type: string }
+        contactEmail:         { type: string, format: email }
+        referredAt:           { type: string, format: date-time }
+        status:               { type: string, enum: [pending, trial, active, churned] }
+        plan:                 { type: string, nullable: true }
+        bonusEarned:          { type: integer }
+
+    PartnerReferralListResponse:
+      type: object
+      required: [referralCode, referralUrl, referrals]
+      properties:
+        referralCode: { type: string }
+        referralUrl:  { type: string }
+        referrals:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartnerReferral"
+
+    CreatePartnerReferralBody:
+      type: object
+      required: [businessName, contactName, contactEmail]
+      properties:
+        businessName:  { type: string, minLength: 1 }
+        contactName:   { type: string, minLength: 1 }
+        contactEmail:  { type: string, format: email }

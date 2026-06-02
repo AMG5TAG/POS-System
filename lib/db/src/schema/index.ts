@@ -94,3 +94,4 @@ export * from "./password-reset-tokens";
 export * from "./account-hold-tokens";
 export * from "./merchant-security-settings";
 export * from "./merchant-backups";
+export * from "./partner-referrals";

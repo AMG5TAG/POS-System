@@ -61,6 +61,7 @@ import type {
   ConfirmUploadResponse,
   CreateDailyCloseInput,
   CreateLaybyBody,
+  CreatePartnerReferralBody,
   CsvImportResult,
   Customer,
   CustomerFile,
@@ -218,6 +219,8 @@ import type {
   OpenaiMessageInput,
   ParkedSale,
   ParkedSaleInput,
+  PartnerReferral,
+  PartnerReferralListResponse,
   PcBuilderSettings,
   PcBuilderSettingsInput,
   PcCompatRule,
@@ -29619,5 +29622,153 @@ export const useRestoreBackup = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRestoreBackupMutationOptions(options));
+    }
+
+export const getListPartnerReferralsUrl = () => {
+
+
+
+
+  return `/api/partner-referrals`
+}
+
+/**
+ * @summary Get the authenticated merchant's referral code and list of referred businesses
+ */
+export const listPartnerReferrals = async ( options?: RequestInit): Promise<PartnerReferralListResponse> => {
+
+  return customFetch<PartnerReferralListResponse>(getListPartnerReferralsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPartnerReferralsQueryKey = () => {
+    return [
+    `/api/partner-referrals`
+    ] as const;
+    }
+
+
+export const getListPartnerReferralsQueryOptions = <TData = Awaited<ReturnType<typeof listPartnerReferrals>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPartnerReferrals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPartnerReferralsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPartnerReferrals>>> = ({ signal }) => listPartnerReferrals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPartnerReferrals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPartnerReferralsQueryResult = NonNullable<Awaited<ReturnType<typeof listPartnerReferrals>>>
+export type ListPartnerReferralsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the authenticated merchant's referral code and list of referred businesses
+ */
+
+export function useListPartnerReferrals<TData = Awaited<ReturnType<typeof listPartnerReferrals>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPartnerReferrals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPartnerReferralsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreatePartnerReferralUrl = () => {
+
+
+
+
+  return `/api/partner-referrals`
+}
+
+/**
+ * @summary Create a new partner referral for the authenticated merchant
+ */
+export const createPartnerReferral = async (createPartnerReferralBody: CreatePartnerReferralBody, options?: RequestInit): Promise<PartnerReferral> => {
+
+  return customFetch<PartnerReferral>(getCreatePartnerReferralUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createPartnerReferralBody,)
+  }
+);}
+
+
+
+
+export const getCreatePartnerReferralMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPartnerReferral>>, TError,{data: BodyType<CreatePartnerReferralBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPartnerReferral>>, TError,{data: BodyType<CreatePartnerReferralBody>}, TContext> => {
+
+const mutationKey = ['createPartnerReferral'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPartnerReferral>>, {data: BodyType<CreatePartnerReferralBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPartnerReferral(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePartnerReferralMutationResult = NonNullable<Awaited<ReturnType<typeof createPartnerReferral>>>
+    export type CreatePartnerReferralMutationBody = BodyType<CreatePartnerReferralBody>
+    export type CreatePartnerReferralMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a new partner referral for the authenticated merchant
+ */
+export const useCreatePartnerReferral = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPartnerReferral>>, TError,{data: BodyType<CreatePartnerReferralBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPartnerReferral>>,
+        TError,
+        {data: BodyType<CreatePartnerReferralBody>},
+        TContext
+      > => {
+      return useMutation(getCreatePartnerReferralMutationOptions(options));
     }
 

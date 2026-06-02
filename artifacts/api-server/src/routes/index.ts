@@ -92,6 +92,7 @@ import modifierGroupsRouter from "./modifier-groups";
 import quickbooksRouter from "./quickbooks";
 import authSecuritySettingsRouter from "./auth-security-settings";
 import backupsRouter from "./backups";
+import partnerReferralsRouter from "./partner-referrals";
 
 const router: IRouter = Router();
 
@@ -188,5 +189,6 @@ router.use(modifierGroupsRouter);
 router.use(quickbooksRouter);
 router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
+router.use(partnerReferralsRouter);
 
 export default router;

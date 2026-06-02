@@ -24,6 +24,7 @@ export const merchantsTable = pgTable("merchants", {
   passwordChangeAlertEmail: text("password_change_alert_email").notNull().default("true"),
   lastAuthEventsViewedAt: timestamp("last_auth_events_viewed_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
+  partnerReferralCode: text("partner_referral_code").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

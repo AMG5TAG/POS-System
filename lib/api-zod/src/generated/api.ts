@@ -9219,3 +9219,36 @@ export const RestoreBackupResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the authenticated merchant's referral code and list of referred businesses
+ */
+export const ListPartnerReferralsResponse = zod.object({
+  "referralCode": zod.string(),
+  "referralUrl": zod.string(),
+  "referrals": zod.array(zod.object({
+  "id": zod.number(),
+  "referredBusinessName": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string().email(),
+  "referredAt": zod.coerce.date(),
+  "status": zod.enum(['pending', 'trial', 'active', 'churned']),
+  "plan": zod.string().nullish(),
+  "bonusEarned": zod.number()
+}))
+})
+
+
+/**
+ * @summary Create a new partner referral for the authenticated merchant
+ */
+
+
+
+
+export const CreatePartnerReferralBody = zod.object({
+  "businessName": zod.string().min(1),
+  "contactName": zod.string().min(1),
+  "contactEmail": zod.string().email()
+})
+
+

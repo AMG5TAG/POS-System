@@ -4370,6 +4370,41 @@ export interface SecuritySettingsUpdate {
   anomalyHoldHours?: number;
 }
 
+export type PartnerReferralStatus = typeof PartnerReferralStatus[keyof typeof PartnerReferralStatus];
+
+
+export const PartnerReferralStatus = {
+  pending: 'pending',
+  trial: 'trial',
+  active: 'active',
+  churned: 'churned',
+} as const;
+
+export interface PartnerReferral {
+  id: number;
+  referredBusinessName: string;
+  contactName: string;
+  contactEmail: string;
+  referredAt: string;
+  status: PartnerReferralStatus;
+  plan?: string | null;
+  bonusEarned: number;
+}
+
+export interface PartnerReferralListResponse {
+  referralCode: string;
+  referralUrl: string;
+  referrals: PartnerReferral[];
+}
+
+export interface CreatePartnerReferralBody {
+  /** @minLength 1 */
+  businessName: string;
+  /** @minLength 1 */
+  contactName: string;
+  contactEmail: string;
+}
+
 export type GetAuthEventsFlaggedCount200 = {
   count: number;
 };
