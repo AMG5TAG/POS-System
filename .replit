@@ -72,3 +72,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"
+APP_BASE_URL = "https://koapos.com.au"
