@@ -1285,7 +1285,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "customerName": zod.string().nullish(),
   "customerPhone": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
-  "status": zod.enum(['pending', 'in-progress', 'awaiting-partner-approval', 'awaiting-stock', 'awaiting-customer', 'completed', 'cancelled']),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
@@ -2770,7 +2770,7 @@ export const ListServiceJobsResponseItem = zod.object({
   "customerName": zod.string().nullish(),
   "customerPhone": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
-  "status": zod.enum(['pending', 'in-progress', 'awaiting-partner-approval', 'awaiting-stock', 'awaiting-customer', 'completed', 'cancelled']),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
@@ -2800,7 +2800,7 @@ export const ListServiceJobsResponse = zod.array(ListServiceJobsResponseItem)
 export const CreateServiceJobBody = zod.object({
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
-  "status": zod.enum(['pending', 'in-progress', 'awaiting-partner-approval', 'awaiting-stock', 'awaiting-customer', 'completed', 'cancelled']).optional(),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'completed', 'cancelled']).optional(),
   "bookInDate": zod.string().optional(),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
@@ -2834,7 +2834,7 @@ export const UpdateServiceJobParams = zod.object({
 export const UpdateServiceJobBody = zod.object({
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
-  "status": zod.enum(['pending', 'in-progress', 'awaiting-partner-approval', 'awaiting-stock', 'awaiting-customer', 'completed', 'cancelled']).optional(),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'completed', 'cancelled']).optional(),
   "bookInDate": zod.string().optional(),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
@@ -2866,7 +2866,7 @@ export const UpdateServiceJobResponse = zod.object({
   "customerName": zod.string().nullish(),
   "customerPhone": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
-  "status": zod.enum(['pending', 'in-progress', 'awaiting-partner-approval', 'awaiting-stock', 'awaiting-customer', 'completed', 'cancelled']),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
@@ -3815,6 +3815,67 @@ export const UpdateTaxSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get SMS / Twilio settings
+ */
+export const GetSmsSettingsResponse = zod.object({
+  "smsEnabled": zod.boolean(),
+  "autoNotifyOnStatus": zod.boolean(),
+  "connected": zod.boolean(),
+  "fromNumber": zod.string().nullish(),
+  "accountSidPrefix": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update SMS notification preferences
+ */
+export const UpdateSmsSettingsBody = zod.object({
+  "smsEnabled": zod.boolean().optional(),
+  "autoNotifyOnStatus": zod.boolean().optional()
+})
+
+export const UpdateSmsSettingsResponse = zod.object({
+  "smsEnabled": zod.boolean(),
+  "autoNotifyOnStatus": zod.boolean(),
+  "connected": zod.boolean(),
+  "fromNumber": zod.string().nullish(),
+  "accountSidPrefix": zod.string().nullish()
+})
+
+
+/**
+ * @summary Save Twilio credentials to vault
+ */
+export const ConnectTwilioBody = zod.object({
+  "accountSid": zod.string(),
+  "authToken": zod.string(),
+  "fromNumber": zod.string()
+})
+
+export const ConnectTwilioResponse = zod.object({
+  "smsEnabled": zod.boolean(),
+  "autoNotifyOnStatus": zod.boolean(),
+  "connected": zod.boolean(),
+  "fromNumber": zod.string().nullish(),
+  "accountSidPrefix": zod.string().nullish()
+})
+
+
+/**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const TestSmsBody = zod.object({
+  "to": zod.string()
+})
+
+export const TestSmsResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional(),
+  "error": zod.string().optional()
+})
+
+
+/**
  * @summary Get email provider settings
  */
 export const GetEmailSettingsResponse = zod.object({
@@ -3871,6 +3932,18 @@ export const TestEmailSettingsBody = zod.object({
 export const TestEmailSettingsResponse = zod.object({
   "success": zod.boolean().optional(),
   "provider": zod.string().optional()
+})
+
+export const ComposeEmailBody = zod.object({
+  "to": zod.string().email(),
+  "subject": zod.string().min(1),
+  "body": zod.string()
+})
+
+export const ComposeEmailResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional(),
+  "error": zod.string().nullish()
 })
 
 
@@ -7707,6 +7780,29 @@ export const UpdateStaffNoteResponse = zod.object({
 
 
 export const DeleteStaffNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const ListDashboardNotesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "text": zod.string(),
+  "isCritical": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+export const CreateDashboardNoteBody = zod.object({
+  "text": zod.string(),
+  "isCritical": zod.boolean().optional()
+})
+
+
+export const DeleteDashboardNoteParams = zod.object({
   "id": zod.coerce.number()
 })
 

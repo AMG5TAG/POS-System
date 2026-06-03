@@ -84,6 +84,7 @@ import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templ
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
 import SettingsEmailPage from "@/pages/app/settings-email";
+import SettingsSmsPage from "@/pages/app/settings-sms";
 import SettingsProductTypesPage from "@/pages/app/settings-product-types";
 import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
@@ -512,6 +513,9 @@ function Router() {
       </Route>
       <Route path="/management/email">
         <ManagementProtectedRoute component={SettingsEmailPage} />
+      </Route>
+      <Route path="/management/sms">
+        <ManagementProtectedRoute component={SettingsSmsPage} />
       </Route>
       <Route path="/management/forms">
         <ManagementProtectedRoute component={ManagementFormsPage} />

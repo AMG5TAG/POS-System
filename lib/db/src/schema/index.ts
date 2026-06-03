@@ -73,6 +73,8 @@ export * from "./service-job-templates";
 export * from "./marketing-generators";
 export * from "./sales-templates";
 export * from "./dashboard-config";
+export * from "./dashboard-notes";
+export * from "./sms-settings";
 export * from "./business-profile";
 export * from "./customer-settings";
 export * from "./sticker-templates";

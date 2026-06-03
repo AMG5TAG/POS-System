@@ -179,12 +179,16 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
 
     if (current && body.status !== current.status) {
       const STATUS_LABELS: Record<string, string> = {
-        "pending":           "Pending",
-        "in-progress":       "In Progress",
-        "at-repairer":       "At Repairer",
-        "awaiting-customer": "Awaiting Customer",
-        "completed":         "Completed",
-        "cancelled":         "Cancelled",
+        "pending":                     "Pending",
+        "in-progress":                 "In Progress",
+        "awaiting-parts":              "Awaiting Parts",
+        "awaiting-stock":              "Awaiting Stock",
+        "at-repairer":                 "At Repairer",
+        "awaiting-partner-approval":   "Awaiting Partner Approval",
+        "partner-replacement":         "Partner Replacement",
+        "awaiting-customer":           "Awaiting Customer",
+        "completed":                   "Completed",
+        "cancelled":                   "Cancelled",
       };
       const fromLabel = STATUS_LABELS[current.status] ?? current.status;
       const toLabel   = STATUS_LABELS[body.status]    ?? body.status;
@@ -240,7 +244,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
       ? `${bizName}: Your repair #${job.jobNumber} is now ${label}. Track it here: ${portalUrl}`
       : `${bizName}: Your repair #${job.jobNumber} is now ${label}.`;
 
-    sendSms({ to: customer.phone, body: smsBody }).catch(() => {});
+    sendSms({ to: customer.phone, body: smsBody }, merchantId).catch(() => {});
   }
 
   res.json(formatJob(job, customer));
@@ -293,12 +297,13 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const statusLabel: Record<string, string> = {
     "pending":                     "Pending",
     "in-progress":                 "In Progress",
+    "awaiting-parts":              "Awaiting Parts",
+    "awaiting-stock":              "Awaiting Stock",
     "at-repairer":                 "At Repairer",
     "awaiting-partner-approval":   "Awaiting Partner Approval",
-    "awaiting-stock":              "Awaiting Stock",
+    "partner-replacement":         "Partner Replacement",
     "awaiting-customer":           "Awaiting Your Decision",
     "completed":                   "Completed & ready for pickup",
-    "partner-replacement":         "Partner Replacement",
     "cancelled":                   "Cancelled",
   };
   const label = statusLabel[job.status] ?? job.status;
@@ -306,7 +311,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
     ? `${bizName}: Your repair #${job.jobNumber} (${job.deviceDescription ?? job.deviceType ?? "device"}) is ${label}. Track it: ${portalUrl}`
     : `${bizName}: Your repair #${job.jobNumber} is ${label}.`;
 
-  const result = await sendSms({ to: toPhone, body: smsBody });
+  const result = await sendSms({ to: toPhone, body: smsBody }, merchantId);
 
   if (!result.success) {
     req.log.warn({ serviceJobId: id, to: toPhone, error: result.error }, "Service job SMS failed");

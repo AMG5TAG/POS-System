@@ -66,7 +66,20 @@
       "Bash(cd *)",
       "Bash(sed -n '1,30p' artifacts/api-server/src/routes/invoices.ts)",
       "Bash(sed -n '770,920p' artifacts/api-server/src/routes/invoices.ts)",
-      "Bash(timeout 420 pnpm install)"
+      "Bash(timeout 420 pnpm install)",
+      "Bash(grep -n \"^const ENTITIES\\\\|^  {\\\\s*$\\\\|key:.*section:\\\\|comingSoon:\" /home/runner/workspace/artifacts/koapos/src/pages/app/management-import-export.tsx)",
+      "Bash(pnpm --filter @workspace/api-spec run codegen)",
+      "Bash(pnpm --filter db push)",
+      "Bash(pnpm --filter @workspace/koapos run typecheck)",
+      "Bash(sed -n '8955,8975p' /home/runner/workspace/lib/api-spec/openapi.yaml)",
+      "Bash(sed -n '9008,9025p' /home/runner/workspace/lib/api-spec/openapi.yaml)",
+      "Bash(sed -n '38,52p' /home/runner/workspace/artifacts/koapos/src/pages/app/service-jobs.tsx)",
+      "Bash(sed -n '395,415p' /home/runner/workspace/artifacts/koapos/src/pages/app/service-jobs.tsx)",
+      "Bash(sed -n '35,55p' /home/runner/workspace/artifacts/koapos/src/components/printing/ServiceJobSheet.tsx)",
+      "Bash(sed -n '85,100p' /home/runner/workspace/artifacts/koapos/src/pages/portal/index.tsx)",
+      "Bash(sed -n '175,215p' /home/runner/workspace/artifacts/api-server/src/routes/service-jobs.ts)",
+      "Bash(sed -n '285,315p' /home/runner/workspace/artifacts/api-server/src/routes/service-jobs.ts)",
+      "Bash(pnpm --filter @workspace/api-server run typecheck)"
     ]
   }
 }

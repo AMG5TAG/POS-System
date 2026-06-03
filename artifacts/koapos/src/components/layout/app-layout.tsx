@@ -27,10 +27,12 @@ import {
   useListCustomers,
   useListServiceJobs,
   useListAppointments,
+  useListProducts,
   useGetAuthEventsUnreadCount,
   type Customer,
   type Appointment,
   type ServiceJob,
+  type Product,
 } from "@workspace/api-client-react";
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
@@ -38,7 +40,7 @@ import {
   SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
@@ -192,6 +194,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
           { name: "Misc",              href: "/management/misc-templates",   icon: FileText },
         ],
       },
+      { name: "SMS",               href: "/management/sms",           icon: MessageSquare  },
       { name: "Integrations",      href: "/management/integrations",  icon: Plug,
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
       { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
@@ -246,6 +249,7 @@ const SEARCH_INDEX = [
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
   { label: "Email Settings",      href: "/management/email",                      icon: Mail,         group: "Management" },
+  { label: "SMS Settings",        href: "/management/sms",                        icon: MessageSquare, group: "Management" },
   { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
   { label: "Floor Plan",         href: "/management/floor-plan",       icon: Map,             group: "Management" },
   { label: "Forms & Files",     href: "/management/forms",            icon: FileText,        group: "Management" },
@@ -377,6 +381,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
   "/management/tax":              ["Management", "Tax Settings"],
   "/management/email":            ["Management", "Email"],
+  "/management/sms":              ["Management", "Settings & Integrations", "SMS"],
   "/management/templates":        ["Management", "Templates", "Sales"],
   "/management/misc-templates":   ["Management", "Templates", "Misc"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
@@ -407,68 +412,148 @@ const ROUTE_LABEL: Record<string, string[]> = {
 
 /* ─── Global search ──────────────────────────────────────────────────────── */
 
+type SearchResultItem = {
+  label: string;
+  sub?: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  group: string;
+};
+
 function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [, navigate] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const setOpenWithCallback = (val: boolean) => { setOpen(val); onOpenChange?.(val); };
 
-  const liveEnabled = query.trim().length >= 2;
-  const { data: custData }  = useListCustomers(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["customers-search", liveEnabled] } });
-  const { data: svcData }   = useListServiceJobs({ query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["service-jobs-search", liveEnabled] } });
-  const { data: apptData }  = useListAppointments(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["appointments-search", liveEnabled] } });
+  // Debounce query for API calls
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(query.trim()), 200);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  const q = query.trim().toLowerCase();
+  // Reset active index when query changes
+  useEffect(() => { setActiveIdx(0); }, [debouncedQ]);
 
-  const staticResults = q.length === 0
-    ? SEARCH_INDEX.slice(0, 8)
-    : SEARCH_INDEX.filter((item) =>
-        item.label.toLowerCase().includes(q) ||
-        item.group.toLowerCase().includes(q)
-      ).slice(0, 6);
+  const q = debouncedQ.toLowerCase();
+  const liveEnabled = q.length >= 2;
 
-  const liveItems: typeof SEARCH_INDEX = [];
-  if (q.length >= 2) {
-    ((custData as { items?: Customer[] } | undefined)?.items ?? [])
-      .filter((c) => `${c.firstName ?? ""} ${c.lastName ?? ""} ${c.email ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((c) => liveItems.push({
-        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || (c.email ?? "Customer"),
+  // Server-side search: customers and products support a search param
+  const { data: custData, isFetching: custFetching } = useListCustomers(
+    { search: debouncedQ, limit: 5 },
+    { query: { enabled: liveEnabled, staleTime: 15000, queryKey: ["gs-customers", debouncedQ] } },
+  );
+  const { data: prodData, isFetching: prodFetching } = useListProducts(
+    { search: debouncedQ, limit: 5 },
+    { query: { enabled: liveEnabled, staleTime: 15000, queryKey: ["gs-products", debouncedQ] } },
+  );
+  // Client-side filter: service jobs and appointments (no server search param)
+  const { data: svcData } = useListServiceJobs(
+    { query: { enabled: liveEnabled, staleTime: 60000, queryKey: ["gs-service-jobs"] } },
+  );
+  const { data: apptData } = useListAppointments(
+    undefined,
+    { query: { enabled: liveEnabled, staleTime: 60000, queryKey: ["gs-appointments"] } },
+  );
+
+  const isSearching = liveEnabled && (custFetching || prodFetching);
+
+  // Build sections
+  const sections: { title: string; items: SearchResultItem[] }[] = [];
+
+  if (liveEnabled) {
+    const customers = ((custData as { items?: Customer[] } | undefined)?.items ?? [])
+      .slice(0, 5)
+      .map((c): SearchResultItem => ({
+        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || "Customer",
+        sub: c.email ?? c.phone ?? undefined,
         href: "/customers",
         icon: Users,
         group: "Customer",
       }));
+    if (customers.length) sections.push({ title: "Customers", items: customers });
 
-    const jobs = (svcData as ServiceJob[] | { items?: ServiceJob[] } | undefined);
-    (Array.isArray(jobs) ? jobs : (jobs as { items?: ServiceJob[] } | undefined)?.items ?? [])
-      .filter((j) => `${j.jobNumber ?? ""} ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? ""} ${j.customerName ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((j) => liveItems.push({
-        label: `#${j.jobNumber} — ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? (j as ServiceJob & { deviceType?: string | null }).deviceType ?? "Service Job"}`,
+    const products = ((prodData as { items?: Product[] } | undefined)?.items ?? [])
+      .slice(0, 5)
+      .map((p): SearchResultItem => ({
+        label: p.name,
+        sub: p.sku ? `${formatCurrency(p.price)} · ${p.sku}` : formatCurrency(p.price),
+        href: "/products",
+        icon: Package,
+        group: "Product",
+      }));
+    if (products.length) sections.push({ title: "Products", items: products });
+
+    const rawJobs = svcData as ServiceJob[] | { items?: ServiceJob[] } | undefined;
+    const jobs = (Array.isArray(rawJobs) ? rawJobs : (rawJobs as { items?: ServiceJob[] })?.items ?? [])
+      .filter((j) => {
+        const haystack = [j.jobNumber, (j as ServiceJob & { deviceDescription?: string }).deviceDescription, (j as ServiceJob & { deviceType?: string }).deviceType, j.customerName].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 5)
+      .map((j): SearchResultItem => ({
+        label: `#${j.jobNumber ?? j.id} — ${(j as ServiceJob & { deviceDescription?: string }).deviceDescription ?? (j as ServiceJob & { deviceType?: string }).deviceType ?? "Service Job"}`,
+        sub: j.customerName ?? undefined,
         href: `/service-jobs/${j.id}`,
         icon: Wrench,
-        group: "Service Job",
+        group: "Service",
       }));
+    if (jobs.length) sections.push({ title: "Services", items: jobs });
 
-    (Array.isArray(apptData) ? apptData as Appointment[] : [])
+    const appts = (Array.isArray(apptData) ? apptData as Appointment[] : [])
       .filter((a) => `${a.title} ${a.customerName ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((a) => liveItems.push({
+      .slice(0, 5)
+      .map((a): SearchResultItem => ({
         label: a.title,
+        sub: a.customerName ?? undefined,
         href: "/appointments",
         icon: CalendarClock,
         group: "Appointment",
       }));
+    if (appts.length) sections.push({ title: "Appointments", items: appts });
   }
 
-  const results = [...staticResults, ...liveItems].slice(0, 12);
+  const navItems = q.length === 0
+    ? SEARCH_INDEX.slice(0, 6)
+    : SEARCH_INDEX.filter((item) =>
+        item.label.toLowerCase().includes(q) || item.group.toLowerCase().includes(q)
+      ).slice(0, 5);
+  if (navItems.length) sections.push({ title: q ? "Navigation" : "Quick Navigation", items: navItems });
+
+  // Flat indexed list for keyboard nav
+  const allItems = sections.flatMap((s) => s.items);
+  const totalItems = allItems.length;
+
+  // Build flat entries (headers + items) for rendering
+  const flatEntries: ({ kind: "header"; title: string } | { kind: "item"; item: SearchResultItem; idx: number })[] = [];
+  let itemCounter = 0;
+  for (const section of sections) {
+    flatEntries.push({ kind: "header", title: section.title });
+    for (const item of section.items) {
+      flatEntries.push({ kind: "item", item, idx: itemCounter++ });
+    }
+  }
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const active = listRef.current.querySelector<HTMLElement>("[data-active='true']");
+    active?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setOpenWithCallback(true); setTimeout(() => inputRef.current?.focus(), 50); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setOpenWithCallback(true);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
       if (e.key === "Escape") setOpenWithCallback(false);
     }
     window.addEventListener("keydown", onKey);
@@ -483,12 +568,12 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const go = (href: string) => { navigate(href); setOpenWithCallback(false); setQuery(""); };
+  const go = (href: string) => { navigate(href); setOpenWithCallback(false); setQuery(""); setDebouncedQ(""); };
 
   return (
     <div ref={containerRef} className="relative flex-1">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors", isSearching ? "text-primary animate-pulse" : "text-muted-foreground")} />
         <input
           ref={inputRef}
           type="text"
@@ -496,27 +581,52 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
           onFocus={() => setOpenWithCallback(true)}
           onChange={(e) => { setQuery(e.target.value); setOpenWithCallback(true); }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && results.length > 0) go(results[0].href);
+            if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)); }
+            if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+            if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx].href); }
             if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
-          placeholder="Search everything..."
+          placeholder="Search customers, products, services…"
           className="w-full h-9 pl-9 pr-14 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono border rounded px-1 py-0.5">⌘K</kbd>
       </div>
       {open && (
-        <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden">
-          {results.length === 0 ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground text-center">No results found.</div>
+        <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden min-w-[320px]">
+          {flatEntries.length === 0 ? (
+            <div className="px-4 py-8 text-sm text-muted-foreground text-center">
+              {isSearching ? "Searching…" : "No results found."}
+            </div>
           ) : (
-            <div className="py-1 max-h-80 overflow-y-auto">
-              {results.map((item) => (
-                <button key={item.href} onMouseDown={() => go(item.href)} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors text-left">
-                  <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 font-medium">{item.label}</span>
-                  <span className="text-xs text-muted-foreground">{item.group}</span>
-                </button>
-              ))}
+            <div ref={listRef} className="py-1 max-h-[420px] overflow-y-auto">
+              {flatEntries.map((entry, i) =>
+                entry.kind === "header" ? (
+                  <div key={`h-${i}`} className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+                    {entry.title}
+                  </div>
+                ) : (
+                  <button
+                    key={`item-${entry.idx}`}
+                    data-active={entry.idx === activeIdx}
+                    onMouseDown={() => go(entry.item.href)}
+                    onMouseEnter={() => setActiveIdx(entry.idx)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left group",
+                      entry.idx === activeIdx
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted",
+                    )}
+                  >
+                    <entry.item.icon className={cn("w-4 h-4 shrink-0", entry.idx === activeIdx ? "text-primary-foreground/80" : "text-muted-foreground")} />
+                    <span className="flex-1 font-medium truncate">{entry.item.label}</span>
+                    {entry.item.sub && (
+                      <span className={cn("text-xs shrink-0 max-w-[140px] truncate", entry.idx === activeIdx ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                        {entry.item.sub}
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
             </div>
           )}
         </div>

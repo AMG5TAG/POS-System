@@ -9,6 +9,7 @@ import {
   useDeleteAppointment,
   useUpdateAppointment,
   useListStaff,
+  useComposeEmail,
   Appointment,
   AppointmentInputStatus,
   Staff,
@@ -29,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
-  ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin,
+  ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -177,6 +178,10 @@ function apptRefCode(id: number): string {
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const composeEmailMutation = useComposeEmail();
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
@@ -236,13 +241,14 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                       </a>
                     )}
                     {appt.customerEmail && (
-                      <a
-                        href={`mailto:${appt.customerEmail}`}
-                        className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); }}
+                        className="flex items-center gap-1.5 mt-0.5 text-xs text-primary hover:underline transition-colors"
                       >
                         <Mail className="w-3 h-3 shrink-0" />
                         {appt.customerEmail}
-                      </a>
+                      </button>
                     )}
                     {appt.customerAddress && (
                       <a
@@ -325,6 +331,49 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <Dialog open={composeOpen} onOpenChange={(open) => { if (!open) setComposeOpen(false); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary" />
+            Email Customer
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <p className="text-sm text-muted-foreground">Sending to <strong>{appt.customerEmail}</strong></p>
+          <Input
+            placeholder="Subject"
+            value={composeSubject}
+            onChange={(e) => setComposeSubject(e.target.value)}
+          />
+          <Textarea
+            placeholder="Message"
+            rows={5}
+            value={composeBody}
+            onChange={(e) => setComposeBody(e.target.value)}
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+          <Button
+            size="sm"
+            disabled={composeEmailMutation.isPending || !composeSubject.trim()}
+            onClick={() => {
+              composeEmailMutation.mutate(
+                { data: { to: appt.customerEmail!, subject: composeSubject, body: composeBody } },
+                {
+                  onSuccess: () => { toast.success(`Email sent to ${appt.customerEmail}`); setComposeOpen(false); },
+                  onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                },
+              );
+            }}
+          >
+            {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+            Send
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

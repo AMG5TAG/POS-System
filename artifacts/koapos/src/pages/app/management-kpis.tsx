@@ -27,7 +27,7 @@ import {
   DollarSign, ShoppingCart, UserPlus, Star, CalendarClock,
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
-  SplitSquareHorizontal, Flame, Store,
+  SplitSquareHorizontal, Flame, Store, Banknote,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -35,7 +35,7 @@ import {
 type KpiMetric =
   | "revenue" | "transactions" | "avg_transaction" | "items_per_transaction"
   | "new_customers" | "loyalty_signups" | "category_revenue" | "appointments"
-  | "services" | "refund_rate" | "gross_margin" | "upsell_rate";
+  | "services" | "refund_rate" | "gross_margin" | "upsell_rate" | "net_profit";
 
 type KpiPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
 type RewardType = "cash" | "percent" | "voucher" | "time_off" | "badge" | "custom";
@@ -84,6 +84,7 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; u
   refund_rate:          { label: "Refund Rate",             icon: AlertCircle,  unit: "%",   isCurrency: false, isInverse: true },
   gross_margin:         { label: "Gross Margin",            icon: BarChart3,    unit: "%",   isCurrency: false },
   upsell_rate:          { label: "Upsell / Add-on Rate",    icon: Zap,          unit: "%",   isCurrency: false },
+  net_profit:           { label: "Net Profit",               icon: Banknote,     unit: "$",   isCurrency: true  },
 };
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {

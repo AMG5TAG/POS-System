@@ -38,9 +38,11 @@ export interface ServiceSheetFormFile {
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   "in-progress": "In Progress",
+  "awaiting-parts": "Awaiting Parts",
+  "awaiting-stock": "Awaiting Stock",
+  "at-repairer": "At Repairer",
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement": "Partner Replacement",
-  "awaiting-stock": "Awaiting Stock",
   "awaiting-customer": "Awaiting Customer",
   completed: "Completed",
   cancelled: "Cancelled",

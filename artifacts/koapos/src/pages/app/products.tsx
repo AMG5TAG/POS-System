@@ -2086,23 +2086,24 @@ export default function ProductsPage() {
                         )}
                       </div>
                     </div>
-                    {/* Suggested tags based on selected category */}
+                    {/* Suggested tags: previously used first, then category suggestions, max 8 */}
                     {(() => {
                       const selectedCat = form.categoryId
                         ? categories.find((c) => c.id.toString() === form.categoryId)
                         : null;
-                      if (!selectedCat) return (
+                      const usedFirst = allTags.filter((t) => !form.tags.includes(t));
+                      const catSuggestions = selectedCat
+                        ? getSuggestedTags(selectedCat.name).filter((s) => !form.tags.includes(s) && !usedFirst.includes(s))
+                        : [];
+                      const suggestions = [...usedFirst, ...catSuggestions].slice(0, 8);
+                      if (suggestions.length === 0) return (
                         <div className="flex items-center justify-center h-full min-h-[48px]">
                           <p className="text-xs text-muted-foreground/50 italic">Select a category to see suggested tags</p>
                         </div>
                       );
-                      const suggestions = getSuggestedTags(selectedCat.name).filter((s) => !form.tags.includes(s));
-                      if (suggestions.length === 0) return null;
                       return (
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1.5">
-                            Suggested for <span className="font-medium text-foreground">{selectedCat.name}</span>
-                          </p>
+                          <p className="text-xs text-muted-foreground mb-1.5">Suggested tags</p>
                           <div className="flex flex-wrap gap-1.5">
                             {suggestions.map((s) => (
                               <button

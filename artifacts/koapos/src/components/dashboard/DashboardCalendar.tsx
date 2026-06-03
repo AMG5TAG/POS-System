@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { useGetDashboardCalendar, CalendarDay, CalendarAppointment, CalendarBirthday } from "@workspace/api-client-react";
+import { useGetDashboardCalendar, useComposeEmail, CalendarDay, CalendarAppointment, CalendarBirthday } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -124,17 +125,15 @@ function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointm
 
 function BirthdayDialog({ birthday, onClose }: { birthday: CalendarBirthday; onClose: () => void }) {
   const fullName = [birthday.firstName, birthday.lastName].filter(Boolean).join(" ");
-  const subject = encodeURIComponent(`Happy Birthday ${birthday.firstName}!`);
-  const body = encodeURIComponent(
-    `Hi ${birthday.firstName},\n\nWishing you a wonderful birthday from all of us here at the store!\n\nEnjoy your special day! 🎂\n\nWarm regards`
-  );
-  const mailtoLink = birthday.email ? `mailto:${birthday.email}?subject=${subject}&body=${body}` : null;
+  const defaultSubject = `Happy Birthday ${birthday.firstName}!`;
+  const defaultBody = `Hi ${birthday.firstName},\n\nWishing you a wonderful birthday from all of us here at the store!\n\nEnjoy your special day!\n\nWarm regards`;
+  const composeEmailMutation = useComposeEmail();
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>🎂 Birthday — {fullName}</DialogTitle>
+          <DialogTitle>Birthday — {fullName}</DialogTitle>
           <DialogDescription>Send a birthday message to this customer</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
@@ -149,21 +148,37 @@ function BirthdayDialog({ birthday, onClose }: { birthday: CalendarBirthday; onC
             </div>
           )}
           <div className="flex flex-col gap-2 pt-2">
-            {mailtoLink && (
-              <a href={mailtoLink}>
-                <Button className="w-full">Send Birthday Email</Button>
-              </a>
+            {birthday.email && (
+              <Button
+                className="w-full gap-2"
+                disabled={composeEmailMutation.isPending}
+                onClick={() => {
+                  composeEmailMutation.mutate(
+                    { data: { to: birthday.email!, subject: defaultSubject, body: defaultBody } },
+                    {
+                      onSuccess: () => { toast.success(`Birthday email sent to ${birthday.email}`); onClose(); },
+                      onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                    },
+                  );
+                }}
+              >
+                {composeEmailMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send Birthday Email
+              </Button>
             )}
             {birthday.phone && (
               <a href={`sms:${birthday.phone}`}>
                 <Button variant="outline" className="w-full">Send SMS</Button>
               </a>
             )}
-            {!mailtoLink && !birthday.phone && (
+            {!birthday.email && !birthday.phone && (
               <p className="text-sm text-muted-foreground">No contact info available for this customer.</p>
             )}
           </div>
         </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

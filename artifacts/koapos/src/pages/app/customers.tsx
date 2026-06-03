@@ -21,6 +21,7 @@ import {
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
+  useComposeEmail,
   getListCustomersQueryKey,
   Customer,
   CustomerNote,
@@ -949,11 +950,12 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
-function InfoRow({ icon: Icon, label, value, href, className }: {
+function InfoRow({ icon: Icon, label, value, href, onClick, className }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value?: string | number | null;
   href?: string;
+  onClick?: () => void;
   className?: string;
 }) {
   if (!value && value !== 0) return null;
@@ -966,6 +968,10 @@ function InfoRow({ icon: Icon, label, value, href, className }: {
           <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium truncate flex items-center gap-1 text-primary hover:underline">
             {value} <ExternalLink className="w-3 h-3 shrink-0" />
           </a>
+        ) : onClick ? (
+          <button type="button" onClick={onClick} className="font-medium truncate flex items-center gap-1 text-primary hover:underline text-left">
+            {value}
+          </button>
         ) : (
           <p className="font-medium truncate">{value}</p>
         )}
@@ -1049,8 +1055,12 @@ function CustomerDetailInner({
   const [emailAddr, setEmailAddr] = useState("");
   const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
   const [jobEmailAddr, setJobEmailAddr] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
   const sendReceiptMutation = useSendTransactionReceipt();
   const sendJobEmailMutation = useSendServiceJobEmail();
+  const composeEmailMutation = useComposeEmail();
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
@@ -1366,7 +1376,7 @@ function CustomerDetailInner({
             </div>
           )}
           <div className="rounded-xl border bg-muted/20 divide-y">
-            <InfoRow icon={Mail}      label="Email"   value={customer.email} href={customer.email ? `mailto:${customer.email}` : undefined} />
+            <InfoRow icon={Mail}      label="Email"   value={customer.email} onClick={customer.email ? () => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); } : undefined} />
             <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? `tel:${customer.phone.replace(/\s/g, "")}` : undefined} />
             <InfoRow icon={Building2} label="Company" value={customer.company} />
           </div>
@@ -2340,6 +2350,51 @@ function CustomerDetailInner({
               }}
             >
               {sendReceiptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Compose email dialog ── */}
+      <Dialog open={composeOpen} onOpenChange={(open) => { if (!open) setComposeOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              Email Customer
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">Sending to <strong>{customer.email}</strong></p>
+            <Input
+              placeholder="Subject"
+              value={composeSubject}
+              onChange={(e) => setComposeSubject(e.target.value)}
+            />
+            <Textarea
+              placeholder="Message"
+              rows={5}
+              value={composeBody}
+              onChange={(e) => setComposeBody(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={composeEmailMutation.isPending || !composeSubject.trim() || !customer.email}
+              onClick={() => {
+                composeEmailMutation.mutate(
+                  { data: { to: customer.email!, subject: composeSubject, body: composeBody } },
+                  {
+                    onSuccess: () => { toast.success(`Email sent to ${customer.email}`); setComposeOpen(false); },
+                    onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                  },
+                );
+              }}
+            >
+              {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
               Send
             </Button>
           </DialogFooter>

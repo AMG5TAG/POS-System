@@ -2113,6 +2113,30 @@ paths:
                   provider: { type: string }
                   error: { type: string, nullable: true }
 
+  /email/compose:
+    post:
+      operationId: composeEmail
+      tags: [email-settings]
+      summary: Send a composed email to any address using the merchant's configured email provider
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeEmailRequest"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string, nullable: true }
+
   /dashboard/calendar:
     get:
       operationId: getDashboardCalendar
@@ -2833,6 +2857,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaxSettings"
+
+  # ── SMS Settings ─────────────────────────────────────────────────────────────
+  /settings/sms:
+    get:
+      operationId: getSmsSettings
+      summary: Get SMS / Twilio settings
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+    put:
+      operationId: updateSmsSettings
+      summary: Update SMS notification preferences
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+
+  /settings/sms/connect:
+    post:
+      operationId: connectTwilio
+      summary: Save Twilio credentials to vault
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TwilioConnectInput"
+      responses:
+        "200":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+
+  /settings/sms/disconnect:
+    delete:
+      operationId: disconnectTwilio
+      summary: Remove Twilio credentials from vault
+      security: [{ session: [] }]
+      responses:
+        "204":
+          description: Disconnected
+
+  /settings/sms/test:
+    post:
+      operationId: testSms
+      summary: Send a test SMS to verify Twilio configuration
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string }
 
   # ── Email Settings ────────────────────────────────────────────────────────────
   /settings/email:
@@ -6030,6 +6139,47 @@ paths:
         "204":
           description: Deleted
 
+  /dashboard-notes:
+    get:
+      operationId: listDashboardNotes
+      tags: [Dashboard]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: Dashboard notes list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardNoteList" }
+    post:
+      operationId: createDashboardNote
+      tags: [Dashboard]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardNoteInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardNoteItem" }
+
+  /dashboard-notes/{id}:
+    delete:
+      operationId: deleteDashboardNote
+      tags: [Dashboard]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   /pc-compat-rules:
     get:
       operationId: listPcCompatRules
@@ -8920,7 +9070,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -8973,7 +9123,7 @@ components:
           type: ["integer", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -9929,7 +10079,39 @@ components:
       properties:
         email: { type: string }
 
+    ComposeEmailRequest:
+      type: object
+      required: [to, subject, body]
+      properties:
+        to: { type: string }
+        subject: { type: string }
+        body: { type: string }
+
     # ── Email Settings ──────────────────────────────────────────────────────────
+    SmsSettings:
+      type: object
+      required: [smsEnabled, autoNotifyOnStatus, connected]
+      properties:
+        smsEnabled:           { type: boolean }
+        autoNotifyOnStatus:   { type: boolean }
+        connected:            { type: boolean }
+        fromNumber:           { type: string, nullable: true }
+        accountSidPrefix:     { type: string, nullable: true }
+
+    SmsSettingsInput:
+      type: object
+      properties:
+        smsEnabled:         { type: boolean }
+        autoNotifyOnStatus: { type: boolean }
+
+    TwilioConnectInput:
+      type: object
+      required: [accountSid, authToken, fromNumber]
+      properties:
+        accountSid:  { type: string }
+        authToken:   { type: string }
+        fromNumber:  { type: string }
+
     EmailSettings:
       type: object
       required: [provider, smtpSecure, smtpPassSet, apiKeySet, receiptEmailsEnabled]
@@ -11918,6 +12100,32 @@ components:
         coolingFactor:         { type: number }
         roundingMode:          { type: string }
         roundingValue:         { type: number }
+
+    DashboardNoteItem:
+      type: object
+      required: [id, merchantId, text, isCritical, createdAt, updatedAt]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        text:       { type: string }
+        isCritical: { type: boolean }
+        createdAt:  { type: string, format: date-time }
+        updatedAt:  { type: string, format: date-time }
+
+    DashboardNoteInput:
+      type: object
+      required: [text]
+      properties:
+        text:       { type: string }
+        isCritical: { type: boolean }
+
+    DashboardNoteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardNoteItem" }
 
     StaffNoteItem:
       type: object

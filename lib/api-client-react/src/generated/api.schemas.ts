@@ -1134,8 +1134,11 @@ export type ServiceJobStatus = typeof ServiceJobStatus[keyof typeof ServiceJobSt
 export const ServiceJobStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
-  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'awaiting-parts': 'awaiting-parts',
   'awaiting-stock': 'awaiting-stock',
+  'at-repairer': 'at-repairer',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
@@ -1195,8 +1198,11 @@ export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof Se
 export const ServiceJobInputStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
-  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'awaiting-parts': 'awaiting-parts',
   'awaiting-stock': 'awaiting-stock',
+  'at-repairer': 'at-repairer',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
@@ -1917,6 +1923,37 @@ export interface SendReceiptRequest {
 
 export interface SendServiceJobEmailRequest {
   email?: string;
+}
+
+export interface ComposeEmailRequest {
+  to: string;
+  subject: string;
+  body: string;
+}
+
+export interface ComposeEmail200 {
+  success?: boolean;
+  provider?: string;
+  error?: string | null;
+}
+
+export interface SmsSettings {
+  smsEnabled: boolean;
+  autoNotifyOnStatus: boolean;
+  connected: boolean;
+  fromNumber?: string | null;
+  accountSidPrefix?: string | null;
+}
+
+export interface SmsSettingsInput {
+  smsEnabled?: boolean;
+  autoNotifyOnStatus?: boolean;
+}
+
+export interface TwilioConnectInput {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
 }
 
 export interface EmailSettings {
@@ -3549,6 +3586,24 @@ export interface Print3dSettingsInput {
   roundingValue?: number;
 }
 
+export interface DashboardNoteItem {
+  id: number;
+  merchantId: number;
+  text: string;
+  isCritical: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardNoteInput {
+  text: string;
+  isCritical?: boolean;
+}
+
+export interface DashboardNoteList {
+  items: DashboardNoteItem[];
+}
+
 export interface StaffNoteItem {
   id: number;
   merchantId: number;
@@ -4636,6 +4691,16 @@ export type DeleteWastageEntry200 = {
 
 export type DeletePriceTier200 = {
   success?: boolean;
+};
+
+export type TestSmsBody = {
+  to: string;
+};
+
+export type TestSms200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string;
 };
 
 export type TestEmailSettings200 = {

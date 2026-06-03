@@ -19,6 +19,31 @@ router.post("/shortlinks", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
+router.get("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.select().from(shortlinksTable).where(and(eq(shortlinksTable.id, id), eq(shortlinksTable.merchantId, merchantId))).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
+router.patch("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { label, longUrl, slug, baseDomain, tags } = req.body as Partial<{ label: string; longUrl: string; slug: string; baseDomain: string; tags: string }>;
+  const update: Partial<{ label: string; longUrl: string; slug: string; baseDomain: string; tags: string }> = {};
+  if (label !== undefined) update.label = label;
+  if (longUrl !== undefined) update.longUrl = longUrl;
+  if (slug !== undefined) update.slug = slug;
+  if (baseDomain !== undefined) update.baseDomain = baseDomain;
+  if (tags !== undefined) update.tags = tags;
+  const [row] = await db.update(shortlinksTable).set(update).where(and(eq(shortlinksTable.id, id), eq(shortlinksTable.merchantId, merchantId))).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
 router.delete("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);

@@ -50,6 +50,8 @@ import type {
   CameraSnapshot,
   CameraSnapshotInput,
   CancelLaybyBody,
+  ComposeEmail200,
+  ComposeEmailRequest,
   CashDrawerEntry,
   CashDrawerEntryInput,
   Category,
@@ -78,6 +80,9 @@ import type {
   DailyCloseCurrent,
   DashboardActivity,
   DashboardConfigResponse,
+  DashboardNoteInput,
+  DashboardNoteItem,
+  DashboardNoteList,
   DashboardSummary,
   DeleteCashDrawerEntry200,
   DeleteDiscount200,
@@ -338,6 +343,8 @@ import type {
   ShortlinkSettingsInput,
   SignatureSaveInput,
   SignatureSaveResult,
+  SmsSettings,
+  SmsSettingsInput,
   SocialFeedResponse,
   SocialFeedSettings,
   SocialFeedSettingsInput,
@@ -373,10 +380,13 @@ import type {
   TaxSettingsInput,
   TestEmailRequest,
   TestEmailSettings200,
+  TestSms200,
+  TestSmsBody,
   TopProduct,
   Transaction,
   TransactionInput,
   TransactionList,
+  TwilioConnectInput,
   UnlockAccountInput,
   UpdateAuthEventStatus,
   UpdateLaybyBody,
@@ -7714,6 +7724,56 @@ export const useSendServiceJobEmail = <TError = ErrorType<unknown>,
       return useMutation(getSendServiceJobEmailMutationOptions(options));
     }
 
+export const getComposeEmailUrl = () => `/api/email/compose`
+
+/**
+ * @summary Send a composed email using the merchant's configured email provider
+ */
+export const composeEmail = async (
+    composeEmailRequest: ComposeEmailRequest, options?: RequestInit): Promise<ComposeEmail200> => {
+  return customFetch<ComposeEmail200>(getComposeEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(composeEmailRequest),
+  });
+}
+
+export const getComposeEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof composeEmail>>, TError,{data: BodyType<ComposeEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof composeEmail>>, TError,{data: BodyType<ComposeEmailRequest>}, TContext> => {
+const mutationKey = ['composeEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof composeEmail>>, {data: BodyType<ComposeEmailRequest>}> = (props) => {
+      const {data} = props ?? {};
+      return composeEmail(data, requestOptions);
+    }
+  return { mutationFn, ...mutationOptions };
+}
+
+export type ComposeEmailMutationResult = NonNullable<Awaited<ReturnType<typeof composeEmail>>>
+export type ComposeEmailMutationBody = BodyType<ComposeEmailRequest>
+export type ComposeEmailMutationError = ErrorType<unknown>
+
+/**
+ * @summary Send a composed email using the merchant's configured email provider
+ */
+export const useComposeEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof composeEmail>>, TError,{data: BodyType<ComposeEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof composeEmail>>,
+        TError,
+        {data: BodyType<ComposeEmailRequest>},
+        TContext
+      > => {
+      return useMutation(getComposeEmailMutationOptions(options));
+    }
+
 export const getGetDashboardCalendarUrl = (params: GetDashboardCalendarParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -10521,6 +10581,366 @@ export const useUpdateTaxSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateTaxSettingsMutationOptions(options));
+    }
+
+export const getGetSmsSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/sms`
+}
+
+/**
+ * @summary Get SMS / Twilio settings
+ */
+export const getSmsSettings = async ( options?: RequestInit): Promise<SmsSettings> => {
+
+  return customFetch<SmsSettings>(getGetSmsSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSmsSettingsQueryKey = () => {
+    return [
+    `/api/settings/sms`
+    ] as const;
+    }
+
+
+export const getGetSmsSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSmsSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSmsSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSmsSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSmsSettings>>> = ({ signal }) => getSmsSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSmsSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSmsSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSmsSettings>>>
+export type GetSmsSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get SMS / Twilio settings
+ */
+
+export function useGetSmsSettings<TData = Awaited<ReturnType<typeof getSmsSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSmsSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSmsSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateSmsSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/sms`
+}
+
+/**
+ * @summary Update SMS notification preferences
+ */
+export const updateSmsSettings = async (smsSettingsInput: SmsSettingsInput, options?: RequestInit): Promise<SmsSettings> => {
+
+  return customFetch<SmsSettings>(getUpdateSmsSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      smsSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateSmsSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmsSettings>>, TError,{data: BodyType<SmsSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSmsSettings>>, TError,{data: BodyType<SmsSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateSmsSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSmsSettings>>, {data: BodyType<SmsSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSmsSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSmsSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSmsSettings>>>
+    export type UpdateSmsSettingsMutationBody = BodyType<SmsSettingsInput>
+    export type UpdateSmsSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update SMS notification preferences
+ */
+export const useUpdateSmsSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmsSettings>>, TError,{data: BodyType<SmsSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSmsSettings>>,
+        TError,
+        {data: BodyType<SmsSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSmsSettingsMutationOptions(options));
+    }
+
+export const getConnectTwilioUrl = () => {
+
+
+
+
+  return `/api/settings/sms/connect`
+}
+
+/**
+ * @summary Save Twilio credentials to vault
+ */
+export const connectTwilio = async (twilioConnectInput: TwilioConnectInput, options?: RequestInit): Promise<SmsSettings> => {
+
+  return customFetch<SmsSettings>(getConnectTwilioUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      twilioConnectInput,)
+  }
+);}
+
+
+
+
+export const getConnectTwilioMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectTwilio>>, TError,{data: BodyType<TwilioConnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectTwilio>>, TError,{data: BodyType<TwilioConnectInput>}, TContext> => {
+
+const mutationKey = ['connectTwilio'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectTwilio>>, {data: BodyType<TwilioConnectInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  connectTwilio(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectTwilioMutationResult = NonNullable<Awaited<ReturnType<typeof connectTwilio>>>
+    export type ConnectTwilioMutationBody = BodyType<TwilioConnectInput>
+    export type ConnectTwilioMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save Twilio credentials to vault
+ */
+export const useConnectTwilio = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectTwilio>>, TError,{data: BodyType<TwilioConnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectTwilio>>,
+        TError,
+        {data: BodyType<TwilioConnectInput>},
+        TContext
+      > => {
+      return useMutation(getConnectTwilioMutationOptions(options));
+    }
+
+export const getDisconnectTwilioUrl = () => {
+
+
+
+
+  return `/api/settings/sms/disconnect`
+}
+
+/**
+ * @summary Remove Twilio credentials from vault
+ */
+export const disconnectTwilio = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDisconnectTwilioUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDisconnectTwilioMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectTwilio>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectTwilio>>, TError,void, TContext> => {
+
+const mutationKey = ['disconnectTwilio'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectTwilio>>, void> = () => {
+
+
+          return  disconnectTwilio(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectTwilioMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectTwilio>>>
+
+    export type DisconnectTwilioMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove Twilio credentials from vault
+ */
+export const useDisconnectTwilio = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectTwilio>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectTwilio>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDisconnectTwilioMutationOptions(options));
+    }
+
+export const getTestSmsUrl = () => {
+
+
+
+
+  return `/api/settings/sms/test`
+}
+
+/**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const testSms = async (testSmsBody: TestSmsBody, options?: RequestInit): Promise<TestSms200> => {
+
+  return customFetch<TestSms200>(getTestSmsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      testSmsBody,)
+  }
+);}
+
+
+
+
+export const getTestSmsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSms>>, TError,{data: BodyType<TestSmsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testSms>>, TError,{data: BodyType<TestSmsBody>}, TContext> => {
+
+const mutationKey = ['testSms'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testSms>>, {data: BodyType<TestSmsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  testSms(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestSmsMutationResult = NonNullable<Awaited<ReturnType<typeof testSms>>>
+    export type TestSmsMutationBody = BodyType<TestSmsBody>
+    export type TestSmsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Send a test SMS to verify Twilio configuration
+ */
+export const useTestSms = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSms>>, TError,{data: BodyType<TestSmsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testSms>>,
+        TError,
+        {data: BodyType<TestSmsBody>},
+        TContext
+      > => {
+      return useMutation(getTestSmsMutationOptions(options));
     }
 
 export const getGetEmailSettingsUrl = () => {
@@ -24804,6 +25224,206 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteStaffNoteMutationOptions(options));
+    }
+
+export const getListDashboardNotesUrl = () => {
+
+
+
+
+  return `/api/dashboard-notes`
+}
+
+export const listDashboardNotes = async ( options?: RequestInit): Promise<DashboardNoteList> => {
+
+  return customFetch<DashboardNoteList>(getListDashboardNotesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDashboardNotesQueryKey = () => {
+    return [
+    `/api/dashboard-notes`
+    ] as const;
+    }
+
+
+export const getListDashboardNotesQueryOptions = <TData = Awaited<ReturnType<typeof listDashboardNotes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDashboardNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDashboardNotesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDashboardNotes>>> = ({ signal }) => listDashboardNotes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDashboardNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDashboardNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listDashboardNotes>>>
+export type ListDashboardNotesQueryError = ErrorType<unknown>
+
+
+
+export function useListDashboardNotes<TData = Awaited<ReturnType<typeof listDashboardNotes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDashboardNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDashboardNotesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateDashboardNoteUrl = () => {
+
+
+
+
+  return `/api/dashboard-notes`
+}
+
+export const createDashboardNote = async (dashboardNoteInput: DashboardNoteInput, options?: RequestInit): Promise<DashboardNoteItem> => {
+
+  return customFetch<DashboardNoteItem>(getCreateDashboardNoteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      dashboardNoteInput,)
+  }
+);}
+
+
+
+
+export const getCreateDashboardNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDashboardNote>>, TError,{data: BodyType<DashboardNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDashboardNote>>, TError,{data: BodyType<DashboardNoteInput>}, TContext> => {
+
+const mutationKey = ['createDashboardNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDashboardNote>>, {data: BodyType<DashboardNoteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDashboardNote(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDashboardNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createDashboardNote>>>
+    export type CreateDashboardNoteMutationBody = BodyType<DashboardNoteInput>
+    export type CreateDashboardNoteMutationError = ErrorType<unknown>
+
+    export const useCreateDashboardNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDashboardNote>>, TError,{data: BodyType<DashboardNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDashboardNote>>,
+        TError,
+        {data: BodyType<DashboardNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDashboardNoteMutationOptions(options));
+    }
+
+export const getDeleteDashboardNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/dashboard-notes/${id}`
+}
+
+export const deleteDashboardNote = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDashboardNoteUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDashboardNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDashboardNote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDashboardNote>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteDashboardNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDashboardNote>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDashboardNote(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDashboardNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDashboardNote>>>
+
+    export type DeleteDashboardNoteMutationError = ErrorType<unknown>
+
+    export const useDeleteDashboardNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDashboardNote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDashboardNote>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteDashboardNoteMutationOptions(options));
     }
 
 export const getListPcCompatRulesUrl = () => {

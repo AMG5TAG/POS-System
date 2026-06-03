@@ -124,7 +124,7 @@ async function dispatchMessage(
     if (!toPhone) return { success: false, error: "No phone number on file" };
     // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
     const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
-    const result = await sendSms({ to: toPhone, body });
+    const result = await sendSms({ to: toPhone, body }, merchantId);
     return { success: result.success, error: result.error };
   }
   if (!toEmail) {

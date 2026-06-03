@@ -89,21 +89,25 @@ function usePortalServices(token: string, enabled: boolean) {
 const JOB_COLORS: Record<string, string> = {
   pending:                     "bg-amber-100  text-amber-800  border-amber-200",
   "in-progress":               "bg-blue-100   text-blue-800   border-blue-200",
-  "awaiting-partner-approval": "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "awaiting-parts":            "bg-rose-100   text-rose-800   border-rose-200",
   "awaiting-stock":            "bg-purple-100 text-purple-800 border-purple-200",
+  "at-repairer":               "bg-yellow-100 text-yellow-800 border-yellow-200",
+  "awaiting-partner-approval": "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "partner-replacement":       "bg-teal-100   text-teal-800   border-teal-200",
   "awaiting-customer":         "bg-orange-100 text-orange-800 border-orange-200",
   completed:                   "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "partner-replacement":       "bg-teal-100   text-teal-800   border-teal-200",
   cancelled:                   "bg-red-100    text-red-700    border-red-200",
 };
 const JOB_LABEL: Record<string, string> = {
   pending:                     "Pending",
   "in-progress":               "In Progress",
-  "awaiting-partner-approval": "Awaiting Partner",
-  "awaiting-stock":            "Awaiting Parts",
+  "awaiting-parts":            "Awaiting Parts",
+  "awaiting-stock":            "Awaiting Stock",
+  "at-repairer":               "At Repairer",
+  "awaiting-partner-approval": "Awaiting Partner Approval",
+  "partner-replacement":       "Partner Replacement",
   "awaiting-customer":         "Awaiting Your Decision",
   completed:                   "Completed — Ready for Pickup",
-  "partner-replacement":       "Partner Replacement",
   cancelled:                   "Cancelled",
 };
 const APPT_COLORS: Record<string, string> = {

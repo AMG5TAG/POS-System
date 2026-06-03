@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, emailSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { UpdateEmailSettingsBody, TestEmailSettingsBody } from "@workspace/api-zod";
+import { UpdateEmailSettingsBody, TestEmailSettingsBody, ComposeEmailBody } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 
 const router: IRouter = Router();
@@ -77,6 +77,19 @@ router.post("/settings/email/test", requireAuth, async (req, res) => {
   });
   if (!result.success) {
     res.status(400).json({ error: result.error ?? "Failed to send test email" });
+    return;
+  }
+  res.json({ success: true, provider: result.provider });
+});
+
+// POST /email/compose
+router.post("/email/compose", requireAuth, async (req, res) => {
+  const merchantId = req.session.merchantId!;
+  const { to, subject, body } = ComposeEmailBody.parse(req.body);
+  const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;white-space:pre-wrap;">${body.replace(/\n/g, "<br>")}</div>`;
+  const result = await sendEmail(merchantId, { to, subject, html, text: body });
+  if (!result.success) {
+    res.status(400).json({ error: result.error ?? "Failed to send email" });
     return;
   }
   res.json({ success: true, provider: result.provider });
