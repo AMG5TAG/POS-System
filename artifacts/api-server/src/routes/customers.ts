@@ -483,10 +483,50 @@ router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/customers/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/customers/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const params = DeleteCustomerParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  await db.delete(customersTable).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, req.session.merchantId!)));
+  const merchantId = req.session.merchantId!;
+  const customerId = params.data.id;
+
+  // Check whether this customer has any linked records that must be retained for
+  // financial record-keeping (Tax Administration Act 1953, Corporations Act 2001).
+  const [txRow] = await db
+    .select({ id: transactionsTable.id })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.customerId, customerId), eq(transactionsTable.merchantId, merchantId)))
+    .limit(1);
+
+  if (txRow) {
+    // Customer has transaction history — anonymise PII instead of hard-deleting so
+    // financial records remain intact (Privacy Act APP 11 + record-keeping obligations).
+    const token = crypto.randomBytes(8).toString("hex");
+    await db.update(customersTable).set({
+      firstName: "Deleted",
+      lastName:  `Customer-${token}`,
+      email:     null,
+      phone:     null,
+      address:   null,
+      dateOfBirth: null,
+      company:   null,
+      abn:       null,
+      notes:     null,
+      billingStreet: null, billingCity: null, billingState: null,
+      billingPostcode: null, billingCountry: null,
+      shippingStreet: null, shippingCity: null, shippingState: null,
+      shippingPostcode: null, shippingCountry: null,
+      agreedToMarketing: "false",
+      portalToken: null,
+      warningNote: null,
+      // Privacy Act APP 11: clear additional free-text fields that may contain PII
+      referredBy: null,
+      heardFromDetails: null,
+      whatsappSameAsPhone: null,
+    }).where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+  } else {
+    // No transaction history — safe to hard-delete.
+    await db.delete(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+  }
   res.sendStatus(204);
 });
 

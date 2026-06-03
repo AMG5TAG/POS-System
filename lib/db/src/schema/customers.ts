@@ -35,7 +35,7 @@ export const customersTable = pgTable("customers", {
   shippingCountry: text("shipping_country"),
   customerGroup: text("customer_group"),
   warningNote: text("warning_note"),
-  agreedToMarketing: text("agreed_to_marketing"),
+  agreedToMarketing: text("agreed_to_marketing").default("false"),
   portalToken: text("portal_token"),
   referralCode: text("referral_code"),
   heardFrom: text("heard_from"),

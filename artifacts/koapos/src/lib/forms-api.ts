@@ -14,7 +14,9 @@ export type FieldType =
   | "multiple_choice"
   | "dropdown"
   | "section_header"
-  | "divider";
+  | "divider"
+  | "privacy_notice"
+  | "marketing_consent";
 
 export interface FormField {
   id: string;

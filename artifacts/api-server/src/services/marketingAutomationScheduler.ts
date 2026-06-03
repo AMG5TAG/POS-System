@@ -5,10 +5,12 @@ import {
   serviceJobsTable,
   invoicesTable,
   merchantsTable,
+  businessProfileTable,
   marketingAutomationRulesTable,
   marketingAutomationLogTable,
 } from "@workspace/db";
 import { eq, and, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
+import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
 import type { Logger } from "pino";
@@ -18,6 +20,35 @@ type Rule = typeof marketingAutomationRulesTable.$inferSelect;
 /** Substitute template variables in text */
 function applyVars(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+/** Generate a signed unsubscribe token for a customer (no DB table needed). */
+function makeUnsubscribeToken(merchantId: number, customerId: number): string {
+  const secret = process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET ?? "koapos-unsub-secret";
+  const payload = `${merchantId}:${customerId}`;
+  const sig = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
+  return Buffer.from(`${payload}:${sig}`).toString("base64url");
+}
+
+/** Build an absolute unsubscribe URL for inclusion in marketing emails. */
+function unsubscribeUrl(merchantId: number, customerId: number): string {
+  const base = process.env.APP_BASE_URL ?? "https://app.koastal.com.au";
+  return `${base}/api/unsubscribe?t=${makeUnsubscribeToken(merchantId, customerId)}`;
+}
+
+/** Build a legal email footer with business identity + unsubscribe link. */
+function legalEmailFooter(bizName: string, bizAddress: string, unsub: string): string {
+  return `
+<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;line-height:1.6;">
+  <p>${bizName}${bizAddress ? ` · ${bizAddress}` : ""}</p>
+  <p>You are receiving this email because you are a customer of ${bizName}.</p>
+  <p><a href="${unsub}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a> from marketing emails.</p>
+</div>`;
+}
+
+/** Plain-text opt-out footer for emails. */
+function legalEmailFooterText(bizName: string, bizAddress: string, unsub: string): string {
+  return `\n\n---\n${bizName}${bizAddress ? ` · ${bizAddress}` : ""}\nTo unsubscribe: ${unsub}`;
 }
 
 /** Check if this rule+record combo was already dispatched (within window) */
@@ -63,12 +94,18 @@ async function logDispatch(opts: {
   });
 }
 
-async function getMerchantName(merchantId: number): Promise<string> {
-  const [m] = await db
-    .select({ name: merchantsTable.businessName })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.id, merchantId));
-  return m?.name ?? "Your Business";
+interface BizInfo { name: string; address: string }
+
+async function getBizInfo(merchantId: number): Promise<BizInfo> {
+  const [[m], [bp]] = await Promise.all([
+    db.select({ name: merchantsTable.businessName, address: merchantsTable.address, city: merchantsTable.city })
+      .from(merchantsTable).where(eq(merchantsTable.id, merchantId)),
+    db.select({ state: businessProfileTable.state, postcode: businessProfileTable.postcode })
+      .from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)),
+  ]);
+  const name = m?.name ?? "Your Business";
+  const address = [m?.address, m?.city, bp?.state, bp?.postcode].filter(Boolean).join(", ");
+  return { name, address };
 }
 
 async function dispatchMessage(
@@ -78,17 +115,34 @@ async function dispatchMessage(
   subject: string,
   html: string,
   text: string,
+  biz: BizInfo,
+  customerId: number | null,
+  isMarketing: boolean,
   toPhone?: string | null,
 ): Promise<{ success: boolean; error?: string }> {
   if (rule.channel === "sms") {
     if (!toPhone) return { success: false, error: "No phone number on file" };
-    const result = await sendSms({ to: toPhone, body: text });
+    // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
+    const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
+    const result = await sendSms({ to: toPhone, body });
     return { success: result.success, error: result.error };
   }
   if (!toEmail) {
     return { success: false, error: "No email address on file" };
   }
-  const result = await sendEmail(merchantId, { to: toEmail, subject, html, text });
+  // Spam Act 2003: marketing emails must include sender identity + unsubscribe link
+  let finalHtml = html;
+  let finalText = text;
+  if (isMarketing && customerId != null) {
+    const unsub = unsubscribeUrl(merchantId, customerId);
+    finalHtml = html + legalEmailFooter(biz.name, biz.address, unsub);
+    finalText = text + legalEmailFooterText(biz.name, biz.address, unsub);
+  } else if (isMarketing) {
+    // No customer ID — still append business identity
+    finalHtml = html + legalEmailFooter(biz.name, biz.address, "#");
+    finalText = text + legalEmailFooterText(biz.name, biz.address, "");
+  }
+  const result = await sendEmail(merchantId, { to: toEmail, subject, html: finalHtml, text: finalText });
   return { success: result.success, error: result.error };
 }
 
@@ -97,7 +151,7 @@ async function dispatchMessage(
 async function runBirthday(
   merchantId: number,
   rule: Rule,
-  bizName: string,
+  biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
   const today = new Date();
@@ -127,14 +181,16 @@ async function runBirthday(
 
   let sent = 0;
   for (const c of matches) {
+    // Spam Act 2003 s 16: only send to customers who have explicitly opted in
+    if (c.agreedToMarketing !== "true") continue;
     const dedupeKey = `${yearStr}-${c.id}`;
     if (await alreadySent(rule.id, dedupeKey, 365 * 24 * 3600 * 1000)) continue;
     const firstName = c.firstName ?? "Valued Customer";
-    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: bizName };
-    const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${bizName}!`, vars);
+    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name };
+    const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${biz.name}!`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
     const text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
-    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
+    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
     logger.info({ ruleId: rule.id, customerId: c.id, trigger: "birthday" }, "Automation: birthday message dispatched");
@@ -147,7 +203,7 @@ async function runBirthday(
 async function runAnniversary(
   merchantId: number,
   rule: Rule,
-  bizName: string,
+  biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
   const today = new Date();
@@ -167,15 +223,17 @@ async function runAnniversary(
 
   let sent = 0;
   for (const c of matches) {
+    // Spam Act 2003 s 16: only send to customers who have explicitly opted in
+    if (c.agreedToMarketing !== "true") continue;
     const dedupeKey = `anniv-${yearStr}-${c.id}`;
     if (await alreadySent(rule.id, dedupeKey, 365 * 24 * 3600 * 1000)) continue;
     const firstName = c.firstName ?? "Valued Customer";
     const years = today.getFullYear() - c.createdAt.getFullYear();
-    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: bizName, years: String(years) };
+    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, years: String(years) };
     const subject = applyVars(rule.templateSubject ?? `Happy ${years > 0 ? `${years}-year` : ""} Anniversary, {{first_name}}!`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Happy anniversary! It's been ${years > 0 ? `${years} year${years > 1 ? "s" : ""}` : "a while"} since you joined us. We appreciate your loyalty! 🎉</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, happy anniversary! Thank you for being a part of {{business_name}}.`, vars);
-    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
+    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
   }
@@ -187,7 +245,7 @@ async function runAnniversary(
 async function runNewProduct(
   merchantId: number,
   rule: Rule,
-  bizName: string,
+  biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
   const since = new Date(Date.now() - 24 * 3600 * 1000);
@@ -206,17 +264,17 @@ async function runNewProduct(
 
   let sent = 0;
   for (const product of newProducts) {
-    // Broadcast to all opted-in customers
+    // Broadcast to all opted-in customers — require explicit opt-in (Spam Act 2003 s 16)
     for (const c of customers) {
-      if (c.agreedToMarketing === "false") continue;
+      if (c.agreedToMarketing !== "true") continue;
       const dedupeKey = `product-${product.id}-customer-${c.id}`;
       if (await alreadySent(rule.id, dedupeKey, 30 * 24 * 3600 * 1000)) continue;
       const firstName = c.firstName ?? "Valued Customer";
-      const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: bizName, product_name: product.name, product_price: `$${parseFloat(product.price).toFixed(2)}` };
+      const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, product_name: product.name, product_price: `$${parseFloat(product.price).toFixed(2)}` };
       const subject = applyVars(rule.templateSubject ?? `New arrival: {{product_name}}`, vars);
       const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>We just added <strong>{{product_name}}</strong> to our range at {{business_name}}. Check it out!</p>`, vars);
       const text = applyVars(`Hi {{first_name}}, we just added {{product_name}} at {{business_name}}. Come check it out!`, vars);
-      const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, c.phone ?? null);
+      const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
       await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "product", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
       if (result.success) sent++;
     }
@@ -230,7 +288,7 @@ async function runNewProduct(
 async function runNewServiceJob(
   merchantId: number,
   rule: Rule,
-  bizName: string,
+  biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
   const since = new Date(Date.now() - 24 * 3600 * 1000);
@@ -256,11 +314,12 @@ async function runNewServiceJob(
     const dedupeKey = `job-${row.job.id}`;
     if (await alreadySent(rule.id, dedupeKey, 48 * 3600 * 1000)) continue;
     const firstName = row.customerFirstName ?? "Valued Customer";
-    const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: bizName, job_number: row.job.jobNumber, device: (row.job as unknown as { deviceType?: string }).deviceType ?? "device", status: row.job.status };
+    const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: biz.name, job_number: row.job.jobNumber, device: (row.job as unknown as { deviceType?: string }).deviceType ?? "device", status: row.job.status };
     const subject = applyVars(rule.templateSubject ?? `Your service job {{job_number}} has been received`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thank you for bringing your <strong>{{device}}</strong> to <strong>{{business_name}}</strong>. Your service job <strong>{{job_number}}</strong> has been received and is now in our queue.</p><p>We'll keep you updated on the progress. Thank you for choosing us!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, your service job {{job_number}} has been received at {{business_name}}. We'll keep you updated!`, vars);
-    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, phone);
+    // New service job is transactional (not marketing) — no opt-in check, no marketing footer
+    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, biz, row.customerId ?? null, false, phone);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId ?? null, recordType: "service_job", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
   }
@@ -272,7 +331,7 @@ async function runNewServiceJob(
 async function runInvoiceOverdue(
   merchantId: number,
   rule: Rule,
-  bizName: string,
+  biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
   const now = new Date();
@@ -311,11 +370,12 @@ async function runInvoiceOverdue(
     const firstName = row.customerFirstName ?? "Valued Customer";
     const dueStr = row.invoice.dueDate ? new Date(row.invoice.dueDate).toLocaleDateString("en-AU") : "N/A";
     const total = parseFloat(String(row.invoice.total)).toFixed(2);
-    const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: bizName, invoice_number: row.invoice.invoiceNumber, due_date: dueStr, total: `$${total}` };
+    const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: biz.name, invoice_number: row.invoice.invoiceNumber, due_date: dueStr, total: `$${total}` };
     const subject = applyVars(rule.templateSubject ?? `Reminder: Invoice {{invoice_number}} is overdue`, vars);
     const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that Invoice <strong>{{invoice_number}}</strong> for <strong>{{total}}</strong> was due on <strong>{{due_date}}</strong> and remains unpaid.</p><p>Please contact <strong>{{business_name}}</strong> at your earliest convenience to arrange payment. Thank you!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, Invoice {{invoice_number}} for {{total}} was due {{due_date}} and is still unpaid. Please contact {{business_name}} to arrange payment.`, vars);
-    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, phone);
+    // Invoice reminders are transactional — no opt-in check, no marketing footer
+    const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, biz, row.customerId ?? null, false, phone);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId ?? null, recordType: "invoice", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
     logger.info({ ruleId: rule.id, invoiceId: row.invoice.id, trigger: "invoice_overdue" }, "Automation: overdue reminder sent");
@@ -333,15 +393,15 @@ export async function runAutomationRule(
   if (!rule.templateBody) {
     return { dispatched: 0, trigger: rule.triggerEvent, error: "No template body configured" };
   }
-  const bizName = await getMerchantName(merchantId);
+  const biz = await getBizInfo(merchantId);
   try {
     let dispatched = 0;
     switch (rule.triggerEvent) {
-      case "birthday":         dispatched = await runBirthday(merchantId, rule, bizName, logger); break;
-      case "anniversary":      dispatched = await runAnniversary(merchantId, rule, bizName, logger); break;
-      case "new_product":      dispatched = await runNewProduct(merchantId, rule, bizName, logger); break;
-      case "new_service_job":  dispatched = await runNewServiceJob(merchantId, rule, bizName, logger); break;
-      case "invoice_overdue":  dispatched = await runInvoiceOverdue(merchantId, rule, bizName, logger); break;
+      case "birthday":         dispatched = await runBirthday(merchantId, rule, biz, logger); break;
+      case "anniversary":      dispatched = await runAnniversary(merchantId, rule, biz, logger); break;
+      case "new_product":      dispatched = await runNewProduct(merchantId, rule, biz, logger); break;
+      case "new_service_job":  dispatched = await runNewServiceJob(merchantId, rule, biz, logger); break;
+      case "invoice_overdue":  dispatched = await runInvoiceOverdue(merchantId, rule, biz, logger); break;
       default:
         return { dispatched: 0, trigger: rule.triggerEvent, error: `Unknown trigger: ${rule.triggerEvent}` };
     }

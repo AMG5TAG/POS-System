@@ -36,7 +36,7 @@ import {
   useBulkUpdateProducts,
 } from "@workspace/api-client-react";
 import {
-  useStickerTemplates, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
+  useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
@@ -364,6 +364,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   product: Product | null;
 }) {
   const { templates, setDefault } = useStickerTemplates();
+  const { printStickers }         = useStickerPrinter();
   const { data: merchant }        = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile }               = useBusinessProfile();
   const [quantity, setQuantity]   = useState(1);
@@ -446,7 +447,24 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
                 </div>
               </div>
 
-              <Button className="w-full gap-2" onClick={() => window.print()}>
+              <Button className="w-full gap-2" onClick={() => {
+                const ok = printStickers({
+                  typeId: "product",
+                  template: defaultTpl,
+                  quantity,
+                  context: {
+                    product: {
+                      name:     product.name,
+                      sku:      product.sku      ?? "",
+                      price:    product.price,
+                      barcode:  product.barcode  ?? "",
+                      category: product.category?.name ?? "",
+                    },
+                    merchant: { name: businessName },
+                  },
+                });
+                if (!ok) toast.error("Couldn't open the print dialog — please try again");
+              }}>
                 <Printer className="w-4 h-4" />
                 Print {quantity > 1 ? `${quantity} Labels` : "Label"}
               </Button>

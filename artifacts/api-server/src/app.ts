@@ -34,6 +34,13 @@ app.use(
 
 const isProduction = process.env.NODE_ENV === "production";
 
+if (isProduction && !process.env.SESSION_SECRET) {
+  logger.warn("SESSION_SECRET env var is not set — using insecure default. Set a strong random value in production.");
+}
+if (isProduction && !process.env.UNSUBSCRIBE_SECRET) {
+  logger.warn("UNSUBSCRIBE_SECRET env var is not set — unsubscribe tokens fall back to SESSION_SECRET or an insecure default. Set a strong random value in production.");
+}
+
 const allowedOrigins: Set<string> = new Set();
 if (isProduction && process.env.REPLIT_DOMAINS) {
   for (const domain of process.env.REPLIT_DOMAINS.split(",")) {

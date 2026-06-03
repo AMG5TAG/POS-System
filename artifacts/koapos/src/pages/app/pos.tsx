@@ -65,6 +65,32 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 import QRCode from "qrcode";
 
+/* ─── Denomination constants (open-till count) ───────────────────────────── */
+
+const OPEN_NOTES = [
+  { label: "$100", value: 100 },
+  { label: "$50",  value: 50  },
+  { label: "$20",  value: 20  },
+  { label: "$10",  value: 10  },
+  { label: "$5",   value: 5   },
+];
+const OPEN_COINS = [
+  { label: "$2",  value: 2    },
+  { label: "$1",  value: 1    },
+  { label: "50¢", value: 0.5  },
+  { label: "20¢", value: 0.2  },
+  { label: "10¢", value: 0.1  },
+  { label: "5¢",  value: 0.05 },
+];
+const OPEN_DENOMS = [...OPEN_NOTES, ...OPEN_COINS];
+
+function openDenomTotal(counts: Record<number, string>): number {
+  return OPEN_DENOMS.reduce(
+    (s, d) => s + d.value * (parseFloat(counts[d.value] || "0") || 0),
+    0,
+  );
+}
+
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type PricingRule = {
@@ -393,7 +419,7 @@ export default function POSPage() {
   const [eodPrintOpen, setEodPrintOpen] = useState(false);
   const [tillClosedDialogOpen, setTillClosedDialogOpen] = useState(false);
   const [lastZReport, setLastZReport] = useState<RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string } | null>(null);
-  const [openFloat, setOpenFloat] = useState("");
+  const [openDenomCounts, setOpenDenomCounts] = useState<Record<number, string>>({});
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
   const [sessionSnap, setSessionSnap] = useState<RegisterSession | null>(null);
@@ -401,7 +427,7 @@ export default function POSPage() {
   const getSession = (): RegisterSession | null => sessionSnap;
 
   const handleOpenRegister = () => {
-    const float = parseFloat(openFloat) || 0;
+    const float = openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
       openedBy: currentStaff?.name ?? null,
@@ -414,6 +440,8 @@ export default function POSPage() {
     saveRegisterSession(session);
     setRegisterOpen(true);
     setOpenRegisterDialogOpen(false);
+    setOpenDenomCounts({});
+    setOpenNotes("");
     setCashMovementPrintOpen(true);
     toast.success("Register opened");
   };
@@ -4135,32 +4163,63 @@ export default function POSPage() {
               </div>
             </div>
 
-            {/* Opening float */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Banknote className="w-4 h-4 text-muted-foreground" /> Opening Float (Cash in Drawer)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
-                <Input
-                  type="number" step="0.01" min="0" placeholder="0.00"
-                  value={openFloat}
-                  onChange={(e) => setOpenFloat(e.target.value)}
-                  className="pl-7"
-                  autoFocus
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Count the starting cash in your till drawer before opening.</p>
-            </div>
-
-            {/* Denomination helper */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {[50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05].map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setOpenFloat((v) => String((parseFloat(v) || 0) + d))}
-                  className="text-xs border rounded-lg py-1.5 hover:bg-muted transition-colors font-mono"
-                >${d < 1 ? d.toFixed(2) : d}</button>
+            {/* Opening float — denomination count */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-1.5">
+                <Banknote className="w-4 h-4 text-muted-foreground" /> Count Cash in Drawer
+              </Label>
+              {[
+                { heading: "Notes", items: OPEN_NOTES },
+                { heading: "Coins", items: OPEN_COINS },
+              ].map(({ heading, items }) => (
+                <div key={heading}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                    {heading}
+                  </p>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 border-b">
+                        <tr>
+                          <th className="text-left px-2.5 py-1.5 font-medium text-xs">Denomination</th>
+                          <th className="text-center px-2.5 py-1.5 font-medium text-xs w-20">Count</th>
+                          <th className="text-right px-2.5 py-1.5 font-medium text-xs w-20">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {items.map((d) => {
+                          const count = parseFloat(openDenomCounts[d.value] || "0") || 0;
+                          return (
+                            <tr key={d.value} className="hover:bg-muted/20">
+                              <td className="px-2.5 py-1 font-medium text-sm">{d.label}</td>
+                              <td className="px-1.5 py-1">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={openDenomCounts[d.value] ?? ""}
+                                  onChange={(e) =>
+                                    setOpenDenomCounts((p) => ({ ...p, [d.value]: e.target.value }))
+                                  }
+                                  className="h-7 text-center text-sm"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2.5 py-1 text-right text-muted-foreground text-sm">
+                                {count > 0 ? `$${(count * d.value).toFixed(2)}` : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               ))}
+              <div className="flex justify-between items-center px-0.5">
+                <p className="text-xs text-muted-foreground">Total opening float</p>
+                <p className="text-lg font-bold text-green-600">
+                  ${openDenomTotal(openDenomCounts).toFixed(2)}
+                </p>
+              </div>
             </div>
 
             {/* Notes */}

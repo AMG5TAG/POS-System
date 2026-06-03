@@ -93,6 +93,7 @@ import quickbooksRouter from "./quickbooks";
 import authSecuritySettingsRouter from "./auth-security-settings";
 import backupsRouter from "./backups";
 import partnerReferralsRouter from "./partner-referrals";
+import unsubscribeRouter from "./unsubscribe";
 
 const router: IRouter = Router();
 
@@ -190,5 +191,6 @@ router.use(quickbooksRouter);
 router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
 router.use(partnerReferralsRouter);
+router.use(unsubscribeRouter);
 
 export default router;

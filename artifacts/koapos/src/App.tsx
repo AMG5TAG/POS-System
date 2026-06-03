@@ -76,6 +76,8 @@ import ManagementLaybyPage from "@/pages/app/management-layby";
 import ManagementInventoryPage from "@/pages/app/management-inventory";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
 import ManagementTemplatesPage from "@/pages/app/management-templates";
+/** Misc templates = the same editor scoped to the "misc" section (Customer PDF, …). */
+const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
 import ManagementFormsPage from "@/pages/app/management-forms";
 import ManagementStickersPage from "@/pages/app/management-stickers";
 import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
@@ -127,6 +129,7 @@ import ManagementReportsZReportPage from "@/pages/app/management-reports-z-repor
 import ManagementReportsStaffLeaderboardPage from "@/pages/app/management-reports-staff-leaderboard";
 import ManagementReportsProductPerformancePage from "@/pages/app/management-reports-product-performance";
 import ManagementCustomersHeardFromPage from "@/pages/app/management-customers-heard-from";
+import ManagementCustomersPortalPage from "@/pages/app/management-customers-portal";
 import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
 import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
 import SettingsTyroEftposPage from "@/pages/app/settings-tyro-eftpos";
@@ -387,6 +390,9 @@ function Router() {
       <Route path="/management/customers/heard-from">
         <ManagementProtectedRoute component={ManagementCustomersHeardFromPage} />
       </Route>
+      <Route path="/management/customers/portal">
+        <ManagementProtectedRoute component={ManagementCustomersPortalPage} />
+      </Route>
       <Route path="/management/customers">
         <ManagementProtectedRoute component={SettingsCustomersPage} />
       </Route>
@@ -424,6 +430,9 @@ function Router() {
       </Route>
       <Route path="/management/templates">
         <ManagementProtectedRoute component={ManagementTemplatesPage} />
+      </Route>
+      <Route path="/management/misc-templates">
+        <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
       </Route>
       <Route path="/management/stickers">
         <ManagementProtectedRoute component={ManagementStickersPage} />

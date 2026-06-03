@@ -18,7 +18,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, RotateCcw, Search, Pencil, Trash2 } from "lucide-react";
+import { useStickerPrinter } from "@/lib/sticker-config";
+import { Plus, RotateCcw, Search, Pencil, Trash2, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 type RAStatus = "Pending" | "Approved" | "Rejected" | "Completed";
@@ -116,6 +117,26 @@ export default function ProductsReturnAuthPage() {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  const { printStickers } = useStickerPrinter();
+  /* Print a return-authorisation label using the saved "return" sticker template. */
+  const printReturnLabel = (r: (typeof returns)[0]) => {
+    const ok = printStickers({
+      typeId: "return",
+      context: { customer: { name: r.customerName ?? "" } },
+      fieldsOverride: {
+        returnNo: r.raNumber ?? "",
+        item: r.items ?? "",
+        reason: r.reason ?? "",
+        status: r.status ?? "",
+        date: formatDate(r.createdAt),
+        customer: r.customerName ?? "",
+        ...(r.reason ? {} : { showReason: "false" }),
+        ...(r.customerName ? {} : { showCustomer: "false" }),
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
+
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
@@ -174,6 +195,7 @@ export default function ProductsReturnAuthPage() {
                     <td className="p-3 hidden lg:table-cell text-muted-foreground text-xs">{formatDate(r.createdAt)}</td>
                     <td className="p-3">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Print label" onClick={() => printReturnLabel(r)}><Printer className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(r.id, r.raNumber)}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>

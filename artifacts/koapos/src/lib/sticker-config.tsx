@@ -2,6 +2,8 @@ import { useState } from "react";
 import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
 } from "lucide-react";
+import { useGetMerchant } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -154,7 +156,7 @@ export const DYMO_SIZES: DymoSize[] = [
   { id: "D1-19mm",  name: "D1 Tape 19mm",                      widthMm: 19,    heightMm: 40,   series: "D1"  },
 ];
 
-/* ─── Sticker types ──────────────────────────────────────────────────────── */
+/* ─── Sticker types — all label fields are on/off toggles ────────────────── */
 
 export const STICKER_TYPES: StickerType[] = [
   {
@@ -165,12 +167,12 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Price tags and shelf labels for stock items",
     defaultSize: "S0722520",
     fields: [
-      { key: "productName", label: "Product Name",  defaultValue: "Flat White" },
-      { key: "sku",         label: "SKU",           defaultValue: "BEV-001"    },
-      { key: "price",       label: "Price",         defaultValue: "$5.50"       },
-      { key: "category",    label: "Category",      defaultValue: "Beverages"  },
-      { key: "barcode",     label: "Barcode",       defaultValue: "9310000123456" },
-      { key: "showBarcode", label: "Show Barcode",  defaultValue: "true", type: "toggle" },
+      { key: "showProductName", label: "Product Name",  defaultValue: "true",  type: "toggle" },
+      { key: "showSku",         label: "SKU",           defaultValue: "true",  type: "toggle" },
+      { key: "showPrice",       label: "Price",         defaultValue: "true",  type: "toggle" },
+      { key: "showCategory",    label: "Category",      defaultValue: "true",  type: "toggle" },
+      { key: "showBarcode",     label: "Barcode",       defaultValue: "true",  type: "toggle" },
+      { key: "showBizName",     label: "Business Name", defaultValue: "true",  type: "toggle" },
     ],
   },
   {
@@ -181,12 +183,12 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Loyalty cards, ID labels and membership stickers",
     defaultSize: "S0722520",
     fields: [
-      { key: "customerName",  label: "Customer Name",  defaultValue: "Sarah Johnson" },
-      { key: "customerId",    label: "Customer ID",    defaultValue: "#CUS-0042"    },
-      { key: "loyaltyNo",     label: "Loyalty Number", defaultValue: "LYL-20491"    },
-      { key: "phone",         label: "Phone",          defaultValue: "(03) 9000 0000" },
-      { key: "email",         label: "Email",          defaultValue: "sarah@email.com" },
-      { key: "group",         label: "Group",          defaultValue: "VIP Member"   },
+      { key: "showCustomerName", label: "Customer Name",  defaultValue: "true", type: "toggle" },
+      { key: "showCustomerId",   label: "Customer ID",    defaultValue: "true", type: "toggle" },
+      { key: "showLoyaltyNo",    label: "Loyalty Number", defaultValue: "true", type: "toggle" },
+      { key: "showPhone",        label: "Phone",          defaultValue: "true", type: "toggle" },
+      { key: "showGroup",        label: "Group",          defaultValue: "true", type: "toggle" },
+      { key: "showBizName",      label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
   {
@@ -197,12 +199,13 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Return authorisation labels for incoming goods",
     defaultSize: "S0722520",
     fields: [
-      { key: "returnNo",   label: "Return #",      defaultValue: "RTN-0089"        },
-      { key: "date",       label: "Date",          defaultValue: "18/05/2026"      },
-      { key: "item",       label: "Item",          defaultValue: "Defective Keyboard" },
-      { key: "reason",     label: "Reason",        defaultValue: "Not as described" },
-      { key: "status",     label: "Status",        defaultValue: "Awaiting Inspection" },
-      { key: "customer",   label: "Customer",      defaultValue: "Sarah Johnson"   },
+      { key: "showReturnNo",  label: "Return #",       defaultValue: "true", type: "toggle" },
+      { key: "showDate",      label: "Date",           defaultValue: "true", type: "toggle" },
+      { key: "showItem",      label: "Item",           defaultValue: "true", type: "toggle" },
+      { key: "showReason",    label: "Reason",         defaultValue: "true", type: "toggle" },
+      { key: "showStatus",    label: "Status",         defaultValue: "true", type: "toggle" },
+      { key: "showCustomer",  label: "Customer",       defaultValue: "true", type: "toggle" },
+      { key: "showBizName",   label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
   {
@@ -213,13 +216,13 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Job labels for service desk and repair tickets",
     defaultSize: "S0722520",
     fields: [
-      { key: "showJobNo",    label: "Job #",         defaultValue: "true", type: "toggle" as const },
-      { key: "showCustomer", label: "Customer",      defaultValue: "true", type: "toggle" as const },
-      { key: "showDevice",   label: "Device",        defaultValue: "true", type: "toggle" as const },
-      { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" as const },
-      { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" as const },
-      { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" as const },
-      { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" as const },
+      { key: "showJobNo",    label: "Job #",         defaultValue: "true", type: "toggle" },
+      { key: "showCustomer", label: "Customer",      defaultValue: "true", type: "toggle" },
+      { key: "showDevice",   label: "Device",        defaultValue: "true", type: "toggle" },
+      { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" },
+      { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" },
+      { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" },
+      { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
     ],
   },
   {
@@ -230,12 +233,11 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Shipping and postal address labels",
     defaultSize: "S0722520",
     fields: [
-      { key: "name",     label: "Name",      defaultValue: "Sarah Johnson"      },
-      { key: "company",  label: "Company",   defaultValue: "Demo Co Pty Ltd"    },
-      { key: "street",   label: "Street",    defaultValue: "123 Main Street"    },
-      { key: "suburb",   label: "Suburb",    defaultValue: "Melbourne"          },
-      { key: "state",    label: "State",     defaultValue: "VIC"                },
-      { key: "postcode", label: "Postcode",  defaultValue: "3000"               },
+      { key: "showName",    label: "Name",                      defaultValue: "true", type: "toggle" },
+      { key: "showCompany", label: "Company",                   defaultValue: "true", type: "toggle" },
+      { key: "showStreet",  label: "Street",                    defaultValue: "true", type: "toggle" },
+      { key: "showSuburb",  label: "Suburb / State / Postcode", defaultValue: "true", type: "toggle" },
+      { key: "showBizName", label: "Business Name",             defaultValue: "true", type: "toggle" },
     ],
   },
   {
@@ -246,11 +248,10 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Retail price tags with product info",
     defaultSize: "S0722520",
     fields: [
-      { key: "productName", label: "Product Name", defaultValue: "Reusable Cup"     },
-      { key: "price",       label: "Sale Price",   defaultValue: "$12.99"            },
-      { key: "wasPrice",    label: "Was Price",    defaultValue: "$18.99"            },
-      { key: "sku",         label: "SKU",          defaultValue: "HW-042"            },
-      { key: "showWas",     label: "Show Was Price", defaultValue: "true", type: "toggle" },
+      { key: "showProductName", label: "Product Name", defaultValue: "true",  type: "toggle" },
+      { key: "showPrice",       label: "Price",        defaultValue: "true",  type: "toggle" },
+      { key: "showWasPrice",    label: "Was Price",    defaultValue: "false", type: "toggle" },
+      { key: "showSku",         label: "SKU",          defaultValue: "true",  type: "toggle" },
     ],
   },
   {
@@ -261,11 +262,10 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Shelf-edge labels for gondola or display shelving",
     defaultSize: "S0722520",
     fields: [
-      { key: "productName", label: "Product Name",  defaultValue: "Flat White 250g"  },
-      { key: "price",       label: "Price",         defaultValue: "$5.50"             },
-      { key: "unitPrice",   label: "Unit Price",    defaultValue: "$2.20/100g"        },
-      { key: "sku",         label: "SKU",           defaultValue: "GR-250"            },
-      { key: "barcode",     label: "Barcode",       defaultValue: "9310000123456"     },
+      { key: "showProductName", label: "Product Name", defaultValue: "true", type: "toggle" },
+      { key: "showPrice",       label: "Price",        defaultValue: "true", type: "toggle" },
+      { key: "showUnitPrice",   label: "Unit Price",   defaultValue: "true", type: "toggle" },
+      { key: "showSku",         label: "SKU",          defaultValue: "true", type: "toggle" },
     ],
   },
 ];
@@ -294,15 +294,12 @@ export function LabelPreview({
   size: DymoSize;
   businessName: string;
   brandColor: string;
-  /** When provided together, scale to fill this container (px) maintaining aspect ratio */
   fillWidth?: number;
   fillHeight?: number;
-  /** "horizontal" (default) = landscape; "vertical" = portrait */
   orientation?: "horizontal" | "vertical";
 }) {
-  // Determine display dimensions and whether to rotate the content
   const isHoriz    = orientation === "horizontal";
-  const natPortrait = size.widthMm <= size.heightMm;  // label is naturally portrait
+  const natPortrait = size.widthMm <= size.heightMm;
   const rotated    = isHoriz ? natPortrait : !natPortrait;
 
   const dispWidthMm  = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
@@ -320,16 +317,15 @@ export function LabelPreview({
     const cappedH = Math.min(dispHeightMm * scale, 320);
     finalScale = Math.min(scale, cappedH / dispHeightMm);
   }
-  const finalW     = size.widthMm  * finalScale;   // physical label width  in px
-  const finalH     = size.heightMm * finalScale;   // physical label height in px
-  const finalDispW = dispWidthMm   * finalScale;   // visual wrapper width  in px
-  const finalDispH = dispHeightMm  * finalScale;   // visual wrapper height in px
+  const finalW     = size.widthMm  * finalScale;
+  const finalH     = size.heightMm * finalScale;
+  const finalDispW = dispWidthMm   * finalScale;
+  const finalDispH = dispHeightMm  * finalScale;
 
   const f = (k: string) => fields[k] ?? "";
-  const showBarcode = f("showBarcode") === "true";
-  const showWas = f("showWas") === "true";
+  // Show helpers — default "true" unless explicitly "false"
+  const show = (k: string) => f(k) !== "false";
 
-  // When rotated, swap w/h so content renders naturally in landscape (no CSS transform)
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -346,88 +342,193 @@ export function LabelPreview({
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
       style={baseStyle}
     >
-      {type.id !== "repair" && <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />}
+      {type.id !== "repair" && (
+        <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
+      )}
       <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">
+
         {type.id === "product" && (
           <>
             <div>
-              <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>{f("productName") || "Product Name"}</div>
-              {f("category") && <div className="text-gray-400 truncate">{f("category")}</div>}
-              {f("sku") && <div className="text-gray-400">SKU: {f("sku")}</div>}
+              {show("showProductName") && (
+                <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                  {f("productName") || "Product Name"}
+                </div>
+              )}
+              {show("showCategory") && (
+                <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
+              )}
+              {show("showSku") && (
+                <div className="text-gray-400">SKU: {f("sku") || "BEV-001"}</div>
+              )}
             </div>
             <div>
-              {showBarcode && f("barcode") && (
+              {show("showBarcode") && (
                 <div className="flex items-center gap-0.5 mb-0.5 opacity-60">
                   {Array.from({ length: 20 }).map((_, i) => (
                     <div key={i} className="bg-black" style={{ width: i % 3 === 0 ? 1.5 : 1, height: Math.max(8, finalScale * 3) }} />
                   ))}
                 </div>
               )}
-              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: brandColor }}>{f("price") || "$0.00"}</div>
-              <div className="text-gray-400 text-right truncate">{businessName}</div>
+              {show("showPrice") && (
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: brandColor }}>
+                  {f("price") || "$5.50"}
+                </div>
+              )}
+              {show("showBizName") && (
+                <div className="text-gray-400 text-right truncate">{businessName}</div>
+              )}
             </div>
           </>
         )}
+
         {type.id === "customer" && (
           <>
-            <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>{f("customerName") || "Customer Name"}</div>
-            {f("group") && <div className="px-1 rounded text-white truncate" style={{ background: brandColor, fontSize: Math.max(6, finalScale * 2.2) }}>{f("group")}</div>}
-            {f("customerId") && <div className="text-gray-500">{f("customerId")}</div>}
-            {f("loyaltyNo") && <div className="text-gray-500">{f("loyaltyNo")}</div>}
-            {f("phone") && <div className="text-gray-500">{f("phone")}</div>}
-            <div className="text-gray-400 text-right truncate">{businessName}</div>
+            {show("showCustomerName") && (
+              <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                {f("customerName") || "Sarah Johnson"}
+              </div>
+            )}
+            {show("showGroup") && (
+              <div className="px-1 rounded text-white truncate" style={{ background: brandColor, fontSize: Math.max(6, finalScale * 2.2) }}>
+                {f("group") || "VIP Member"}
+              </div>
+            )}
+            {show("showCustomerId") && (
+              <div className="text-gray-500">{f("customerId") || "#CUS-0042"}</div>
+            )}
+            {show("showLoyaltyNo") && (
+              <div className="text-gray-500">{f("loyaltyNo") || "LYL-20491"}</div>
+            )}
+            {show("showPhone") && (
+              <div className="text-gray-500">{f("phone") || "(03) 9000 0000"}</div>
+            )}
+            {show("showBizName") && (
+              <div className="text-gray-400 text-right truncate">{businessName}</div>
+            )}
           </>
         )}
+
         {type.id === "return" && (
           <>
-            <div className="font-bold" style={{ color: "#ef4444", fontSize: Math.max(7, finalScale * 2.8) }}>RETURN {f("returnNo")}</div>
-            {f("item") && <div className="font-medium truncate">{f("item")}</div>}
-            {f("reason") && <div className="text-gray-500 truncate">{f("reason")}</div>}
-            {f("status") && <div className="px-1 rounded text-white truncate" style={{ background: "#ef4444", fontSize: Math.max(6, finalScale * 2.2) }}>{f("status")}</div>}
-            {f("date") && <div className="text-gray-400">{f("date")}</div>}
-            <div className="text-gray-400 text-right truncate">{businessName}</div>
+            {show("showReturnNo") && (
+              <div className="font-bold" style={{ color: "#ef4444", fontSize: Math.max(7, finalScale * 2.8) }}>
+                RETURN {f("returnNo") || "RTN-0089"}
+              </div>
+            )}
+            {show("showItem") && (
+              <div className="font-medium truncate">{f("item") || "Defective Keyboard"}</div>
+            )}
+            {show("showReason") && (
+              <div className="text-gray-500 truncate">{f("reason") || "Not as described"}</div>
+            )}
+            {show("showStatus") && (
+              <div className="px-1 rounded text-white truncate" style={{ background: "#ef4444", fontSize: Math.max(6, finalScale * 2.2) }}>
+                {f("status") || "Awaiting Inspection"}
+              </div>
+            )}
+            {show("showDate") && (
+              <div className="text-gray-400">{f("date") || "18/05/2026"}</div>
+            )}
+            {show("showCustomer") && (
+              <div className="text-gray-500 truncate">{f("customer") || "Sarah Johnson"}</div>
+            )}
+            {show("showBizName") && (
+              <div className="text-gray-400 text-right truncate">{businessName}</div>
+            )}
           </>
         )}
+
         {type.id === "repair" && (
           <>
-            {f("showJobNo") !== "false" && (
-              <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>SERVICE {f("jobNo") || "SVC-0031"}</div>
+            {show("showJobNo") && (
+              <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
+                SERVICE {f("jobNo") || "SVC-0031"}
+              </div>
             )}
-            {f("showCustomer") !== "false" && <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>}
-            {f("showDevice") !== "false" && <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>}
-            {f("showFault") !== "false" && <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>}
-            {f("showDueDate") !== "false" && <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>}
-            {f("showTech") !== "false" && <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>}
-            {f("showBizName") !== "false" && <div className="text-gray-400 text-right truncate">{businessName}</div>}
+            {show("showCustomer") && (
+              <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>
+            )}
+            {show("showDevice") && (
+              <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>
+            )}
+            {show("showFault") && (
+              <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>
+            )}
+            {show("showDueDate") && (
+              <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>
+            )}
+            {show("showTech") && (
+              <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>
+            )}
+            {show("showBizName") && (
+              <div className="text-gray-400 text-right truncate">{businessName}</div>
+            )}
           </>
         )}
+
         {type.id === "address" && (
           <>
-            {f("name") && <div className="font-bold truncate">{f("name")}</div>}
-            {f("company") && <div className="truncate">{f("company")}</div>}
-            {f("street") && <div className="truncate">{f("street")}</div>}
-            <div className="truncate">{[f("suburb"), f("state"), f("postcode")].filter(Boolean).join(" ")}</div>
-            <div className="text-gray-400 text-right truncate">{businessName}</div>
+            {show("showName") && (
+              <div className="font-bold truncate">{f("name") || "Sarah Johnson"}</div>
+            )}
+            {show("showCompany") && (
+              <div className="truncate">{f("company") || "Demo Co Pty Ltd"}</div>
+            )}
+            {show("showStreet") && (
+              <div className="truncate">{f("street") || "123 Main Street"}</div>
+            )}
+            {show("showSuburb") && (
+              <div className="truncate">
+                {[f("suburb") || "Melbourne", f("state") || "VIC", f("postcode") || "3000"].filter(Boolean).join(" ")}
+              </div>
+            )}
+            {show("showBizName") && (
+              <div className="text-gray-400 text-right truncate">{businessName}</div>
+            )}
           </>
         )}
+
         {type.id === "pricetag" && (
           <>
-            <div className="font-bold truncate">{f("productName") || "Product"}</div>
-            {f("sku") && <div className="text-gray-400">#{f("sku")}</div>}
+            {show("showProductName") && (
+              <div className="font-bold truncate">{f("productName") || "Reusable Cup"}</div>
+            )}
+            {show("showSku") && (
+              <div className="text-gray-400">#{f("sku") || "HW-042"}</div>
+            )}
             <div>
-              {showWas && f("wasPrice") && <div className="line-through text-gray-400">{f("wasPrice")}</div>}
-              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>{f("price") || "$0.00"}</div>
+              {show("showWasPrice") && (
+                <div className="line-through text-gray-400">{f("wasPrice") || "$18.99"}</div>
+              )}
+              {show("showPrice") && (
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+                  {f("price") || "$12.99"}
+                </div>
+              )}
             </div>
           </>
         )}
+
         {type.id === "shelf" && (
           <>
-            <div className="font-bold truncate">{f("productName") || "Product"}</div>
-            {f("unitPrice") && <div className="text-gray-400 truncate">{f("unitPrice")}</div>}
-            {f("sku") && <div className="text-gray-400">SKU {f("sku")}</div>}
-            <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>{f("price") || "$0.00"}</div>
+            {show("showProductName") && (
+              <div className="font-bold truncate">{f("productName") || "Flat White 250g"}</div>
+            )}
+            {show("showUnitPrice") && (
+              <div className="text-gray-400 truncate">{f("unitPrice") || "$2.20/100g"}</div>
+            )}
+            {show("showSku") && (
+              <div className="text-gray-400">SKU {f("sku") || "GR-250"}</div>
+            )}
+            {show("showPrice") && (
+              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+                {f("price") || "$5.50"}
+              </div>
+            )}
           </>
         )}
+
       </div>
     </div>
   );
@@ -519,4 +620,226 @@ export function useStickerTemplates() {
   };
 
   return { templates, create, update, remove, setDefault };
+}
+
+/* ─── Shared label print helper ──────────────────────────────────────────────
+ * Single source of truth for turning a sticker type + resolved fields into a
+ * print-ready, DYMO-sized HTML document. Used by the Stickers manager and by
+ * every "Print label" entry point across the app so the same layout, sizing
+ * and field toggles apply everywhere. (Mirrors the per-type markup the
+ * Stickers manager preview renders.)
+ */
+export interface BuildLabelHtmlArgs {
+  typeId: string;
+  size: DymoSize;
+  /** Resolved field values; toggle fields use the literal string "false" to hide. */
+  fields: Record<string, string>;
+  businessName: string;
+  brandColor: string;
+  orientation: "horizontal" | "vertical";
+  quantity: number;
+}
+
+export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
+  const { typeId, size, fields, businessName, brandColor, orientation, quantity } = args;
+  const isHoriz = orientation === "horizontal";
+  const pageW = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
+  const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
+
+  const f    = (k: string) => fields[k] ?? "";
+  const show = (k: string) => f(k) !== "false";
+  const biz  = businessName;
+
+  const shorter = Math.min(pageW, pageH);
+  const bp      = Math.max(4.5, shorter * 0.36);
+
+  const barsBars = Array.from({ length: 20 }).map((_, i) =>
+    `<div style="background:#000;width:${i % 3 === 0 ? "0.8" : "0.5"}mm;height:3mm;display:inline-block;"></div>`
+  ).join("");
+
+  const inner = (() => {
+    switch (typeId) {
+      case "product": return `
+        <div>
+          ${show("showProductName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
+          ${show("showCategory") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
+          ${show("showSku") ? `<div style="color:#888">SKU: ${f("sku")||"BEV-001"}</div>` : ""}
+        </div>
+        <div>
+          ${show("showBarcode")&&f("barcode") ? `<div style="display:flex;gap:.3mm;margin-bottom:.5mm;opacity:.6">${barsBars}</div><div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt">${f("barcode")}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}
+          ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
+        </div>`;
+
+      case "customer": return `
+        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
+        ${show("showGroup") ? `<div style="background:${brandColor};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
+        ${show("showCustomerId") ? `<div style="color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
+        ${show("showLoyaltyNo") ? `<div style="color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
+        ${show("showPhone") ? `<div style="color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+
+      case "return": return `
+        ${show("showReturnNo") ? `<div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
+        ${show("showItem") ? `<div style="font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
+        ${show("showReason") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
+        ${show("showStatus") ? `<div style="background:#ef4444;color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
+        ${show("showDate") ? `<div style="color:#888">${f("date")||"18/05/2026"}</div>` : ""}
+        ${show("showCustomer") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+
+      case "repair": return `
+        ${show("showJobNo") ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>` : ""}
+        ${show("showCustomer") ? `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
+        ${show("showDevice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
+        ${show("showFault") ? `<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
+        ${show("showDueDate") ? `<div style="font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
+        ${show("showTech") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+
+      case "address": return `
+        ${show("showName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")||"Sarah Johnson"}</div>` : ""}
+        ${show("showCompany") ? `<div style="white-space:nowrap;overflow:hidden">${f("company")||"Demo Co Pty Ltd"}</div>` : ""}
+        ${show("showStreet") ? `<div style="white-space:nowrap;overflow:hidden">${f("street")||"123 Main Street"}</div>` : ""}
+        ${show("showSuburb") ? `<div style="white-space:nowrap;overflow:hidden">${[f("suburb")||"Melbourne",f("state")||"VIC",f("postcode")||"3000"].filter(Boolean).join(" ")}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+
+      case "pricetag": return `
+        ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Reusable Cup"}</div>` : ""}
+        ${show("showSku") ? `<div style="color:#888">#${f("sku")||"HW-042"}</div>` : ""}
+        <div>
+          ${show("showWasPrice") ? `<div style="text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$12.99"}</div>` : ""}
+        </div>`;
+
+      case "shelf": return `
+        ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
+        ${show("showUnitPrice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
+        ${show("showSku") ? `<div style="color:#888">SKU ${f("sku")||"GR-250"}</div>` : ""}
+        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}`;
+
+      default: return "";
+    }
+  })();
+
+  const labelBlock = `
+    <div style="
+      width:${pageW}mm;height:${pageH}mm;
+      box-sizing:border-box;overflow:hidden;
+      position:relative;
+      font-family:Arial,Helvetica,sans-serif;
+      font-size:${bp.toFixed(1)}pt;line-height:1.25;
+      padding:1.5mm 1.5mm 1.5mm 1.5mm;padding-top:2mm;
+      display:flex;flex-direction:column;justify-content:space-between;
+      background:#fff;
+      writing-mode:horizontal-tb;
+      page-break-after:always;break-after:page;
+      page-break-inside:avoid;break-inside:avoid;
+    ">
+      ${typeId !== "repair" ? `<div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>` : ""}
+      ${inner}
+    </div>`;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Label Print</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  @page{size:${pageW}mm ${pageH}mm;margin:0}
+  html,body{
+    margin:0;padding:0;
+    width:${pageW}mm;
+    background:#fff;
+    writing-mode:horizontal-tb;
+  }
+</style>
+</head>
+<body>
+${Array.from({ length: Math.max(1, quantity) }).map(() => labelBlock).join("\n")}
+</body>
+</html>`;
+}
+
+/** Print label HTML through a hidden, off-screen iframe (no pop-up required). */
+function printLabelHtmlViaIframe(html: string): boolean {
+  if (typeof document === "undefined") return false;
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(iframe);
+  const win = iframe.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) { iframe.remove(); return false; }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  let removed = false;
+  const cleanup = () => { if (!removed) { removed = true; setTimeout(() => iframe.remove(), 1000); } };
+  win.onafterprint = cleanup;
+  setTimeout(() => {
+    try { win.focus(); win.print(); } catch { iframe.remove(); }
+    // Safety net: some browsers never fire afterprint.
+    setTimeout(cleanup, 60_000);
+  }, 300);
+  return true;
+}
+
+export interface PrintStickersArgs {
+  /** Sticker type id, e.g. "product" | "customer" | "repair" | "address" | "return". */
+  typeId: string;
+  /** Data context used to resolve {{quick.codes}} in the template fields. */
+  context?: QuickCodeContext;
+  /** Explicit template to use; otherwise the default (then first) saved template for the type. */
+  template?: StickerTemplate;
+  sizeOverride?: string;
+  quantity?: number;
+  orientation?: "horizontal" | "vertical";
+  /** Literal field values merged AFTER quick-code resolution (escape hatch for
+   *  type-specific keys like returnNo / street that aren't in QUICK_CODES). */
+  fieldsOverride?: Record<string, string>;
+}
+
+/**
+ * Centralized sticker-print controller. Resolves the saved (default) template
+ * for a type, substitutes quick codes from the given data context, and prints
+ * a correctly DYMO-sized label — so every print path applies the same template.
+ * Returns false if printing couldn't be started (e.g. unknown type / no DOM).
+ */
+export function useStickerPrinter() {
+  const { templates } = useStickerTemplates();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { profile } = useBusinessProfile();
+  const businessName = merchant?.businessName || "Your Business";
+  const brandColor   = profile.brandColors?.[0] || "#efbf04";
+
+  const defaultTemplateFor = (typeId: string): StickerTemplate | undefined =>
+    templates.find((t) => t.typeId === typeId && t.isDefault) ?? templates.find((t) => t.typeId === typeId);
+
+  const printStickers = (args: PrintStickersArgs): boolean => {
+    const type = STICKER_TYPES.find((t) => t.id === args.typeId);
+    if (!type) return false;
+    const tpl = args.template ?? defaultTemplateFor(args.typeId);
+    const sizeId = args.sizeOverride ?? tpl?.sizeId ?? type.defaultSize;
+    const size = DYMO_SIZES.find((s) => s.id === sizeId) ?? DYMO_SIZES[0];
+
+    const typeDefaults = Object.fromEntries(type.fields.map((fld) => [fld.key, fld.defaultValue]));
+    const baseFields = { ...typeDefaults, ...(tpl?.fields ?? {}) };
+    const resolved = args.context ? resolveQuickCodes(baseFields, args.context) : baseFields;
+    const fields = { ...resolved, ...(args.fieldsOverride ?? {}) };
+
+    const html = buildLabelHtml({
+      typeId: args.typeId,
+      size,
+      fields,
+      businessName,
+      brandColor,
+      orientation: args.orientation ?? "horizontal",
+      quantity: args.quantity ?? 1,
+    });
+    return printLabelHtmlViaIframe(html);
+  };
+
+  return { printStickers, defaultTemplateFor, businessName, brandColor };
 }

@@ -34,7 +34,7 @@ import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer, Info,
   Check, Star, Sparkles, Minimize2, Zap, Building2,
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
-  Settings2, ClipboardList, FileSearch, Save, ShieldCheck,
+  Settings2, ClipboardList, FileSearch, Save, ShieldCheck, FileDown,
 } from "lucide-react";
 import {
   printReceipt,
@@ -52,7 +52,14 @@ import { FontPicker } from "@/components/ui/font-picker";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "Thermal_Receipt" | "Invoice" | "A4_Receipt" | "Quote" | "Service_Ticket";
+type Category = "Thermal_Receipt" | "Invoice" | "A4_Receipt" | "Quote" | "Service_Ticket" | "Customer_PDF";
+
+/** Which template categories belong to each Management → Templates sub-section. */
+type TemplateSection = "sales" | "misc";
+const SECTION_CATEGORIES: Record<TemplateSection, Category[]> = {
+  sales: ["Thermal_Receipt", "Invoice", "A4_Receipt", "Quote", "Service_Ticket"],
+  misc:  ["Customer_PDF"],
+};
 
 interface TemplateOption {
   id: string;
@@ -106,6 +113,14 @@ export interface TplOpts {
   jobNoFontSize:        string;
   showLogins:           boolean;
   showFormsFiles:       boolean;
+  // Customer PDF section toggles
+  showTransactions:     boolean;
+  showAppointments:     boolean;
+  showServiceJobs:      boolean;
+  showNotes:            boolean;
+  showFormSubmissions:  boolean;
+  showWarningNote:      boolean;
+  showInternalNotes:    boolean;
   // Font
   fontFamily:           string;
 }
@@ -127,6 +142,8 @@ export const DEFAULT_OPTS: TplOpts = {
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
   showLogins: false, showFormsFiles: false,
+  showTransactions: true, showAppointments: true, showServiceJobs: true,
+  showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
   fontFamily: "inter",
 };
 
@@ -289,6 +306,19 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+    ];
+    case "Customer_PDF": return [
+      { section: "Header", key: "showLogo",            label: "Show Business Logo",     type: "toggle", hint: "Renders your logo in the PDF header" },
+      { section: "Header", key: "headerText",          label: "Header Subtitle",        type: "text",   placeholder: "e.g. Customer History Export", quickCodes: true },
+      { section: "Body",   key: "fontFamily",          label: "Font Family",            type: "fontpicker", hint: "Mapped to the nearest PDF-safe font (sans → Helvetica, serif → Times)" },
+      { section: "Body",   key: "showTransactions",    label: "Transaction History",    type: "toggle" },
+      { section: "Body",   key: "showAppointments",    label: "Appointments",           type: "toggle" },
+      { section: "Body",   key: "showServiceJobs",     label: "Service Jobs",           type: "toggle" },
+      { section: "Body",   key: "showNotes",           label: "Notes",                  type: "toggle" },
+      { section: "Body",   key: "showFormSubmissions", label: "Form Submissions",       type: "toggle" },
+      { section: "Body",   key: "showWarningNote",     label: "Customer Warning Note",  type: "toggle", hint: "The red alert note shown on the customer profile" },
+      { section: "Body",   key: "showInternalNotes",   label: "Internal Notes",         type: "toggle", hint: "Staff-only notes field on the customer record" },
+      { section: "Footer", key: "footerText",          label: "Footer Text",            type: "text",   placeholder: "e.g. Confidential — internal use only", quickCodes: true },
     ];
     default: return [];
   }
@@ -806,6 +836,9 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "ss-standard", name: "Standard", style: "professional", description: "Full A4 sheet — all sections, grid layout, call history" },
     { id: "ss-compact",  name: "Compact",  style: "minimal",      description: "Condensed layout, fewer rows, fits more on one page"     },
   ],
+  Customer_PDF: [
+    { id: "cp-standard", name: "Standard", style: "professional", description: "Branded header, full customer history export" },
+  ],
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
@@ -814,6 +847,7 @@ const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; 
   Invoice:         { label: "Invoice",          icon: FileText,      color: "text-violet-500"  },
   Quote:           { label: "Quote",            icon: FileSearch,    color: "text-amber-500"   },
   Service_Ticket:  { label: "Service Ticket",   icon: ClipboardList, color: "text-cyan-500"    },
+  Customer_PDF:    { label: "Customer PDF",     icon: FileDown,      color: "text-fuchsia-500" },
 };
 
 const STYLE_ICONS: Record<string, React.ElementType> = {
@@ -1485,6 +1519,85 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
   );
 }
 
+/* Lightweight mock of the Customer PDF export — mirrors customer-pdf.ts layout
+   (branded header bar + the sections enabled by the template toggles). */
+function CustomerPdfPreview({ businessName, brandColor, logo, email, abn, website, opts }: PreviewProps) {
+  const headerText = resolveCode(opts.headerText || "Customer History Export", businessName, abn, website, email);
+  const footerText = opts.footerText
+    ? resolveCode(opts.footerText, businessName, abn, website, email)
+    : `${businessName} Customer Export`;
+  const sections: { key: keyof TplOpts; label: string }[] = [
+    { key: "showTransactions",    label: "Transaction History" },
+    { key: "showAppointments",    label: "Appointments" },
+    { key: "showServiceJobs",     label: "Service Jobs" },
+    { key: "showNotes",           label: "Notes" },
+    { key: "showFormSubmissions", label: "Form Submissions" },
+  ];
+  return (
+    <div className="text-gray-800" style={{ fontFamily: resolveFontCss(opts.fontFamily) }}>
+      {/* Header bar */}
+      <div className="flex items-center justify-between rounded-t px-3 py-2.5 text-white" style={{ background: brandColor }}>
+        <div className="flex items-center gap-2 min-w-0">
+          {opts.showLogo && logo && <img src={logo} alt="" className="h-6 w-auto max-w-[64px] object-contain bg-white/90 rounded px-0.5" />}
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold leading-tight truncate">{businessName}</p>
+            <p className="text-[8px] opacity-90 leading-tight truncate">{headerText}</p>
+          </div>
+        </div>
+        <span className="text-[7px] opacity-80 shrink-0">Exported today</span>
+      </div>
+
+      {/* Customer info card */}
+      <div className="border-x border-b px-3 py-2 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: `${brandColor}22`, color: brandColor }}>SJ</div>
+          <div>
+            <p className="text-[10px] font-semibold leading-tight">Sarah Johnson</p>
+            <p className="text-[7.5px] text-gray-400 leading-tight">VIP · 1,240 pts</p>
+          </div>
+        </div>
+        {opts.showWarningNote && (
+          <div className="rounded bg-red-50 border border-red-200 px-2 py-1 text-[7.5px] text-red-600 font-medium">⚠ Allergic to latex — handle with care</div>
+        )}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[7.5px] text-gray-500">
+          <span>Email · sarah@email.com</span>
+          <span>Phone · (03) 9000 0000</span>
+          <span>Loyalty · 1,240 pts</span>
+          <span>Visits · 18</span>
+        </div>
+        {opts.showInternalNotes && (
+          <div className="rounded bg-gray-50 border px-2 py-1 text-[7.5px] text-gray-500">
+            <span className="font-semibold text-gray-400">Internal Notes · </span>Prefers afternoon appointments
+          </div>
+        )}
+      </div>
+
+      {/* Section blocks */}
+      <div className="border-x border-b rounded-b px-3 py-2 space-y-1.5">
+        {sections.filter((s) => opts[s.key]).map((s) => (
+          <div key={s.key}>
+            <div className="text-[8px] font-bold text-white px-1.5 py-0.5 rounded-sm inline-block mb-1" style={{ background: brandColor }}>{s.label} (3)</div>
+            <div className="space-y-0.5">
+              {[0, 1].map((i) => (
+                <div key={i} className="h-3 rounded bg-gray-100" style={{ width: `${100 - i * 18}%` }} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {sections.every((s) => !opts[s.key]) && (
+          <p className="text-[8px] italic text-gray-400 py-2 text-center">All history sections are hidden</p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-1.5 pt-1 border-t flex items-center justify-between text-[7px] text-gray-400">
+        <span className="truncate">{footerText}</span>
+        <span className="shrink-0">Page 1 of 1</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Receipt & Print Settings ───────────────────────────────────────────── */
 
 type PaperSize = "58mm" | "80mm" | "a4";
@@ -1563,11 +1676,13 @@ const DEFAULT_STYLE: Record<Category, string> = {
   Invoice:         "i-pro",
   Quote:           "q-pro",
   Service_Ticket:  "ss-standard",
+  Customer_PDF:    "cp-standard",
 };
 
-export default function ManagementTemplatesPage() {
-  const [activeCategory, setActiveCategory] = useState<Category>("Thermal_Receipt");
-  const [previewId, setPreviewId]           = useState<string>("r-pro");
+export default function ManagementTemplatesPage({ section = "sales" }: { section?: TemplateSection } = {}) {
+  const sectionCategories = SECTION_CATEGORIES[section];
+  const [activeCategory, setActiveCategory] = useState<Category>(sectionCategories[0]);
+  const [previewId, setPreviewId]           = useState<string>(DEFAULT_STYLE[sectionCategories[0]]);
 
   const [focusedFieldLabel, setFocusedFieldLabel] = useState<string | null>(null);
   const insertFnRef = useRef<((code: string) => void) | null>(null);
@@ -1751,6 +1866,7 @@ export default function ManagementTemplatesPage() {
       case "A4_Receipt":       return <InvoicePreview      {...previewProps} />;
       case "Quote":            return <InvoicePreview      {...previewProps} />;
       case "Service_Ticket":   return <ServiceSheetPreview {...previewProps} />;
+      case "Customer_PDF":     return <CustomerPdfPreview  {...previewProps} />;
     }
   };
 
@@ -1762,8 +1878,12 @@ export default function ManagementTemplatesPage() {
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">Sales Templates</h1>
-              <p className="text-sm text-muted-foreground">Configure print templates for receipts, invoices, quotes and service tickets. Changes are saved to the database and used across all print and export actions.</p>
+              <h1 className="text-2xl font-bold">{section === "misc" ? "Misc Templates" : "Sales Templates"}</h1>
+              <p className="text-sm text-muted-foreground">
+                {section === "misc"
+                  ? "Configure templates for other customer documents. Changes are saved to the database and used across the related export actions."
+                  : "Configure print templates for receipts, invoices, quotes and service tickets. Changes are saved to the database and used across all print and export actions."}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5 shrink-0">
@@ -1772,11 +1892,13 @@ export default function ManagementTemplatesPage() {
           </div>
         </div>
 
-        {/* Top settings row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-          <NotificationsPanel />
-          <ReceiptPrintSettings />
-        </div>
+        {/* Top settings row — receipt-specific, only for the Sales section */}
+        {section === "sales" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+            <NotificationsPanel />
+            <ReceiptPrintSettings />
+          </div>
+        )}
 
         {tplLoading ? (
           <div className="text-center py-16 text-muted-foreground text-sm">Loading templates…</div>
@@ -1785,7 +1907,7 @@ export default function ManagementTemplatesPage() {
             {/* Full-width category bar */}
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex divide-x">
-                {(Object.keys(CATEGORY_META) as Category[]).map((cat) => {
+                {sectionCategories.map((cat) => {
                   const { label, icon: Icon, color } = CATEGORY_META[cat];
                   const active = cat === activeCategory;
                   const catRow = templates.find((t) => t.templateType === cat);
@@ -1880,6 +2002,9 @@ export default function ManagementTemplatesPage() {
                   )}
                   {activeCategory === "Service_Ticket" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                  )}
+                  {activeCategory === "Customer_PDF" && (
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-full max-w-md">{renderPreview()}</div>
                   )}
                 </div>
 

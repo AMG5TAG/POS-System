@@ -10,7 +10,7 @@ import {
   AlignLeft, AlignJustify, ToggleLeft, Calendar, Clock, Mail, Phone,
   Hash, PenLine, Upload, ListOrdered, ChevronDown, Minus, SeparatorHorizontal,
   ChevronUp, ChevronDown as ChevronDownIcon, Trash2, Eye, EyeOff, Save,
-  Plus, X, Copy, Check, Zap, FileUp,
+  Plus, X, Copy, Check, Zap, FileUp, ShieldCheck, CheckSquare,
 } from "lucide-react";
 import type { FormField, FieldType } from "@/lib/forms-api";
 import { QUICK_CODES } from "@/lib/forms-api";
@@ -40,6 +40,8 @@ const FIELD_TYPES: FieldTypeDef[] = [
   { type: "dropdown",        label: "Dropdown",       Icon: ChevronDown,       color: "text-blue-500"   },
   { type: "section_header",  label: "Section Header", Icon: Minus,             color: "text-muted-foreground" },
   { type: "divider",         label: "Divider",        Icon: SeparatorHorizontal,color: "text-muted-foreground"},
+  { type: "privacy_notice",  label: "Privacy Notice", Icon: ShieldCheck,       color: "text-blue-600"         },
+  { type: "marketing_consent", label: "Marketing Consent", Icon: CheckSquare,  color: "text-green-600"        },
 ];
 
 const DEFAULT_LABELS: Record<FieldType, string> = {
@@ -57,6 +59,8 @@ const DEFAULT_LABELS: Record<FieldType, string> = {
   dropdown:        "Dropdown",
   section_header:  "Section",
   divider:         "",
+  privacy_notice:  "Privacy Notice",
+  marketing_consent: "I agree to receive marketing communications",
 };
 
 function getFieldDef(type: FieldType): FieldTypeDef {

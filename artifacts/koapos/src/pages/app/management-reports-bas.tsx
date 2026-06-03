@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetProfitLoss } from "@workspace/api-client-react";
+import { useGetProfitLoss, useGetMerchant } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,6 +82,9 @@ export default function ManagementReportsBasPage() {
   const [customFrom, setCustomFrom] = useState(toISO(new Date(new Date().setDate(new Date().getDate() - 91))));
   const [customTo, setCustomTo]   = useState(toISO(new Date()));
 
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant-bas"] } });
+  const { profile } = useBusinessProfile();
+
   const { from, to } = preset === "custom"
     ? { from: customFrom, to: customTo }
     : presetDates(preset);
@@ -112,7 +116,13 @@ export default function ManagementReportsBasPage() {
   const canExport = !isLoading && !isError && grossRevenue > 0;
 
   function handleExportCsv() {
+    const bizName = merchant?.businessName ?? "";
+    const abn     = profile?.abn ?? "";
     const rows = [
+      ["Business Name", bizName],
+      ["ABN",           abn],
+      ["Period",        `${from} to ${to}`],
+      [],
       ["BAS Field", "Description", "Amount (AUD)"],
       ["G1",  "Total Sales (including GST)",  grossRevenue.toFixed(2)],
       ["1A",  "GST on Sales",                 taxCollected.toFixed(2)],
@@ -120,9 +130,8 @@ export default function ManagementReportsBasPage() {
       ["Net", "Net Sales excluding GST",       exGstRevenue.toFixed(2)],
       ["",    "Total Refunds",                 refundTotal.toFixed(2)],
       ["",    "Transaction Count",             txCount.toString()],
-      ["",    "Period",                        `${from} to ${to}`],
     ];
-    const csv = rows.map(r => r.join(",")).join("\n");
+    const csv = rows.map(r => r.map(v => (String(v).includes(",") ? `"${v}"` : v)).join(",")).join("\n");
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
       download: `bas-report-${from}-${to}.csv`,

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   Plus, FileText, Edit2, Trash2, MoreVertical, Eye, Copy, ClipboardList,
   AlignLeft, AlignJustify, ToggleLeft, Calendar, Clock, Mail, Phone,
-  Hash, PenLine, Upload, ListOrdered, ChevronDown, Minus, SeparatorHorizontal,
+  Hash, PenLine, Upload, ListOrdered, ChevronDown, Minus, SeparatorHorizontal, ShieldCheck, CheckSquare,
   Zap, Download, Folder, FolderOpen, File, Image, FileSpreadsheet, X,
   Cloud, CloudOff, RefreshCw, HardDrive,
 } from "lucide-react";
@@ -206,6 +206,8 @@ const FIELD_ICONS: Record<FieldType, React.ComponentType<{ className?: string }>
   dropdown:        ChevronDown,
   section_header:  Minus,
   divider:         SeparatorHorizontal,
+  privacy_notice:  ShieldCheck,
+  marketing_consent: CheckSquare,
 };
 
 const FIELD_COLORS: Record<FieldType, string> = {
@@ -223,6 +225,8 @@ const FIELD_COLORS: Record<FieldType, string> = {
   dropdown:        "text-blue-500",
   section_header:  "text-muted-foreground",
   divider:         "text-muted-foreground",
+  privacy_notice:  "text-blue-600",
+  marketing_consent: "text-green-600",
 };
 
 // ── Empty state ──────────────────────────────────────────────────────────

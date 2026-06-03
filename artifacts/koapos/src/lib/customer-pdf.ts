@@ -63,6 +63,72 @@ const C = {
   amber:      [217, 119, 6]   as [number, number, number],
 };
 
+/* ── Template helpers ────────────────────────────────────────────────────── */
+
+/** jsPDF ships only helvetica/times/courier — map a template font key to the
+ *  nearest built-in family. */
+const FONT_MAP: Record<string, "helvetica" | "times" | "courier"> = {
+  inter: "helvetica", roboto: "helvetica", lato: "helvetica", opensans: "helvetica",
+  montserrat: "helvetica", poppins: "helvetica", helvetica: "helvetica", arial: "helvetica",
+  georgia: "times", times: "times", "times new roman": "times",
+  courier: "courier", "courier new": "courier",
+};
+function mapFont(family?: string | null): "helvetica" | "times" | "courier" {
+  if (!family) return "helvetica";
+  return FONT_MAP[family.trim().toLowerCase()] ?? "helvetica";
+}
+
+function hexToRgb(hex?: string | null): [number, number, number] | null {
+  if (!hex) return null;
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Best-effort: load an image URL/dataURL into a PNG dataURL for jsPDF.addImage.
+ *  Returns null on any failure (CORS taint, 404, etc.) so the PDF still renders. */
+async function loadImageDataUrl(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+    if (!loaded || !loaded.naturalWidth || !loaded.naturalHeight) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = loaded.naturalWidth;
+    canvas.height = loaded.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(loaded, 0, 0);
+    return { dataUrl: canvas.toDataURL("image/png"), w: loaded.naturalWidth, h: loaded.naturalHeight };
+  } catch {
+    return null;
+  }
+}
+
+/** Template that drives the Customer PDF (Management → Templates → Misc → Customer PDF). */
+export interface CustomerPdfTemplate {
+  brandColor?: string | null;
+  logoUrl?: string | null;
+  showLogo?: boolean;
+  fontFamily?: string | null;
+  headerText?: string | null;
+  footerText?: string | null;
+  sections?: {
+    transactions?: boolean;
+    appointments?: boolean;
+    serviceJobs?: boolean;
+    notes?: boolean;
+    formSubmissions?: boolean;
+    warningNote?: boolean;
+    internalNotes?: boolean;
+  };
+}
+
 /* ── Layout constants ────────────────────────────────────────────────────── */
 
 const PAGE_W = 210;
@@ -73,7 +139,7 @@ const CONTENT_W = PAGE_W - ML - MR;
 
 /* ── PDF Builder ─────────────────────────────────────────────────────────── */
 
-interface ExportOptions {
+export interface ExportOptions {
   customer: Customer;
   transactions: Transaction[];
   appointments: Appointment[];
@@ -82,10 +148,26 @@ interface ExportOptions {
   formSubmissions?: FormSubmission[];
   allForms?: FormTemplate[];
   merchantName?: string;
+  /** Saved Customer PDF template (brand colour, logo, font, header/footer, section toggles). */
+  template?: CustomerPdfTemplate;
 }
 
-export function exportCustomerPDF(opts: ExportOptions): void {
-  const { customer, transactions, appointments, serviceJobs, notes, formSubmissions, allForms, merchantName } = opts;
+export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
+  const { customer, transactions, appointments, serviceJobs, notes, formSubmissions, allForms, merchantName, template } = opts;
+
+  // Template-derived rendering settings (sensible defaults when unset).
+  const font = mapFont(template?.fontFamily);
+  const primary = hexToRgb(template?.brandColor) ?? C.primary;
+  const showLogo = template?.showLogo ?? false;
+  const sections = {
+    transactions:    template?.sections?.transactions    ?? true,
+    appointments:    template?.sections?.appointments    ?? true,
+    serviceJobs:     template?.sections?.serviceJobs     ?? true,
+    notes:           template?.sections?.notes           ?? true,
+    formSubmissions: template?.sections?.formSubmissions ?? true,
+    warningNote:     template?.sections?.warningNote      ?? true,
+    internalNotes:   template?.sections?.internalNotes    ?? true,
+  };
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   let y = 0;
@@ -108,9 +190,9 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   function sectionHeading(title: string): void {
     checkPage(14);
     y += 6;
-    doc.setFillColor(...C.primary);
+    doc.setFillColor(...primary);
     doc.roundedRect(ML, y, CONTENT_W, 7, 1.5, 1.5, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font, "bold");
     doc.setFontSize(8);
     doc.setTextColor(...C.white);
     doc.text(title.toUpperCase(), ML + 3.5, y + 4.8);
@@ -119,7 +201,7 @@ export function exportCustomerPDF(opts: ExportOptions): void {
 
   function infoRow(label: string, value: string | null | undefined, yRef: number): number {
     const v = value ?? "—";
-    doc.setFont("helvetica", "normal");
+    doc.setFont(font, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...C.light);
     doc.text(label, ML + 2, yRef + 4.5);
@@ -136,18 +218,32 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   /* 1. Header                                                                */
   /* ──────────────────────────────────────────────────────────────────────── */
 
-  // Blue header bar
-  doc.setFillColor(...C.primary);
+  // Header bar (brand colour)
+  doc.setFillColor(...primary);
   doc.rect(0, 0, PAGE_W, 28, "F");
 
-  doc.setFont("helvetica", "bold");
+  // Optional logo (best-effort; falls back to text-only header on failure)
+  let textX = ML;
+  if (showLogo && template?.logoUrl) {
+    const img = await loadImageDataUrl(template.logoUrl);
+    if (img) {
+      const h = 16;
+      const w = Math.min(50, (img.w / img.h) * h);
+      try {
+        doc.addImage(img.dataUrl, "PNG", ML, 6, w, h);
+        textX = ML + w + 5;
+      } catch { /* unsupported image — skip logo */ }
+    }
+  }
+
+  doc.setFont(font, "bold");
   doc.setFontSize(16);
   doc.setTextColor(...C.white);
-  doc.text(merchantName ?? "KoaPOS", ML, 12);
+  doc.text(merchantName ?? "KoaPOS", textX, 12);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(font, "normal");
   doc.setFontSize(9);
-  doc.text("Customer History Export", ML, 19);
+  doc.text(template?.headerText?.trim() || "Customer History Export", textX, 19);
 
   // Date stamp top-right
   doc.setFontSize(8);
@@ -170,19 +266,19 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   doc.setFillColor(...C.indigoBg);
   doc.circle(ML + 8, avatarY + 8, 8, "F");
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font, "bold");
   doc.setFontSize(10);
   doc.setTextColor(...C.indigo);
   const initW = doc.getStringUnitWidth(initials) * 10 * 0.352778;
   doc.text(initials, ML + 8 - initW / 2, avatarY + 9.5);
 
   // Name + ID beside avatar
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font, "bold");
   doc.setFontSize(13);
   doc.setTextColor(...C.dark);
   doc.text(fullName, ML + 20, avatarY + 7);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(font, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...C.mid);
   const subLine = [
@@ -195,10 +291,10 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   y = avatarY + 22;
 
   // Warning note
-  if (customer.warningNote) {
+  if (customer.warningNote && sections.warningNote) {
     doc.setFillColor(254, 226, 226);
     doc.roundedRect(ML, y, CONTENT_W, 9, 1.5, 1.5, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font, "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.red);
     doc.text("⚠  " + customer.warningNote, ML + 3, y + 5.8);
@@ -232,15 +328,15 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   y += 2;
 
   // Internal notes
-  if (customer.notes) {
+  if (customer.notes && sections.internalNotes) {
     checkPage(16);
     doc.setFillColor(...C.bg);
     doc.roundedRect(ML, y, CONTENT_W, 14, 1.5, 1.5, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font, "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.mid);
     doc.text("Internal Notes", ML + 3, y + 5);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(font, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...C.dark);
     const noteLines = doc.splitTextToSize(customer.notes, CONTENT_W - 6) as string[];
@@ -252,11 +348,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   /* 3. Transaction History                                                   */
   /* ──────────────────────────────────────────────────────────────────────── */
 
+  if (sections.transactions) {
   sectionHeading(`Transaction History (${transactions.length})`);
 
   if (!transactions.length) {
     checkPage(10);
-    doc.setFont("helvetica", "italic");
+    doc.setFont(font, "italic");
     doc.setFontSize(8.5);
     doc.setTextColor(...C.light);
     doc.text("No transactions recorded.", ML + 3, y + 5);
@@ -267,9 +364,9 @@ export function exportCustomerPDF(opts: ExportOptions): void {
     const cols = { receipt: ML, date: ML + 30, method: ML + 72, status: ML + 112, total: ML + 145, items: ML + 168 };
     const colWs = { receipt: 28, date: 40, method: 38, status: 30, total: 22, items: CONTENT_W - 168 + ML - ML };
 
-    doc.setFillColor(...C.primary);
+    doc.setFillColor(...primary);
     doc.roundedRect(ML, y, CONTENT_W, 6.5, 1, 1, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font, "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.white);
     doc.text("Receipt #",   cols.receipt + 1, y + 4.3);
@@ -299,7 +396,7 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       }
       rowBg = !rowBg;
 
-      doc.setFont("helvetica", "normal");
+      doc.setFont(font, "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...C.dark);
 
@@ -316,18 +413,18 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       const sw = doc.getStringUnitWidth(statusText) * 7 * 0.352778 + 4;
       doc.setFillColor(...statusColor);
       doc.roundedRect(cols.status + 1, y + 1, sw, 4.5, 1, 1, "F");
-      doc.setFont("helvetica", "bold");
+      doc.setFont(font, "bold");
       doc.setFontSize(6.5);
       doc.setTextColor(...statusTextColor);
       doc.text(statusText, cols.status + 3, y + 4.2);
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(font, "bold");
       doc.setFontSize(7.5);
       doc.setTextColor(...C.dark);
       doc.text(fmtCurrency(tx.total), cols.total + 1, y + 4);
 
       if (itemLines.length) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(font, "normal");
         doc.setFontSize(6.5);
         doc.setTextColor(...C.mid);
         doc.text(itemLines, ML + 2, y + 7.5);
@@ -346,18 +443,19 @@ export function exportCustomerPDF(opts: ExportOptions): void {
     y += 3;
     const totalSpent = transactions.reduce((s, tx) => s + parseFloat(String(tx.total ?? 0)), 0);
     const refunded   = transactions.filter(tx => tx.status === "refunded").length;
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font, "bold");
     doc.setFontSize(8);
     doc.setTextColor(...C.mid);
     doc.text(`${transactions.length} transaction${transactions.length !== 1 ? "s" : ""}  ·  ${refunded} refund${refunded !== 1 ? "s" : ""}  ·  Lifetime spend: ${fmtCurrency(totalSpent)}`, ML + 3, y + 4);
     y += 8;
   }
+  } // end transactions section
 
   /* ──────────────────────────────────────────────────────────────────────── */
   /* 4. Appointments (if any)                                                 */
   /* ──────────────────────────────────────────────────────────────────────── */
 
-  if (appointments.length > 0) {
+  if (appointments.length > 0 && sections.appointments) {
     sectionHeading(`Appointments (${appointments.length})`);
 
     for (const appt of appointments) {
@@ -365,12 +463,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       doc.setFillColor(...C.bg);
       doc.roundedRect(ML, y, CONTENT_W, 12, 1.5, 1.5, "F");
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(font, "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(...C.dark);
       doc.text(appt.title || "Appointment", ML + 3, y + 5);
 
-      doc.setFont("helvetica", "normal");
+      doc.setFont(font, "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...C.mid);
       doc.text(`${fmtDateTime(appt.scheduledAt)}  ·  ${appt.durationMinutes} min  ·  ${appt.status}`, ML + 3, y + 9.5);
@@ -382,7 +480,7 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   /* 5. Service Jobs (if any)                                                 */
   /* ──────────────────────────────────────────────────────────────────────── */
 
-  if (serviceJobs.length > 0) {
+  if (serviceJobs.length > 0 && sections.serviceJobs) {
     sectionHeading(`Service Jobs (${serviceJobs.length})`);
 
     for (const job of serviceJobs) {
@@ -390,12 +488,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       doc.setFillColor(...C.bg);
       doc.roundedRect(ML, y, CONTENT_W, 14, 1.5, 1.5, "F");
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(font, "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(...C.dark);
       doc.text(`${job.jobNumber}${job.deviceType ? "  ·  " + job.deviceType : ""}`, ML + 3, y + 5);
 
-      doc.setFont("helvetica", "normal");
+      doc.setFont(font, "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...C.mid);
       const jobMeta = [
@@ -419,11 +517,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
   /* 6. Notes (including merge events)                                        */
   /* ──────────────────────────────────────────────────────────────────────── */
 
+  if (sections.notes) {
   sectionHeading(`Notes (${notes.length})`);
 
   if (!notes.length) {
     checkPage(10);
-    doc.setFont("helvetica", "italic");
+    doc.setFont(font, "italic");
     doc.setFontSize(8.5);
     doc.setTextColor(...C.light);
     doc.text("No notes recorded.", ML + 3, y + 5);
@@ -455,21 +554,21 @@ export function exportCustomerPDF(opts: ExportOptions): void {
         doc.roundedRect(ML, y, 3, cardH, 1, 1, "F");
 
         // Header
-        doc.setFont("helvetica", "bold");
+        doc.setFont(font, "bold");
         doc.setFontSize(8);
         doc.setTextColor(...C.indigo);
         doc.text("PROFILE MERGED", ML + 6, y + 5.5);
 
         const noteDate = parsed?.date ?? fmtDate(note.createdAt);
         const dateLabelW = doc.getStringUnitWidth(noteDate) * 8 * 0.352778;
-        doc.setFont("helvetica", "normal");
+        doc.setFont(font, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...C.light);
         doc.text(noteDate, ML + CONTENT_W - dateLabelW, y + 5.5);
 
         let rowY = y + 10;
         for (const [lbl, val] of mergeRows) {
-          doc.setFont("helvetica", "normal");
+          doc.setFont(font, "normal");
           doc.setFontSize(7.5);
           doc.setTextColor(...C.mid);
           doc.text(lbl, ML + 6, rowY + 4);
@@ -497,7 +596,7 @@ export function exportCustomerPDF(opts: ExportOptions): void {
         doc.setLineWidth(0.25);
         doc.roundedRect(ML, y, CONTENT_W, cardH, 2, 2, "S");
 
-        doc.setFont("helvetica", "normal");
+        doc.setFont(font, "normal");
         doc.setFontSize(8);
         doc.setTextColor(...C.dark);
         doc.text(noteLines, ML + 4, y + 6);
@@ -529,13 +628,14 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       }
     }
   }
+  } // end notes section
 
   /* ──────────────────────────────────────────────────────────────────────── */
   /* 7. Form Submissions (if any)                                             */
   /* ──────────────────────────────────────────────────────────────────────── */
 
   const subs = formSubmissions ?? [];
-  if (subs.length > 0) {
+  if (subs.length > 0 && sections.formSubmissions) {
     sectionHeading(`Form Submissions (${subs.length})`);
 
     for (const sub of subs) {
@@ -550,12 +650,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
       doc.setFillColor(...C.bg);
       doc.roundedRect(ML, y, CONTENT_W, cardH, 1.5, 1.5, "F");
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(font, "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(...C.dark);
       doc.text(formName, ML + 3, y + 5);
 
-      doc.setFont("helvetica", "normal");
+      doc.setFont(font, "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...C.light);
       const dateStr = fmtDateTime(sub.createdAt);
@@ -568,7 +668,7 @@ export function exportCustomerPDF(opts: ExportOptions): void {
         const label = field?.label ?? key;
         const displayValue = Array.isArray(value) ? value.join(", ") : String(value ?? "—");
 
-        doc.setFont("helvetica", "normal");
+        doc.setFont(font, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...C.mid);
         doc.text(label, ML + 3, rowY + 4);
@@ -597,11 +697,12 @@ export function exportCustomerPDF(opts: ExportOptions): void {
     doc.setPage(i);
     doc.setFillColor(...C.bg);
     doc.rect(0, PAGE_H - 10, PAGE_W, 10, "F");
-    doc.setFont("helvetica", "normal");
+    doc.setFont(font, "normal");
     doc.setFontSize(6.5);
     doc.setTextColor(...C.light);
+    const footerLead = template?.footerText?.trim() || `${merchantName ?? "KoaPOS"} Customer Export`;
     doc.text(
-      `KoaPOS Customer Export  ·  ${fullName}  ·  Exported ${exportDate}`,
+      `${footerLead}  ·  ${fullName}  ·  Exported ${exportDate}`,
       ML,
       PAGE_H - 4,
     );

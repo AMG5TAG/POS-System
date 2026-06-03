@@ -983,9 +983,12 @@ export default function SettingsAccountPage() {
           </CardContent>
         </Card>
 
+        {/* Recent sign-ins */}
+        <RecentSignInsCard authEvents={authEvents} />
+
         </div>{/* end left column */}
 
-        {/* Right column: Business Username + Recent sign-ins */}
+        {/* Right column: Business Username */}
         <div className="space-y-6">
 
         <Card id="business-username">
@@ -1173,9 +1176,6 @@ export default function SettingsAccountPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Recent sign-ins */}
-        <RecentSignInsCard authEvents={authEvents} />
 
         </div>{/* end right column */}
 

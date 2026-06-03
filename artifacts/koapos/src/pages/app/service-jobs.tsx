@@ -30,7 +30,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { STICKER_TYPES, DYMO_SIZES, LabelPreview, useStickerTemplates } from "@/lib/sticker-config";
+import { useStickerPrinter } from "@/lib/sticker-config";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
@@ -231,7 +231,7 @@ export default function ServiceJobsPage() {
   const [selected, setSelected]             = useState<Set<number>>(new Set());
   const [viewing, setViewing]               = useState<ServiceJob | null>(null);
   const [printChoiceJob, setPrintChoiceJob] = useState<ServiceJob | null>(null);
-  const [printState, setPrintState]         = useState<{ job: ServiceJob; mode: "sheet" | "sticker" } | null>(null);
+  const [printState, setPrintState]         = useState<{ job: ServiceJob } | null>(null);
   const [activeSortKey, setSortKey]         = useState<SortKey>("bookInDate");
   const [sortDir, setSortDir]               = useState<SortDir>("desc");
 
@@ -243,13 +243,13 @@ export default function ServiceJobsPage() {
   const { profile }          = useBusinessProfile();
   const businessName         = merchant?.businessName ?? "Your Business";
   const brandColor           = (profile.brandColors as string[] | undefined)?.[0] ?? "#efbf04";
-  const { templates: stickerTemplates } = useStickerTemplates();
+  const { printStickers } = useStickerPrinter();
 
+  // Sheet print: reveal the hidden A4 print area, fire window.print(), then clean up.
   useEffect(() => {
     if (!printState) return;
     const t = setTimeout(() => {
-      const attr = printState.mode === "sheet" ? "sj-sheet" : "sj-sticker";
-      document.body.setAttribute("data-print", attr);
+      document.body.setAttribute("data-print", "sj-sheet");
       const cleanup = () => {
         document.body.removeAttribute("data-print");
         setPrintState(null);
@@ -266,6 +266,30 @@ export default function ServiceJobsPage() {
 
   /* Read active service-sheet template + opts from Management > Templates */
   const { opts: serviceOpts, fontCss: serviceFontCss } = useSalesTemplate("Service_Ticket");
+
+  /* Repair sticker prints through the shared sticker printer so the saved
+   * "repair" template (size + field toggles) is applied. The A4 sheet keeps its
+   * own rich renderer (ServiceJobSheet) below. */
+  const printRepairSticker = (job: ServiceJob) => {
+    const ok = printStickers({
+      typeId: "repair",
+      orientation: "horizontal",
+      fieldsOverride: {
+        jobNo:    job.jobNumber ?? "",
+        customer: job.customerName ?? "",
+        device:   job.deviceType ?? job.deviceDescription ?? "",
+        fault:    job.workDescription ?? "",
+        dueDate:  "",
+        tech:     "",
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
+
+  const startPrint = (job: ServiceJob, mode: "sheet" | "sticker") => {
+    if (mode === "sticker") { printRepairSticker(job); return; }
+    setPrintState({ job });
+  };
 
   const jobs   = Array.isArray(jobsData) ? jobsData : [];
   const active = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled").length;
@@ -528,33 +552,25 @@ export default function ServiceJobsPage() {
         onClose={() => setViewing(null)}
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
-        onPrint={(job, mode) => { setViewing(null); setPrintState({ job, mode }); }}
+        onPrint={(job, mode) => { setViewing(null); startPrint(job, mode); }}
       />
 
       <PrintChoiceDialog
         job={printChoiceJob}
         onClose={() => setPrintChoiceJob(null)}
-        onSelect={(mode) => { const job = printChoiceJob!; setPrintChoiceJob(null); setPrintState({ job, mode }); }}
+        onSelect={(mode) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode); }}
       />
 
       {/* ── Print areas ─────────────────────────────────────────────────── */}
       {printState && (() => {
         const pj = printState.job;
-        const repairType = STICKER_TYPES.find((t) => t.id === "repair") ?? STICKER_TYPES[0];
-        const tpl        = stickerTemplates.find((t) => t.typeId === "repair");
-        const stickerSize = DYMO_SIZES.find((s) => s.id === (tpl?.sizeId ?? repairType.defaultSize))
-                         ?? DYMO_SIZES.find((s) => s.id === "S0722520")
-                         ?? DYMO_SIZES[0];
-        // Orientation-adjusted sticker dimensions (horizontal = landscape)
-        const stkW = Math.max(stickerSize.widthMm, stickerSize.heightMm);
-        const stkH = Math.min(stickerSize.widthMm, stickerSize.heightMm);
         return (
           <>
-            {/* Screen: hide both print areas so they don't appear in the UI */}
-            {/* Print: show only the area matching the current data-print attribute */}
+            {/* Screen: hide the print area so it doesn't appear in the UI.
+               Print: show only the A4 service sheet. */}
             <style>{`
               @media screen {
-                #sj-sheet-print-area, #sj-sticker-print-area { display: none !important; }
+                #sj-sheet-print-area { display: none !important; }
               }
               @media print {
                 body * { visibility: hidden !important; }
@@ -565,26 +581,11 @@ export default function ServiceJobsPage() {
                   position: fixed !important; left: 0 !important; top: 0 !important;
                   width: 210mm !important; box-sizing: border-box !important;
                 }
-                body[data-print="sj-sticker"] #sj-sticker-print-area,
-                body[data-print="sj-sticker"] #sj-sticker-print-area * { visibility: visible !important; }
-                body[data-print="sj-sticker"] #sj-sticker-print-area {
-                  display: flex !important;
-                  position: fixed !important; left: 0 !important; top: 0 !important;
-                  width: ${stkW}mm !important; height: ${stkH}mm !important;
-                  align-items: center !important; justify-content: center !important;
-                  overflow: hidden !important;
-                }
+                @page { size: A4 portrait; margin: 10mm; }
               }
             `}</style>
-            {/* Inject @page size rules separately — @page cannot be nested inside selectors */}
-            {printState.mode === "sheet" && (
-              <style>{`@media print { @page { size: A4 portrait; margin: 10mm; } }`}</style>
-            )}
-            {printState.mode === "sticker" && (
-              <style>{`@media print { @page { size: ${stkW}mm ${stkH}mm; margin: 0; } }`}</style>
-            )}
 
-            {/* A4 service sheet (unified template) */}
+            {/* A4 service sheet (Service_Ticket template) */}
             <ServiceJobSheet
               id="sj-sheet-print-area"
               opts={serviceOpts}
@@ -628,28 +629,6 @@ export default function ServiceJobsPage() {
                 partnerRepairCode: pj.partnerRepairCode ?? undefined,
               }}
             />
-
-            {/* Sticker */}
-            <div
-              id="sj-sticker-print-area"
-              style={{ position: "fixed", left: "-9999px", top: 0 }}
-            >
-              <LabelPreview
-                type={repairType}
-                fields={{
-                  jobNo:    pj.jobNumber ?? "",
-                  customer: pj.customerName ?? "",
-                  device:   pj.deviceType ?? pj.deviceDescription ?? "",
-                  fault:    pj.workDescription ?? "",
-                  dueDate:  "",
-                  tech:     "",
-                }}
-                size={stickerSize}
-                businessName={businessName}
-                brandColor={brandColor}
-                orientation="horizontal"
-              />
-            </div>
           </>
         );
       })()}

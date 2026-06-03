@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import jsPDF from "jspdf";
-import QRCode from "qrcode";
 
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -9,6 +7,7 @@ import {
   useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
+  getInvoicePdf, type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -30,8 +29,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
-import { resolveCode } from "@/pages/app/management-templates";
 import { useSalesTemplate } from "@/lib/use-sales-template";
+import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
@@ -251,8 +250,11 @@ export default function POSInvoicesPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
-  const { opts: invoiceOpts, fontCss: invoiceFontCss } = useSalesTemplate("Invoice");
-  const { opts: quoteOpts, fontCss: quoteFontCss } = useSalesTemplate("Quote");
+  // invoiceOpts still drives the email composer defaults below. The printed /
+  // downloaded invoice + quote now render through the centralized document
+  // template controller (shared buildInvoiceHtml layout + backend PDF).
+  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
+  const { printInvoice: printInvoiceTpl, printQuote: printQuoteTpl } = useDocumentTemplate();
 
   /* ── Sync initial line state when default tax rate loads ── */
   useEffect(() => {
@@ -660,613 +662,70 @@ export default function POSInvoicesPage() {
     }
   };
 
-  /* ── Helpers ── */
-  const resolveStr = (text: string, biz: string, abn: string, web: string, em: string) =>
-    resolveCode(text || "", biz, abn, web, em);
+  /* ── Print / PDF ───────────────────────────────────────────────────────
+   * Print and PDF both flow through the centralized document-template system
+   * so the customer-facing invoice/quote matches Management > Templates and the
+   * server-rendered PDF. `invoiceToTransaction` adapts this page's Invoice shape
+   * to the shared `Transaction` the print helpers expect. */
+  const invoiceToTransaction = (inv: Invoice): Transaction => ({
+    id: inv.id,
+    merchantId: 0,
+    customerId: inv.customerId,
+    customer: (inv.customerName || inv.customerEmail)
+      ? ({
+          firstName: inv.customerName ?? "",
+          lastName: "",
+          email: inv.customerEmail ?? "",
+          phone: inv.customerPhone ?? "",
+        } as unknown as Transaction["customer"])
+      : undefined,
+    receiptNumber: inv.invoiceNumber,
+    status: inv.status as unknown as Transaction["status"],
+    // buildInvoiceHtml derives the displayed ex-GST subtotal as (subtotal -
+    // taxTotal). Invoice.subtotal is already GST-exclusive, so pass a
+    // GST-inclusive subtotal here to round-trip to the correct figure.
+    subtotal: inv.subtotal + inv.taxTotal,
+    taxTotal: inv.taxTotal,
+    discountTotal: inv.discountTotal ?? 0,
+    total: inv.total,
+    // Invoices have no single payment method; an empty label suppresses the
+    // "Paid — <method>" badge while the Status block still shows the state.
+    paymentMethod: "" as unknown as Transaction["paymentMethod"],
+    items: (inv.items ?? []).map((l) => ({
+      productId: 0,
+      productName: l.description,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      totalPrice: l.quantity * l.unitPrice,
+    })),
+    createdAt: inv.createdAt,
+    // Extras consumed by the print path (not part of the base Transaction type):
+    amountPaid: inv.amountPaid,
+    discountLabel: inv.discountTotal
+      ? `Discount${inv.discountType === "percent" && inv.discountValue ? ` (${inv.discountValue}%)` : ""}`
+      : undefined,
+  } as Transaction);
 
-  /* ── Print ── */
-  const printInvoice = async (inv: Invoice) => {
-    const opts        = invoiceOpts;
-    const bizName     = merchant?.businessName ?? "Your Business";
-    const abn         = profile.abn ?? "";
-    const website     = profile.website ?? "";
-    const address     = [
-      (merchant as { address?: string } | undefined)?.address,
-      (merchant as { city?: string } | undefined)?.city,
-      profile.state, profile.postcode,
-    ].filter(Boolean).join(", ");
-    const email       = profile.contactEmail ?? "";
-    const tagline     = profile.tagline ?? "";
-    const brandColor  = profile.brandColors?.[0] ?? "#4f46e5";
-    const logo        = profile.logo ?? "";
-    const socials     = profile.socialLinks;
-    const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
+  const printInvoice = (inv: Invoice) => printInvoiceTpl(invoiceToTransaction(inv));
+  const printAsQuote = (inv: Invoice) => printQuoteTpl(invoiceToTransaction(inv));
 
-    const termsText   = resolveStr(opts.paymentTerms, bizName, abn, website, email);
-    const notesText   = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
-    const footerText  = resolveStr(opts.footerText, bizName, abn, website, email);
-    const thankYouMsg = resolveStr(opts.thankYouMsg || "", bizName, abn, website, email);
-    const customMsg   = resolveStr(opts.customMessage || "", bizName, abn, website, email);
-
-    /* QR code data URL */
-    let qrDataUrl = "";
-    if (opts.showCustomerQr && inv.customerId) {
-      try { qrDataUrl = await QRCode.toDataURL(`CUS-${inv.customerId}`, { width: 80, margin: 1 }); } catch { /* ignore */ }
-    }
-
-    const w = window.open("", "_blank", "width=800,height=900");
-    if (!w) return;
-
-    const itemRows = (inv.items ?? []).map((l, idx) => `
-      <tr style="${idx % 2 === 1 ? "background:#fafafa" : ""}">
-        <td>${l.description}</td>
-        <td style="text-align:center">${l.quantity}</td>
-        <td style="text-align:right">$${l.unitPrice.toFixed(2)}</td>
-        <td style="text-align:right">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
-      </tr>`).join("");
-
-    /* Logo block */
-    const logoHtml = opts.showLogo
-      ? (logo
-          ? `<img src="${logo}" alt="Logo" style="max-height:56px;max-width:140px;object-fit:contain;display:block;margin-bottom:8px">`
-          : `<div style="width:44px;height:44px;border-radius:8px;background:${brandColor};margin-bottom:8px"></div>`)
-      : "";
-
-    /* Customer block */
-    const hasCustomer = inv.customerName || inv.customerEmail;
-    const customerBlock = hasCustomer ? (() => {
-      const lines: string[] = [];
-      if (inv.customerName)                              lines.push(`<p style="font-size:14px;font-weight:600;margin:0 0 2px">${inv.customerName}</p>`);
-      if (inv.customerCompany)                           lines.push(`<p style="color:#555;margin:0 0 1px">${inv.customerCompany}</p>`);
-      if (opts.showAllCustomerDetails && inv.customerEmail)   lines.push(`<p style="color:#666;margin:0 0 1px">${inv.customerEmail}</p>`);
-      if (opts.showAllCustomerDetails && inv.customerPhone)   lines.push(`<p style="color:#666;margin:0 0 1px">${inv.customerPhone}</p>`);
-      if (opts.showAllCustomerDetails && inv.customerAddress) lines.push(`<p style="color:#666;margin:0">${inv.customerAddress}</p>`);
-      return `<div class="bill-to"><strong>${opts.showAllCustomerDetails ? "CUSTOMER" : "BILL TO"}</strong><div style="margin-top:6px">${lines.join("")}</div></div>`;
-    })() : "";
-
-    /* QR + barcode block (next to customer or after) */
-    const qrBlock = qrDataUrl ? `
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f7f7f7;border-radius:6px;padding:12px 16px;margin-left:16px;font-size:13px;text-align:center">
-        <p style="font-size:9px;color:#999;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.6px">Customer Profile</p>
-        <img src="${qrDataUrl}" style="width:72px;height:72px">
-      </div>` : "";
-
-    const barcodeBlock = opts.showBarcode ? `
-      <div style="margin:12px 0;text-align:center">
-        <p style="font-family:monospace;font-size:11px;letter-spacing:4px;color:#888;border:1px solid #ddd;display:inline-block;padding:4px 12px;border-radius:4px">${inv.invoiceNumber}</p>
-        <p style="font-size:9px;color:#aaa;margin:2px 0 0">INVOICE BARCODE</p>
-      </div>` : "";
-
-    /* Customer + QR combined row — both blocks share the same background
-       and stretch to equal height via flex align-items:stretch */
-    const customerQrRow = (hasCustomer || qrDataUrl) ? `
-      <div style="display:flex;justify-content:space-between;margin-bottom:20px">
-        ${customerBlock}
-        ${qrDataUrl ? qrBlock : ""}
-      </div>` : "";
-
-    /* Payment block */
-    const paymentBlock = (opts.showPaymentMethods || opts.bankDetails) ? `
-      <div class="payment-block">
-        ${opts.paymentSectionHeading ? `<div class="terms-title">${opts.paymentSectionHeading}</div>` : ""}
-        ${opts.showPaymentMethods ? `<div class="payment-methods">${paymentTypes.map(m => `<span class="pm-badge">${m}</span>`).join("")}</div>` : ""}
-        ${opts.bankDetails ? `<pre class="bank-details">${opts.bankDetails}</pre>` : ""}
-      </div>` : "";
-
-    /* Socials */
-    const socialsBlock = opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin) ? `
-      <div class="socials">
-        ${socials.facebook  ? `<span>fb/ ${socials.facebook}</span>` : ""}
-        ${socials.instagram ? `<span>ig/ @${socials.instagram}</span>` : ""}
-        ${socials.twitter   ? `<span>x/ @${socials.twitter}</span>` : ""}
-        ${socials.linkedin  ? `<span>in/ ${socials.linkedin}</span>` : ""}
-        ${socials.youtube   ? `<span>yt/ ${socials.youtube}</span>` : ""}
-        ${socials.tiktok    ? `<span>tt/ @${socials.tiktok}</span>` : ""}
-      </div>` : "";
-
-    w.document.write(`<!DOCTYPE html><html><head>
-      <title>Invoice ${inv.invoiceNumber}</title>
-      <style>
-        *{box-sizing:border-box}
-        body{font-family:${invoiceFontCss};padding:40px;color:#222;max-width:760px;margin:0 auto}
-        .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${brandColor};padding-bottom:16px;margin-bottom:24px}
-        .biz-name{font-size:20px;font-weight:700;margin:0}
-        .biz-meta{font-size:12px;color:#666;margin-top:4px;line-height:1.7}
-        .inv-title{font-size:28px;font-weight:800;color:${brandColor};text-align:right;margin:0}
-        .inv-meta{font-size:13px;color:#666;text-align:right;margin-top:4px;line-height:1.8}
-        .bill-to{background:#f7f7f7;border-radius:6px;padding:12px 16px;font-size:13px;flex:1}
-        .bill-to strong{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#999}
-        table{width:100%;border-collapse:collapse;margin:0 0 16px}
-        th{text-align:left;border-bottom:2px solid #ddd;padding:8px 6px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px}
-        td{padding:9px 6px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
-        .totals{margin-left:auto;width:270px;margin-top:8px}
-        .totals .row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0}
-        .totals .grand{font-weight:700;border-top:2px solid #ddd;padding-top:10px;margin-top:4px;font-size:15px;color:#111;display:flex;justify-content:space-between;align-items:center}
-        .terms{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-left:3px solid ${brandColor};border-radius:0 6px 6px 0;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
-        .terms-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#aaa;margin-bottom:6px}
-        .inv-notes{margin-top:12px;padding:12px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.7}
-        .footer{margin-top:28px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center}
-        .payment-block{margin-top:20px;padding:14px 16px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#555}
-        .payment-methods{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-        .pm-badge{border:1px solid #ddd;border-radius:4px;padding:3px 9px;font-size:11px;color:#555;background:#fff;white-space:nowrap}
-        .bank-details{margin-top:8px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:#555;background:#fff;border:1px solid #eee;border-radius:4px;padding:8px 12px}
-        .loyalty-block{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;color:#065f46;background:#ecfdf5;border-radius:6px;margin-top:8px;margin-bottom:8px}
-        .socials{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:11px;color:#aaa}
-        .custom-msg{margin-top:16px;padding:10px 14px;background:#fafafa;border-radius:6px;font-size:12px;color:#555;line-height:1.6}
-        .thank-you{margin-top:16px;text-align:center;font-size:13px;font-weight:600;color:${brandColor}}
-        @media print{body{padding:20px}}
-      </style>
-    </head><body>
-      <div class="header">
-        <div>
-          ${logoHtml}
-          <p class="biz-name">${bizName}</p>
-          ${opts.showTagline && tagline ? `<p style="font-size:12px;color:#888;font-style:italic;margin:2px 0 4px">${tagline}</p>` : ""}
-          <div class="biz-meta">
-            ${opts.showAbn && abn ? `ABN ${abn}<br>` : ""}
-            ${address ? `${address}<br>` : ""}
-            ${email ? `${email}<br>` : ""}
-            ${opts.showWebsite && website ? `<a href="${website}" style="color:${brandColor}">${website}</a>` : ""}
-          </div>
-        </div>
-        <div style="text-align:right">
-          <p class="inv-title">INVOICE</p>
-          <div class="inv-meta">
-            <strong>${inv.invoiceNumber}</strong><br>
-            Date: ${formatDate(inv.createdAt)}<br>
-            ${inv.dueDate ? `Due: ${formatDateOnly(inv.dueDate)}<br>` : ""}
-            Status: ${STATUS_LABELS[inv.status]}
-          </div>
-        </div>
-      </div>
-      ${customerQrRow}
-      <table>
-        <thead><tr>
-          <th>Description</th>
-          <th style="text-align:center">Qty</th>
-          <th style="text-align:right">Unit Price</th>
-          <th style="text-align:right">Total</th>
-        </tr></thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-      <div class="totals">
-        <div class="row"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>
-        ${opts.showGstBreakdown ? `<div class="row"><span>GST (10%)</span><span>$${inv.taxTotal.toFixed(2)}</span></div>` : ""}
-        ${inv.discountTotal ? `<div class="row" style="color:#b45309"><span>Discount</span><span>-$${inv.discountTotal.toFixed(2)}</span></div>` : ""}
-        <div class="grand"><span>Total Due (AUD)</span><span>$${inv.total.toFixed(2)}</span></div>
-        ${(inv.amountPaid ?? 0) > 0 ? `<div class="row" style="color:#047857"><span>Amount Paid</span><span>-$${(inv.amountPaid ?? 0).toFixed(2)}</span></div><div class="grand"><span>Balance Due (AUD)</span><span>$${Math.max(0, inv.total - (inv.amountPaid ?? 0)).toFixed(2)}</span></div>` : ""}
-      </div>
-      ${opts.showLoyaltyEarned ? (() => {
-        const lType = loyaltySettings?.programType ?? "points";
-        let lIcon: string, lLabel: string, lValue: string;
-        if (lType === "cashback") {
-          const rate = loyaltySettings?.cashbackRate ?? 0.01;
-          const earned = Math.round(inv.total * rate * 100) / 100;
-          lIcon = "$"; lLabel = "Cashback Earned"; lValue = `+ $${earned.toFixed(2)}`;
-        } else {
-          const ppd = loyaltySettings?.pointsPerDollar ?? 1;
-          const pts = Math.floor(inv.total * ppd);
-          lIcon = "&#9733;"; lLabel = "Loyalty Earned"; lValue = `+${pts} pts`;
-        }
-        return `<div class="loyalty-block"><span>${lIcon} ${lLabel}</span><span>${lValue}</span></div>`;
-      })() : ""}
-      ${paymentBlock}
-      ${termsText ? `<div class="terms"><div class="terms-title">Payment Terms</div><div>${termsText}</div>${notesText ? `<div style="margin-top:8px;font-style:italic">${notesText}</div>` : ""}</div>` : notesText ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${notesText}</div>` : ""}
-      ${inv.notes ? `<div class="inv-notes"><div class="terms-title" style="margin-bottom:6px">Notes</div>${inv.notes}</div>` : ""}
-      ${socialsBlock}
-      ${customMsg ? `<div class="custom-msg">${customMsg.replace(/\n/g, "<br>")}</div>` : ""}
-      ${thankYouMsg ? `<div class="thank-you">${thankYouMsg}</div>` : ""}
-      ${footerText ? `<div class="footer">${footerText}</div>` : ""}
-      ${barcodeBlock}
-    </body></html>`);
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); }, 400);
-  };
-
+  /* PDF download streams the branded, templated A4 PDF from the server (same
+   * buildInvoiceHtml layout used by Print Preview and the emailed PDF). */
   const downloadInvoicePDF = async (inv: Invoice) => {
     if (pdfGeneratingId !== null) return;
     setPdfGeneratingId(inv.id);
     try {
-    const opts      = invoiceOpts;
-    const bizName   = merchant?.businessName ?? "Your Business";
-    const abn       = profile.abn ?? "";
-    const website   = profile.website ?? "";
-    const address   = [
-      (merchant as { address?: string } | undefined)?.address,
-      (merchant as { city?: string } | undefined)?.city,
-      profile.state, profile.postcode,
-    ].filter(Boolean).join(", ");
-    const email     = profile.contactEmail ?? "";
-    const tagline   = profile.tagline ?? "";
-    const rawColor  = profile.brandColors?.[0] ?? "#4f46e5";
-    const logo      = profile.logo ?? "";
-    const socials   = profile.socialLinks;
-    const paymentTypes = profile.paymentTypes ?? ["Cash", "EFTPOS", "Mastercard", "Visa"];
-
-    const termsText   = resolveStr(opts.paymentTerms, bizName, abn, website, email);
-    const notesText   = resolveStr(opts.invoiceNotes, bizName, abn, website, email);
-    const footerText  = resolveStr(opts.footerText, bizName, abn, website, email);
-    const thankYouMsg = resolveStr(opts.thankYouMsg || "", bizName, abn, website, email);
-    const customMsg   = resolveStr(opts.customMessage || "", bizName, abn, website, email);
-
-    const hexToRgb = (hex: string): [number, number, number] => {
-      const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return r ? [parseInt(r[1], 16), parseInt(r[2], 16), parseInt(r[3], 16)] : [79, 70, 229];
-    };
-    const [cr, cg, cb] = hexToRgb(rawColor);
-
-    /* QR code data URL */
-    let qrDataUrl = "";
-    if (opts.showCustomerQr && inv.customerId) {
-      try { qrDataUrl = await QRCode.toDataURL(`CUS-${inv.customerId}`, { width: 80, margin: 1 }); } catch { /* ignore */ }
-    }
-
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const W = 210, ML = 20, MR = 20, CW = W - ML - MR;
-    let y = 22;
-
-    /* ── Header ── */
-    let logoH = 0;
-    if (opts.showLogo) {
-      if (logo) {
-        try {
-          /* Compress to JPEG at ≤260 px before embedding — raw user PNG logos
-             (often 1000–4000 px) are the #1 cause of 100 MB+ PDF output. */
-          const { dataUrl: compressedLogo, format: logoFmt } = await compressForPdf(logo, 260, 0.78);
-          doc.addImage(compressedLogo, logoFmt, ML, y, 22, 22);
-          logoH = 26;
-        } catch {
-          doc.setFillColor(cr, cg, cb);
-          doc.roundedRect(ML, y, 10, 10, 2, 2, "F");
-          logoH = 14;
-        }
-      } else {
-        doc.setFillColor(cr, cg, cb);
-        doc.roundedRect(ML, y, 10, 10, 2, 2, "F");
-        logoH = 14;
-      }
-    }
-    const bizY = y + logoH;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(30, 30, 30);
-    doc.text(bizName, ML, bizY);
-    if (opts.showTagline && tagline) {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(130, 130, 130);
-      doc.text(tagline, ML, bizY + 4.5);
-    }
-    let metaY = bizY + (opts.showTagline && tagline ? 9 : 5.5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(100, 100, 100);
-    const metaLines: string[] = [];
-    if (opts.showAbn && abn)         metaLines.push(`ABN ${abn}`);
-    if (address)                     metaLines.push(address);
-    if (email)                       metaLines.push(email);
-    if (opts.showWebsite && website) metaLines.push(website);
-    metaLines.forEach((l) => { doc.text(l, ML, metaY); metaY += 4.5; });
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(26);
-    doc.setTextColor(cr, cg, cb);
-    doc.text("INVOICE", W - MR, y + 2, { align: "right" });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(30, 30, 30);
-    doc.text(inv.invoiceNumber, W - MR, y + 12, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    let imY = y + 18;
-    doc.text(`Date: ${formatDate(inv.createdAt)}`, W - MR, imY, { align: "right" }); imY += 5;
-    if (inv.dueDate) { doc.text(`Due: ${formatDateOnly(inv.dueDate)}`, W - MR, imY, { align: "right" }); imY += 5; }
-    doc.text(`Status: ${STATUS_LABELS[inv.status]}`, W - MR, imY, { align: "right" });
-
-    y = Math.max(metaY, imY) + 7;
-    doc.setDrawColor(cr, cg, cb);
-    doc.setLineWidth(0.8);
-    doc.line(ML, y, W - MR, y);
-    y += 8;
-
-    /* ── Customer + QR ── */
-    if (inv.customerName || inv.customerEmail) {
-      const custLines: { text: string; bold?: boolean; small?: boolean }[] = [];
-      if (inv.customerName)    custLines.push({ text: inv.customerName, bold: true });
-      if (inv.customerCompany) custLines.push({ text: inv.customerCompany, small: true });
-      if (opts.showAllCustomerDetails && inv.customerEmail)   custLines.push({ text: inv.customerEmail, small: true });
-      if (opts.showAllCustomerDetails && inv.customerPhone)   custLines.push({ text: inv.customerPhone, small: true });
-      if (opts.showAllCustomerDetails && inv.customerAddress) custLines.push({ text: inv.customerAddress, small: true });
-
-      const lineH = 4.8;
-      const custH = Math.max(16, 4 + custLines.length * lineH + 4);
-      const qrSize = qrDataUrl ? 22 : 0;
-      const custW  = CW - (qrSize > 0 ? qrSize + 4 : 0);
-
-      doc.setFillColor(247, 247, 247);
-      doc.setDrawColor(220, 220, 220);
-      doc.setLineWidth(0.3);
-      doc.rect(ML, y - 3, CW, custH + (qrSize > 0 ? Math.max(0, qrSize - custH + 6) : 0), "FD");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      doc.text(opts.showAllCustomerDetails ? "CUSTOMER" : "BILL TO", ML + 4, y + 2);
-
-      let cy = y + 7;
-      custLines.forEach((cl) => {
-        doc.setFont("helvetica", cl.bold ? "bold" : "normal");
-        doc.setFontSize(cl.small ? 8.5 : 10.5);
-        doc.setTextColor(cl.bold ? 30 : 80, cl.bold ? 30 : 80, cl.bold ? 30 : 80);
-        doc.text(cl.text, ML + 4, cy, { maxWidth: custW - 6 });
-        cy += lineH;
-      });
-
-      if (qrDataUrl) {
-        try {
-          doc.addImage(qrDataUrl, "PNG", W - MR - qrSize, y - 1, qrSize, qrSize);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
-          doc.setTextColor(160, 160, 160);
-          const qrLabel = opts.loyaltyQrText || "Scan for loyalty";
-          doc.text(qrLabel, W - MR - qrSize / 2, y + qrSize + 1, { align: "center", maxWidth: qrSize + 2 });
-        } catch { /* ignore */ }
-      }
-
-      y += custH + (qrSize > 0 ? Math.max(0, qrSize - custH + 8) : 6);
-    }
-
-    /* ── Line items table ── */
-    const COL = { desc: 98, qty: 18, unit: 32, amt: 22 };
-    doc.setFillColor(245, 245, 245);
-    doc.rect(ML, y - 3, CW, 8, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(80, 80, 80);
-    let cx = ML + 2;
-    doc.text("DESCRIPTION", cx, y + 2);                                        cx += COL.desc;
-    doc.text("QTY",    cx + COL.qty  / 2, y + 2, { align: "center" });         cx += COL.qty;
-    doc.text("UNIT PRICE", cx + COL.unit, y + 2, { align: "right" });           cx += COL.unit;
-    doc.text("TOTAL", cx + COL.amt,       y + 2, { align: "right" });
-    doc.setDrawColor(210, 210, 210);
-    doc.setLineWidth(0.35);
-    doc.line(ML, y + 4, W - MR, y + 4);
-    y += 10;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    (inv.items ?? []).forEach((item, idx) => {
-      if (idx % 2 === 1) {
-        doc.setFillColor(251, 251, 251);
-        doc.rect(ML, y - 4, CW, 9, "F");
-      }
-      cx = ML + 2;
-      doc.setTextColor(30, 30, 30);
-      const desc = item.description.length > 54 ? item.description.slice(0, 52) + "…" : item.description;
-      doc.text(desc, cx, y + 1);                                                cx += COL.desc;
-      doc.setTextColor(80, 80, 80);
-      doc.text(String(item.quantity), cx + COL.qty / 2, y + 1, { align: "center" }); cx += COL.qty;
-      doc.text(`$${item.unitPrice.toFixed(2)}`, cx + COL.unit, y + 1, { align: "right" }); cx += COL.unit;
-      doc.setTextColor(30, 30, 30);
-      doc.text(`$${(item.quantity * item.unitPrice).toFixed(2)}`, cx + COL.amt, y + 1, { align: "right" });
-      doc.setDrawColor(235, 235, 235);
-      doc.setLineWidth(0.2);
-      doc.line(ML, y + 4, W - MR, y + 4);
-      y += 9;
-    });
-    y += 5;
-
-    /* ── Totals ── */
-    const totX = W - MR - 66;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.text("Subtotal", totX + 2, y); doc.text(`$${inv.subtotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
-    if (opts.showGstBreakdown) {
-      doc.text("GST (10%)", totX + 2, y); doc.text(`$${inv.taxTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
-    }
-    if (inv.discountTotal) {
-      doc.setTextColor(180, 80, 0);
-      doc.text("Discount", totX + 2, y); doc.text(`-$${inv.discountTotal.toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
-      doc.setTextColor(80, 80, 80);
-    }
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(totX, y - 2, W - MR, y - 2);
-    y += 2;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(30, 30, 30);
-    doc.text("Total Due (AUD)", totX + 2, y); doc.text(`$${inv.total.toFixed(2)}`, W - MR, y, { align: "right" });
-    y += 8;
-    if ((inv.amountPaid ?? 0) > 0) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(4, 120, 87);
-      doc.text("Amount Paid", totX + 2, y); doc.text(`-$${(inv.amountPaid ?? 0).toFixed(2)}`, W - MR, y, { align: "right" }); y += 6;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(30, 30, 30);
-      doc.text("Balance Due (AUD)", totX + 2, y);
-      doc.text(`$${Math.max(0, inv.total - (inv.amountPaid ?? 0)).toFixed(2)}`, W - MR, y, { align: "right" });
-      y += 8;
-    }
-    y += 2;
-
-    /* ── Loyalty Earned ── */
-    if (opts.showLoyaltyEarned) {
-      const lPdfType = (loyaltySettings as LoyaltySettings | undefined)?.programType ?? "points";
-      let lPdfLeft: string, lPdfRight: string;
-      if (lPdfType === "cashback") {
-        const rate = (loyaltySettings as LoyaltySettings | undefined)?.cashbackRate ?? 0.01;
-        const earned = Math.round(inv.total * rate * 100) / 100;
-        lPdfLeft = "$ Cashback Earned";
-        lPdfRight = `+ $${earned.toFixed(2)}`;
-      } else {
-        const ppd = (loyaltySettings as LoyaltySettings | undefined)?.pointsPerDollar ?? 1;
-        const pts = Math.floor(inv.total * ppd);
-        lPdfLeft = "\u2605 Loyalty Earned";
-        lPdfRight = `+${pts} pts`;
-      }
-      doc.setFillColor(236, 253, 245);
-      doc.setDrawColor(167, 243, 208);
-      doc.setLineWidth(0.3);
-      doc.rect(ML, y, CW, 9, "FD");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(6, 95, 70);
-      doc.text(lPdfLeft, ML + 4, y + 5.5);
-      doc.text(lPdfRight, W - MR - 2, y + 5.5, { align: "right" });
-      y += 13;
-    } else {
-      y += 2;
-    }
-
-    /* ── Payment block ── */
-    if (opts.showPaymentMethods || opts.bankDetails) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      const bankLines = opts.bankDetails ? opts.bankDetails.split("\n").filter(Boolean) : [];
-      const pmLineCount = opts.showPaymentMethods
-        ? Math.ceil(doc.splitTextToSize(paymentTypes.join("  ·  "), CW - 10).length)
-        : 0;
-      const blockH = 8 + (opts.showPaymentMethods ? pmLineCount * 5.5 + 2 : 0) + (bankLines.length * 4.5) + (bankLines.length ? 2 : 0);
-      doc.setFillColor(249, 249, 249);
-      doc.setDrawColor(220, 220, 220);
-      doc.rect(ML, y, CW, blockH, "FD");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(130, 130, 130);
-      if (opts.paymentSectionHeading) { doc.text(opts.paymentSectionHeading.toUpperCase(), ML + 4, y + 4.5); }
-      let py = y + 9;
-      if (opts.showPaymentMethods) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(80, 80, 80);
-        const pmLines = doc.splitTextToSize(paymentTypes.join("  ·  "), CW - 10);
-        doc.text(pmLines as string[], ML + 4, py);
-        py += (pmLines as string[]).length * 5.5 + 2;
-      }
-      if (bankLines.length) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(80, 80, 80);
-        bankLines.forEach((ln) => { doc.text(ln, ML + 4, py); py += 4.5; });
-      }
-      y += blockH + 4;
-    }
-
-    /* ── Terms ── */
-    if (termsText || notesText) {
-      const tLines  = termsText ? (doc.splitTextToSize(termsText, CW - 14) as string[]) : [];
-      const nLines  = notesText ? (doc.splitTextToSize(notesText, CW - 14) as string[]) : [];
-      const termsH  = 8 + tLines.length * 5 + (nLines.length ? nLines.length * 5 + 2 : 0) + 4;
-      doc.setFillColor(cr, cg, cb);
-      doc.rect(ML, y, 1.5, termsH, "F");
-      doc.setFillColor(249, 249, 249);
-      doc.rect(ML + 1.5, y, CW - 1.5, termsH, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(130, 130, 130);
-      doc.text("TERMS", ML + 5, y + 4.5);
-      let ty = y + 9;
-      if (tLines.length) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(80, 80, 80);
-        doc.text(tLines, ML + 5, ty);
-        ty += tLines.length * 5 + 2;
-      }
-      if (nLines.length) {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(nLines, ML + 5, ty);
-        ty += nLines.length * 5;
-      }
-      y += termsH + 4;
-    }
-
-    /* ── Invoice notes ── */
-    if (inv.notes) {
-      const noteLines = doc.splitTextToSize(inv.notes, CW - 10) as string[];
-      const noteH = 8 + noteLines.length * 5 + 4;
-      doc.setFillColor(249, 249, 249);
-      doc.rect(ML, y, CW, noteH, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(130, 130, 130);
-      doc.text("NOTES", ML + 4, y + 4.5);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(80, 80, 80);
-      doc.text(noteLines, ML + 4, y + 10);
-      y += noteH + 4;
-    }
-
-    /* ── Socials ── */
-    if (opts.showSocialLinks && (socials?.facebook || socials?.instagram || socials?.twitter || socials?.linkedin || socials?.youtube || socials?.tiktok)) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(160, 160, 160);
-      const socParts: string[] = [];
-      if (socials.facebook)  socParts.push(`fb/ ${socials.facebook}`);
-      if (socials.instagram) socParts.push(`ig/ @${socials.instagram}`);
-      if (socials.twitter)   socParts.push(`x/ @${socials.twitter}`);
-      if (socials.linkedin)  socParts.push(`in/ ${socials.linkedin}`);
-      if (socials.youtube)   socParts.push(`yt/ ${socials.youtube}`);
-      if (socials.tiktok)    socParts.push(`tt/ @${socials.tiktok}`);
-      const socLines = doc.splitTextToSize(socParts.join("    "), CW) as string[];
-      doc.text(socLines, ML, y);
-      y += socLines.length * 5 + 2;
-    }
-
-    /* ── Custom message ── */
-    if (customMsg) {
-      const cmLines = doc.splitTextToSize(customMsg, CW - 10) as string[];
-      const cmH = 6 + cmLines.length * 5 + 4;
-      doc.setFillColor(250, 250, 250);
-      doc.rect(ML, y, CW, cmH, "F");
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(85, 85, 85);
-      doc.text(cmLines, ML + 4, y + 6);
-      y += cmH + 3;
-    }
-
-    /* ── Thank you message ── */
-    if (thankYouMsg) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(cr, cg, cb);
-      doc.text(thankYouMsg, W / 2, y + 5, { align: "center" });
-      y += 10;
-    }
-
-    /* ── Footer ── */
-    if (footerText) {
-      doc.setDrawColor(230, 230, 230);
-      doc.setLineWidth(0.3);
-      doc.line(ML, 281, W - MR, 281);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(170, 170, 170);
-      doc.text(footerText, W / 2, 287, { align: "center" });
-    }
-
-    /* ── Barcode (bottom of document) ── */
-    if (opts.showBarcode) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(160, 160, 160);
-      doc.text(inv.invoiceNumber, W / 2, y + 4, { align: "center", charSpace: 3 });
-      doc.setFontSize(7);
-      doc.text("INVOICE BARCODE", W / 2, y + 8.5, { align: "center" });
-    }
-
-    doc.save(`${inv.invoiceNumber}.pdf`);
+      const blob = await getInvoicePdf(inv.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${inv.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to generate PDF");
     } finally {
       setPdfGeneratingId(null);
     }
@@ -1762,6 +1221,10 @@ export default function POSInvoicesPage() {
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
                       onClick={() => { void printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
                       <Printer className="w-3.5 h-3.5" /> Print
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      onClick={() => { printAsQuote(detailInvoice); void recordEvent(detailInvoice.id, "print", "quote"); }}>
+                      <FileText className="w-3.5 h-3.5" /> Quote
                     </Button>
                   </div>
                 </div>

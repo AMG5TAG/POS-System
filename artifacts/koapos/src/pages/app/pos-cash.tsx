@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
   Coins, TrendingUp, TrendingDown, Trash2, Printer,
-  ChevronDown, ChevronUp, Calculator,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,22 +33,108 @@ const TYPE_COLORS: Record<EntryType, string> = {
   closing_count: "text-purple-600",
 };
 
-const DENOMINATIONS = [
-  { label: "$100", value: 100 }, { label: "$50", value: 50 }, { label: "$20", value: 20 },
-  { label: "$10", value: 10 },  { label: "$5",  value: 5  }, { label: "$2",  value: 2  },
-  { label: "$1",  value: 1  },  { label: "50¢", value: 0.5 }, { label: "20¢", value: 0.2 },
-  { label: "10¢", value: 0.1 }, { label: "5¢",  value: 0.05 },
+const NOTES = [
+  { label: "$100", value: 100 },
+  { label: "$50",  value: 50  },
+  { label: "$20",  value: 20  },
+  { label: "$10",  value: 10  },
+  { label: "$5",   value: 5   },
 ];
+
+const COINS = [
+  { label: "$2",  value: 2    },
+  { label: "$1",  value: 1    },
+  { label: "50¢", value: 0.5  },
+  { label: "20¢", value: 0.2  },
+  { label: "10¢", value: 0.1  },
+  { label: "5¢",  value: 0.05 },
+];
+
+const DENOMINATIONS = [...NOTES, ...COINS];
+
+function denomTotal(counts: Record<number, string>): number {
+  return DENOMINATIONS.reduce(
+    (s, d) => s + d.value * (parseFloat(counts[d.value] || "0") || 0),
+    0,
+  );
+}
+
+function DenomTable({
+  counts,
+  onChange,
+}: {
+  counts: Record<number, string>;
+  onChange: (counts: Record<number, string>) => void;
+}) {
+  const update = (value: number, raw: string) =>
+    onChange({ ...counts, [value]: raw });
+
+  return (
+    <div className="space-y-3">
+      {[
+        { heading: "Notes", items: NOTES },
+        { heading: "Coins", items: COINS },
+      ].map(({ heading, items }) => (
+        <div key={heading}>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-0.5">
+            {heading}
+          </p>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b">
+                <tr>
+                  <th className="text-left p-2.5 font-medium">Denomination</th>
+                  <th className="text-center p-2.5 font-medium w-28">Count</th>
+                  <th className="text-right p-2.5 font-medium w-28">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {items.map((d) => {
+                  const count = parseFloat(counts[d.value] || "0") || 0;
+                  return (
+                    <tr key={d.value} className="hover:bg-muted/20">
+                      <td className="p-2.5 font-medium">{d.label}</td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={counts[d.value] ?? ""}
+                          onChange={(e) => update(d.value, e.target.value)}
+                          className="h-8 text-center"
+                          placeholder="0"
+                        />
+                      </td>
+                      <td className="p-2.5 text-right text-muted-foreground">
+                        {count > 0 ? formatCurrency(count * d.value) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function POSCashPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [selectedDate] = useState(today);
   const [tab, setTab] = useState<Tab>("movements");
   const [movType, setMovType] = useState<"opening_float" | "cash_in" | "cash_out">("opening_float");
+
+  // Opening float — denomination counts
+  const [openingCounts, setOpeningCounts] = useState<Record<number, string>>({});
+  const [openingNote, setOpeningNote] = useState("");
+
+  // Cash in / Cash out — simple amount
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [showDenom, setShowDenom] = useState(false);
-  const [denomCounts, setDenomCounts] = useState<Record<number, string>>({});
+
+  // Reconcile / closing count — denomination counts
+  const [closingCounts, setClosingCounts] = useState<Record<number, string>>({});
 
   const { data: entries = [], isLoading } = useListCashDrawerEntries({ date: selectedDate });
   const createEntry = useCreateCashDrawerEntry();
@@ -70,14 +156,27 @@ export default function POSCashPage() {
   const tillBalance = openingFloat + cashIn - cashOut;
 
   const lastCount = [...entries].reverse().find((e) => e.type === "closing_count");
-  const variance = lastCount ? (lastCount.amount ?? 0) - tillBalance : null;
 
-  const countedTotal = DENOMINATIONS.reduce(
-    (s, d) => s + d.value * (parseFloat(denomCounts[d.value] || "0") || 0), 0,
-  );
+  const openingTotal  = denomTotal(openingCounts);
+  const closingTotal  = denomTotal(closingCounts);
 
   /* ── Actions ────────────────────────────────────────────────────────── */
-  const handleAdd = () => {
+  const handleAddOpening = () => {
+    if (openingTotal <= 0) { toast.error("Count at least one denomination"); return; }
+    createEntry.mutate(
+      { data: { type: "opening_float", amount: openingTotal, note: openingNote || "Opening float count", shiftDate: selectedDate } },
+      {
+        onSuccess: () => {
+          toast.success(`Opening float saved: ${formatCurrency(openingTotal)}`);
+          setOpeningCounts({});
+          setOpeningNote("");
+        },
+        onError: () => toast.error("Failed to save opening float"),
+      },
+    );
+  };
+
+  const handleAddMovement = () => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
     createEntry.mutate(
@@ -93,14 +192,14 @@ export default function POSCashPage() {
     );
   };
 
-  const handleSaveCount = () => {
+  const handleSaveClosingCount = () => {
+    if (closingTotal <= 0) { toast.error("Count at least one denomination"); return; }
     createEntry.mutate(
-      { data: { type: "closing_count", amount: countedTotal, note: "Physical count", shiftDate: selectedDate } },
+      { data: { type: "closing_count", amount: closingTotal, note: "Physical count", shiftDate: selectedDate } },
       {
         onSuccess: () => {
-          toast.success(`Closing count saved: ${formatCurrency(countedTotal)}`);
-          setDenomCounts({});
-          setShowDenom(false);
+          toast.success(`Closing count saved: ${formatCurrency(closingTotal)}`);
+          setClosingCounts({});
         },
         onError: () => toast.error("Failed to save count"),
       },
@@ -184,7 +283,7 @@ export default function POSCashPage() {
           <>
             {/* Record movement card */}
             <Card>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4 space-y-4">
                 <p className="flex items-center gap-2 font-semibold text-sm">
                   <Coins className="w-4 h-4 text-primary" />
                   Record Cash Movement
@@ -210,88 +309,64 @@ export default function POSCashPage() {
                   ))}
                 </div>
 
-                {/* Inline input row */}
-                <div className="flex gap-2">
-                  <div className="relative w-44 shrink-0">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                      placeholder="0.00"
-                      className="pl-7"
-                    />
-                  </div>
-                  <Input
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                    placeholder="Note (optional)"
-                    className="flex-1"
-                  />
-                  <Button onClick={handleAdd} disabled={createEntry.isPending} className="shrink-0 px-5">
-                    Add
-                  </Button>
-                </div>
+                {/* Opening Float — denomination counter */}
+                {movType === "opening_float" && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      Count the notes and coins in the till to set today's opening float.
+                    </p>
 
-                {/* Denomination counter toggle */}
-                <button
-                  onClick={() => setShowDenom((v) => !v)}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                >
-                  <Calculator className="w-3.5 h-3.5" />
-                  {showDenom ? "Hide" : "Show"} Denomination Counter
-                  {showDenom ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
+                    <DenomTable counts={openingCounts} onChange={setOpeningCounts} />
 
-                {/* Denomination counter panel */}
-                {showDenom && (
-                  <div className="space-y-3 pt-1 border-t">
-                    <div className="rounded-lg border overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/40 border-b">
-                          <tr>
-                            <th className="text-left p-2.5 font-medium">Denomination</th>
-                            <th className="text-center p-2.5 font-medium w-28">Count</th>
-                            <th className="text-right p-2.5 font-medium w-28">Subtotal</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {DENOMINATIONS.map((d) => {
-                            const count = parseFloat(denomCounts[d.value] || "0") || 0;
-                            return (
-                              <tr key={d.value} className="hover:bg-muted/20">
-                                <td className="p-2.5 font-medium">{d.label}</td>
-                                <td className="p-2">
-                                  <Input
-                                    type="number" min={0}
-                                    value={denomCounts[d.value] ?? ""}
-                                    onChange={(e) => setDenomCounts((p) => ({ ...p, [d.value]: e.target.value }))}
-                                    className="h-7 text-center"
-                                    placeholder="0"
-                                  />
-                                </td>
-                                <td className="p-2.5 text-right text-muted-foreground">
-                                  {count > 0 ? formatCurrency(count * d.value) : "—"}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="flex items-center justify-between px-1">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Counted total</p>
-                        <p className="text-lg font-bold">{formatCurrency(countedTotal)}</p>
+                    <div className="flex items-end gap-3 pt-1">
+                      <div className="flex-1">
+                        <Input
+                          value={openingNote}
+                          onChange={(e) => setOpeningNote(e.target.value)}
+                          placeholder="Note (optional)"
+                        />
                       </div>
-                      <Button onClick={handleSaveCount} disabled={createEntry.isPending || countedTotal === 0}>
-                        Save Closing Count
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-muted-foreground mb-0.5">Total</p>
+                        <p className="text-xl font-bold text-blue-600">{formatCurrency(openingTotal)}</p>
+                      </div>
+                      <Button
+                        onClick={handleAddOpening}
+                        disabled={createEntry.isPending || openingTotal <= 0}
+                        className="shrink-0"
+                      >
+                        Save Opening Float
                       </Button>
                     </div>
+                  </div>
+                )}
+
+                {/* Cash In / Cash Out — simple amount input */}
+                {movType !== "opening_float" && (
+                  <div className="flex gap-2">
+                    <div className="relative w-44 shrink-0">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddMovement()}
+                        placeholder="0.00"
+                        className="pl-7"
+                      />
+                    </div>
+                    <Input
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddMovement()}
+                      placeholder="Note (optional)"
+                      className="flex-1"
+                    />
+                    <Button onClick={handleAddMovement} disabled={createEntry.isPending} className="shrink-0 px-5">
+                      Add
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -377,43 +452,11 @@ export default function POSCashPage() {
                 End-of-Day Reconciliation
               </h2>
 
-              {/* Count drawer */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Physical Count</p>
-                <div className="rounded-lg border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/40 border-b">
-                      <tr>
-                        <th className="text-left p-2.5 font-medium">Denomination</th>
-                        <th className="text-center p-2.5 font-medium w-28">Count</th>
-                        <th className="text-right p-2.5 font-medium w-28">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {DENOMINATIONS.map((d) => {
-                        const count = parseFloat(denomCounts[d.value] || "0") || 0;
-                        return (
-                          <tr key={d.value} className="hover:bg-muted/20">
-                            <td className="p-2.5 font-medium">{d.label}</td>
-                            <td className="p-2">
-                              <Input
-                                type="number" min={0}
-                                value={denomCounts[d.value] ?? ""}
-                                onChange={(e) => setDenomCounts((p) => ({ ...p, [d.value]: e.target.value }))}
-                                className="h-7 text-center"
-                                placeholder="0"
-                              />
-                            </td>
-                            <td className="p-2.5 text-right text-muted-foreground">
-                              {count > 0 ? formatCurrency(count * d.value) : "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Count the notes and coins in the till and enter the quantities below.
+              </p>
+
+              <DenomTable counts={closingCounts} onChange={setClosingCounts} />
 
               {/* Variance summary */}
               <div className="grid grid-cols-3 gap-3">
@@ -423,22 +466,22 @@ export default function POSCashPage() {
                 </div>
                 <div className="rounded-lg border p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Counted</p>
-                  <p className="font-bold text-lg">{formatCurrency(countedTotal)}</p>
+                  <p className="font-bold text-lg">{formatCurrency(closingTotal)}</p>
                 </div>
                 <div className={cn(
                   "rounded-lg border p-3 text-center",
-                  countedTotal > 0 && Math.abs(countedTotal - tillBalance) > 0.01
+                  closingTotal > 0 && Math.abs(closingTotal - tillBalance) > 0.01
                     ? "border-amber-300 bg-amber-50 dark:bg-amber-950/20"
                     : "",
                 )}>
                   <p className="text-xs text-muted-foreground mb-1">Variance</p>
                   <p className={cn(
                     "font-bold text-lg",
-                    countedTotal === 0 ? "text-muted-foreground" :
-                    countedTotal - tillBalance >= 0 ? "text-green-600" : "text-red-500",
+                    closingTotal === 0 ? "text-muted-foreground" :
+                    closingTotal - tillBalance >= 0 ? "text-green-600" : "text-red-500",
                   )}>
-                    {countedTotal === 0 ? "—" : (
-                      `${countedTotal - tillBalance >= 0 ? "+" : ""}${formatCurrency(countedTotal - tillBalance)}`
+                    {closingTotal === 0 ? "—" : (
+                      `${closingTotal - tillBalance >= 0 ? "+" : ""}${formatCurrency(closingTotal - tillBalance)}`
                     )}
                   </p>
                 </div>
@@ -453,7 +496,7 @@ export default function POSCashPage() {
               )}
 
               <div className="flex justify-end">
-                <Button onClick={handleSaveCount} disabled={createEntry.isPending || countedTotal === 0}>
+                <Button onClick={handleSaveClosingCount} disabled={createEntry.isPending || closingTotal <= 0}>
                   Save Closing Count
                 </Button>
               </div>

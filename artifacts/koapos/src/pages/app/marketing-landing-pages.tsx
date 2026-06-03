@@ -39,6 +39,7 @@ export interface LandingPage {
   btnVariant: "filled" | "outline" | "ghost";
   btnBg: string; btnText: string; btnBorder: string;
   textColor: string; font: string;
+  privacyUrl: string;
   links: LandingPageLink[];
   createdAt: string; updatedAt: string;
 }
@@ -70,6 +71,7 @@ function apiToLocal(r: Record<string, unknown>): LandingPage {
     btnBorder: String(r.btnBorder ?? "#ffffff"),
     textColor: String(r.textColor ?? "#ffffff"),
     font: String(r.font ?? "Inter"),
+    privacyUrl: String(r.privacyUrl ?? ""),
     links,
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updatedAt ?? new Date().toISOString()),
@@ -98,6 +100,7 @@ function localToApi(p: LandingPage): LandingPageInput {
     textColor: p.textColor,
     font: p.font,
     links: JSON.stringify(p.links),
+    ...(p.privacyUrl !== undefined ? { privacyUrl: p.privacyUrl } : {}),
   };
 }
 
@@ -115,7 +118,7 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
   bgDir: "to bottom", bgImage: "",
   btnStyle: "pill", btnVariant: "filled",
   btnBg: "#ffffff", btnText: "#111827", btnBorder: "#ffffff",
-  textColor: "#ffffff", font: "Inter", links: [],
+  textColor: "#ffffff", font: "Inter", privacyUrl: "", links: [],
 };
 
 
@@ -173,6 +176,15 @@ export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; sc
           <div className="text-center text-sm opacity-40 py-4">No links yet</div>
         )}
       </div>
+      {page.privacyUrl && (
+        <div className="mt-6 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.2)" }}>
+          <a href={page.privacyUrl} target="_blank" rel="noreferrer noopener"
+            className="text-xs opacity-60 hover:opacity-90 underline"
+            style={{ color: page.textColor }}>
+            Privacy Policy
+          </a>
+        </div>
+      )}
     </div>
   );
 }
@@ -437,6 +449,18 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
             {page.links.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-2">No links yet. Add links that will appear as buttons on your landing page.</p>
             )}
+            <div className="pt-2 border-t space-y-1.5">
+              <Label className="text-xs flex items-center gap-1.5">
+                Privacy Policy URL <span className="text-muted-foreground font-normal">(optional — required by Privacy Act APP 1.4)</span>
+              </Label>
+              <Input
+                value={page.privacyUrl}
+                onChange={(e) => set("privacyUrl", e.target.value)}
+                placeholder="https://yourbusiness.com.au/privacy"
+                className="text-xs h-8"
+              />
+              <p className="text-[11px] text-muted-foreground">A link to your Privacy Policy is displayed in the page footer.</p>
+            </div>
           </>
         )}
       </div>
@@ -527,7 +551,7 @@ export default function MarketingLandingPagesPage() {
   const updateMutation = useUpdateLandingPage();
   const deleteMutation = useDeleteLandingPage();
 
-  const serverPages: LandingPage[] = ((pagesResponse?.items ?? []) as Record<string, unknown>[]).map(apiToLocal);
+  const serverPages: LandingPage[] = ((pagesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToLocal);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [localPage, setLocalPage] = useState<LandingPage | null>(null);

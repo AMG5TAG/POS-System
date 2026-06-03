@@ -23,6 +23,7 @@ export const landingPagesTable = pgTable("landing_pages", {
   btnBorder:    text("btn_border").notNull().default("#ffffff"),
   textColor:    text("text_color").notNull().default("#ffffff"),
   font:         text("font").notNull().default("Inter"),
+  privacyUrl:   text("privacy_url").notNull().default(""),
   links:        text("links").notNull().default("[]"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

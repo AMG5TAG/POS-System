@@ -218,6 +218,31 @@ function FieldInput({
       );
     case "divider":
       return <Separator />;
+    case "privacy_notice":
+      return (
+        <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+          <p className="font-medium mb-1">{label || "Privacy Notice"}</p>
+          <p className="text-xs text-blue-700 dark:text-blue-400">
+            {helpText || "Your personal information is collected to process your request. It will be handled in accordance with our Privacy Policy and the Australian Privacy Act 1988."}
+          </p>
+        </div>
+      );
+    case "marketing_consent":
+      return (
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            id={field.id}
+            className="mt-0.5 h-4 w-4 rounded border-input"
+            checked={value === "true"}
+            onChange={(e) => onChange(e.target.checked ? "true" : "false")}
+          />
+          <label htmlFor={field.id} className="text-sm leading-snug cursor-pointer">
+            {label || "I agree to receive marketing communications"}
+            {field.required && <span className="text-destructive ml-1">*</span>}
+          </label>
+        </div>
+      );
     default:
       return null;
   }
@@ -263,7 +288,7 @@ export function FormRenderer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const required = form.fields.filter(f => f.required && f.type !== "section_header" && f.type !== "divider");
+    const required = form.fields.filter(f => f.required && f.type !== "section_header" && f.type !== "divider" && f.type !== "privacy_notice");
     const missing = required.filter(f => !values[f.id]);
     if (missing.length > 0) {
       const names = missing.map(f => f.label || f.type).join(", ");

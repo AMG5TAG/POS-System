@@ -150,6 +150,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       posSales:      sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
       refundTotal:   sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'refunded'  THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
       discountTotal: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.discountTotal}::numeric ELSE 0 END), 0)`,
+      taxCollected:  sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.taxTotal}::numeric ELSE 0 END), 0)`,
       posCount:      sql<string>`COUNT(CASE WHEN ${transactionsTable.status} = 'completed' THEN 1 END)`,
     }).from(transactionsTable).where(and(eq(transactionsTable.merchantId, merchantId), periodCondTxn)),
 
@@ -212,6 +213,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const posSales        = parseFloat(txnAgg[0]?.posSales ?? "0");
   const refundTotal     = parseFloat(txnAgg[0]?.refundTotal ?? "0");
   const discountTotal   = parseFloat(txnAgg[0]?.discountTotal ?? "0");
+  const taxCollected    = parseFloat((txnAgg[0] as { taxCollected?: string })?.taxCollected ?? "0");
   const posCount        = Number(txnAgg[0]?.posCount ?? 0);
   const invoiceSales    = parseFloat(invoiceAgg[0]?.invoiceSales ?? "0");
   const invoiceCount    = Number(invoiceAgg[0]?.invoiceCount ?? 0);
@@ -240,6 +242,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     period,
     refundTotal:        Math.round(refundTotal * 100) / 100,
     discountTotal:      Math.round(discountTotal * 100) / 100,
+    taxCollected:       Math.round(taxCollected * 100) / 100,
     itemsSold,
     costTotal:          Math.round(costTotal * 100) / 100,
     topPaymentMethod,

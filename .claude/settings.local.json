@@ -58,7 +58,15 @@
       "Bash(curl -s -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see attached.\"}}' http://localhost:3000/api/invoices/12/email)",
       "Bash(curl -sv -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see attached.\"}}' http://localhost:3000/api/invoices/12/email)",
       "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}' -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see.\"}}' http://localhost:3000/api/invoices/12/email)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(pnpm --filter koapos exec tsc --noEmit)",
+      "Bash(pnpm --filter api-server exec tsc --noEmit)",
+      "Read(//usr/bin/**)",
+      "Bash(timeout 25 pnpm view puppeteer version)",
+      "Bash(cd *)",
+      "Bash(sed -n '1,30p' artifacts/api-server/src/routes/invoices.ts)",
+      "Bash(sed -n '770,920p' artifacts/api-server/src/routes/invoices.ts)",
+      "Bash(timeout 420 pnpm install)"
     ]
   }
 }

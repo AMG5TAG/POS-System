@@ -152,13 +152,17 @@ export default function ManagementOverviewPage() {
   const discountTotal = summary?.discountTotal    ?? 0;
   const itemsSold     = summary?.itemsSold        ?? 0;
 
-  /* GST calculation using merchant's configured rate */
+  /* GST — use stored tax_total from transactions (accurate for mixed-rate merchants).
+     Falls back to rate-based estimate only when no stored figure is available. */
   const gstRatePct    = parseFloat(String(taxData?.gstRate ?? 10));
   const gstRateStr    = taxData ? `${gstRatePct.toFixed(0)}%` : "10%";
   const gstInclusive  = taxData?.taxInclusive !== "false";
-  const gstCollected  = gstInclusive
-    ? totalSales * ((gstRatePct / 100) / (1 + gstRatePct / 100))
-    : totalSales * (gstRatePct / 100);
+  const storedTax     = (summary as { taxCollected?: number } | undefined)?.taxCollected;
+  const gstCollected  = storedTax != null
+    ? storedTax
+    : gstInclusive
+      ? totalSales * ((gstRatePct / 100) / (1 + gstRatePct / 100))
+      : totalSales * (gstRatePct / 100);
   const revenueExGst  = totalSales - gstCollected;
 
   /* Cost of goods sold */
@@ -309,7 +313,7 @@ export default function ManagementOverviewPage() {
               icon={Receipt}
               iconBg="bg-amber-100 dark:bg-amber-900/30 text-amber-600"
               value={isLoading ? "—" : formatCurrency(gstCollected)}
-              sub="1/11th of revenue (10% GST)"
+              sub={storedTax != null ? "From transaction records" : `Estimated at ${gstRateStr} of revenue`}
               valueClass="text-amber-600"
               href="/management/tax"
             />

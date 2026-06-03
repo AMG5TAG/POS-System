@@ -5,6 +5,7 @@ import { useBusinessProfile } from "@/lib/business-profile";
 import {
   printReceipt as rawPrintReceipt,
   printA4Invoice as rawPrintA4Invoice,
+  printA4Quote as rawPrintA4Quote,
   printA4Receipt as rawPrintA4Receipt,
   printA4ServiceJob as rawPrintA4ServiceJob,
   normalizeReceiptStyle,
@@ -74,6 +75,8 @@ export interface DocumentTemplateController {
   printReceipt: (tx: Transaction) => Promise<void>;
   /** Print an A4 tax invoice using the saved Invoice template. */
   printInvoice: (tx: Transaction) => void;
+  /** Print an A4 quote using the saved Quote template (same layout, "Quote" heading). */
+  printQuote: (tx: Transaction) => void;
   /** Print an A4 receipt using the saved A4_Receipt template.
    *  Pass `overallDiscountPct` (e.g. 10 for 10%) when the cart discount was
    *  entered as a percentage so the receipt label reads "10% discount". */
@@ -98,6 +101,7 @@ export interface DocumentTemplateController {
 export function useDocumentTemplate(): DocumentTemplateController {
   const receipt = useSalesTemplate("Thermal_Receipt");
   const invoice = useSalesTemplate("Invoice");
+  const quote = useSalesTemplate("Quote");
   const a4Receipt = useSalesTemplate("A4_Receipt");
   const service = useSalesTemplate("Service_Ticket");
   const { profile, isLoading: profileLoading } = useBusinessProfile();
@@ -116,6 +120,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
   const isLoading =
     receipt.isLoading ||
     invoice.isLoading ||
+    quote.isLoading ||
     a4Receipt.isLoading ||
     service.isLoading ||
     profileLoading ||
@@ -130,6 +135,10 @@ export function useDocumentTemplate(): DocumentTemplateController {
       })),
     printInvoice: (tx) =>
       rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
+        overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
+      })),
+    printQuote: (tx) =>
+      rawPrintA4Quote(tx, businessInfo, toReceiptOpts(quote.opts, quote.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
       })),
     printA4Receipt: (tx, overallDiscountPct) =>

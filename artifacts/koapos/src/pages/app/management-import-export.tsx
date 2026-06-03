@@ -650,7 +650,7 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
   };
 
   return (
-    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4">
+    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full">
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Download className="w-4 h-4 text-primary" />
@@ -909,7 +909,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     .every((f) => !!mapping[f.key]);
 
   return (
-    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4">
+    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1258,62 +1258,84 @@ export default function ManagementImportExportPage() {
           </p>
         </div>
 
-        {/* Entity selector */}
-        <div className="flex flex-wrap items-center bg-muted rounded-xl p-1 gap-0.5">
-          {ENTITIES.map((e) => {
-            const Icon     = e.icon;
-            const isActive = e.key === activeKey;
-            return (
-              <button
-                key={e.key}
-                type="button"
-                onClick={() => !e.comingSoon && setActiveKey(e.key)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap cursor-pointer select-none",
-                  isActive
-                    ? "bg-background shadow-sm text-primary"
-                    : "text-muted-foreground hover:text-foreground",
-                  e.comingSoon && "opacity-50 cursor-default",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span>{e.label}</span>
-                {e.comingSoon && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-0.5">Soon</Badge>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Three-column layout: Type | Export | Import */}
+        <div className="grid grid-cols-1 lg:grid-cols-[210px_1fr_1fr] gap-6 items-stretch">
 
-        {/* Entity description */}
-        <p className="text-sm text-muted-foreground">{entity.description}</p>
-
-        {/* Content area */}
-        {entity.comingSoon ? (
-          <div className="grid grid-cols-2 gap-6">
-            <ComingSoonCard label={entity.label} />
-          </div>
-        ) : entity.exportOnly ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ExportCard entity={entity} />
-            <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center">
-              <Upload className="w-10 h-10 text-muted-foreground/30" />
-              <div>
-                <p className="font-medium text-muted-foreground">Import Not Available</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  {entity.pluralLabel} are created through normal system activity and cannot be imported via CSV.
-                  Use the export above to download a copy for your records.
-                </p>
-              </div>
+          {/* Column 1: Type selector */}
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</p>
+            <div className="rounded-xl border overflow-hidden flex-1 flex flex-col">
+              {ENTITIES.map((e) => {
+                const Icon     = e.icon;
+                const isActive = e.key === activeKey;
+                return (
+                  <button
+                    key={e.key}
+                    type="button"
+                    onClick={() => !e.comingSoon && setActiveKey(e.key)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors border-b last:border-b-0 text-left",
+                      isActive
+                        ? "bg-primary/5 text-primary font-semibold"
+                        : "hover:bg-muted/50 text-foreground",
+                      e.comingSoon && "opacity-50 cursor-default",
+                    )}
+                  >
+                    <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                    <div className="min-w-0">
+                      <p className="font-medium leading-tight">{e.label}</p>
+                      <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{e.description}</p>
+                    </div>
+                    {e.comingSoon && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Soon</Badge>
+                    )}
+                    {e.exportOnly && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Export</Badge>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ExportCard entity={entity} />
-            <ImportCard entity={entity} />
+
+          {/* Column 2: Export */}
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Export</p>
+            {entity.comingSoon ? (
+              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
+                <Download className="w-10 h-10 text-muted-foreground/30" />
+                <p className="font-medium text-muted-foreground">Coming Soon</p>
+              </div>
+            ) : (
+              <ExportCard entity={entity} />
+            )}
           </div>
-        )}
+
+          {/* Column 3: Import */}
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import</p>
+            {entity.comingSoon ? (
+              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
+                <Upload className="w-10 h-10 text-muted-foreground/30" />
+                <p className="font-medium text-muted-foreground">Coming Soon</p>
+              </div>
+            ) : entity.exportOnly ? (
+              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
+                <Upload className="w-10 h-10 text-muted-foreground/30" />
+                <div>
+                  <p className="font-medium text-muted-foreground">Import Not Available</p>
+                  <p className="text-sm text-muted-foreground/70 mt-1">
+                    {entity.pluralLabel} are created through normal system activity and cannot be imported via CSV.
+                    Use the export to download a copy for your records.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ImportCard entity={entity} />
+            )}
+          </div>
+
+        </div>
       </div>
     </AppLayout>
   );

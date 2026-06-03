@@ -42,6 +42,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { useStickerPrinter } from "@/lib/sticker-config";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
@@ -1019,7 +1020,31 @@ function CustomerDetailInner({
 }) {
   const queryClient = useQueryClient();
   const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
+  const { printStickers } = useStickerPrinter();
   const [tab, setTab] = useState<DetailTab>("overview");
+
+  /* Print a customer label using the saved "customer" sticker template. Real
+   * values are passed as overrides; toggles for missing data are turned off so
+   * the label never shows sample placeholder text. */
+  const printCustomerLabel = () => {
+    const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "";
+    const group = customer.customerGroup || customer.tierName || "";
+    const ok = printStickers({
+      typeId: "customer",
+      context: { customer: { name, id: `CUS-${customer.id}`, phone: customer.phone ?? "", email: customer.email ?? "", group }, merchant: {} },
+      fieldsOverride: {
+        customerName: name,
+        customerId: `CUS-${customer.id}`,
+        loyaltyNo: customer.loyaltyPoints != null ? `${customer.loyaltyPoints} pts` : "",
+        phone: customer.phone ?? "",
+        group,
+        ...(customer.phone ? {} : { showPhone: "false" }),
+        ...(group ? {} : { showGroup: "false" }),
+        ...(customer.loyaltyPoints != null ? {} : { showLoyaltyNo: "false" }),
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
   const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
@@ -1971,6 +1996,9 @@ function CustomerDetailInner({
             }}
           >
             <FileDown className="w-3.5 h-3.5" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={printCustomerLabel}>
+            <Printer className="w-3.5 h-3.5" /> Label
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={onClose}>
             <X className="w-3.5 h-3.5" /> Close

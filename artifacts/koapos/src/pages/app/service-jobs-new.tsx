@@ -10,7 +10,7 @@ import {
   type Customer,
 } from "@workspace/api-client-react";
 import {
-  LabelPreview, useStickerTemplates,
+  LabelPreview, useStickerTemplates, useStickerPrinter,
   STICKER_TYPES, DYMO_SIZES,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -215,6 +215,7 @@ export default function ServiceJobNewPage() {
 
   const { data: merchant } = useGetMerchant();
   const { templates: stickerTemplates } = useStickerTemplates();
+  const { printStickers } = useStickerPrinter();
   const { profile: bizProfile } = useBusinessProfile();
 
   const [customerId, setCustomerId] = useState("");
@@ -810,13 +811,16 @@ export default function ServiceJobNewPage() {
             className="flex-1 gap-2"
             onClick={() => {
               setShowStickerDialog(false);
-              setTimeout(() => {
-                document.body.setAttribute("data-print", "sticker");
-                const cleanup = () => document.body.removeAttribute("data-print");
-                window.addEventListener("afterprint", cleanup, { once: true });
-                setTimeout(cleanup, 30_000);
-                window.print();
-              }, 150);
+              // Print through the shared sticker printer so the saved repair
+              // template (size + field toggles) is applied; matches the preview.
+              const ok = printStickers({
+                typeId: "repair",
+                template: activeStickerTpl ?? undefined,
+                sizeOverride: stickerSize.id,
+                orientation: "horizontal",
+                fieldsOverride: stickerFields,
+              });
+              if (!ok) toast.error("Couldn't open the print dialog — please try again");
             }}
           >
             <Printer className="w-4 h-4" />
@@ -829,7 +833,7 @@ export default function ServiceJobNewPage() {
     {/* Print-only areas — hidden on screen, shown during window.print() */}
     <style dangerouslySetInnerHTML={{ __html:
       `@media screen {
-        #svc-job-sheet-print-area, #svc-sticker-print-area { display: none !important; }
+        #svc-job-sheet-print-area { display: none !important; }
       }
       @media print {
         body * { visibility: hidden !important; }
@@ -839,14 +843,6 @@ export default function ServiceJobNewPage() {
           display: block !important;
           position: fixed !important; left: 0 !important; top: 0 !important;
           width: 100% !important; box-sizing: border-box !important;
-        }
-        body[data-print="sticker"] #svc-sticker-print-area,
-        body[data-print="sticker"] #svc-sticker-print-area * { visibility: visible !important; }
-        body[data-print="sticker"] #svc-sticker-print-area {
-          display: flex !important;
-          position: fixed !important; left: 0 !important; top: 0 !important;
-          width: 100vw !important; height: 100vh !important;
-          align-items: center !important; justify-content: center !important;
         }
         @page { size: A4 portrait; margin: 10mm; }
       }`
@@ -896,16 +892,6 @@ export default function ServiceJobNewPage() {
       }}
     />
 
-    {/* ── Sticker print area ───────────────────────────────────────── */}
-    <div id="svc-sticker-print-area">
-      <LabelPreview
-        type={repairStickerType}
-        fields={stickerFields}
-        size={stickerSize}
-        businessName={businessName}
-        brandColor={brandColor}
-      />
-    </div>
     </>
   );
 }

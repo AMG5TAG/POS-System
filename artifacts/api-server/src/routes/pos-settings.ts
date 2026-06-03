@@ -39,6 +39,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
     hardwareConfig,
     enabledShortcuts,
     roleDiscountLimits,
+    mapProvider,
   } = req.body as Partial<typeof posSettingsTable.$inferInsert>;
 
   const patch = {
@@ -55,6 +56,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
     ...(hardwareConfig !== undefined && { hardwareConfig }),
     ...(enabledShortcuts !== undefined && { enabledShortcuts }),
     ...(roleDiscountLimits !== undefined && { roleDiscountLimits }),
+    ...(mapProvider !== undefined && { mapProvider }),
   };
 
   const [existing] = await db

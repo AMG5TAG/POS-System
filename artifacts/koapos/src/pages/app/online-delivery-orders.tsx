@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useStickerPrinter } from "@/lib/sticker-config";
 import {
   Truck, Package, Clock, CheckCircle2, XCircle, ChefHat, Bike,
   Plus, Eye, RefreshCw, Phone, MapPin, StickyNote, ChevronRight,
-  Receipt,
+  Receipt, Printer,
 } from "lucide-react";
 import {
   useListDeliveryOrders,
@@ -138,6 +139,23 @@ function OrderCard({ order, onAdvance, onCancel, onView }: {
   const cfg = STATUS_CONFIG[order.status];
   const Icon = cfg.icon;
   const next = STATUS_FLOW[order.status];
+  const { printStickers } = useStickerPrinter();
+
+  /* Print a shipping/address label using the saved "address" sticker template.
+   * Delivery orders store a single address string, so it goes in the street line
+   * and the company/suburb lines are suppressed to avoid placeholder text. */
+  const printAddressLabel = () => {
+    const ok = printStickers({
+      typeId: "address",
+      fieldsOverride: {
+        name: order.customerName ?? "",
+        street: order.address ?? "",
+        showCompany: "false",
+        showSuburb: "false",
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
 
   return (
     <div className="rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow">
@@ -177,6 +195,11 @@ function OrderCard({ order, onAdvance, onCancel, onView }: {
         <Button variant="ghost" size="sm" className="h-7 text-xs flex-1 gap-1" onClick={onView}>
           <Eye className="w-3 h-3" /> View
         </Button>
+        {order.address && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" title="Print address label" onClick={printAddressLabel}>
+            <Printer className="w-3 h-3" />
+          </Button>
+        )}
         {next && (
           <Button size="sm" className="h-7 text-xs flex-1 gap-1" onClick={onAdvance}>
             <ChevronRight className="w-3 h-3" /> {STATUS_CONFIG[next].label}

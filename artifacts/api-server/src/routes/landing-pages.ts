@@ -24,6 +24,7 @@ const PostLandingPage = z.object({
   btnBorder: z.string().default("#ffffff"),
   textColor: z.string().default("#ffffff"),
   font: z.string().default("Inter"),
+  privacyUrl: z.string().default(""),
   links: z.string().default("[]"),
 });
 
@@ -33,7 +34,7 @@ const PatchLandingPage = z.object({
   bgFrom: z.string(), bgTo: z.string(), bgDir: z.string(), bgImage: z.string(),
   btnStyle: z.string(), btnVariant: z.string(), btnBg: z.string(),
   btnText: z.string(), btnBorder: z.string(), textColor: z.string(),
-  font: z.string(), links: z.string(),
+  font: z.string(), privacyUrl: z.string(), links: z.string(),
 }).partial();
 
 const router: IRouter = Router();
@@ -56,10 +57,11 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const parsed = PostLandingPage.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, links } = parsed.data;
-  const [row] = await db.insert(landingPagesTable).values({
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, links } = parsed.data;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [row] = await (db.insert(landingPagesTable) as any).values({
     merchantId, pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, links,
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, links,
   }).returning();
   res.status(201).json(row);
 });

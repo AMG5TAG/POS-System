@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, productsTable } from "@workspace/db";
 import { sql, eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -20,7 +21,7 @@ const SalesSummaryParams = DateRangeParams.extend({
 const r2 = (n: unknown) => Math.round(Number(n ?? 0) * 100) / 100;
 
 /* ── GET /reports/profit-loss ────────────────────────────────────────────── */
-router.get("/reports/profit-loss", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = DateRangeParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message }); return;
@@ -99,7 +100,7 @@ router.get("/reports/profit-loss", requireAuth, async (req, res): Promise<void> 
 });
 
 /* ── GET /reports/sales-summary ──────────────────────────────────────────── */
-router.get("/reports/sales-summary", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/sales-summary", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = SalesSummaryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message }); return;
@@ -188,7 +189,7 @@ router.get("/reports/sales-summary", requireAuth, async (req, res): Promise<void
 });
 
 /* ── GET /reports/inventory-valuation ────────────────────────────────────── */
-router.get("/reports/inventory-valuation", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/inventory-valuation", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
 
   const products = await db
@@ -239,7 +240,7 @@ router.get("/reports/inventory-valuation", requireAuth, async (req, res): Promis
 });
 
 /* ── GET /reports/product-performance ────────────────────────────────────── */
-router.get("/reports/product-performance", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/product-performance", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = DateRangeParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message }); return;
@@ -291,7 +292,7 @@ router.get("/reports/product-performance", requireAuth, async (req, res): Promis
 });
 
 /* ── GET /reports/z-report ───────────────────────────────────────────────── */
-router.get("/reports/z-report", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/z-report", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
@@ -300,15 +301,17 @@ router.get("/reports/z-report", requireAuth, async (req, res): Promise<void> => 
   const [summary, byMethod] = await Promise.all([
     db.execute<{
       completed_count: string; gross_sales: string; discount_total: string;
-      tax_collected: string; refund_count: string; refund_amount: string;
+      tax_collected: string; refund_count: string; refund_amount: string; refund_tax: string;
     }>(sql`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'completed')         AS completed_count,
-        COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0)         AS gross_sales,
-        COALESCE(SUM(discount_total) FILTER (WHERE status = 'completed'), 0) AS discount_total,
-        COALESCE(SUM(tax_total) FILTER (WHERE status = 'completed'), 0)      AS tax_collected,
-        COUNT(*) FILTER (WHERE status = 'refunded')          AS refund_count,
-        COALESCE(SUM(ABS(total)) FILTER (WHERE status = 'refunded'), 0)      AS refund_amount
+        COUNT(*) FILTER (WHERE status = 'completed')                          AS completed_count,
+        COALESCE(SUM(total)         FILTER (WHERE status = 'completed'), 0)   AS gross_sales,
+        COALESCE(SUM(discount_total) FILTER (WHERE status = 'completed'), 0)  AS discount_total,
+        COALESCE(SUM(tax_total)      FILTER (WHERE status = 'completed'), 0)
+          - COALESCE(SUM(ABS(tax_total)) FILTER (WHERE status = 'refunded'), 0) AS tax_collected,
+        COUNT(*) FILTER (WHERE status = 'refunded')                           AS refund_count,
+        COALESCE(SUM(ABS(total))     FILTER (WHERE status = 'refunded'), 0)   AS refund_amount,
+        COALESCE(SUM(ABS(tax_total)) FILTER (WHERE status = 'refunded'), 0)   AS refund_tax
       FROM transactions
       WHERE merchant_id = ${merchantId}
         AND created_at::date = ${date}::date
@@ -324,22 +327,30 @@ router.get("/reports/z-report", requireAuth, async (req, res): Promise<void> => 
     `),
   ]);
 
-  const s = summary.rows[0] ?? { completed_count: "0", gross_sales: "0", discount_total: "0", tax_collected: "0", refund_count: "0", refund_amount: "0" };
+  const s = summary.rows[0] ?? { completed_count: "0", gross_sales: "0", discount_total: "0", tax_collected: "0", refund_count: "0", refund_amount: "0", refund_tax: "0" };
+  const grossSales    = r2(s.gross_sales);
+  const discountTotal = r2(s.discount_total);
+  const refundAmount  = r2(s.refund_amount);
+  const taxCollected  = r2(s.tax_collected); // already net of refund GST from the query
+  // Net Sales = gross less discounts, less refunds, less GST (ex-GST net sales)
+  const netSalesExGst = r2(grossSales - discountTotal - refundAmount - taxCollected);
   res.json({
     date,
-    grossSales:       r2(s.gross_sales),
-    discountTotal:    r2(s.discount_total),
-    taxCollected:     r2(s.tax_collected),
-    netSales:         r2(Number(s.gross_sales) - Number(s.discount_total) - Number(s.refund_amount)),
+    grossSales,
+    discountTotal,
+    taxCollected,
+    netSales:         r2(grossSales - discountTotal - refundAmount),
+    netSalesExGst,
     transactionCount: Number(s.completed_count),
     refundCount:      Number(s.refund_count),
-    refundAmount:     r2(s.refund_amount),
+    refundAmount,
+    refundTax:        r2(s.refund_tax),
     byPaymentMethod:  byMethod.rows.map(r => ({ method: r.payment_method, count: Number(r.count), total: r2(r.total) })),
   });
 });
 
 /* ── GET /reports/staff-leaderboard ─────────────────────────────────────── */
-router.get("/reports/staff-leaderboard", requireAuth, async (req, res): Promise<void> => {
+router.get("/reports/staff-leaderboard", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = DateRangeParams.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { startDate, endDate } = parsed.data;

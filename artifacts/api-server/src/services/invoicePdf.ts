@@ -1,4 +1,6 @@
 import PDFDocument from "pdfkit";
+import { buildInvoiceHtml, type InvoiceDocInput } from "@workspace/sales-documents";
+import { htmlToPdf } from "./htmlToPdf";
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 
@@ -33,6 +35,45 @@ export interface InvoicePdfData {
   brandColor?: string | null;
   /** Absolute URL for the merchant logo. Fetched and embedded if reachable. */
   logoUrl?: string | null;
+  // ── Template options from Management > Templates > Invoice ────────────────
+  /** Whether to render the logo (default true). */
+  showLogo?: boolean;
+  /** Whether to show the ABN line in the header (default true). */
+  showAbn?: boolean;
+  /** Whether to show the website in the header (default true). */
+  showWebsite?: boolean;
+  /** Whether to show the business tagline (default false). */
+  showTagline?: boolean;
+  /** Business tagline text. */
+  businessTagline?: string | null;
+  /** Whether to show the GST breakdown line in totals (default true). */
+  showGstBreakdown?: boolean;
+  /** Custom header text rendered below the business details block. */
+  headerText?: string | null;
+  /** Thank-you message rendered above the footer. */
+  thankYouMsg?: string | null;
+  /** Custom footer text rendered at the very bottom. */
+  footerText?: string | null;
+  /** Payment terms rendered after the totals. */
+  paymentTerms?: string | null;
+  /** Additional invoice notes rendered at the bottom. */
+  invoiceNotes?: string | null;
+  /** Bank transfer / payment details block. */
+  bankDetails?: string | null;
+  /** Heading for the bank details section. */
+  paymentSectionHeading?: string | null;
+  /** Show customer phone / address / company in the Bill-To block. */
+  showAllCustomerDetails?: boolean;
+  /** Render the business social links in the footer. */
+  showSocialLinks?: boolean;
+  /** Render social icons in their official brand colours. */
+  socialIconBrandColors?: boolean;
+  /** Map of platform → url/handle for the footer social strip. */
+  socialLinks?: Record<string, string> | null;
+  /** Stored font-family key/name from the template (e.g. "inter"). */
+  fontFamily?: string | null;
+  /** Stored `selectedStyle` from the template. */
+  styleVariant?: string | null;
 }
 
 const FALLBACK_BRAND = "#4f46e5";
@@ -102,12 +143,105 @@ async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
   }
 }
 
+/* ─── Shared HTML → PDF path (single source of truth) ─────────────────────────
+ * Maps the invoice data onto the same `buildInvoiceHtml` layout used by the
+ * in-app Print Preview, then renders it to PDF with headless Chromium so the
+ * customer-facing document matches Management > Templates. Falls back to the
+ * legacy pdfkit layout below if Chromium is unavailable.
+ */
+function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
+  const discountLabel = data.discountTotal
+    ? `Discount${data.discountType === "percent" && data.discountValue ? ` (${data.discountValue}%)` : ""}`
+    : null;
+
+  return {
+    title: "Tax Invoice",
+    documentNumber: data.invoiceNumber,
+    dateStr: fmtDate(data.createdAt),
+    dueDateStr: data.dueDate ? fmtDate(data.dueDate) : null,
+    paidAtStr: data.paidAt ? fmtDate(data.paidAt) : null,
+    status: data.status,
+    business: {
+      name: data.businessName,
+      abn: data.businessAbn,
+      website: data.businessWebsite,
+      email: data.businessEmail,
+      phone: data.businessPhone,
+      address: data.businessAddress,
+      city: data.businessCity,
+      tagline: data.businessTagline,
+      brandColor: data.brandColor,
+      logoUrl: data.logoUrl,
+    },
+    customer: {
+      name: data.customerName,
+      email: data.customerEmail,
+      phone: data.customerPhone,
+      address: data.customerAddress,
+      company: data.customerCompany,
+    },
+    items: data.items.map((it) => ({
+      description: it.description,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      amount: it.quantity * it.unitPrice,
+    })),
+    subtotal: data.subtotal,
+    taxTotal: data.taxTotal,
+    discountTotal: data.discountTotal,
+    discountLabel,
+    total: data.total,
+    amountPaid: data.amountPaid,
+    notes: data.notes,
+    options: {
+      showLogo: data.showLogo,
+      showAbn: data.showAbn,
+      showWebsite: data.showWebsite,
+      showTagline: data.showTagline,
+      showGstBreakdown: data.showGstBreakdown,
+      showSocialLinks: data.showSocialLinks,
+      socialIconBrandColors: data.socialIconBrandColors,
+      showAllCustomerDetails: data.showAllCustomerDetails,
+      headerText: data.headerText,
+      thankYouMsg: data.thankYouMsg,
+      footerText: data.footerText,
+      paymentTerms: data.paymentTerms,
+      invoiceNotes: data.invoiceNotes,
+      bankDetails: data.bankDetails,
+      paymentSectionHeading: data.paymentSectionHeading,
+      fontFamily: data.fontFamily,
+      styleVariant: data.styleVariant,
+      socialLinks: data.socialLinks ?? null,
+    },
+  };
+}
+
 export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
+  const html = buildInvoiceHtml(mapToDoc(data));
+  try {
+    return await htmlToPdf(html);
+  } catch (err) {
+    // Chromium couldn't render (e.g. binary missing in this runtime). Rather
+    // than failing the invoice send/print, fall back to the legacy pdfkit
+    // layout. The output is less faithful to the template but still valid.
+    // eslint-disable-next-line no-console
+    console.warn("[invoicePdf] HTML→PDF render failed, falling back to pdfkit:", err instanceof Error ? err.message : err);
+    return buildInvoicePdfLegacy(data);
+  }
+}
+
+async function buildInvoicePdfLegacy(data: InvoicePdfData): Promise<Buffer> {
   const BRAND = data.brandColor?.trim() || FALLBACK_BRAND;
+
+  const showLogo         = data.showLogo !== false;
+  const showAbn          = data.showAbn  !== false;
+  const showWebsite      = data.showWebsite !== false;
+  const showTagline      = data.showTagline === true;
+  const showGstBreakdown = data.showGstBreakdown !== false;
 
   // Pre-fetch logo (if provided) before opening the PDFDocument so we can
   // skip the logo section cleanly rather than stalling mid-render.
-  const logoBuf: Buffer | null = data.logoUrl?.startsWith("http")
+  const logoBuf: Buffer | null = (showLogo && data.logoUrl?.startsWith("http"))
     ? await fetchLogoBuffer(data.logoUrl)
     : null;
 
@@ -144,11 +278,18 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
 
     const addrParts = [data.businessAddress, data.businessCity].filter(Boolean).join(", ");
     doc.font("Helvetica").fontSize(9).fillColor(GRAY);
-    if (addrParts)           { doc.text(addrParts,                ML, leftY); leftY += 13; }
-    if (data.businessPhone)  { doc.text(data.businessPhone,       ML, leftY); leftY += 13; }
-    if (data.businessEmail)  { doc.text(data.businessEmail,       ML, leftY); leftY += 13; }
-    if (data.businessAbn)    { doc.text(`ABN: ${data.businessAbn}`, ML, leftY); leftY += 13; }
-    if (data.businessWebsite){ doc.text(data.businessWebsite,     ML, leftY); leftY += 13; }
+    if (showTagline && data.businessTagline) { doc.text(data.businessTagline,           ML, leftY); leftY += 13; }
+    if (addrParts)                           { doc.text(addrParts,                      ML, leftY); leftY += 13; }
+    if (data.businessPhone)                  { doc.text(data.businessPhone,             ML, leftY); leftY += 13; }
+    if (data.businessEmail)                  { doc.text(data.businessEmail,             ML, leftY); leftY += 13; }
+    if (showAbn && data.businessAbn)         { doc.text(`ABN: ${data.businessAbn}`,     ML, leftY); leftY += 13; }
+    if (showWebsite && data.businessWebsite) { doc.text(data.businessWebsite,           ML, leftY); leftY += 13; }
+
+    // Custom header text (from template)
+    if (data.headerText?.trim()) {
+      doc.font("Helvetica").fontSize(8).fillColor(GRAY).text(data.headerText.trim(), ML, leftY, { width: PW / 2 });
+      leftY += 13;
+    }
 
     // Right column – INVOICE label + meta
     const RX = ML + PW - 200;
@@ -241,7 +382,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     };
 
     totRow("Subtotal", fmtCurrency(data.subtotal));
-    totRow("GST (10%)", fmtCurrency(data.taxTotal));
+    if (showGstBreakdown) totRow("GST (10%)", fmtCurrency(data.taxTotal));
     if (data.discountTotal) {
       const discLabel = `Discount${data.discountType === "percent" && data.discountValue ? ` (${data.discountValue}%)` : ""}`;
       totRow(discLabel, `−${fmtCurrency(data.discountTotal)}`);
@@ -258,11 +399,35 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
       totRow("Balance Due", fmtCurrency(balance), true, balance > 0 ? "#d97706" : "#059669");
     }
 
-    // ── Notes ─────────────────────────────────────────────────────────────
-    if (data.notes) {
-      const NY = totY + 24;
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(GRAY).text("NOTES", ML, NY);
-      doc.font("Helvetica").fontSize(9).fillColor(DARK).text(data.notes, ML, NY + 13, { width: PW - 240 });
+    // ── Notes / payment terms / bank details ──────────────────────────────
+    let extY = totY + 24;
+
+    const noteItems: { heading: string; body: string }[] = [];
+    if (data.notes)             noteItems.push({ heading: "NOTES",           body: data.notes });
+    if (data.invoiceNotes?.trim()) noteItems.push({ heading: "NOTES",        body: data.invoiceNotes.trim() });
+    if (data.paymentTerms?.trim()) noteItems.push({ heading: "PAYMENT TERMS",body: data.paymentTerms.trim() });
+    if (data.bankDetails?.trim()) {
+      const heading = data.paymentSectionHeading?.trim() || "PAYMENT DETAILS";
+      noteItems.push({ heading, body: data.bankDetails.trim() });
+    }
+
+    const noteWidth = PW - 240;
+    for (const item of noteItems) {
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(GRAY).text(item.heading, ML, extY);
+      extY += 13;
+      doc.font("Helvetica").fontSize(9).fillColor(DARK).text(item.body, ML, extY, { width: noteWidth });
+      extY += doc.heightOfString(item.body, { width: noteWidth }) + 12;
+    }
+
+    if (data.thankYouMsg?.trim()) {
+      doc.font("Helvetica").fontSize(9).fillColor(GRAY)
+        .text(data.thankYouMsg.trim(), ML, extY, { width: PW, align: "center" });
+      extY += 20;
+    }
+
+    if (data.footerText?.trim()) {
+      doc.font("Helvetica").fontSize(8).fillColor(GRAY)
+        .text(data.footerText.trim(), ML, extY, { width: PW, align: "center" });
     }
 
     // ── Footer ────────────────────────────────────────────────────────────

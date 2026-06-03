@@ -3226,7 +3226,6 @@ export const CreatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3260,7 +3259,6 @@ export const GetPurchaseOrderResponse = zod.object({
   "expectedDate": zod.string().nullish(),
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3301,7 +3299,6 @@ export const UpdatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3327,7 +3324,6 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "expectedDate": zod.string().nullish(),
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -7439,7 +7435,7 @@ export const GetActiveSalesTemplatesResponse = zod.object({
  * @summary Create or update config for a specific template type
  */
 export const UpsertSalesTemplateParams = zod.object({
-  "templateType": zod.enum(['Invoice', 'Thermal_Receipt', 'Quote', 'Service_Ticket', 'A4_Receipt'])
+  "templateType": zod.enum(['Invoice', 'Thermal_Receipt', 'Quote', 'Service_Ticket', 'A4_Receipt', 'Customer_PDF'])
 })
 
 export const UpsertSalesTemplateBody = zod.object({
@@ -8378,9 +8374,9 @@ export const createInvoiceBodyItemsItemTaxRateMax = 100;
 
 
 export const CreateInvoiceBody = zod.object({
-  "customerId": zod.number().nullish(),
-  "dueDate": zod.coerce.date().nullish(),
-  "notes": zod.string().nullish(),
+  "customerId": zod.number().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "notes": zod.string().optional(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
@@ -8390,11 +8386,11 @@ export const CreateInvoiceBody = zod.object({
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
   "value": zod.number()
-}).nullish(),
+}).optional(),
   "invoicePrefix": zod.string().optional(),
   "invoiceDigits": zod.number().optional(),
   "recurring": zod.object({
-  "frequency": zod.enum(['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'yearly']),
+  "frequency": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually']),
   "startDate": zod.coerce.date().nullish(),
   "occurrences": zod.number().optional()
 }).optional()

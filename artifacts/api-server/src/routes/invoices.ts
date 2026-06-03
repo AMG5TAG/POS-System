@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
@@ -673,8 +673,11 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-  const [bp]       = await db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId));
+  const [[merchant], [bp], [tplRow]] = await Promise.all([
+    db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)),
+    db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)),
+    db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Invoice"))),
+  ]);
 
   const inv = fmt(
     row.invoice,
@@ -687,6 +690,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     || row.customerAddress
     || null;
 
+  const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
   let bpBrandColors: string[] = [];
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* use default */ }
   const pdfBuffer = await buildInvoicePdf({
@@ -718,6 +722,26 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     businessEmail:   bp?.contactEmail || null,
     brandColor:      bpBrandColors[0] || null,
     logoUrl:         bp?.logo || null,
+    // ── Template settings ────────────────────────────────────────────────
+    showLogo:              tplRow ? tplRow.showLogo : true,
+    showAbn:               tplOpts.showAbn !== undefined ? Boolean(tplOpts.showAbn) : true,
+    showWebsite:           tplOpts.showWebsite !== undefined ? Boolean(tplOpts.showWebsite) : true,
+    showTagline:           Boolean(tplOpts.showTagline),
+    businessTagline:       bp?.tagline || null,
+    showGstBreakdown:      tplOpts.showGstBreakdown !== undefined ? Boolean(tplOpts.showGstBreakdown) : true,
+    headerText:            tplRow?.headerHtml || (tplOpts.headerText as string | undefined) || null,
+    thankYouMsg:           (tplOpts.thankYouMsg as string | undefined) || null,
+    footerText:            tplRow?.footerHtml || (tplOpts.footerText as string | undefined) || null,
+    paymentTerms:          (tplOpts.paymentTerms as string | undefined) || null,
+    invoiceNotes:          (tplOpts.invoiceNotes as string | undefined) || null,
+    bankDetails:           (tplOpts.bankDetails as string | undefined) || null,
+    paymentSectionHeading: (tplOpts.paymentSectionHeading as string | undefined) || null,
+    showAllCustomerDetails: Boolean(tplOpts.showAllCustomerDetails),
+    showSocialLinks:        Boolean(tplOpts.showSocialLinks),
+    socialIconBrandColors:  Boolean(tplOpts.socialIconBrandColors),
+    socialLinks:            (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
+    fontFamily:             tplRow?.fontFamily || null,
+    styleVariant:           tplRow?.selectedStyle || null,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -756,9 +780,10 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  const [merchant, bp] = await Promise.all([
+  const [merchant, bp, emailTplRow] = await Promise.all([
     db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)).then((r) => r[0]),
     db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
+    db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Invoice"))).then((r) => r[0]),
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
@@ -851,6 +876,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   const billingAddrForPdf = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
     || row.customerAddress
     || null;
+  const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
   const pdfBuffer = await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
@@ -880,6 +906,26 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     businessEmail:   bp?.contactEmail || null,
     brandColor:      tpl.brandColor || (() => { try { return (JSON.parse(bp?.brandColors || "[]") as string[])[0] || null; } catch { return null; } })(),
     logoUrl:         tpl.logo || bp?.logo || null,
+    // ── Template settings ────────────────────────────────────────────────
+    showLogo:              emailTplRow ? emailTplRow.showLogo : true,
+    showAbn:               emailTplOpts.showAbn !== undefined ? Boolean(emailTplOpts.showAbn) : true,
+    showWebsite:           emailTplOpts.showWebsite !== undefined ? Boolean(emailTplOpts.showWebsite) : true,
+    showTagline:           Boolean(emailTplOpts.showTagline),
+    businessTagline:       bp?.tagline || null,
+    showGstBreakdown:      emailTplOpts.showGstBreakdown !== undefined ? Boolean(emailTplOpts.showGstBreakdown) : true,
+    headerText:            emailTplRow?.headerHtml || (emailTplOpts.headerText as string | undefined) || null,
+    thankYouMsg:           (emailTplOpts.thankYouMsg as string | undefined) || null,
+    footerText:            emailTplRow?.footerHtml || (emailTplOpts.footerText as string | undefined) || null,
+    paymentTerms:          (emailTplOpts.paymentTerms as string | undefined) || null,
+    invoiceNotes:          (emailTplOpts.invoiceNotes as string | undefined) || null,
+    bankDetails:           (emailTplOpts.bankDetails as string | undefined) || null,
+    paymentSectionHeading: (emailTplOpts.paymentSectionHeading as string | undefined) || null,
+    showAllCustomerDetails: Boolean(emailTplOpts.showAllCustomerDetails),
+    showSocialLinks:        Boolean(emailTplOpts.showSocialLinks),
+    socialIconBrandColors:  Boolean(emailTplOpts.socialIconBrandColors),
+    socialLinks:            tpl.socialLinks ?? (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
+    fontFamily:             emailTplRow?.fontFamily || null,
+    styleVariant:           emailTplRow?.selectedStyle || null,
   });
 
   const result = await sendEmail(merchantId, {

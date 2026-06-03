@@ -169,6 +169,34 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   if (typeof body.heardFromDetails === "string") updates.heardFromDetails = body.heardFromDetails;
   if (body.referredByCustomerId !== undefined) updates.referredByCustomerId = body.referredByCustomerId != null ? Number(body.referredByCustomerId) : null;
 
+  // Append a timestamped status-change entry to notes whenever the status changes
+  if (typeof body.status === "string") {
+    const [current] = await db
+      .select({ status: serviceJobsTable.status, notes: serviceJobsTable.notes })
+      .from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)))
+      .limit(1);
+
+    if (current && body.status !== current.status) {
+      const STATUS_LABELS: Record<string, string> = {
+        "pending":           "Pending",
+        "in-progress":       "In Progress",
+        "at-repairer":       "At Repairer",
+        "awaiting-customer": "Awaiting Customer",
+        "completed":         "Completed",
+        "cancelled":         "Cancelled",
+      };
+      const fromLabel = STATUS_LABELS[current.status] ?? current.status;
+      const toLabel   = STATUS_LABELS[body.status]    ?? body.status;
+      const now = new Date();
+      const p = (n: number) => String(n).padStart(2, "0");
+      const stamp = `${p(now.getDate())}/${p(now.getMonth() + 1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}`;
+      const logEntry = `[${stamp}] Status: ${fromLabel} → ${toLabel}`;
+      const baseNotes = typeof updates.notes === "string" ? updates.notes : (current.notes ?? "");
+      updates.notes = baseNotes ? `${baseNotes}\n${logEntry}` : logEntry;
+    }
+  }
+
   const [job] = await db
     .update(serviceJobsTable)
     .set(updates)

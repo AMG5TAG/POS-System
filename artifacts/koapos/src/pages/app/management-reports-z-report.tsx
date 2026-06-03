@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useGetMerchant } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +36,9 @@ export default function ManagementReportsZReportPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
 
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant-zreport"] } });
+  const { profile } = useBusinessProfile();
+
   const { data, isLoading, refetch } = useQuery<ZReportData>({
     queryKey: ["z-report", date],
     queryFn: async () => {
@@ -45,21 +50,25 @@ export default function ManagementReportsZReportPage() {
 
   const handleExport = () => {
     if (!data) return;
+    const bizName = merchant?.businessName ?? "";
+    const abn     = profile?.abn ?? "";
     const lines = [
-      ["Z-REPORT", data.date],
+      ["Business Name", bizName],
+      ["ABN",           abn],
+      ["Z-REPORT DATE", data.date],
       [],
-      ["Gross Sales", data.grossSales],
-      ["Discounts", `-${data.discountTotal}`],
-      ["Refunds", `-${data.refundAmount}`],
-      ["Net Sales", data.netSales],
-      ["Tax Collected (GST)", data.taxCollected],
-      ["Transaction Count", data.transactionCount],
-      ["Refund Count", data.refundCount],
+      ["Gross Sales",        data.grossSales],
+      ["Discounts",          `-${data.discountTotal}`],
+      ["Refunds",            `-${data.refundAmount}`],
+      ["Net Sales",          data.netSales],
+      ["Tax Collected (GST net of refunds)", data.taxCollected],
+      ["Transaction Count",  data.transactionCount],
+      ["Refund Count",       data.refundCount],
       [],
       ["Payment Method", "Count", "Total"],
       ...data.byPaymentMethod.map(m => [m.method, m.count, m.total]),
     ];
-    const csv = lines.map(r => r.join(",")).join("\n");
+    const csv = lines.map(r => r.map(v => (String(v).includes(",") ? `"${v}"` : v)).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     a.download = `z-report-${date}.csv`;
