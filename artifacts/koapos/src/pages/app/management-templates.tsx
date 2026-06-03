@@ -1616,7 +1616,11 @@ export default function ManagementTemplatesPage() {
   const quickCodeGroups = buildQuickCodeGroups(
     businessName, profile.abn || "", profile.contactEmail || merchant?.email || "",
     profile.website || "", profile.tagline || "",
-    [profile.state, profile.postcode].filter(Boolean).join(" "),
+    [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      profile.state, profile.postcode,
+    ].filter(Boolean).join(", "),
   );
 
   const currentTemplates = TEMPLATES[activeCategory];

@@ -594,7 +594,12 @@ export default function ServiceJobsPage() {
                 abn: (profile as { abn?: string }).abn,
                 website: (profile as { website?: string }).website,
                 email: (profile as { contactEmail?: string }).contactEmail ?? merchant?.email ?? undefined,
-                address: [(profile as { state?: string }).state, (profile as { postcode?: string }).postcode].filter(Boolean).join(" "),
+                address: [
+                  (merchant as { address?: string } | undefined)?.address,
+                  (merchant as { city?: string } | undefined)?.city,
+                  (profile as { state?: string }).state,
+                  (profile as { postcode?: string }).postcode,
+                ].filter(Boolean).join(", "),
                 brandColor,
                 logo: (profile as { logo?: string }).logo,
                 socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,

@@ -185,8 +185,8 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       {
         name: "Templates", icon: LayoutTemplate,
         children: [
-          { name: "Sale Templates",    href: "/management/templates",        icon: LayoutTemplate },
-          { name: "Labels & Stickers", href: "/management/stickers",         icon: Printer,
+          { name: "Sales",             href: "/management/templates",        icon: LayoutTemplate },
+          { name: "Stickers",          href: "/management/stickers",         icon: Printer,
             matchPaths: ["/management/sticker-templates"] },
         ],
       },
@@ -264,7 +264,7 @@ const SEARCH_INDEX = [
   { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
   { label: "POS Registers",      href: "/management/registers",        icon: Monitor,         group: "Management" },
-  { label: "Sale Templates",      href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Sales",               href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
   /* moved under Inventory */
   { label: "Tax Settings",       href: "/management/tax",                        icon: Receipt,      group: "Management" },
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
@@ -372,11 +372,11 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
   "/management/tax":              ["Management", "Tax Settings"],
   "/management/email":            ["Management", "Email"],
-  "/management/templates":        ["Management", "Templates", "Sale Templates"],
+  "/management/templates":        ["Management", "Templates", "Sales"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
   "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
   "/pos/pc-builder":                     ["POS", "PC Builder"],
-  "/management/stickers":          ["Management", "Templates", "Labels & Stickers"],
+  "/management/stickers":          ["Management", "Templates", "Stickers"],
   "/management/sticker-templates": ["Management", "Templates", "Sticker Templates"],
   "/marketing":                            ["Marketing", "Overview"],
   "/marketing/email/campaigns":            ["Marketing", "Campaigns"],

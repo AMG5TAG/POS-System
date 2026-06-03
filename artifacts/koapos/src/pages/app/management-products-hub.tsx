@@ -15,9 +15,9 @@ const TABS: HubTab[] = [
   { label: "Inventory",  href: "/management/inventory",               icon: Boxes          },
   { label: "Product Types",      href: "/management/product-types",           icon: Tag            },
   { label: "Modifier Groups",    href: "/management/modifier-groups",         icon: Layers         },
-  { label: "Sale Templates",     href: "/management/templates",               icon: LayoutTemplate },
+  { label: "Sales",              href: "/management/templates",               icon: LayoutTemplate },
   {
-    label: "Labels & Stickers",
+    label: "Stickers",
     href: "/management/stickers",
     icon: Printer,
     matchPaths: ["/management/sticker-templates"],
