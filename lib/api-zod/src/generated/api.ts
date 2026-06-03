@@ -8378,9 +8378,9 @@ export const createInvoiceBodyItemsItemTaxRateMax = 100;
 
 
 export const CreateInvoiceBody = zod.object({
-  "customerId": zod.number().optional(),
-  "dueDate": zod.coerce.date().optional(),
-  "notes": zod.string().optional(),
+  "customerId": zod.number().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
@@ -8390,7 +8390,7 @@ export const CreateInvoiceBody = zod.object({
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
   "value": zod.number()
-}).optional(),
+}).nullish(),
   "invoicePrefix": zod.string().optional(),
   "invoiceDigits": zod.number().optional(),
   "recurring": zod.object({

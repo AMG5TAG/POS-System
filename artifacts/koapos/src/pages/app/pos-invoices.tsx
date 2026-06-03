@@ -475,13 +475,13 @@ export default function POSInvoicesPage() {
       const updated = await updateInvoiceMutation.mutateAsync({
         id: editingInvoice.id,
         data: {
-          customerId: editForm.customerId ? parseInt(editForm.customerId) : null,
+          customerId: editForm.customerId ? parseInt(editForm.customerId) : undefined,
           dueDate: editForm.dueDate || null,
           notes: editForm.notes || null,
           items: validLines,
           discount: editDiscount.enabled && editDiscount.value
             ? { type: editDiscount.type, value: parseFloat(editDiscount.value) }
-            : null,
+            : undefined,
           recurring: {
             enabled: editRecurring.enabled,
             frequency: editRecurring.frequency,
@@ -520,15 +520,15 @@ export default function POSInvoicesPage() {
     try {
       const prefixSettings = getInvoicePrefix();
       const body = {
-        customerId: form.customerId ? parseInt(form.customerId) : null,
-        dueDate: form.dueDate || null,
-        notes: form.notes || null,
+        customerId: form.customerId ? parseInt(form.customerId) : undefined,
+        dueDate: form.dueDate || undefined,
+        notes: form.notes || undefined,
         items: validLines,
         invoicePrefix: prefixSettings.invoicePrefix,
         invoiceDigits: prefixSettings.invoiceDigits,
         discount: discount.enabled && discount.value
           ? { type: discount.type, value: parseFloat(discount.value) }
-          : null,
+          : undefined,
         ...(recurring.enabled && {
           recurring: {
             frequency: recurring.frequency,

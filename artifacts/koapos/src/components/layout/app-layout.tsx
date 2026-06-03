@@ -121,9 +121,10 @@ const INVENTORY_SUBNAV = [
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
-type NavLeaf  = { name: string; href: string; icon: React.ComponentType<{ className?: string }>; matchPaths?: string[] };
-type NavGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }>; defaultHref?: string };
-type NavItem  = NavLeaf | NavGroup;
+type NavLeaf     = { name: string; href: string; icon: React.ComponentType<{ className?: string }>; matchPaths?: string[] };
+type NavSubGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }> };
+type NavGroup    = { name: string; children: (NavLeaf | NavSubGroup)[]; icon: React.ComponentType<{ className?: string }>; defaultHref?: string };
+type NavItem     = NavLeaf | NavGroup;
 
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/management/overview", icon: LayoutDashboard },
@@ -142,13 +143,10 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   {
     name: "Products & Inventory", icon: Boxes, defaultHref: "/management/inventory",
     children: [
-      { name: "Inventory",  href: "/management/inventory",               icon: Boxes          },
-      { name: "Product Types",      href: "/management/product-types",           icon: Tag            },
-      { name: "Modifier Groups",    href: "/management/modifier-groups",         icon: Layers         },
-      { name: "Sale Templates",     href: "/management/templates",               icon: LayoutTemplate },
-      { name: "Labels & Stickers",  href: "/management/stickers",               icon: Printer,
-        matchPaths: ["/management/sticker-templates"] },
-      { name: "Calculators",        href: "/management/calculators",             icon: Calculator     },
+      { name: "Inventory",       href: "/management/inventory",       icon: Boxes    },
+      { name: "Product Types",   href: "/management/product-types",   icon: Tag      },
+      { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers   },
+      { name: "Calculators",     href: "/management/calculators",     icon: Calculator },
     ],
   },
   {
@@ -180,16 +178,24 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   {
     name: "Settings & Integrations", icon: Settings, defaultHref: "/management/account",
     children: [
-      { name: "Account",            href: "/management/account",       icon: UserCircle     },
-      { name: "Business Details",  href: "/management/business",       icon: Building2,
+      { name: "Account",           href: "/management/account",       icon: UserCircle     },
+      { name: "Business Details",  href: "/management/business",      icon: Building2,
         matchPaths: ["/management/regional"] },
-      { name: "Tax",               href: "/management/tax",            icon: Receipt        },
-      { name: "Integrations",      href: "/management/integrations",   icon: Plug,
+      { name: "Tax",               href: "/management/tax",           icon: Receipt        },
+      {
+        name: "Templates", icon: LayoutTemplate,
+        children: [
+          { name: "Sale Templates",    href: "/management/templates",        icon: LayoutTemplate },
+          { name: "Labels & Stickers", href: "/management/stickers",         icon: Printer,
+            matchPaths: ["/management/sticker-templates"] },
+        ],
+      },
+      { name: "Integrations",      href: "/management/integrations",  icon: Plug,
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
-      { name: "Import / Export",   href: "/management/import-export",  icon: ArrowLeftRight },
-      { name: "Feedback",          href: "/management/feedback",        icon: MessageSquare  },
-      { name: "Misc",              href: "/management/misc",            icon: MoreHorizontal },
-      { name: "System",            href: "/management/koapos",          icon: Sparkles       },
+      { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
+      { name: "Feedback",          href: "/management/feedback",      icon: MessageSquare  },
+      { name: "Misc",              href: "/management/misc",          icon: MoreHorizontal },
+      { name: "System",            href: "/management/koapos",        icon: Sparkles       },
     ],
   },
 ];
@@ -366,12 +372,12 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
   "/management/tax":              ["Management", "Tax Settings"],
   "/management/email":            ["Management", "Email"],
-  "/management/templates":        ["Management", "Sale Templates"],
+  "/management/templates":        ["Management", "Templates", "Sale Templates"],
   "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
   "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
   "/pos/pc-builder":                     ["POS", "PC Builder"],
-  "/management/stickers":                  ["Management", "Stickers"],
-  "/management/sticker-templates":         ["Management", "Sticker Templates"],
+  "/management/stickers":          ["Management", "Templates", "Labels & Stickers"],
+  "/management/sticker-templates": ["Management", "Templates", "Sticker Templates"],
   "/marketing":                            ["Marketing", "Overview"],
   "/marketing/email/campaigns":            ["Marketing", "Campaigns"],
   "/marketing/email/templates":            ["Marketing", "Email Templates"],
@@ -542,14 +548,55 @@ function isLeafActive(child: NavLeaf, location: string): boolean {
   return false;
 }
 
+function isSubGroupActive(sg: NavSubGroup, location: string): boolean {
+  return sg.children.some((c) => isLeafActive(c, location));
+}
+
+function NavInlineSubGroup({ name, icon: Icon, children, location, navigate }: {
+  name: string; icon: React.ComponentType<{ className?: string }>; children: NavLeaf[];
+  location: string; navigate?: (href: string) => void;
+}) {
+  const active = children.some((c) => isLeafActive(c, location));
+  const [open, setOpen] = useState(active);
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton isActive={active} onClick={() => setOpen((o) => !o)} className="cursor-pointer w-full">
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1">{name}</span>
+        <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </SidebarMenuSubButton>
+      {open && (
+        <SidebarMenuSub>
+          {children.map((child) => {
+            const childActive = isLeafActive(child, location);
+            return (
+              <SidebarMenuSubItem key={child.href}>
+                <SidebarMenuSubButton asChild isActive={childActive}>
+                  <Link href={child.href} className="flex items-center gap-2.5">
+                    <child.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="flex-1">{child.name}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuSubItem>
+  );
+}
+
 function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, navigate, badgeCountByHref }: {
-  name: string; icon: React.ComponentType<{ className?: string }>; children: NavLeaf[]; location: string;
+  name: string; icon: React.ComponentType<{ className?: string }>; children: (NavLeaf | NavSubGroup)[]; location: string;
   defaultHref?: string; navigate?: (href: string) => void; badgeCountByHref?: Record<string, number>;
 }) {
-  const isChildActive = children.some((c) => isLeafActive(c, location));
+  const isChildActive = children.some((c) =>
+    "href" in c ? isLeafActive(c, location) : isSubGroupActive(c, location)
+  );
   const [open, setOpen] = useState(isChildActive);
   const totalBadge = badgeCountByHref
-    ? children.reduce((sum, c) => sum + (badgeCountByHref[c.href] ?? 0), 0)
+    ? children.filter((c): c is NavLeaf => "href" in c)
+        .reduce((sum, c) => sum + (badgeCountByHref[c.href] ?? 0), 0)
     : 0;
   const handleClick = () => {
     if (defaultHref && navigate) navigate(defaultHref);
@@ -570,6 +617,18 @@ function NavNestedGroup({ name, icon: Icon, children, location, defaultHref, nav
       {open && (
         <SidebarMenuSub>
           {children.map((child) => {
+            if (!("href" in child)) {
+              return (
+                <NavInlineSubGroup
+                  key={child.name}
+                  name={child.name}
+                  icon={child.icon}
+                  children={child.children}
+                  location={location}
+                  navigate={navigate}
+                />
+              );
+            }
             const active = isLeafActive(child, location);
             const badge = badgeCountByHref?.[child.href] ?? 0;
             return (
@@ -872,13 +931,31 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
                   <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
                     <item.icon className="w-3 h-3" /><span>{item.name}</span>
                   </div>
-                  {item.children.map((child) => (
-                    <button key={child.href} onClick={() => { navigate(child.href); onToggle(); }}
-                      className={cn("w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-sm hover:bg-muted transition-colors text-left", location === child.href && "bg-secondary/60 font-medium")}>
-                      <child.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      {child.name}
-                    </button>
-                  ))}
+                  {item.children.map((child) => {
+                    if (!("href" in child)) {
+                      return (
+                        <div key={child.name}>
+                          <div className="flex items-center gap-1.5 pl-7 pr-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">
+                            <child.icon className="w-3 h-3" /><span>{child.name}</span>
+                          </div>
+                          {child.children.map((leaf) => (
+                            <button key={leaf.href} onClick={() => { navigate(leaf.href); onToggle(); }}
+                              className={cn("w-full flex items-center gap-2.5 pl-11 pr-3 py-1.5 text-sm hover:bg-muted transition-colors text-left", isLeafActive(leaf, location) && "bg-secondary/60 font-medium")}>
+                              <leaf.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                              {leaf.name}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return (
+                      <button key={child.href} onClick={() => { navigate(child.href); onToggle(); }}
+                        className={cn("w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-sm hover:bg-muted transition-colors text-left", isLeafActive(child, location) && "bg-secondary/60 font-medium")}>
+                        <child.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        {child.name}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             }
@@ -1030,34 +1107,21 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
   const go = (href: string) => { navigate(href); onClose(); };
 
+  const flattenNavItems = (items: NavItem[]): NavLeaf[] =>
+    items.flatMap((item) =>
+      "children" in item
+        ? item.children.flatMap((c) => "href" in c ? [c] : c.children)
+        : [item]
+    );
+
   const sections: { label: string; items: NavLeaf[] }[] = [
     { label: "POS",        items: POS_SUBNAV },
     { label: "Inventory",  items: INVENTORY_SUBNAV },
-    {
-      label: "Staff",
-      items: STAFF_SUBNAV.flatMap((item) =>
-        "children" in item ? item.children : [item as NavLeaf]
-      ),
-    },
-    {
-      label: "Marketing",
-      items: MARKETING_SUBNAV.flatMap((item) =>
-        "children" in item ? item.children : [item as NavLeaf]
-      ),
-    },
-    {
-      label: "Online",
-      items: ONLINE_SUBNAV.flatMap((item) =>
-        "children" in item ? item.children : [item as NavLeaf]
-      ),
-    },
-    { label: "Cameras", items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
-    {
-      label: "Management",
-      items: MANAGEMENT_SUBNAV.flatMap((item) =>
-        "children" in item ? item.children : [item as NavLeaf]
-      ),
-    },
+    { label: "Staff",      items: flattenNavItems(STAFF_SUBNAV) },
+    { label: "Marketing",  items: flattenNavItems(MARKETING_SUBNAV) },
+    { label: "Online",     items: flattenNavItems(ONLINE_SUBNAV) },
+    { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
+    { label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) },
   ];
 
   return (
@@ -1319,7 +1383,8 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     const totalSectionBadge = badgeCountByHref
       ? items.reduce((sum, item) => {
           if ("children" in item) {
-            return sum + item.children.reduce((s, c) => s + (badgeCountByHref[c.href] ?? 0), 0);
+            return sum + item.children.reduce((s, c) =>
+              "href" in c ? s + (badgeCountByHref[c.href] ?? 0) : s, 0);
           }
           return sum + (badgeCountByHref[(item as NavLeaf).href] ?? 0);
         }, 0)

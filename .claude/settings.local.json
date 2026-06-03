@@ -33,7 +33,31 @@
       "Bash(curl -sv -c /tmp/cookies.txt -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@koastal.com.au\",\"password\":\"password\"}')",
       "Bash(printenv SESSION_SECRET)",
       "Bash(echo \"koapos-dev-secret\")",
-      "Bash(echo 'Secret: __TRACKED_VAR__')"
+      "Bash(echo 'Secret: __TRACKED_VAR__')",
+      "Bash(curl -s http://localhost:3000/api/purchase-orders)",
+      "Bash(netstat -tlnp)",
+      "Bash(echo 'Cookie: __TRACKED_VAR__')",
+      "Bash(curl -s --cookie connect.sid=__TRACKED_VAR__ http://localhost:3000/api/invoices?limit=2)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(type\\(d\\).__name__, str\\(d\\)[:200]\\)\")",
+      "Bash(pnpm --filter @workspace/api-server run build)",
+      "Bash(pkill -f \"dist/index.mjs\")",
+      "Bash(sleep 1)",
+      "Bash(sleep 3)",
+      "Bash(echo 'SIGNED: __TRACKED_VAR__')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(str\\(d\\)[:300]\\)\")",
+      "Bash(PORT=3000 node --enable-source-maps /home/runner/workspace/artifacts/api-server/dist/index.mjs)",
+      "Bash(echo 'PID: __TRACKED_VAR__')",
+      "Bash(curl -s --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg http://localhost:3000/api/invoices?limit=2)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('id:', d.get\\('id'\\), 'status:', d.get\\('status'\\), 'error:', d.get\\('error'\\)\\)\")",
+      "Bash(pkill -9 -f \"index.mjs\")",
+      "Bash(fuser 3000/tcp)",
+      "Bash(curl -s -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"customerId\":3,\"dueDate\":null,\"notes\":null,\"items\":[{\"description\":\"Service\",\"quantity\":1,\"unitPrice\":100,\"taxRate\":10}],\"invoicePrefix\":\"KI\",\"invoiceDigits\":5,\"discount\":null}' http://localhost:3000/api/invoices)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('✅ id:', d.get\\('id'\\), 'total:', d.get\\('total'\\), 'discountTotal:', d.get\\('discountTotal'\\)\\) if 'id' in d else print\\('❌', d.get\\('error',''\\)[:200]\\)\")",
+      "Bash(curl -s -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see attached.\"}}' http://localhost:3000/api/invoices/12/email)",
+      "Bash(curl -sv -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see attached.\"}}' http://localhost:3000/api/invoices/12/email)",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}' -X POST --cookie connect.sid=s%3AzK1jZtFrXZ6iJqx5SynUpiFy1FW6K8La.sW73ytQ%2ByxU4p%2FDKNdkNywWQixHWQsFklysuj47fjjg -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"template\":{\"subject\":\"Invoice\",\"body\":\"Please see.\"}}' http://localhost:3000/api/invoices/12/email)"
     ]
   }
 }
