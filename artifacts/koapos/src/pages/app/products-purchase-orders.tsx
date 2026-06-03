@@ -10,6 +10,8 @@ import {
   useSendPurchaseOrderEmail,
   useListProducts,
   useListSuppliers,
+  useRequestUploadUrl,
+  useConfirmUpload,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
   ApiError,
@@ -26,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
@@ -64,6 +66,7 @@ const EMPTY_FORM = {
   status:          "Draft" as POStatus,
   deliveryCharge:  0,
   deliveryTaxMode: "exclusive" as TaxMode,
+  invoiceAttachments: [] as string[],
 };
 const EMPTY_ITEM: POItem = { productName: "", quantity: 1, unitCost: 0, received: 0 };
 
@@ -97,6 +100,11 @@ export default function ProductsPurchaseOrdersPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
   /* Supplier dropdown */
+  const requestUploadUrl = useRequestUploadUrl();
+  const confirmUpload    = useConfirmUpload();
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const invoiceFileRef = useRef<HTMLInputElement>(null);
+
   const { data: suppliersData } = useListSuppliers({}, { query: { enabled: dialogOpen, queryKey: ["suppliers"] } });
   const suppliers: SupplierOption[] = [...((suppliersData as { items?: SupplierOption[] })?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -159,14 +167,15 @@ export default function ProductsPurchaseOrdersPage() {
   const openEdit = (po: (typeof orders)[0]) => {
     setEditingId(po.id);
     setForm({
-      supplierId:      po.supplierId ?? null,
-      supplierName:    po.supplierName ?? "",
-      orderNumber:     (po as { orderNumber?: string | null }).orderNumber ?? "",
-      expectedDate:    po.expectedDate ?? "",
-      notes:           po.notes ?? "",
-      status:          po.status as POStatus,
-      deliveryCharge:  (po as { deliveryCharge?: number }).deliveryCharge ?? 0,
-      deliveryTaxMode: ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
+      supplierId:         po.supplierId ?? null,
+      supplierName:       po.supplierName ?? "",
+      orderNumber:        (po as { orderNumber?: string | null }).orderNumber ?? "",
+      expectedDate:       po.expectedDate ?? "",
+      notes:              po.notes ?? "",
+      status:             po.status as POStatus,
+      deliveryCharge:     (po as { deliveryCharge?: number }).deliveryCharge ?? 0,
+      deliveryTaxMode:    ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
+      invoiceAttachments: (po as { invoiceUrls?: string[] }).invoiceUrls ?? [],
     });
     setItems((po.items ?? []).map((i) => ({
       productName: i.productName ?? "",
@@ -177,6 +186,40 @@ export default function ProductsPurchaseOrdersPage() {
     })));
     setProductSearchQuery("");
     setDialogOpen(true);
+  };
+
+  const handleInvoiceUpload = async (file: File) => {
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+      toast.error("Please select a PDF or image file");
+      return;
+    }
+    setUploadingInvoice(true);
+    try {
+      const result = await requestUploadUrl.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
+      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      if (!putRes.ok) throw new Error("Upload to storage failed");
+      await confirmUpload.mutateAsync({ data: { objectPath: result.objectPath } });
+      const url = `/api/storage${result.objectPath}`;
+      setForm((prev) => ({ ...prev, invoiceAttachments: [...prev.invoiceAttachments, url] }));
+      toast.success("Invoice attached");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingInvoice(false);
+      if (invoiceFileRef.current) invoiceFileRef.current.value = "";
+    }
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open && dialogOpen) {
+      const hasItems = items.some((i) => i.productName);
+      const isDirty = hasItems || form.supplierId !== null || form.notes !== "" ||
+                      form.orderNumber !== "" || form.invoiceAttachments.length > 0;
+      if (isDirty) {
+        if (!window.confirm("You have unsaved changes. Are you sure you want to close?")) return;
+      }
+    }
+    setDialogOpen(open);
   };
 
   const invalidateList = () => queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
@@ -193,6 +236,7 @@ export default function ProductsPurchaseOrdersPage() {
       notes:           form.notes || undefined,
       deliveryCharge:  form.deliveryCharge,
       deliveryTaxMode: form.deliveryTaxMode,
+      invoiceUrls:     form.invoiceAttachments,
       items:           validItems,
     };
     if (editingId !== null) {
@@ -462,6 +506,33 @@ export default function ProductsPurchaseOrdersPage() {
                 </div>
               )}
 
+              {/* Invoice attachments */}
+              {((po as { invoiceUrls?: string[] }).invoiceUrls ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" /> Invoice Attachments
+                  </p>
+                  <div className="space-y-1.5">
+                    {((po as { invoiceUrls?: string[] }).invoiceUrls ?? []).map((url, idx) => {
+                      const fileName = url.split("/").pop() ?? `Invoice ${idx + 1}`;
+                      return (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 hover:bg-muted/40 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="flex-1 text-sm truncate">{decodeURIComponent(fileName)}</span>
+                          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Receipt history */}
               {(po as PurchaseOrder & { receipts?: Array<{ id: number; processedBy: string; processedAt: string; notes: string }> }).receipts?.length ? (
                 <div className="space-y-2">
@@ -576,7 +647,7 @@ export default function ProductsPurchaseOrdersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Purchase Order" : "New Purchase Order"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -808,6 +879,57 @@ export default function ProductsPurchaseOrdersPage() {
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder="Internal notes..." rows={2} />
+            </div>
+
+            {/* ── Invoice Attachments ──────────────────────────────────── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5" /> Invoice Attachments</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={uploadingInvoice}
+                  onClick={() => invoiceFileRef.current?.click()}
+                >
+                  {uploadingInvoice
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                    : <><Plus className="w-3.5 h-3.5" /> Attach File</>}
+                </Button>
+                <input
+                  ref={invoiceFileRef}
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInvoiceUpload(f); }}
+                />
+              </div>
+              {form.invoiceAttachments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No invoices attached. Attach PDF or image invoices from your supplier.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {form.invoiceAttachments.map((url, idx) => {
+                    const fileName = url.split("/").pop() ?? `Invoice ${idx + 1}`;
+                    return (
+                      <div key={url} className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 text-sm truncate">{decodeURIComponent(fileName)}</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0" title="Open">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+                          onClick={() => setForm((prev) => ({ ...prev, invoiceAttachments: prev.invoiceAttachments.filter((_, i) => i !== idx) }))}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* ── Summary footer ───────────────────────────────────────── */}

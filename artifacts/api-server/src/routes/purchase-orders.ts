@@ -42,6 +42,8 @@ function fmtReceipt(r: ReceiptRow) {
 }
 
 function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = []) {
+  let invoiceUrls: string[] = [];
+  try { if (po.invoiceUrls) invoiceUrls = JSON.parse(po.invoiceUrls); } catch {}
   return {
     id: po.id,
     supplierId: po.supplierId ?? null,
@@ -53,6 +55,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     expectedDate: po.expectedDate ?? null,
     receivedDate: po.receivedDate ?? null,
     notes: po.notes ?? null,
+    invoiceUrls,
     totalCost: parseFloat(po.totalCost),
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
@@ -165,6 +168,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
     expectedDate: body.expectedDate ?? null,
     receivedDate: body.receivedDate ?? null,
     notes: body.notes ?? null,
+    invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
     totalCost: String(totalCost),
     deliveryCharge: String(deliveryCharge),
     deliveryTaxMode,
@@ -224,6 +228,9 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     expectedDate: body.expectedDate ?? null,
     receivedDate: body.receivedDate ?? null,
     notes: body.notes ?? null,
+    invoiceUrls: body.invoiceUrls !== undefined
+      ? (body.invoiceUrls.length ? JSON.stringify(body.invoiceUrls) : null)
+      : undefined,
     totalCost: String(totalCost),
     deliveryCharge: String(deliveryCharge),
     deliveryTaxMode,

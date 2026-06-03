@@ -9,10 +9,13 @@ type LineItem = { description: string; quantity: number; unitPrice: number; taxR
 export function advanceByFrequency(date: Date, frequency: string): Date {
   const d = new Date(date);
   switch (frequency) {
-    case "daily":  d.setDate(d.getDate() + 1); break;
-    case "weekly": d.setDate(d.getDate() + 7); break;
-    case "yearly": d.setFullYear(d.getFullYear() + 1); break;
-    default:       d.setMonth(d.getMonth() + 1); break; // monthly
+    case "daily":       d.setDate(d.getDate() + 1); break;
+    case "weekly":      d.setDate(d.getDate() + 7); break;
+    case "fortnightly": d.setDate(d.getDate() + 14); break;
+    case "quarterly":   d.setMonth(d.getMonth() + 3); break;
+    case "annually":
+    case "yearly":      d.setFullYear(d.getFullYear() + 1); break;
+    default:            d.setMonth(d.getMonth() + 1); break; // monthly
   }
   return d;
 }

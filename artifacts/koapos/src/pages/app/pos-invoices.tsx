@@ -122,7 +122,7 @@ const STATUS_LABELS: Record<InvStatus, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", partial: "Partially Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
-const FREQ_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
+const FREQ_LABELS = { weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", annually: "Annually" };
 
 /* ── Recurring helpers ───────────────────────────────────────────────────── */
 
@@ -169,7 +169,7 @@ export default function POSInvoicesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editRecurring, setEditRecurring] = useState({
     enabled: false,
-    frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly",
+    frequency: "monthly" as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually",
     startDate: "",
     occurrences: 1,
   });
@@ -189,7 +189,7 @@ export default function POSInvoicesPage() {
 
   const [recurring, setRecurring] = useState({
     enabled: false,
-    frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly",
+    frequency: "monthly" as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually",
     startDate: "",
     occurrences: 1,
   });
@@ -420,7 +420,7 @@ export default function POSInvoicesPage() {
   const CREATE_PRISTINE_FORM = { customerId: "", dueDate: "", notes: "" };
   const CREATE_PRISTINE_LINES: LineItem[] = [{ description: "", quantity: 1, unitPrice: 0, taxRate: defaultTaxRate }];
   const CREATE_PRISTINE_DISCOUNT = { enabled: false, type: "percent" as DiscountType, value: "" };
-  const CREATE_PRISTINE_RECURRING = { enabled: false, frequency: "monthly" as "daily" | "weekly" | "monthly" | "yearly", startDate: "", occurrences: 1 };
+  const CREATE_PRISTINE_RECURRING = { enabled: false, frequency: "monthly" as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually", startDate: "", occurrences: 1 };
 
   const isCreateDirty = createOpen && (
     JSON.stringify(form) !== JSON.stringify(CREATE_PRISTINE_FORM) ||
@@ -445,7 +445,7 @@ export default function POSInvoicesPage() {
     };
     const newRecurring = {
       enabled: inv.isRecurring ?? false,
-      frequency: (inv.recurringFrequency as "daily" | "weekly" | "monthly" | "yearly") ?? "monthly",
+      frequency: (inv.recurringFrequency === "yearly" ? "annually" : inv.recurringFrequency === "daily" ? "weekly" : (inv.recurringFrequency ?? "monthly")) as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually",
       startDate: inv.recurringStartDate ? inv.recurringStartDate.slice(0, 10) : "",
       occurrences: inv.recurringOccurrences ?? 1,
     };

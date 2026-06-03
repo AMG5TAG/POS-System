@@ -180,7 +180,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
   {
     name: "Settings & Integrations", icon: Settings, defaultHref: "/management/account",
     children: [
-      { name: "Account & Modules", href: "/management/account",       icon: UserCircle     },
+      { name: "Account",            href: "/management/account",       icon: UserCircle     },
       { name: "Business Details",  href: "/management/business",       icon: Building2,
         matchPaths: ["/management/regional"] },
       { name: "Tax",               href: "/management/tax",            icon: Receipt        },

@@ -355,10 +355,10 @@ export default function ProductsBrandsPage() {
                 const isOpen = expanded.has(b.id);
                 return (
                   <div key={b.id}>
-                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => openEdit(b)}>
                       {/* Expand chevron */}
                       <button
-                        onClick={() => toggleExpand(b.id)}
+                        onClick={(e) => { e.stopPropagation(); toggleExpand(b.id); }}
                         className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0"
                       >
                         <ChevronRight className={cn("w-4 h-4 transition-transform", isOpen && "rotate-90")} />
@@ -402,7 +402,7 @@ export default function ProductsBrandsPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(b)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>

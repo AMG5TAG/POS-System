@@ -132,12 +132,12 @@ const defaultForm: ProductForm = {
   stockLocationOverflow: "",
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
   { key: "stock",         label: "Stock"         },
-  { key: "compatibility", label: "Compatibility" },
+  { key: "compatibility", label: "Compatibility", hideForService: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "variants",      label: "Variants",     variantOnly: true },
@@ -1815,7 +1815,11 @@ export default function ProductsPage() {
           {/* Tab nav */}
           <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
             {FORM_TABS
-              .filter(({ digitalCodeOnly, variantOnly }) => (!digitalCodeOnly || form.productType === "digital_code") && (!variantOnly || form.productType === "variant"))
+              .filter(({ digitalCodeOnly, variantOnly, hideForService }) =>
+                (!digitalCodeOnly || form.productType === "digital_code") &&
+                (!variantOnly || form.productType === "variant") &&
+                (!hideForService || form.productType !== "service")
+              )
               .map(({ key, label }) => (
                 <button
                   key={key}
@@ -2380,7 +2384,7 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Stock Locations */}
-                <div className="border-t pt-5">
+                {form.productType !== "service" && <div className="border-t pt-5">
                   <SectionHeader label="Stock Locations" />
                   <p className="text-xs text-muted-foreground mt-1 mb-4">Specify where this product can be found in your store.</p>
                   <div className="grid grid-cols-2 gap-4">
@@ -2425,7 +2429,7 @@ export default function ProductsPage() {
                       <p className="text-xs text-muted-foreground mt-1.5">Where backup / overflow stock is held.</p>
                     </div>
                   </div>
-                </div>
+                </div>}
 
               </div>
             )}

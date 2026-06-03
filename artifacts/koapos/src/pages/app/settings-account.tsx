@@ -42,7 +42,6 @@ const ACCOUNT_TABS = [
 import { cn } from "@/lib/utils";
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-const PORTAL_BASE = "www.koapos.com.au/b/";
 
 function formatUsernameInput(raw: string) {
   return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
@@ -729,6 +728,9 @@ export default function SettingsAccountPage() {
     }
   }, [merchant?.username]);
 
+  const hostname = window.location.hostname;
+  const PORTAL_BASE = `${hostname}/b/`;
+
   const isValid = username.length === 0 || USERNAME_RE.test(username);
   const hasChanged = username !== (savedUsername ?? "");
   const isLongEnough = username.length >= 3;
@@ -1001,7 +1003,7 @@ export default function SettingsAccountPage() {
               <Label htmlFor="username">Username</Label>
               <div className="flex gap-0">
                 <div className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground whitespace-nowrap select-none">
-                  koapos.com.au/b/
+                  {PORTAL_BASE}
                 </div>
                 <Input
                   id="username"
@@ -1029,8 +1031,7 @@ export default function SettingsAccountPage() {
               <div className="rounded-lg border bg-muted/40 px-3 py-2.5 flex items-center gap-2">
                 <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span className="text-sm font-mono break-all">
-                  <span className="text-muted-foreground">www.</span>
-                  <span className="text-muted-foreground">koapos.com.au/b/</span>
+                  <span className="text-muted-foreground">{PORTAL_BASE}</span>
                   <span className="font-semibold text-foreground">{username}</span>
                 </span>
               </div>
@@ -1044,7 +1045,7 @@ export default function SettingsAccountPage() {
                   <p className="font-medium">Your public URL will change</p>
                   <p>
                     Any existing links, QR codes, or integrations pointing to{" "}
-                    <span className="font-mono">koapos.com.au/b/{savedUsername}</span> will stop working.
+                    <span className="font-mono">{PORTAL_BASE}{savedUsername}</span> will stop working.
                     You will need to update them after saving.
                   </p>
                 </div>

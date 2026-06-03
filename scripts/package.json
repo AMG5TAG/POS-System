@@ -9,6 +9,7 @@
     "seed-product-types": "tsx ./src/seed-product-types.ts",
     "seed-default-register": "tsx ./src/seed-default-register.ts",
     "setup-login-cleanup": "tsx ./src/setup-login-cleanup.ts",
+    "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

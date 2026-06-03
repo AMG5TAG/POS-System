@@ -49,7 +49,7 @@ interface EntityConfig {
     existing: Record<string, unknown>
   ) => { match: boolean; id: number; label: string };
   /* Convert an API response item into a flat CSV row object */
-  toExportRow: (item: Record<string, unknown>) => Record<string, string>;
+  toExportRow: (item: Record<string, unknown>, allItems?: Record<string, unknown>[]) => Record<string, string>;
 }
 
 /* ─── Country code expansion ─────────────────────────────────────────────── */
@@ -396,23 +396,31 @@ const ENTITIES: EntityConfig[] = [
       };
     },
     fields: [
-      { key: "name",      label: "Category Name", required: true },
-      { key: "color",     label: "Color",          hint: "Hex color e.g. #3b82f6" },
-      { key: "icon",      label: "Icon",           hint: "Lucide icon name e.g. Coffee, ShoppingCart" },
-      { key: "sortOrder", label: "Sort Order",     type: "number", hint: "Display order (lower = first)" },
+      { key: "name",       label: "Category Name",    required: true },
+      { key: "parentName", label: "Parent Category",  hint: "Name of parent category (leave empty for root)" },
+      { key: "color",      label: "Color",            hint: "Hex color e.g. #3b82f6" },
+      { key: "icon",       label: "Icon",             hint: "Lucide icon name e.g. Coffee, ShoppingCart" },
+      { key: "sortOrder",  label: "Sort Order",       type: "number", hint: "Display order (lower = first)" },
     ],
     sampleRows: [
-      { name: "Beverages",   color: "#3b82f6", icon: "Coffee",       sortOrder: "1" },
-      { name: "Snacks",      color: "#f97316", icon: "Cookie",       sortOrder: "2" },
-      { name: "Electronics", color: "#8b5cf6", icon: "Cpu",          sortOrder: "3" },
-      { name: "Apparel",     color: "#ec4899", icon: "Shirt",        sortOrder: "4" },
+      { name: "Beverages",   parentName: "",           color: "#3b82f6", icon: "Coffee",  sortOrder: "1" },
+      { name: "Hot Drinks",  parentName: "Beverages",  color: "#3b82f6", icon: "Coffee",  sortOrder: "1" },
+      { name: "Snacks",      parentName: "",           color: "#f97316", icon: "Cookie",  sortOrder: "2" },
+      { name: "Electronics", parentName: "",           color: "#8b5cf6", icon: "Cpu",     sortOrder: "3" },
     ],
-    toExportRow: (item) => ({
-      name:      String(item.name      ?? ""),
-      color:     String(item.color     ?? ""),
-      icon:      String(item.icon      ?? ""),
-      sortOrder: String(item.sortOrder ?? ""),
-    }),
+    toExportRow: (item, allItems) => {
+      const parentId = item.parentId as number | null | undefined;
+      const parentName = parentId && allItems
+        ? String(allItems.find((c) => c.id === parentId)?.name ?? "")
+        : "";
+      return {
+        name:       String(item.name      ?? ""),
+        parentName,
+        color:      String(item.color     ?? ""),
+        icon:       String(item.icon      ?? ""),
+        sortOrder:  String(item.sortOrder ?? ""),
+      };
+    },
   },
   {
     key: "types",
@@ -542,6 +550,7 @@ const ALIASES: Record<string, string[]> = {
   color:              ["color", "colour", "hex", "hexcolor", "tagcolor", "catcolor"],
   icon:               ["icon", "iconname", "symbol", "emoji"],
   sortOrder:          ["sortorder", "order", "sort", "sequence", "position", "rank"],
+  parentName:         ["parentname", "parent", "parentcategory", "parentcat", "parentgroup"],
   paymentMethod:      ["paymentmethod", "payment", "method", "tender", "paidby"],
   customerName:       ["customername", "customer", "buyer", "clientname", "client"],
 };
@@ -628,7 +637,7 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
       const list: Record<string, unknown>[] = Array.isArray(data)
         ? data
         : (Array.isArray(data.items) ? data.items : []);
-      const rows    = list.map(entity.toExportRow);
+      const rows    = list.map((item) => entity.toExportRow(item, list));
       const headers = entity.fields.map((f) => f.key);
       const csv     = toCSV(headers, rows);
       downloadCSV(`${entity.key}_export.csv`, csv);
@@ -793,7 +802,29 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     const conflictMap = new Map(conflicts.map((c) => [c.rowIndex, c]));
     let processed = 0;
 
-    for (let i = 0; i < rows.length; i++) {
+    /* Categories: pre-fetch existing categories and order rows parents-first */
+    const categoryNameToId = new Map<string, number>();
+    let importOrder = rows.map((_, i) => i);
+
+    if (entity.key === "categories") {
+      try {
+        const r = await fetch("/api/categories", { credentials: "include" });
+        const data = await r.json() as { items?: Array<{ id: number; name: string }> };
+        const existing = data.items ?? [];
+        for (const c of existing) categoryNameToId.set(String(c.name ?? "").toLowerCase().trim(), c.id);
+      } catch { /* proceed without pre-populated map */ }
+
+      const parentCol = mapping.parentName ?? "";
+      importOrder = [...importOrder].sort((a, b) => {
+        const aP = parentCol ? (rows[a][parentCol] ?? "").trim() : "";
+        const bP = parentCol ? (rows[b][parentCol] ?? "").trim() : "";
+        if (!aP && bP) return -1;
+        if (aP && !bP) return 1;
+        return 0;
+      });
+    }
+
+    for (const i of importOrder) {
       const conflict = conflictMap.get(i);
       if (conflict?.action === "ignore") {
         processed++;
@@ -809,6 +840,16 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         payload.sku = `${prefix}-${Math.floor(10000 + Math.random() * 90000)}`;
       }
 
+      /* Categories: resolve parentName → parentId */
+      if (entity.key === "categories") {
+        const parentNameVal = payload.parentName;
+        delete payload.parentName;
+        if (parentNameVal) {
+          const parentId = categoryNameToId.get(String(parentNameVal).toLowerCase().trim());
+          if (parentId !== undefined) payload.parentId = parentId;
+        }
+      }
+
       const isUpdate = conflict?.action === "update" && !!entity.updateUrl;
       const url    = isUpdate ? `${entity.updateUrl}/${conflict!.existingId}` : entity.createUrl;
       const method = isUpdate ? "PATCH" : "POST";
@@ -820,8 +861,16 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (r.ok) { res.success++; }
-        else {
+        if (r.ok) {
+          res.success++;
+          /* Categories: track newly created ID so child rows can resolve it */
+          if (entity.key === "categories" && !isUpdate && payload.name) {
+            try {
+              const created = await r.json() as { id?: number };
+              if (created.id) categoryNameToId.set(String(payload.name).toLowerCase().trim(), created.id);
+            } catch { /* non-fatal */ }
+          }
+        } else {
           res.failed++;
           const text = await r.text().catch(() => "");
           let apiError = "";

@@ -3226,6 +3226,7 @@ export const CreatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3259,6 +3260,7 @@ export const GetPurchaseOrderResponse = zod.object({
   "expectedDate": zod.string().nullish(),
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3299,6 +3301,7 @@ export const UpdatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -3324,6 +3327,7 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "expectedDate": zod.string().nullish(),
   "receivedDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
@@ -8390,7 +8394,7 @@ export const CreateInvoiceBody = zod.object({
   "invoicePrefix": zod.string().optional(),
   "invoiceDigits": zod.number().optional(),
   "recurring": zod.object({
-  "frequency": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually']),
+  "frequency": zod.enum(['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'yearly']),
   "startDate": zod.coerce.date().nullish(),
   "occurrences": zod.number().optional()
 }).optional()

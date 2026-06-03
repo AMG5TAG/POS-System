@@ -16,7 +16,7 @@ import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import ManagementBackupPage from "@/pages/app/management-backup";
 
 const TABS: HubTab[] = [
-  { label: "Account & Modules",  href: "/management/account",       icon: UserCircle     },
+  { label: "Account",             href: "/management/account",       icon: UserCircle     },
   {
     label: "Business Details",
     href: "/management/business",

@@ -5,7 +5,7 @@ import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, 
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail } from "../services/email";
 
@@ -869,6 +869,7 @@ router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Prom
 
   // Clear account lockout so the merchant can sign in immediately
   await clearFailedAttempts(merchant.email);
+  invalidateMerchantStatusCache(record.merchantId);
 
   res.json({ ok: true });
 });
@@ -935,6 +936,7 @@ router.post("/auth/change-email", requireAuth, async (req, res): Promise<void> =
     return;
   }
   await db.update(merchantsTable).set({ email: trimmedEmail }).where(eq(merchantsTable.id, merchantId));
+  invalidateMerchantStatusCache(merchantId);
   res.json({ ok: true });
 });
 
