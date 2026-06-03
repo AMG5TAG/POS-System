@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { Boxes, Tag, Layers, LayoutTemplate, Printer, Calculator } from "lucide-react";
+import { Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive } from "lucide-react";
 
 import ManagementInventoryPage from "@/pages/app/management-inventory";
 import SettingsProductTypesPage from "@/pages/app/settings-product-types";
@@ -12,22 +12,18 @@ import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
 
 const TABS: HubTab[] = [
-  { label: "Inventory",  href: "/management/inventory",               icon: Boxes          },
-  { label: "Product Types",      href: "/management/product-types",           icon: Tag            },
-  { label: "Modifier Groups",    href: "/management/modifier-groups",         icon: Layers         },
-  { label: "Sales",              href: "/management/templates",               icon: LayoutTemplate },
+  { label: "Inventory",       href: "/management/inventory",               icon: Boxes          },
+  { label: "Product Types",   href: "/management/product-types",           icon: Tag            },
+  { label: "Modifier Groups", href: "/management/modifier-groups",         icon: Layers         },
+  { label: "Sales",           href: "/management/templates",               icon: LayoutTemplate },
   {
     label: "Stickers",
     href: "/management/stickers",
     icon: Printer,
     matchPaths: ["/management/sticker-templates"],
   },
-  {
-    label: "Calculators",
-    href: "/management/calculators/3d-printing",
-    icon: Calculator,
-    matchPaths: ["/management/calculators/pc-builder"],
-  },
+  { label: "3D Prints",  href: "/management/calculators/3d-printing", icon: Cpu       },
+  { label: "PC Builder", href: "/management/calculators/pc-builder",  icon: HardDrive },
 ];
 
 function HubContent() {

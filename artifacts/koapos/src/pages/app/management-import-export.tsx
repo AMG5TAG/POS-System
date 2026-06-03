@@ -748,6 +748,8 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     return value.trim() || undefined;
   };
 
+  const MARKETING_TRUTHY = new Set(["true", "1", "yes", "y", "on"]);
+
   const buildPayload = (row: Record<string, string>) => {
     const payload: Record<string, unknown> = {};
     for (const field of entity.fields) {
@@ -757,7 +759,13 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) rawVal = expandCountryValue(rawVal);
         if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   rawVal = expandStateValue(rawVal);
         const val = coerce(rawVal, field.type);
-        if (val !== undefined) payload[field.key] = val;
+        if (val !== undefined) {
+          if (field.key === "agreedToMarketing") {
+            payload[field.key] = MARKETING_TRUTHY.has(String(val).trim().toLowerCase()) ? "true" : "false";
+          } else {
+            payload[field.key] = val;
+          }
+        }
       }
     }
     return payload;

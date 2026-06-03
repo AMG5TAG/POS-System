@@ -671,6 +671,41 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   res.json({ year, month, days });
 });
 
+router.get("/dashboard/payment-totals", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
+
+  // Use a generous day window (midnight to midnight next day) to catch timezone offsets
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+
+  const rows = await db
+    .select({
+      paymentMethod: transactionsTable.paymentMethod,
+      total: sql<string>`COALESCE(SUM(${transactionsTable.total}::numeric), 0)`,
+      txCount: sql<string>`COUNT(*)`,
+    })
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.merchantId, merchantId),
+      eq(transactionsTable.status, "completed"),
+      gte(transactionsTable.createdAt, dayStart),
+      lt(transactionsTable.createdAt, dayEnd),
+    ))
+    .groupBy(transactionsTable.paymentMethod);
+
+  const totals: Record<string, { total: number; txCount: number }> = {};
+  for (const r of rows) {
+    const method = (r.paymentMethod as string) || "other";
+    totals[method] = {
+      total: Math.round(parseFloat(r.total) * 100) / 100,
+      txCount: Number(r.txCount),
+    };
+  }
+
+  res.json(totals);
+});
+
 router.get("/dashboard/config", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const [row] = await db

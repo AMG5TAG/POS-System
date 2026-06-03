@@ -6,6 +6,7 @@ export const STAFF_LOGIN_MSG_KEY = "koapos_staff_login_msg";
 export const INTEGRATION_PAYMENT_METHODS_KEY = "koapos_enabled_integration_payments";
 export const POS_GRID_SETTINGS_KEY = "koapos_pos_grid_settings";
 export const ACTIVE_REGISTER_KEY = "koapos_active_register";
+export const DEVICE_ID_KEY = "koapos_device_id";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
@@ -40,6 +41,10 @@ export interface RegisterSession {
   txCount: number;
   refunds?: Record<string, number>;
   refundCount?: number;
+  /** Unique ID of the device (browser) that opened this session. */
+  deviceId?: string;
+  /** Server-side pos_register_sessions.id — set after successful server sync. */
+  serverSessionId?: number;
 }
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
@@ -90,6 +95,25 @@ export function saveRegisterSession(session: RegisterSession): void {
 /** Destroy the persisted till session (called only when the operator explicitly closes the till). */
 export function clearRegisterSession(): void {
   try { localStorage.removeItem(ACTIVE_REGISTER_KEY); } catch { /* ignore */ }
+}
+
+/**
+ * Return the persistent device ID for this browser, creating and storing
+ * a new one if it has never been set.  The ID never changes for a given
+ * browser profile so it reliably identifies "this computer/tablet/phone".
+ */
+export function getOrCreateDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const id = typeof crypto?.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return "unknown";
+  }
 }
 
 /* ── Staff login message ─────────────────────────────────────────────────── */

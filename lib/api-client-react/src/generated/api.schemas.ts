@@ -2561,6 +2561,7 @@ export interface KpiTarget {
   reward?: string;
   notes: string;
   isActive: string;
+  showOnDashboard: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -2576,6 +2577,12 @@ export interface KpiTargetInput {
   reward?: string;
   notes?: string;
   isActive?: string;
+  showOnDashboard?: string;
+}
+
+export interface DashboardKpiResult {
+  kpi: KpiTarget;
+  actual: number | null;
 }
 
 export interface KpiTargetListResponse {
@@ -3066,6 +3073,7 @@ export interface PosRegisterSession {
   cashCounted?: string | null;
   eftposDeclared?: string | null;
   closingNotes?: string | null;
+  deviceId?: string | null;
 }
 
 export interface PosRegisterSessionInput {
@@ -3078,7 +3086,9 @@ export interface PosRegisterSessionInput {
   closedAt?: string | null;
   cashCounted?: string | null;
   eftposDeclared?: string | null;
+  paymentTotals?: string | null;
   closingNotes?: string | null;
+  deviceId?: string | null;
 }
 
 export interface PosRegisterSessionListResponse {
@@ -4860,4 +4870,50 @@ offset?: number;
 export type RestoreBackup200 = {
   ok: boolean;
 };
+
+export interface StaffTimesheetEntry {
+  id: number;
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface StaffTimesheetList {
+  items: StaffTimesheetEntry[];
+}
+
+export interface StaffClockStatus {
+  staffId: number;
+  staffName: string;
+  clockedIn: boolean;
+  openEntryId: number | null;
+  clockInTime: string | null;
+}
+
+export interface ClockInInput {
+  pin: string;
+}
+
+export interface ClockOutInput {
+  pin: string;
+}
+
+export type PaymentTotalsResult = Record<string, { total: number; txCount: number }>;
+
+export type ListStaffTimesheetsParams = {
+  startDate?: string;
+  endDate?: string;
+};
+
+export interface CreateStaffTimesheetInput {
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut?: string | null;
+}
 

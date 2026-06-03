@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListPosRegisterSessions,
@@ -7,7 +7,9 @@ import {
   useCreateCashDrawerEntry,
   useCreatePosRegisterSession,
   useUpdatePosRegisterSession,
+  useGetPaymentTotals,
 } from "@workspace/api-client-react";
+import { getOrCreateDeviceId } from "@/lib/pos-local-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +26,16 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import {
   Monitor, DollarSign, ArrowDownLeft, ArrowUpRight,
-  Lock, LockOpen, Plus, Minus, TrendingUp, Printer,
+  Lock, LockOpen, Plus, Minus, TrendingUp, Printer, MonitorX, AlertTriangle,
+  CreditCard, Banknote, Wallet, Star, CalendarClock, Landmark, Ticket, SplitSquareHorizontal, Gift,
 } from "lucide-react";
+import {
+  getEnabledPaymentMethods,
+  getEnabledIntegrationPayments,
+  INTEGRATION_PAYMENT_LABELS,
+  type PaymentMethodId,
+} from "@/lib/pos-local-settings";
+import { ALL_PAYMENT_METHODS } from "@/pages/app/management-registers";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -45,6 +55,7 @@ type Session = {
   cashCounted: string | null;
   eftposDeclared: string | null;
   closingNotes: string | null;
+  deviceId?: string | null;
 };
 
 type Entry = {
@@ -61,6 +72,7 @@ export default function PosEodPage() {
   const [registerId, setRegisterId] = useState("default");
   const createSession = useCreatePosRegisterSession();
   const updateSession = useUpdatePosRegisterSession();
+  const myDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
   const { data: regsData }     = useListPosRegisters({});
   const registers: { registerId: string; name: string }[] =
@@ -83,6 +95,12 @@ export default function PosEodPage() {
   const openSession  = sessions.find(s => !s.closedAt);
   const closedToday  = sessions.filter(s => s.closedAt && s.closedAt.startsWith(TODAY));
 
+  /* Is the open session owned by this device or another one? */
+  const openSessionIsThisDevice = !openSession?.deviceId || openSession.deviceId === myDeviceId;
+  const openSessionOtherDeviceId = openSession && openSession.deviceId && openSession.deviceId !== myDeviceId
+    ? openSession.deviceId
+    : null;
+
   /* ── open dialog ── */
   const [openDlg, setOpenDlg]   = useState(false);
   const [openForm, setOpenForm] = useState({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
@@ -91,7 +109,7 @@ export default function PosEodPage() {
   function handleOpen() {
     setSaving(true);
     createSession.mutate(
-      { data: { registerId, openedBy: openForm.openedBy, openingFloat: openForm.openingFloat, openingNotes: openForm.openingNotes } },
+      { data: { registerId, openedBy: openForm.openedBy, openingFloat: openForm.openingFloat, openingNotes: openForm.openingNotes, deviceId: myDeviceId } },
       {
         onSuccess: () => {
           toast.success("Register opened");
@@ -105,26 +123,89 @@ export default function PosEodPage() {
     );
   }
 
-  /* ── close dialog ── */
-  const [closeDlg, setCloseDlg]   = useState(false);
-  const [closeForm, setCloseForm] = useState({ cashCounted: "", eftposDeclared: "0.00", closingNotes: "" });
+  /* ── payment methods for close dialog ── */
+  const enabledBuiltIn  = useMemo(() => getEnabledPaymentMethods().filter(id => id !== "split"), []);
+  const enabledInteg    = useMemo(() => getEnabledIntegrationPayments(), []);
 
-  const openingFloat  = parseFloat(openSession?.openingFloat ?? "0");
-  const cashIn        = entries.filter(e => e.type === "cash_in").reduce((s, e) => s + e.amount, 0);
-  const cashOut       = entries.filter(e => e.type === "cash_out").reduce((s, e) => s + e.amount, 0);
-  const expectedCash  = openingFloat + cashIn - cashOut;
-  const cashVariance  = closeForm.cashCounted !== "" ? parseFloat(closeForm.cashCounted) - expectedCash : null;
+  const paymentRows = useMemo(() => {
+    const rows: { id: string; label: string }[] = [];
+    for (const id of enabledBuiltIn) {
+      const meta = ALL_PAYMENT_METHODS.find((m: { id: string; label: string }) => m.id === id);
+      if (meta) rows.push({ id, label: meta.label });
+    }
+    // add gift_card if not already in built-in list
+    if (!(enabledBuiltIn as string[]).includes("gift_card")) {
+      rows.push({ id: "gift_card", label: "Gift Card" });
+    }
+    for (const key of enabledInteg) {
+      rows.push({ id: key, label: INTEGRATION_PAYMENT_LABELS[key] ?? key });
+    }
+    return rows;
+  }, [enabledBuiltIn, enabledInteg]);
+
+  /* ── close dialog ── */
+  const [closeDlg, setCloseDlg] = useState(false);
+  const [paymentDeclared, setPaymentDeclared] = useState<Record<string, string>>({});
+  const [closingNotes, setClosingNotes] = useState("");
+  const [crossDeviceCloseWarned, setCrossDeviceCloseWarned] = useState(false);
+
+  const openingFloat = parseFloat(openSession?.openingFloat ?? "0");
+  const cashIn       = entries.filter(e => e.type === "cash_in").reduce((s, e)  => s + e.amount, 0);
+  const cashOut      = entries.filter(e => e.type === "cash_out").reduce((s, e) => s + e.amount, 0);
+  const expectedCash = openingFloat + cashIn - cashOut;
+
+  const cashDeclaredVal = parseFloat(paymentDeclared["cash"] ?? "");
+  const cashVariance    = !isNaN(cashDeclaredVal) ? cashDeclaredVal - expectedCash : null;
+
+  /* system totals from today's transactions */
+  const { data: paymentSystemTotals = {} } = useGetPaymentTotals(TODAY, {
+    query: { queryKey: ["payment-totals", TODAY], staleTime: 30_000, enabled: closeDlg },
+  });
+
+  function openCloseDlg() {
+    // pre-fill each non-cash method with its system total
+    const prefill: Record<string, string> = {};
+    for (const row of paymentRows) {
+      const sys = (paymentSystemTotals as Record<string, { total: number }>)[row.id];
+      if (row.id === "cash") {
+        prefill["cash"] = expectedCash.toFixed(2);
+      } else if (sys) {
+        prefill[row.id] = sys.total.toFixed(2);
+      } else {
+        prefill[row.id] = "0.00";
+      }
+    }
+    setPaymentDeclared(prefill);
+    setClosingNotes("");
+    setCrossDeviceCloseWarned(!openSessionIsThisDevice);
+    setCloseDlg(true);
+  }
 
   function handleClose() {
     if (!openSession) return;
     setSaving(true);
+    const totals: Record<string, number> = {};
+    for (const row of paymentRows) {
+      totals[row.id] = parseFloat(paymentDeclared[row.id] ?? "0") || 0;
+    }
+    const paymentTotalsJson = JSON.stringify(totals);
     updateSession.mutate(
-      { id: openSession.id, data: { closedAt: new Date().toISOString(), cashCounted: closeForm.cashCounted || "0", eftposDeclared: closeForm.eftposDeclared || "0", closingNotes: closeForm.closingNotes } },
+      {
+        id: openSession.id,
+        data: {
+          closedAt: new Date().toISOString(),
+          cashCounted: String(totals["cash"] ?? 0),
+          eftposDeclared: String(totals["eftpos"] ?? totals["tyro_eftpos"] ?? totals["commbank_eftpos"] ?? 0),
+          paymentTotals: paymentTotalsJson,
+          closingNotes,
+        },
+      },
       {
         onSuccess: () => {
           toast.success("Register closed — Z-Read recorded");
           setCloseDlg(false);
-          setCloseForm({ cashCounted: "", eftposDeclared: "0.00", closingNotes: "" });
+          setPaymentDeclared({});
+          setClosingNotes("");
           qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
         },
         onError: () => toast.error("Failed to close register"),
@@ -183,24 +264,54 @@ export default function PosEodPage() {
           </Select>
         </div>
 
+        {/* ── Cross-device warning banner ── */}
+        {openSessionOtherDeviceId && (
+          <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 p-3 flex items-start gap-2 text-sm text-orange-800 dark:text-orange-300">
+            <MonitorX className="w-4 h-4 mt-0.5 shrink-0" />
+            <p>
+              This register is open on <span className="font-semibold">another device</span>
+              {openSession?.openedBy ? ` (${openSession.openedBy})` : ""}.
+              End of day should be run from that device. You can still close the session here if needed.
+            </p>
+          </div>
+        )}
+
         {/* ── Session banner ── */}
         <div className={cn(
           "rounded-lg border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
-          openSession ? "border-green-300 bg-green-50 dark:bg-green-950/20" : "border-muted bg-muted/20"
+          openSession
+            ? openSessionIsThisDevice
+              ? "border-green-300 bg-green-50 dark:bg-green-950/20"
+              : "border-orange-300 bg-orange-50 dark:bg-orange-950/20"
+            : "border-muted bg-muted/20"
         )}>
           <div className="flex items-center gap-3">
             {openSession
-              ? <LockOpen className="w-5 h-5 text-green-600 shrink-0" />
+              ? openSessionIsThisDevice
+                ? <LockOpen className="w-5 h-5 text-green-600 shrink-0" />
+                : <MonitorX className="w-5 h-5 text-orange-500 shrink-0" />
               : <Lock className="w-5 h-5 text-muted-foreground shrink-0" />}
             <div>
-              <p className={cn("font-semibold", openSession ? "text-green-800 dark:text-green-300" : "text-foreground")}>
-                {sessLoading ? "Loading…" : openSession ? "Register is open" : "Register is closed"}
+              <p className={cn("font-semibold",
+                openSession
+                  ? openSessionIsThisDevice ? "text-green-800 dark:text-green-300" : "text-orange-700 dark:text-orange-300"
+                  : "text-foreground"
+              )}>
+                {sessLoading ? "Loading…"
+                  : openSession
+                    ? openSessionIsThisDevice ? "Register is open on this device" : "Register is open on another device"
+                    : "Register is closed"}
               </p>
               {openSession && (
-                <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                <p className={cn("text-xs mt-0.5",
+                  openSessionIsThisDevice ? "text-green-700 dark:text-green-400" : "text-orange-600 dark:text-orange-400"
+                )}>
                   Opened{openSession.openedBy ? ` by ${openSession.openedBy}` : ""} at{" "}
                   {format(new Date(openSession.openedAt), "h:mm a")}
                   {" · "}Float: {fmt(parseFloat(openSession.openingFloat))}
+                  {!openSessionIsThisDevice && (
+                    <span className="ml-2 font-medium">(different device)</span>
+                  )}
                 </p>
               )}
               {!openSession && closedToday.length > 0 && (
@@ -218,13 +329,21 @@ export default function PosEodPage() {
             )}
             {openSession && (
               <>
-                <Button variant="outline" size="sm" onClick={() => { setMoveForm({ type: "cash_in", amount: "", note: "" }); setMoveDlg(true); }}>
-                  <Plus className="w-3.5 h-3.5" /> Cash In
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => { setMoveForm({ type: "cash_out", amount: "", note: "" }); setMoveDlg(true); }}>
-                  <Minus className="w-3.5 h-3.5" /> Cash Out
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => { setCloseForm({ cashCounted: expectedCash.toFixed(2), eftposDeclared: "0.00", closingNotes: "" }); setCloseDlg(true); }}>
+                {openSessionIsThisDevice && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => { setMoveForm({ type: "cash_in", amount: "", note: "" }); setMoveDlg(true); }}>
+                      <Plus className="w-3.5 h-3.5" /> Cash In
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setMoveForm({ type: "cash_out", amount: "", note: "" }); setMoveDlg(true); }}>
+                      <Minus className="w-3.5 h-3.5" /> Cash Out
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={openCloseDlg}
+                >
                   <Lock className="w-3.5 h-3.5" /> Close & Z-Read
                 </Button>
               </>
@@ -327,11 +446,21 @@ export default function PosEodPage() {
                     const c  = parseFloat(s.cashCounted ?? "0");
                     const ep = parseFloat(s.eftposDeclared ?? "0");
                     const v  = c - f;
+                    const isThisDevice = !s.deviceId || s.deviceId === myDeviceId;
                     return (
                       <tr key={s.id} className="hover:bg-muted/30">
                         <td className="p-3">{format(new Date(s.openedAt), "d MMM, h:mm a")}</td>
                         <td className="p-3">{format(new Date(s.closedAt!), "d MMM, h:mm a")}</td>
-                        <td className="p-3 text-muted-foreground hidden sm:table-cell">{s.openedBy || "—"}</td>
+                        <td className="p-3 text-muted-foreground hidden sm:table-cell">
+                          <div className="flex items-center gap-1.5">
+                            {s.openedBy || "—"}
+                            <span className={cn("text-[10px] px-1 py-0.5 rounded font-medium",
+                              isThisDevice ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground"
+                            )}>
+                              {isThisDevice ? "This device" : "Other device"}
+                            </span>
+                          </div>
+                        </td>
                         <td className="p-3 text-right">{fmt(f)}</td>
                         <td className="p-3 text-right">{fmt(c)}</td>
                         <td className="p-3 text-right hidden md:table-cell">{fmt(ep)}</td>
@@ -386,57 +515,133 @@ export default function PosEodPage() {
 
       {/* ── Close Register / Z-Read Dialog ── */}
       <Dialog open={closeDlg} onOpenChange={setCloseDlg}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Printer className="w-4 h-4 text-primary" /> Close Register — Z-Read
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
+            {crossDeviceCloseWarned && (
+              <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/30 p-3 flex items-start gap-2 text-xs text-orange-800 dark:text-orange-300">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                This session was opened on a different device. Closing it here will end that device's till.
+              </div>
+            )}
+
+            {/* Cash drawer summary */}
             <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Opening Float</span>
                 <span>{fmt(openingFloat)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">+ Cash In</span>
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <ArrowDownLeft className="w-3 h-3 text-green-600" /> Cash In
+                </span>
                 <span className="text-green-600">+{fmt(cashIn)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">− Cash Out</span>
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <ArrowUpRight className="w-3 h-3 text-red-500" /> Cash Out
+                </span>
                 <span className="text-red-500">−{fmt(cashOut)}</span>
               </div>
               <div className="flex justify-between font-semibold border-t pt-1.5 mt-0.5">
-                <span>Expected in Drawer</span>
+                <span>Expected Cash in Drawer</span>
                 <span>{fmt(expectedCash)}</span>
               </div>
             </div>
+
+            {/* Payment type totals */}
             <div>
-              <Label>Cash Counted ($)</Label>
-              <Input type="number" min="0" step="0.01"
-                value={closeForm.cashCounted}
-                onChange={e => setCloseForm(f => ({ ...f, cashCounted: e.target.value }))} />
-              {cashVariance !== null && (
-                <p className={cn("text-xs mt-1 font-medium",
-                  cashVariance < -0.005 ? "text-red-500"
-                  : cashVariance > 0.005 ? "text-amber-600"
-                  : "text-green-600"
-                )}>
-                  Variance: {cashVariance >= 0 ? "+" : ""}{fmt(cashVariance)}
-                  {Math.abs(cashVariance) < 0.01 && " ✓ Balanced"}
-                </p>
-              )}
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                Declare Totals by Payment Type
+              </p>
+              <div className="rounded-lg border overflow-hidden">
+                {/* Header */}
+                <div className="grid grid-cols-3 gap-2 px-3 py-2 bg-muted/50 border-b text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span>Method</span>
+                  <span className="text-right">POS Total</span>
+                  <span className="text-right">Counted / Declared</span>
+                </div>
+                <div className="divide-y">
+                  {paymentRows.map(row => {
+                    const sys = (paymentSystemTotals as Record<string, { total: number; txCount: number }>)[row.id];
+                    const sysTotal = sys?.total ?? 0;
+                    const declared = paymentDeclared[row.id] ?? "";
+                    const declaredNum = parseFloat(declared);
+                    const diff = !isNaN(declaredNum) && sysTotal > 0 ? declaredNum - sysTotal : null;
+                    const isCash = row.id === "cash";
+
+                    return (
+                      <div key={row.id} className="grid grid-cols-3 gap-2 items-center px-3 py-2.5">
+                        <span className="text-sm font-medium flex items-center gap-1.5">
+                          {isCash
+                            ? <Banknote className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "eftpos" || row.id.includes("eftpos") || row.id.includes("terminal")
+                            ? <CreditCard className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "card" ? <CreditCard className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "loyalty" ? <Star className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "store_credit" ? <Wallet className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "laybuy" ? <CalendarClock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "direct_deposit" ? <Landmark className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "voucher" ? <Ticket className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : row.id === "gift_card" ? <Gift className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            : <DollarSign className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          }
+                          <span className="truncate">{row.label}</span>
+                        </span>
+
+                        <div className="text-right">
+                          <span className={cn("text-sm tabular-nums", sysTotal > 0 ? "text-foreground" : "text-muted-foreground/50")}>
+                            {sysTotal > 0 ? fmt(sysTotal) : "—"}
+                          </span>
+                          {sys?.txCount ? (
+                            <p className="text-[10px] text-muted-foreground">{sys.txCount} txn{sys.txCount !== 1 ? "s" : ""}</p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-0.5">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="h-7 text-sm text-right w-28 tabular-nums"
+                            value={declared}
+                            onChange={e => setPaymentDeclared(prev => ({ ...prev, [row.id]: e.target.value }))}
+                          />
+                          {isCash && cashVariance !== null && (
+                            <p className={cn("text-[10px] font-medium",
+                              cashVariance < -0.005 ? "text-red-500"
+                              : cashVariance > 0.005 ? "text-amber-500"
+                              : "text-green-600"
+                            )}>
+                              {cashVariance >= 0 ? "+" : ""}{fmt(cashVariance)}
+                              {Math.abs(cashVariance) < 0.01 && " ✓"}
+                            </p>
+                          )}
+                          {!isCash && diff !== null && Math.abs(diff) > 0.005 && (
+                            <p className={cn("text-[10px] font-medium", diff < 0 ? "text-red-500" : "text-amber-500")}>
+                              {diff >= 0 ? "+" : ""}{fmt(diff)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-            <div>
-              <Label>EFTPOS Declared ($)</Label>
-              <Input type="number" min="0" step="0.01"
-                value={closeForm.eftposDeclared}
-                onChange={e => setCloseForm(f => ({ ...f, eftposDeclared: e.target.value }))} />
-            </div>
+
             <div>
               <Label>Closing Notes (optional)</Label>
-              <Textarea rows={2} value={closeForm.closingNotes}
-                onChange={e => setCloseForm(f => ({ ...f, closingNotes: e.target.value }))} />
+              <Textarea
+                rows={2}
+                placeholder="Handover notes, discrepancies…"
+                value={closingNotes}
+                onChange={e => setClosingNotes(e.target.value)}
+              />
             </div>
           </div>
           <DialogFooter>

@@ -8,7 +8,7 @@ import { useAccessibility } from "@/lib/accessibility";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
-  Boxes, UserSquare2, Settings, Blocks, LogOut, CalendarClock,
+  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock,
   Wrench, ChevronDown, LayoutGrid, Layers, ClipboardList, Clock,
   RotateCcw, Truck, Bookmark, Tag, Hash, AlertTriangle, History,
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
@@ -29,6 +29,9 @@ import {
   useListAppointments,
   useListProducts,
   useGetAuthEventsUnreadCount,
+  useGetStaffClockStatus,
+  useClockIn,
+  useClockOut,
   type Customer,
   type Appointment,
   type ServiceJob,
@@ -41,6 +44,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
@@ -149,7 +157,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Inventory",       href: "/management/inventory",       icon: Boxes    },
       { name: "Product Types",   href: "/management/product-types",   icon: Tag      },
       { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers   },
-      { name: "Calculators",     href: "/management/calculators",     icon: Calculator },
+      {
+        name: "Calculators", icon: Calculator,
+        children: [
+          { name: "3D Prints",  href: "/management/calculators/3d-printing", icon: Cpu       },
+          { name: "PC Builder", href: "/management/calculators/pc-builder",  icon: HardDrive },
+        ],
+      },
     ],
   },
   {
@@ -410,6 +424,141 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/cameras":                   ["Management", "Cameras"],
 };
 
+/* ─── Staff clock in/out dialog ──────────────────────────────────────────── */
+
+type ClockStep = "pin" | "confirm" | "done";
+
+function StaffClockDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [pin, setPin] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => { setPin(""); setSubmitted(false); };
+
+  const { data: status, isFetching, error } = useGetStaffClockStatus(pin, {
+    query: {
+      queryKey: ["/api/staff-timesheets/status", pin],
+      enabled: submitted && pin.length >= 4,
+      retry: false,
+      staleTime: 0,
+    },
+  });
+
+  const clockInMutation  = useClockIn();
+  const clockOutMutation = useClockOut();
+
+  const handleClose = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+
+  const handleSubmitPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 4) { toast.error("Enter your 4-digit PIN"); return; }
+    setSubmitted(true);
+  };
+
+  const handleClockIn = () => {
+    clockInMutation.mutate({ data: { pin } }, {
+      onSuccess: (entry) => {
+        toast.success(`${entry.staffName} clocked in at ${entry.clockIn}`);
+        handleClose(false);
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? "Clock-in failed";
+        toast.error(msg);
+      },
+    });
+  };
+
+  const handleClockOut = () => {
+    clockOutMutation.mutate({ data: { pin } }, {
+      onSuccess: (entry) => {
+        const hours = entry.clockOut && entry.clockIn
+          ? (() => {
+              const [ih, im] = entry.clockIn.split(":").map(Number);
+              const [oh, om] = (entry.clockOut as string).split(":").map(Number);
+              const mins = (oh! * 60 + om!) - (ih! * 60 + im!);
+              const h = Math.floor(mins / 60);
+              const m = mins % 60;
+              return m > 0 ? `${h}h ${m}m` : `${h}h`;
+            })()
+          : "";
+        toast.success(`${entry.staffName} clocked out${hours ? ` — ${hours} worked` : ""}`);
+        handleClose(false);
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? "Clock-out failed";
+        toast.error(msg);
+      },
+    });
+  };
+
+  const isPending = clockInMutation.isPending || clockOutMutation.isPending;
+  const apiError  = (error as { message?: string } | null)?.message;
+  const showConfirm = submitted && !isFetching && status && !apiError;
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-xs">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="w-4 h-4" /> Staff Clock In / Out
+          </DialogTitle>
+          <DialogDescription>Enter your PIN to clock in or out for today.</DialogDescription>
+        </DialogHeader>
+
+        {!showConfirm ? (
+          <form onSubmit={handleSubmitPin} className="space-y-4 py-1">
+            <Input
+              ref={inputRef}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setSubmitted(false); }}
+              placeholder="Enter PIN"
+              className="text-center text-2xl tracking-widest h-12"
+              autoFocus
+            />
+            {apiError && (
+              <p className="text-sm text-destructive text-center">{apiError}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={isFetching || pin.length < 4}>
+              {isFetching ? "Looking up…" : "Continue"}
+            </Button>
+          </form>
+        ) : (
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg bg-muted px-4 py-3 text-center">
+              <p className="font-semibold text-base">{status.staffName}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {status.clockedIn
+                  ? `Clocked in since ${status.clockInTime}`
+                  : "Not clocked in today"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { reset(); }}>
+                Back
+              </Button>
+              {status.clockedIn ? (
+                <Button className="flex-1 gap-1.5" onClick={handleClockOut} disabled={isPending}>
+                  <LogOut className="w-4 h-4" />
+                  {clockOutMutation.isPending ? "Clocking out…" : "Clock Out"}
+                </Button>
+              ) : (
+                <Button className="flex-1 gap-1.5" onClick={handleClockIn} disabled={isPending}>
+                  <LogIn className="w-4 h-4" />
+                  {clockInMutation.isPending ? "Clocking in…" : "Clock In"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Global search ──────────────────────────────────────────────────────── */
 
 type SearchResultItem = {
@@ -418,6 +567,7 @@ type SearchResultItem = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   group: string;
+  action?: () => void;
 };
 
 function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void }) {
@@ -425,6 +575,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [clockOpen, setClockOpen] = useState(false);
   const [, navigate] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -463,6 +614,15 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
   );
 
   const isSearching = liveEnabled && (custFetching || prodFetching);
+
+  const CLOCK_QUICK_ACTION: SearchResultItem = {
+    label: "Staff Clock In / Out",
+    sub: "Record shift start or end with PIN",
+    href: "#staff-clock",
+    icon: Clock,
+    group: "Quick Actions",
+    action: () => setClockOpen(true),
+  };
 
   // Build sections
   const sections: { title: string; items: SearchResultItem[] }[] = [];
@@ -526,6 +686,12 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
       ).slice(0, 5);
   if (navItems.length) sections.push({ title: q ? "Navigation" : "Quick Navigation", items: navItems });
 
+  // Staff clock action — always show when no query; show when query matches
+  const clockMatches = q.length === 0 || ["clock", "staff", "login", "shift", "in", "out"].some(kw => kw.includes(q) || q.includes(kw));
+  if (clockMatches) {
+    sections.push({ title: "Quick Actions", items: [CLOCK_QUICK_ACTION] });
+  }
+
   // Flat indexed list for keyboard nav
   const allItems = sections.flatMap((s) => s.items);
   const totalItems = allItems.length;
@@ -568,7 +734,13 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const go = (href: string) => { navigate(href); setOpenWithCallback(false); setQuery(""); setDebouncedQ(""); };
+  const go = (item: SearchResultItem) => {
+    if (item.action) { item.action(); }
+    else { navigate(item.href); }
+    setOpenWithCallback(false);
+    setQuery("");
+    setDebouncedQ("");
+  };
 
   return (
     <div ref={containerRef} className="relative flex-1">
@@ -583,7 +755,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)); }
             if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
-            if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx].href); }
+            if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx]); }
             if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
           placeholder="Search customers, products, services…"
@@ -608,7 +780,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
                   <button
                     key={`item-${entry.idx}`}
                     data-active={entry.idx === activeIdx}
-                    onMouseDown={() => go(entry.item.href)}
+                    onMouseDown={() => go(entry.item)}
                     onMouseEnter={() => setActiveIdx(entry.idx)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left group",
@@ -631,6 +803,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
           )}
         </div>
       )}
+      <StaffClockDialog open={clockOpen} onOpenChange={setClockOpen} />
     </div>
   );
 }
@@ -1115,6 +1288,29 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   );
 }
 
+/* ─── Staff swap button ──────────────────────────────────────────────────── */
+
+function StaffSwapButton({ location, navigate }: { location: string; navigate: (href: string) => void }) {
+  const handleClick = () => {
+    if (location.startsWith("/pos")) {
+      window.dispatchEvent(new CustomEvent("koapos:open-staff-pin"));
+    } else {
+      navigate("/pos");
+      setTimeout(() => window.dispatchEvent(new CustomEvent("koapos:open-staff-pin")), 350);
+    }
+  };
+  return (
+    <button
+      onClick={handleClick}
+      title="Swap staff member"
+      aria-label="Swap staff member"
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+    >
+      <UserCircle className="w-4 h-4" />
+    </button>
+  );
+}
+
 function useHeaderScrollShadow() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -1201,6 +1397,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
+          <StaffSwapButton location={location} navigate={navigate} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1335,6 +1532,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
+          <StaffSwapButton location={location} navigate={navigate} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1642,6 +1840,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
                   <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
                 </Button>
               </Link>
+              <StaffSwapButton location={location} navigate={navigate} />
               <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
                 {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>

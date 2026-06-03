@@ -79,7 +79,14 @@
       "Bash(sed -n '85,100p' /home/runner/workspace/artifacts/koapos/src/pages/portal/index.tsx)",
       "Bash(sed -n '175,215p' /home/runner/workspace/artifacts/api-server/src/routes/service-jobs.ts)",
       "Bash(sed -n '285,315p' /home/runner/workspace/artifacts/api-server/src/routes/service-jobs.ts)",
-      "Bash(pnpm --filter @workspace/api-server run typecheck)"
+      "Bash(pnpm --filter @workspace/api-server run typecheck)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(pnpm --filter @workspace/db push)",
+      "Bash(grep -v \"^$\")",
+      "Bash(pnpm --filter @workspace/api-server exec tsc --noEmit)",
+      "Bash(pnpm --filter @workspace/db exec tsc --project tsconfig.json)",
+      "Bash(pnpm --filter @workspace/api-client-react exec tsc --project tsconfig.json)"
     ]
   }
 }

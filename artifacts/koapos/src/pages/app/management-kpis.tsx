@@ -46,6 +46,7 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
+  showOnDashboard?: string;
 }
 
 /* ─── API converters ─────────────────────────────────────────────────────── */
@@ -66,6 +67,7 @@ function apiToTarget(r: Record<string, unknown>): KpiTarget {
     reward,
     notes: String(r.notes ?? ""),
     isActive: String(r.isActive) !== "false",
+    showOnDashboard: String(r.showOnDashboard ?? "false"),
   };
 }
 
@@ -126,22 +128,30 @@ const BLANK_REWARD: KpiReward = { type: "cash", value: 0, label: "", note: "" };
 
 /* ─── KPI card ───────────────────────────────────────────────────────────── */
 
-function KpiCard({ kpi, onEdit, onDelete, staffList }: {
-  kpi: KpiTarget; onEdit: () => void; onDelete: () => void; staffList: { id: number; name: string }[];
+function KpiCard({ kpi, onEdit, onDelete, onToggleDashboard, staffList }: {
+  kpi: KpiTarget; onEdit: () => void; onDelete: () => void;
+  onToggleDashboard: () => void;
+  staffList: { id: number; name: string }[];
 }) {
   const meta = METRIC_META[kpi.metric];
   const Icon = meta.icon;
   const isStoreWide = kpi.staffIds.length === 0;
+  const onDashboard = (kpi as KpiTarget & { showOnDashboard?: string }).showOnDashboard === "true";
   const assignedNames = kpi.staffIds.map((id) => staffList.find((s) => String(s.id) === id)?.name).filter(Boolean).join(", ");
 
   return (
-    <div className={cn("rounded-xl border bg-card p-4 flex flex-col gap-3 transition-opacity", !kpi.isActive && "opacity-50")}>
+    <div className={cn("rounded-xl border bg-card p-4 flex flex-col gap-3 transition-opacity", !kpi.isActive && "opacity-50", onDashboard && "ring-2 ring-primary/30")}>
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0"><Icon className="w-4 h-4" /></div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-sm">{kpi.name}</p>
             {!kpi.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+            {onDashboard && (
+              <Badge className="text-xs bg-primary/10 text-primary border-primary/20 gap-0.5">
+                <BarChart3 className="w-2.5 h-2.5" /> Dashboard
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">{meta.label}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -166,8 +176,18 @@ function KpiCard({ kpi, onEdit, onDelete, staffList }: {
         </div>
       </div>
       <div className="flex gap-2 pt-1 border-t border-border">
-        <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={onEdit}>
-          <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+        <Button
+          variant={onDashboard ? "default" : "outline"}
+          size="sm"
+          className={cn("flex-1 text-xs gap-1", onDashboard ? "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20" : "text-muted-foreground")}
+          onClick={onToggleDashboard}
+          title={onDashboard ? "Remove from dashboard" : "Show on dashboard"}
+        >
+          <BarChart3 className="h-3 w-3" />
+          {onDashboard ? "On Dashboard" : "Add to Dashboard"}
+        </Button>
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground px-3" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 px-3" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
@@ -512,6 +532,20 @@ export default function ManagementKpisPage() {
     });
   };
 
+  const handleToggleDashboard = (kpi: KpiTarget) => {
+    const currentlyOn = (kpi as KpiTarget & { showOnDashboard?: string }).showOnDashboard === "true";
+    updateTarget.mutate(
+      { id: Number(kpi.id), data: { targetId: kpi.id, name: kpi.name, metric: kpi.metric, period: kpi.period, target: kpi.target, showOnDashboard: currentlyOn ? "false" : "true" } },
+      {
+        onSuccess: () => {
+          refetchTargets();
+          toast.success(currentlyOn ? "Removed from dashboard" : `"${kpi.name}" will now show on the dashboard`);
+        },
+        onError: () => toast.error("Failed to update KPI"),
+      },
+    );
+  };
+
   const handleSpread = (newTargets: KpiTarget[]) => {
     Promise.all(newTargets.map((t, i) =>
       createTarget.mutateAsync({ data: {
@@ -581,7 +615,7 @@ export default function ManagementKpisPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {storeWide.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                  {storeWide.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                 </div>
               )}
             </section>
@@ -612,7 +646,7 @@ export default function ManagementKpisPage() {
               <section className="space-y-3">
                 <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-muted-foreground" /><h2 className="font-semibold text-muted-foreground text-sm">Inactive KPIs</h2><Badge variant="outline">{inactiveTargets.length}</Badge></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {inactiveTargets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                  {inactiveTargets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                 </div>
               </section>
             )}
@@ -645,7 +679,7 @@ export default function ManagementKpisPage() {
                         <Badge variant="secondary" className="text-xs ml-auto">{group.targets.length} targets</Badge>
                       </div>
                       <div className="p-3 grid grid-cols-1 gap-3">
-                        {group.targets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                        {group.targets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                       </div>
                     </div>
                   ))}

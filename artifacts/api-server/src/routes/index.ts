@@ -96,6 +96,7 @@ import authSecuritySettingsRouter from "./auth-security-settings";
 import backupsRouter from "./backups";
 import partnerReferralsRouter from "./partner-referrals";
 import unsubscribeRouter from "./unsubscribe";
+import staffTimesheetsRouter from "./staff-timesheets";
 
 const router: IRouter = Router();
 
@@ -196,5 +197,6 @@ router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
 router.use(partnerReferralsRouter);
 router.use(unsubscribeRouter);
+router.use(staffTimesheetsRouter);
 
 export default router;

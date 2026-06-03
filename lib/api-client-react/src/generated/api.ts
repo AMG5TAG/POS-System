@@ -308,6 +308,15 @@ import type {
   ResetPasswordInput,
   RestoreBackup200,
   RestoreBackupInput,
+  StaffTimesheetEntry,
+  StaffTimesheetList,
+  StaffClockStatus,
+  ClockInInput,
+  ClockOutInput,
+  CreateStaffTimesheetInput,
+  ListStaffTimesheetsParams,
+  DashboardKpiResult,
+  PaymentTotalsResult,
   RosterShiftInput,
   RosterShiftItem,
   RosterShiftListResponse,
@@ -30392,3 +30401,274 @@ export const useCreatePartnerReferral = <TError = ErrorType<void>,
       return useMutation(getCreatePartnerReferralMutationOptions(options));
     }
 
+// ─── Staff Timesheets ────────────────────────────────────────────────────────
+
+export const getListStaffTimesheetsUrl = (params?: ListStaffTimesheetsParams) => {
+  const query = params
+    ? Object.entries(params)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+        .join("&")
+    : "";
+  return query ? `/api/staff-timesheets?${query}` : `/api/staff-timesheets`;
+};
+
+export const listStaffTimesheets = async (
+  params?: ListStaffTimesheetsParams,
+  options?: RequestInit,
+): Promise<StaffTimesheetList> => {
+  return customFetch<StaffTimesheetList>(getListStaffTimesheetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStaffTimesheetsQueryKey = (params?: ListStaffTimesheetsParams) =>
+  [`/api/staff-timesheets`, ...(params ? [params] : [])] as const;
+
+export const getListStaffTimesheetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStaffTimesheets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListStaffTimesheetsParams,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listStaffTimesheets>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListStaffTimesheetsQueryKey(params);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffTimesheets>>> = ({ signal }) =>
+    listStaffTimesheets(params, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listStaffTimesheets>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListStaffTimesheets<
+  TData = Awaited<ReturnType<typeof listStaffTimesheets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListStaffTimesheetsParams,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listStaffTimesheets>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStaffTimesheetsQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// Staff clock status by PIN
+export const getStaffClockStatusUrl = (pin: string) =>
+  `/api/staff-timesheets/status?pin=${encodeURIComponent(pin)}`;
+
+export const getStaffClockStatus = async (pin: string, options?: RequestInit): Promise<StaffClockStatus> =>
+  customFetch<StaffClockStatus>(getStaffClockStatusUrl(pin), { ...options, method: "GET" });
+
+export const getGetStaffClockStatusQueryKey = (pin: string) =>
+  [`/api/staff-timesheets/status`, pin] as const;
+
+export const getGetStaffClockStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStaffClockStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  pin: string,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getStaffClockStatus>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetStaffClockStatusQueryKey(pin);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStaffClockStatus>>> = ({ signal }) =>
+    getStaffClockStatus(pin, { signal, ...requestOptions });
+  return { queryKey, queryFn, enabled: pin.length >= 4, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getStaffClockStatus>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useGetStaffClockStatus<
+  TData = Awaited<ReturnType<typeof getStaffClockStatus>>,
+  TError = ErrorType<unknown>,
+>(
+  pin: string,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getStaffClockStatus>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStaffClockStatusQueryOptions(pin, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// Clock in
+export const clockIn = async (data: ClockInInput, options?: RequestInit): Promise<StaffTimesheetEntry> =>
+  customFetch<StaffTimesheetEntry>(`/api/staff-timesheets/clock-in`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+
+export const getClockInMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof clockIn>>, TError, { data: BodyType<ClockInInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof clockIn>>, TError, { data: BodyType<ClockInInput> }, TContext> => {
+  const mutationKey = ["clockIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof clockIn>>, { data: BodyType<ClockInInput> }> = (props) => {
+    const { data } = props ?? {};
+    return clockIn(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useClockIn = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof clockIn>>, TError, { data: BodyType<ClockInInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof clockIn>>, TError, { data: BodyType<ClockInInput> }, TContext> =>
+  useMutation(getClockInMutationOptions(options));
+
+// Clock out
+export const clockOut = async (data: ClockOutInput, options?: RequestInit): Promise<StaffTimesheetEntry> =>
+  customFetch<StaffTimesheetEntry>(`/api/staff-timesheets/clock-out`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+
+export const getClockOutMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof clockOut>>, TError, { data: BodyType<ClockOutInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof clockOut>>, TError, { data: BodyType<ClockOutInput> }, TContext> => {
+  const mutationKey = ["clockOut"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof clockOut>>, { data: BodyType<ClockOutInput> }> = (props) => {
+    const { data } = props ?? {};
+    return clockOut(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useClockOut = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof clockOut>>, TError, { data: BodyType<ClockOutInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof clockOut>>, TError, { data: BodyType<ClockOutInput> }, TContext> =>
+  useMutation(getClockOutMutationOptions(options));
+
+// Delete timesheet entry
+export const deleteStaffTimesheet = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(`/api/staff-timesheets/${id}`, { ...options, method: "DELETE" });
+
+export const getDeleteStaffTimesheetMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteStaffTimesheet>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof deleteStaffTimesheet>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["deleteStaffTimesheet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStaffTimesheet>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+    return deleteStaffTimesheet(id, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteStaffTimesheet = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteStaffTimesheet>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof deleteStaffTimesheet>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteStaffTimesheetMutationOptions(options));
+
+// Create timesheet entry (admin / manual)
+export const createStaffTimesheet = async (data: CreateStaffTimesheetInput, options?: RequestInit): Promise<StaffTimesheetEntry> =>
+  customFetch<StaffTimesheetEntry>(`/api/staff-timesheets`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+
+export const getCreateStaffTimesheetMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createStaffTimesheet>>, TError, { data: BodyType<CreateStaffTimesheetInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof createStaffTimesheet>>, TError, { data: BodyType<CreateStaffTimesheetInput> }, TContext> => {
+  const mutationKey = ["createStaffTimesheet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStaffTimesheet>>, { data: BodyType<CreateStaffTimesheetInput> }> = (props) => {
+    const { data } = props ?? {};
+    return createStaffTimesheet(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useCreateStaffTimesheet = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createStaffTimesheet>>, TError, { data: BodyType<CreateStaffTimesheetInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof createStaffTimesheet>>, TError, { data: BodyType<CreateStaffTimesheetInput> }, TContext> =>
+  useMutation(getCreateStaffTimesheetMutationOptions(options));
+
+// ─── Dashboard KPI ───────────────────────────────────────────────────────────
+
+export const getDashboardKpiUrl = () => `/api/kpi-targets/dashboard-kpi`;
+
+export const getDashboardKpi = async (options?: RequestInit): Promise<DashboardKpiResult | null> =>
+  customFetch<DashboardKpiResult | null>(getDashboardKpiUrl(), { ...options, method: "GET" });
+
+export const getGetDashboardKpiQueryKey = () => [`/api/kpi-targets/dashboard-kpi`] as const;
+
+export const getGetDashboardKpiQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDashboardKpi>>,
+  TError = ErrorType<unknown>,
+>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getDashboardKpi>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetDashboardKpiQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardKpi>>> = ({ signal }) =>
+    getDashboardKpi({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getDashboardKpi>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useGetDashboardKpi<
+  TData = Awaited<ReturnType<typeof getDashboardKpi>>,
+  TError = ErrorType<unknown>,
+>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getDashboardKpi>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDashboardKpiQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── Payment Totals ──────────────────────────────────────────────────────────
+
+export const getPaymentTotalsUrl = (date?: string) =>
+  date ? `/api/dashboard/payment-totals?date=${encodeURIComponent(date)}` : `/api/dashboard/payment-totals`;
+
+export const getPaymentTotals = async (date?: string, options?: RequestInit): Promise<PaymentTotalsResult> =>
+  customFetch<PaymentTotalsResult>(getPaymentTotalsUrl(date), { ...options, method: "GET" });
+
+export const getGetPaymentTotalsQueryKey = (date?: string) =>
+  [`/api/dashboard/payment-totals`, ...(date ? [date] : [])] as const;
+
+export const getGetPaymentTotalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPaymentTotals>>,
+  TError = ErrorType<unknown>,
+>(
+  date?: string,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getPaymentTotals>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetPaymentTotalsQueryKey(date);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentTotals>>> = ({ signal }) =>
+    getPaymentTotals(date, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getPaymentTotals>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useGetPaymentTotals<
+  TData = Awaited<ReturnType<typeof getPaymentTotals>>,
+  TError = ErrorType<unknown>,
+>(
+  date?: string,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getPaymentTotals>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPaymentTotalsQueryOptions(date, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}

@@ -17,6 +17,7 @@ import {
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters, useListProductTypes,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings,
+  useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse,
@@ -36,7 +37,7 @@ import {
   type StaffLoginMessage,
 } from "@/pages/app/management-registers";
 import {
-  loadRegisterSession, saveRegisterSession, clearRegisterSession,
+  loadRegisterSession, saveRegisterSession, clearRegisterSession, getOrCreateDeviceId,
   type RegisterSession,
 } from "@/lib/pos-local-settings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -59,7 +60,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare, Loader2,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
-  WifiOff, ShieldCheck, ArrowBigUp,
+  WifiOff, ShieldCheck, ArrowBigUp, MonitorX,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -422,11 +423,17 @@ export default function POSPage() {
   const [openDenomCounts, setOpenDenomCounts] = useState<Record<number, string>>({});
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
+
+  /* Device locking — tracks the server-side session ID for the local till and
+     whether another device has an open till for this register. */
+  const [serverSessionId, setServerSessionId] = useState<number | null>(null);
+  const [deviceConflict, setDeviceConflict] = useState<{ openedBy: string; openedAt: string; deviceId: string } | null>(null);
   const [sessionSnap, setSessionSnap] = useState<RegisterSession | null>(null);
 
   const getSession = (): RegisterSession | null => sessionSnap;
 
   const handleOpenRegister = () => {
+    const deviceId = getOrCreateDeviceId();
     const float = openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
@@ -435,6 +442,7 @@ export default function POSPage() {
       openingNotes: openNotes,
       sales: {},
       txCount: 0,
+      deviceId,
     };
     setSessionSnap(session);
     saveRegisterSession(session);
@@ -444,6 +452,22 @@ export default function POSPage() {
     setOpenNotes("");
     setCashMovementPrintOpen(true);
     toast.success("Register opened");
+
+    /* Sync to server so other devices can detect this till is in use. */
+    createServerSession.mutate(
+      { data: { registerId: activeRegisterId, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
+      {
+        onSuccess: (row) => {
+          const id = (row as { id?: number })?.id;
+          if (id) {
+            setServerSessionId(id);
+            const updated = { ...session, serverSessionId: id };
+            setSessionSnap(updated);
+            saveRegisterSession(updated);
+          }
+        },
+      }
+    );
   };
 
   const printCashMovement = () => {
@@ -494,20 +518,36 @@ export default function POSPage() {
 
   const handleCloseRegister = () => {
     const session = getSession();
+    const closedAt = new Date().toISOString();
     const zReport = {
       ...(session ?? {}),
-      closedAt: new Date().toISOString(),
+      closedAt,
       cashCounted: parseFloat(closeFormData.cashCounted) || 0,
       eftposDeclared: parseFloat(closeFormData.eftposDeclared) || 0,
       closingNotes: closeFormData.notes,
     };
+    const sid = serverSessionId;
     setRegisterOpen(false);
     clearRegisterSession();
+    setServerSessionId(null);
+    setDeviceConflict(null);
     setCloseRegisterDialogOpen(false);
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
     setLastZReport(zReport as RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string });
     setEodPrintOpen(true);
     toast.success("Register closed — Z-report saved");
+
+    /* Sync close to server so other devices see the till is now free. */
+    if (sid) {
+      updateServerSession.mutate({ id: sid, data: {
+        closedAt,
+        cashCounted: String(zReport.cashCounted),
+        eftposDeclared: String(zReport.eftposDeclared),
+        closingNotes: closeFormData.notes || "",
+        sales: JSON.stringify(session?.sales ?? {}),
+        txCount: session?.txCount ?? 0,
+      }});
+    }
   };
 
   const printEodReport = () => {
@@ -614,6 +654,14 @@ export default function POSPage() {
 
   const { data: registersData } = useListPosRegisters();
   const activeRegister = (registersData?.items ?? []).find((r) => r.registerId === activeRegisterId);
+
+  /* Server-side session hooks for device locking */
+  const createServerSession = useCreatePosRegisterSession();
+  const updateServerSession = useUpdatePosRegisterSession();
+  const { data: openSessionsData } = useListPosRegisterSessions(
+    { registerId: activeRegisterId },
+    { query: { queryKey: ["pos-open-sessions", activeRegisterId], refetchInterval: 30_000 } }
+  );
 
   const { data: productsData } = useListProducts(
     { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
@@ -904,9 +952,31 @@ export default function POSPage() {
     if (saved) {
       setSessionSnap(saved);
       setRegisterOpen(true);
+      if (saved.serverSessionId) setServerSessionId(saved.serverSessionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Listen for the staff-swap event dispatched by the universal top bar button. */
+  useEffect(() => {
+    const handler = () => { setPinInput(""); setPinError(""); setPinDialogOpen(true); };
+    window.addEventListener("koapos:open-staff-pin", handler);
+    return () => window.removeEventListener("koapos:open-staff-pin", handler);
+  }, []);
+
+  /* Detect open sessions on OTHER devices for this register. */
+  useEffect(() => {
+    const myDeviceId = getOrCreateDeviceId();
+    const sessions = (openSessionsData as { items?: Array<{ closedAt?: string | null; deviceId?: string | null; openedBy?: string; openedAt?: string }> })?.items ?? [];
+    const conflict = sessions.find(
+      s => !s.closedAt && s.deviceId && s.deviceId !== myDeviceId
+    );
+    setDeviceConflict(
+      conflict
+        ? { openedBy: conflict.openedBy ?? "", openedAt: conflict.openedAt ?? "", deviceId: conflict.deviceId! }
+        : null
+    );
+  }, [openSessionsData]);
 
   /* Invoice Payment Mode — the invoices page parks the remaining balance +
      linked customer in a module store and navigates here. Take it on mount and
@@ -1980,6 +2050,15 @@ export default function POSPage() {
     setPinDialogOpen(false); setPinInput(""); setPinError("");
     toast.success(`Signed in as ${staff.name}`);
 
+    /* Warn if there's an open till on another device. */
+    if (deviceConflict) {
+      const when = deviceConflict.openedAt
+        ? new Date(deviceConflict.openedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      const who = deviceConflict.openedBy ? ` by ${deviceConflict.openedBy}` : "";
+      toast.warning(`Till is open on another device${who}${when ? ` (opened ${when})` : ""}. Close it there before opening a new session.`, { duration: 8000 });
+    }
+
     /* staff login message */
     const msg = getStaffLoginMessage();
     if (msg?.enabled && msg.text.trim()) {
@@ -2293,6 +2372,12 @@ export default function POSPage() {
                 : `Syncing ${pendingCount} queued sale${pendingCount !== 1 ? "s" : ""}…`}
             </div>
           )}
+          {deviceConflict && !registerOpen && (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-orange-500 text-white">
+              <MonitorX className="w-3 h-3 shrink-0" />
+              Till is open on another device{deviceConflict.openedBy ? ` (${deviceConflict.openedBy})` : ""}. Close it there before opening a new session on this device.
+            </div>
+          )}
           <div className="p-3 border-b space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -2486,6 +2571,15 @@ export default function POSPage() {
               )}
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+              {/* Staff Pin */}
+              <button
+                onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
+                title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
+                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", currentStaff && "text-primary")}
+              >
+                <User className="w-4 h-4" />
+              </button>
+              {/* Till */}
               <button
                 onClick={() => {
                   if (registerOpen) {
@@ -2501,10 +2595,7 @@ export default function POSPage() {
               >
                 {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
               </button>
-              <PosWebcamCapture
-                enabled={activeRegister?.posCameraEnabled === "true"}
-                deviceId={activeRegister?.posCameraDeviceId}
-              />
+              {/* Customer Facing Screen */}
               <button
                 onClick={() => window.open("/customer-display", "_blank")}
                 title="Open customer-facing display"
@@ -2512,13 +2603,10 @@ export default function POSPage() {
               >
                 <Monitor className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
-                title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
-                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", currentStaff && "text-primary")}
-              >
-                <User className="w-4 h-4" />
-              </button>
+              <PosWebcamCapture
+                enabled={activeRegister?.posCameraEnabled === "true"}
+                deviceId={activeRegister?.posCameraDeviceId}
+              />
               {/* Parked sales badge */}
               {parkedSalesData.length > 0 && (
                 <button
@@ -2537,9 +2625,6 @@ export default function POSPage() {
                   </span>
                 </button>
               )}
-              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }} disabled={cart.length === 0} title="Clear cart">
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
             </div>
           </div>
 
@@ -2608,27 +2693,28 @@ export default function POSPage() {
                   <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <>
-                  <button
-                    onClick={() => setCustomerOpen(o => !o)}
-                    className={cn(
-                      "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
-                      customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
-                    <Search className="w-3 h-3 text-muted-foreground shrink-0" />
-                  </button>
-                  <button
-                    onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
-                    className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0"
-                    title="Walk-in customer"
-                  >
-                    <Footprints className="w-3.5 h-3.5" />
-                  </button>
-                </>
+                <button
+                  onClick={() => setCustomerOpen(o => !o)}
+                  className={cn(
+                    "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
+                    customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
+                  )}
+                >
+                  <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
+                  <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+                </button>
               )}
-              {/* Link and Notes — always visible */}
+              {/* Walk In — only when no customer selected */}
+              {!activeCustomerName && (
+                <button
+                  onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
+                  className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0"
+                  title="Walk-in customer"
+                >
+                  <Footprints className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {/* Link */}
               <button
                 onClick={() => setServiceLinkOpen(true)}
                 title="Link to service or appointment"
@@ -2636,12 +2722,22 @@ export default function POSPage() {
               >
                 <LinkIcon className="w-3.5 h-3.5" />
               </button>
+              {/* Notes */}
               <button
                 onClick={() => setNotesOpen(true)}
                 className={cn("p-1.5 border rounded-lg transition-colors shrink-0", notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
                 title="Sale notes"
               >
                 <NotebookPen className="w-3.5 h-3.5" />
+              </button>
+              {/* Clear Cart */}
+              <button
+                onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }}
+                disabled={cart.length === 0}
+                title="Clear cart"
+                className="p-1.5 border border-dashed rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
             {/* Inline customer dropdown */}
