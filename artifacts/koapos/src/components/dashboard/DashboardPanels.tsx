@@ -18,6 +18,7 @@ import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDeta
 const ALL_STATUSES: { value: string; label: string }[] = [
   { value: "pending",                     label: "Pending" },
   { value: "in-progress",                 label: "In Progress" },
+  { value: "at-repairer",                 label: "At Repairer" },
   { value: "awaiting-partner-approval",   label: "Awaiting Partner Approval" },
   { value: "awaiting-stock",              label: "Awaiting Stock" },
   { value: "awaiting-customer",           label: "Awaiting Customer" },
@@ -35,6 +36,7 @@ function statusColor(status: string): string {
   switch (status) {
     case "pending":                     return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "in-progress":                 return "bg-blue-100 text-blue-700 border-blue-200";
+    case "at-repairer":                 return "bg-yellow-50 text-yellow-700 border-yellow-300";
     case "awaiting-partner-approval":   return "bg-indigo-100 text-indigo-700 border-indigo-200";
     case "awaiting-stock":              return "bg-purple-100 text-purple-700 border-purple-200";
     case "awaiting-customer":           return "bg-orange-100 text-orange-700 border-orange-200";
@@ -49,6 +51,7 @@ function statusIconColor(status: string): string {
   switch (status) {
     case "pending":                     return "text-yellow-500";
     case "in-progress":                 return "text-blue-500";
+    case "at-repairer":                 return "text-yellow-600";
     case "awaiting-partner-approval":   return "text-indigo-500";
     case "awaiting-stock":              return "text-purple-500";
     case "awaiting-customer":           return "text-orange-500";

@@ -1906,7 +1906,7 @@ export default function POSPage() {
              var s=document.createElement('script');
              s.src='https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js';
              s.onload=function(){
-               JsBarcode('#sale-barcode','${bcValue}',{format:'CODE128',width:1,height:24,fontSize:8,displayValue:true,margin:0});
+               JsBarcode('#sale-barcode','${bcValue}',{format:'CODE128',width:1,height:24,displayValue:false,margin:0});
              };
              document.head.appendChild(s);
            })();

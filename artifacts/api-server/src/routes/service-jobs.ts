@@ -203,6 +203,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
 
     const statusLabel: Record<string, string> = {
       "in-progress":      "In Progress",
+      "at-repairer":       "At Repairer",
       "awaiting-customer": "Ready — awaiting your decision",
       "completed":         "Completed & ready for pickup",
     };
@@ -264,6 +265,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const statusLabel: Record<string, string> = {
     "pending":                     "Pending",
     "in-progress":                 "In Progress",
+    "at-repairer":                 "At Repairer",
     "awaiting-partner-approval":   "Awaiting Partner Approval",
     "awaiting-stock":              "Awaiting Stock",
     "awaiting-customer":           "Awaiting Your Decision",

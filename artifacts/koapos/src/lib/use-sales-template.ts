@@ -51,7 +51,7 @@ export function useSalesTemplate(type: SalesTemplateType): SalesTemplateResult {
   return {
     opts,
     fontFamily,
-    fontCss: FONT_CSS[fontFamily] ?? FONT_CSS.inter,
+    fontCss: FONT_CSS[fontFamily] ?? (fontFamily ? `"${fontFamily}", sans-serif` : FONT_CSS.inter),
     selectedStyle: row.selectedStyle || "professional",
     isLoading,
   };

@@ -18,6 +18,7 @@ function statusLabel(status: string): string {
   switch (status) {
     case "pending": return "Pending";
     case "in-progress": return "In Progress";
+    case "at-repairer": return "At Repairer";
     case "awaiting-partner-approval": return "Awaiting Partner Approval";
     case "awaiting-stock": return "Awaiting Stock";
     case "awaiting-customer": return "Awaiting Customer";
@@ -32,6 +33,7 @@ function statusColor(status: string) {
   switch (status) {
     case "pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "in-progress": return "bg-blue-100 text-blue-700 border-blue-200";
+    case "at-repairer": return "bg-yellow-50 text-yellow-700 border-yellow-300";
     case "awaiting-partner-approval": return "bg-indigo-100 text-indigo-700 border-indigo-200";
     case "awaiting-stock": return "bg-purple-100 text-purple-700 border-purple-200";
     case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";

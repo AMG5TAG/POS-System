@@ -1,4 +1,5 @@
 import type { Transaction } from "@workspace/api-client-react";
+import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 
 export interface ReceiptBusinessInfo {
@@ -100,11 +101,11 @@ function openPrintWindow(html: string, title: string): void {
 
 /* ─── Thermal / 80mm receipt ────────────────────────────────────────────── */
 
-export function printReceipt(
+export async function printReceipt(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
-): void {
+): Promise<void> {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
   const rawWebsite = businessInfo?.website ?? "";
@@ -260,7 +261,22 @@ export function printReceipt(
     }
   `;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}</body></html>`;
+  /* ── Customer QR code ────────────────────────────────────────────────── */
+  let qrBlock = "";
+  if (tpl.showCustomerQr && tx.customer?.id) {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(`CUS-${tx.customer.id}`, { width: 80, margin: 1 });
+      qrBlock = `<div class="center mt bdr-t pt">
+        <div class="gray small" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Customer Profile</div>
+        <div style="display:inline-block;border:1px solid #e5e7eb;padding:4px;border-radius:4px">
+          <img src="${qrDataUrl}" style="width:72px;height:72px;display:block" alt="QR">
+        </div>
+        ${tpl.loyaltyQrText ? `<p class="gray small" style="margin-top:4px">${esc(tpl.loyaltyQrText)}</p>` : ""}
+      </div>`;
+    } catch { /* silently skip if QR generation fails */ }
+  }
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${qrBlock}</body></html>`;
 
   openPrintWindow(html, `Receipt ${escReceiptNum}`);
 
@@ -485,11 +501,11 @@ export function printA4Invoice(
 /* ─── A4 sales receipt ─────────────────────────────────────────────────── */
 /* Shares the same layout as the Invoice but with a "Receipt" title. */
 
-export function printA4Receipt(
+export async function printA4Receipt(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
-): void {
+): Promise<void> {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
   const rawWebsite = businessInfo?.website ?? "";
@@ -570,10 +586,14 @@ export function printA4Receipt(
        ${customerPhone ? `<p class="muted">${customerPhone}</p>` : ""}`
     : (customerName ? `<p class="strong">${customerName}</p>` : "");
 
-  const qrHtml = tpl.showCustomerQr
+  let qrDataUrlA4 = "";
+  if (tpl.showCustomerQr && tx.customer?.id) {
+    try { qrDataUrlA4 = await QRCode.toDataURL(`CUS-${tx.customer.id}`, { width: 80, margin: 1 }); } catch {}
+  }
+  const qrHtml = (tpl.showCustomerQr && qrDataUrlA4)
     ? `<div class="qr">
          <div class="qr-cap">Customer Profile</div>
-         <div class="qr-img"></div>
+         <img src="${qrDataUrlA4}" style="width:64px;height:64px;display:block;margin:0 auto;border:1px solid #e5e7eb;border-radius:2px" alt="QR">
          ${tpl.loyaltyQrText ? `<div class="qr-sub">${esc(tpl.loyaltyQrText)}</div>` : ""}
        </div>`
     : "";
@@ -600,7 +620,7 @@ export function printA4Receipt(
     : "";
 
   const barcodeHtml = tpl.showBarcode
-    ? `<div class="barcode"><div class="bars"></div><div class="bars-cap">${escReceiptNum}</div></div>`
+    ? `<div class="barcode"><div class="bars"></div></div>`
     : "";
 
   const paidBadge = `<span class="paid">✓ Paid — ${esc(pmLabel) || "Payment received"}</span>`;

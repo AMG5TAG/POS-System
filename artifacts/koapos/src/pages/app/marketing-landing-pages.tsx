@@ -21,6 +21,7 @@ import {
   useUpdateLandingPage,
   useDeleteLandingPage,
 } from "@workspace/api-client-react";
+import { FontPicker } from "@/components/ui/font-picker";
 import type { LandingPageInput } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -117,23 +118,6 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
   textColor: "#ffffff", font: "Inter", links: [],
 };
 
-/* ── Font picker ───────────────────────────────────────────────────────── */
-
-const FONTS = ["Inter", "Roboto", "Playfair Display", "Lora", "Montserrat", "Open Sans", "Poppins", "DM Sans"];
-
-function FontPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {FONTS.map((f) => (
-        <button key={f} onClick={() => onChange(f)}
-          className={cn("px-2 py-1 text-xs rounded border transition-colors", value === f ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}
-          style={{ fontFamily: `"${f}", sans-serif` }}>
-          {f}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /* ── Landing page renderer (shared with public view) ──────────────────── */
 

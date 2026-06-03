@@ -48,6 +48,7 @@ import {
 } from "@/lib/print-receipt";
 import { formatSocialEntries, KNOWN_SOCIAL_PLATFORMS, getSocialBrandColor } from "@/lib/social-links";
 import { SocialIcon } from "@/components/printing/SocialIcon";
+import { FontPicker } from "@/components/ui/font-picker";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -200,7 +201,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
 interface FieldDef {
   key: keyof TplOpts;
   label: string;
-  type: "text" | "textarea" | "toggle" | "select";
+  type: "text" | "textarea" | "toggle" | "select" | "fontpicker";
   options?: { value: string; label: string }[];
   placeholder?: string;
   hint?: string;
@@ -216,7 +217,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
       { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
       { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. Welcome to {{business.name}}", quickCodes: true },
-      { section: "Body",   key: "fontFamily",         label: "Font Family",         type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
+      { section: "Body",   key: "fontFamily",         label: "Font Family",         type: "fontpicker" },
       { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
       { section: "Body",   key: "showPaymentMethods", label: "Show Payment Method", type: "toggle" },
       { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
@@ -237,7 +238,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
-      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
+      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
       { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",         type: "toggle", hint: "Scannable barcode to retrieve this sale" },
@@ -259,7 +260,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
-      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
+      { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Thank you for your enquiry…", quickCodes: true },
       { section: "Footer",   key: "footerText",              label: "Footer Text",               type: "text",     placeholder: "Thank you for your enquiry!", quickCodes: true },
@@ -273,7 +274,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
       { section: "Header",   key: "headerText",           label: "Custom Header HTML",       type: "textarea", placeholder: "SERVICE JOB SHEET" },
-      { section: "Body",     key: "fontFamily",           label: "Font Family",              type: "select",   options: FONT_OPTIONS.map(f => ({ value: f.value, label: f.label })) },
+      { section: "Body",     key: "fontFamily",           label: "Font Family",              type: "fontpicker" },
       { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "select",   options: [{ value: "normal", label: "Normal" }, { value: "large", label: "Large" }, { value: "xlarge", label: "X-Large" }] },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
       { section: "Sections", key: "showDeviceDetails",    label: "Show Device Details",      type: "toggle" },
@@ -591,6 +592,20 @@ const FONT_OPTIONS: { value: string; label: string; css: string }[] = [
   { value: "courier",  label: "Courier",     css: "'Courier New', Courier, monospace"    },
 ];
 
+/** Maps legacy short-key font values to their proper display names. */
+const LEGACY_FONT_NAMES: Record<string, string> = {
+  inter: "Inter", roboto: "Roboto", lato: "Lato",
+  georgia: "Georgia", courier: "Courier New",
+};
+
+/** Resolves a stored fontFamily value (legacy key or full font name) to a CSS font-family string. */
+function resolveFontCss(fontFamily: string): string {
+  const opt = FONT_OPTIONS.find(f => f.value === fontFamily);
+  if (opt) return opt.css;
+  if (fontFamily) return `"${fontFamily}", sans-serif`;
+  return FONT_OPTIONS[0].css;
+}
+
 function OptionsPanel({
   category,
   templateId,
@@ -698,7 +713,12 @@ function OptionsPanel({
                 return (
                   <div key={f.key} className="space-y-1.5">
                     <Label className="text-xs">{f.label}</Label>
-                    {f.type === "select" && f.options ? (
+                    {f.type === "fontpicker" ? (
+                      <FontPicker
+                        value={LEGACY_FONT_NAMES[val] ?? val}
+                        onChange={(v) => update(f.key, v as TplOpts[typeof f.key])}
+                      />
+                    ) : f.type === "select" && f.options ? (
                       <select
                         value={val || f.options[0]?.value}
                         onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
@@ -895,7 +915,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
 
   const BarcodeBlock = () => opts.showBarcode ? (
     <div className="border-t pt-1.5 mt-1 text-center">
-      <Barcode value="TXN-1042" format="CODE128" width={1.2} height={24} fontSize={8} displayValue />
+      <Barcode value="TXN-1042" format="CODE128" width={1.2} height={24} displayValue={false} />
     </div>
   ) : null;
 
@@ -1051,7 +1071,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
 
   const BarcodeBlock = () => opts.showBarcode ? (
     <div className="border-t pt-1.5 mt-1.5 text-center">
-      <Barcode value="INV-1042" format="CODE128" width={1.5} height={26} fontSize={8} displayValue />
+      <Barcode value="INV-1042" format="CODE128" width={1.5} height={26} displayValue={false} />
     </div>
   ) : null;
 
@@ -1629,7 +1649,7 @@ export default function ManagementTemplatesPage() {
       headerText: opts.headerText,
       customMessage: opts.customMessage,
       loyaltyQrText: opts.loyaltyQrText,
-      fontFamily: FONT_OPTIONS.find(f => f.value === opts.fontFamily)?.css ?? FONT_OPTIONS[0].css,
+      fontFamily: resolveFontCss(opts.fontFamily),
       styleVariant: normalizeReceiptStyle(previewId),
       showTagline: opts.showTagline,
       showAllCustomerDetails: opts.showAllCustomerDetails,

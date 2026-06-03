@@ -71,13 +71,13 @@ export interface DocumentTemplateController {
   /** Business identity (name, ABN, website, email, brand colour) shared by every document. */
   businessInfo: ReceiptBusinessInfo;
   /** Print an 80mm thermal receipt using the saved Thermal_Receipt template. */
-  printReceipt: (tx: Transaction) => void;
+  printReceipt: (tx: Transaction) => Promise<void>;
   /** Print an A4 tax invoice using the saved Invoice template. */
   printInvoice: (tx: Transaction) => void;
   /** Print an A4 receipt using the saved A4_Receipt template.
    *  Pass `overallDiscountPct` (e.g. 10 for 10%) when the cart discount was
    *  entered as a percentage so the receipt label reads "10% discount". */
-  printA4Receipt: (tx: Transaction, overallDiscountPct?: number) => void;
+  printA4Receipt: (tx: Transaction, overallDiscountPct?: number) => Promise<void>;
   /** Print an A4 service report using the saved Service_Ticket template. */
   printServiceJob: (
     job: ServiceJobPrintData,
