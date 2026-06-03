@@ -27,7 +27,8 @@ import { User, MapPin, Settings2, CheckCircle2, AlertTriangle, Check, ChevronsUp
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { COUNTRY_STATES, COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
+import { COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
+import { StateSelectInput } from "@/components/ui/state-select-input";
 
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
@@ -106,7 +107,6 @@ export function AddCustomerWizard({
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const merchantCountryCode = (merchantData as any)?.country ?? "AU";
   const defaultCountryName = COUNTRY_CODE_TO_NAME[merchantCountryCode] ?? "Australia";
-  const stateOptions = COUNTRY_STATES[merchantCountryCode] ?? [];
 
   const [form, setForm] = useState<CustomerForm>(defaultForm);
   const [step, setStep] = useState<Step>("personal");
@@ -445,18 +445,7 @@ export function AddCustomerWizard({
                   <Input value={form.billingCity} onChange={(e) => setField("billingCity", e.target.value)} placeholder="Sydney" />
                 </Field>
                 <Field label="State">
-                  {stateOptions.length > 0 ? (
-                    <Select value={form.billingState} onValueChange={(v) => setField("billingState", v)}>
-                      <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                      <SelectContent>
-                        {stateOptions.map((s) => (
-                          <SelectItem key={s.code} value={s.code}>{s.code} — {s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input value={form.billingState} onChange={(e) => setField("billingState", e.target.value)} placeholder="State" />
-                  )}
+                  <StateSelectInput value={form.billingState} onChange={(v) => setField("billingState", v)} countryCode={merchantCountryCode} />
                 </Field>
               </FieldRow>
               <FieldRow>
@@ -491,18 +480,7 @@ export function AddCustomerWizard({
                           <Input value={form.shippingCity} onChange={(e) => setField("shippingCity", e.target.value)} placeholder="Sydney" />
                         </Field>
                         <Field label="State">
-                          {stateOptions.length > 0 ? (
-                            <Select value={form.shippingState} onValueChange={(v) => setField("shippingState", v)}>
-                              <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                              <SelectContent>
-                                {stateOptions.map((s) => (
-                                  <SelectItem key={s.code} value={s.code}>{s.code} — {s.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input value={form.shippingState} onChange={(e) => setField("shippingState", e.target.value)} placeholder="State" />
-                          )}
+                          <StateSelectInput value={form.shippingState} onChange={(v) => setField("shippingState", v)} countryCode={merchantCountryCode} />
                         </Field>
                       </FieldRow>
                       <FieldRow>

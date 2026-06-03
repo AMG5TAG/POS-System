@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { StateSelectInput } from "@/components/ui/state-select-input";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -295,7 +296,10 @@ function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
       <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="123 Main St" />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={form.city}  onChange={(e) => set("city",  e.target.value)} placeholder="Sydney" />
-        <PillInput label="State" value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="NSW" />
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-foreground/80">State</Label>
+          <StateSelectInput value={form.state} onChange={(v) => set("state", v)} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={form.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="2000" />

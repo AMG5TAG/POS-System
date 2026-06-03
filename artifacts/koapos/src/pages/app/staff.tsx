@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { StateSelectInput } from "@/components/ui/state-select-input";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -214,7 +215,10 @@ function AddressBlock({
       <PillInput label="Street Address" value={addr.street} onChange={set("street")} />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={addr.city}  onChange={set("city")} />
-        <PillInput label="State" value={addr.state} onChange={set("state")} />
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-foreground/80">State</label>
+          <StateSelectInput value={addr.state} onChange={(v) => onChange({ ...addr, state: v })} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={addr.postcode} onChange={set("postcode")} />
