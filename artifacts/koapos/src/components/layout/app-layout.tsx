@@ -1441,7 +1441,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const sidebarEl = (
     <Sidebar
       side={isRight ? "right" : "left"}
-      collapsible="icon"
+      collapsible={hideSidebar ? "offcanvas" : "icon"}
       className="overflow-y-auto"
     >
       <SidebarHeader className="min-h-16 flex items-center px-4 py-3 border-b">
@@ -1512,7 +1512,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
-            <SidebarTrigger className="md:hidden shrink-0" />
+            <SidebarTrigger className={hideSidebar ? "shrink-0" : "md:hidden shrink-0"} />
 
             <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
               <Breadcrumbs location={location} />

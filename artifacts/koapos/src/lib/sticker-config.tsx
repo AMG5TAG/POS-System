@@ -213,12 +213,13 @@ export const STICKER_TYPES: StickerType[] = [
     description: "Job labels for service desk and repair tickets",
     defaultSize: "S0722520",
     fields: [
-      { key: "jobNo",      label: "Job #",         defaultValue: "SVC-0031"        },
-      { key: "customer",   label: "Customer",      defaultValue: "Mike Chen"       },
-      { key: "device",     label: "Device",        defaultValue: "MacBook Pro 2023" },
-      { key: "fault",      label: "Fault",         defaultValue: "Screen flickering" },
-      { key: "dueDate",    label: "Due Date",      defaultValue: "22/05/2026"      },
-      { key: "tech",       label: "Technician",    defaultValue: "Alex Taylor"     },
+      { key: "showJobNo",    label: "Job #",         defaultValue: "true", type: "toggle" as const },
+      { key: "showCustomer", label: "Customer",      defaultValue: "true", type: "toggle" as const },
+      { key: "showDevice",   label: "Device",        defaultValue: "true", type: "toggle" as const },
+      { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" as const },
+      { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" as const },
+      { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" as const },
+      { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" as const },
     ],
   },
   {
@@ -345,7 +346,7 @@ export function LabelPreview({
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
       style={baseStyle}
     >
-      <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
+      {type.id !== "repair" && <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />}
       <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">
         {type.id === "product" && (
           <>
@@ -389,12 +390,15 @@ export function LabelPreview({
         )}
         {type.id === "repair" && (
           <>
-            <div className="font-bold" style={{ color: "#ef4444", fontSize: Math.max(7, finalScale * 2.8) }}>SERVICE {f("jobNo")}</div>
-            {f("customer") && <div className="font-medium truncate">{f("customer")}</div>}
-            {f("device") && <div className="text-gray-500 truncate">{f("device")}</div>}
-            {f("fault") && <div className="text-gray-400 truncate">Fault: {f("fault")}</div>}
-            {f("dueDate") && <div className="font-medium truncate">Due: {f("dueDate")}</div>}
-            {f("tech") && <div className="text-gray-400 truncate">Tech: {f("tech")}</div>}
+            {f("showJobNo") !== "false" && (
+              <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>SERVICE {f("jobNo") || "SVC-0031"}</div>
+            )}
+            {f("showCustomer") !== "false" && <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>}
+            {f("showDevice") !== "false" && <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>}
+            {f("showFault") !== "false" && <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>}
+            {f("showDueDate") !== "false" && <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>}
+            {f("showTech") !== "false" && <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>}
+            {f("showBizName") !== "false" && <div className="text-gray-400 text-right truncate">{businessName}</div>}
           </>
         )}
         {type.id === "address" && (

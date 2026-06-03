@@ -325,8 +325,8 @@ export default function ManagementOverviewPage() {
               title="Net Profit"
               icon={TrendingUp}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
-              value={isLoading ? "—" : formatCurrency(Math.max(0, revenueExGst - discountTotal - refundTotal))}
-              sub="Revenue ex-GST, less discounts & refunds"
+              value={isLoading ? "—" : formatCurrency(revenueExGst - discountTotal - refundTotal - costTotal)}
+              sub="Revenue ex-GST, less COGS, discounts & refunds"
               valueClass="text-emerald-600"
               href="/management/sales-overview"
             />

@@ -209,12 +209,13 @@ export default function ManagementStickersPage() {
           ${f("date")?`<div style="color:#888">${f("date")}</div>`:""}
           ${biz?`<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>`:""}`;
         case "repair": return `
-          <div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">SERVICE ${f("jobNo")}</div>
-          ${f("customer")?`<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")}</div>`:""}
-          ${f("device")?`<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")}</div>`:""}
-          ${f("fault")?`<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")}</div>`:""}
-          ${f("dueDate")?`<div style="font-weight:600">Due: ${f("dueDate")}</div>`:""}
-          ${f("tech")?`<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")}</div>`:""}`;
+          ${f("showJobNo") !== "false" ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>` : ""}
+          ${f("showCustomer") !== "false" ? `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Customer"}</div>` : ""}
+          ${f("showDevice") !== "false" ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")||"Device"}</div>` : ""}
+          ${f("showFault") !== "false" ? `<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Fault"}</div>` : ""}
+          ${f("showDueDate") !== "false" ? `<div style="font-weight:600">Due: ${f("dueDate")||"Due Date"}</div>` : ""}
+          ${f("showTech") !== "false" ? `<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Technician"}</div>` : ""}
+          ${f("showBizName") !== "false" && biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         case "address": return `
           ${f("name")?`<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")}</div>`:""}
           ${f("company")?`<div style="white-space:nowrap;overflow:hidden">${f("company")}</div>`:""}
@@ -252,7 +253,7 @@ export default function ManagementStickersPage() {
         page-break-after:always;break-after:page;
         page-break-inside:avoid;break-inside:avoid;
       ">
-        <div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>
+        ${selectedTypeId !== "repair" ? `<div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>` : ""}
         ${inner}
       </div>`;
 
@@ -402,8 +403,10 @@ ${Array.from({ length: quantity }).map(() => labelBlock).join("\n")}
                 <p>Connect your DYMO LabelWriter via USB. Install DYMO Connect software for direct printing. Click Print to send to your default label printer.</p>
               </div>
             </div>
+          </div>
 
-          {/* Field editor */}
+          {/* Field editor - full width */}
+          <div className="col-span-1 lg:col-span-2 lg:row-start-2">
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
@@ -541,10 +544,10 @@ ${Array.from({ length: quantity }).map(() => labelBlock).join("\n")}
               )}
             </CardContent>
           </Card>
-          </div>{/* end left col */}
+          </div>
 
           {/* Right: preview */}
-          <div className="space-y-3">
+          <div className="space-y-3 lg:row-start-1 lg:col-start-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Label Preview</p>
               <div className="flex items-center gap-2">

@@ -4640,29 +4640,21 @@ export default function POSPage() {
   );
 }
 
-/* ── Click anywhere on POS page to reveal collapsed sidebar ─────────────── */
+/* ── Click outside the open sidebar on the POS page to close it ─────────── */
 function POSPageExpander({ children }: { children: React.ReactNode }) {
-  const { state, setOpen } = useSidebar();
+  const { open, setOpen } = useSidebar();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (
-        state === "collapsed" &&
-        e.button === 0 &&
-        !target.closest("button") &&
-        !target.closest("a") &&
-        !target.closest("input") &&
-        !target.closest("textarea") &&
-        !target.closest("[data-slot=sidebar]")
-      ) {
-        setOpen(true);
+      if (open && !target.closest("[data-slot=sidebar]")) {
+        setOpen(false);
       }
     };
     el.addEventListener("mousedown", handler);
     return () => el.removeEventListener("mousedown", handler);
-  }, [state, setOpen]);
+  }, [open, setOpen]);
   return <div ref={ref} className="contents">{children}</div>;
 }
