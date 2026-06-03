@@ -7,8 +7,9 @@ const router: IRouter = Router();
 
 function fmt(row: typeof customerSettingsTable.$inferSelect) {
   return {
-    groups:                 JSON.parse(row.groups         || "[]"),
-    requiredFields:         JSON.parse(row.requiredFields || "{}"),
+    groups:                 JSON.parse(row.groups              || "[]"),
+    requiredFields:         JSON.parse(row.requiredFields      || "{}"),
+    heardFromSources:       JSON.parse(row.heardFromSources    || "[]"),
     defaultGroup:           row.defaultGroup,
     loyaltyPointsPerDollar: row.loyaltyPointsPerDollar,
     enableLoyalty:          row.enableLoyalty === "true",
@@ -26,9 +27,17 @@ const DEFAULT_GROUPS = [
   { id: "staff",     name: "Staff",      description: "Team members and staff accounts",                        color: "#ef4444" },
 ];
 
+const DEFAULT_HEARD_FROM_SOURCES = [
+  { id: "google",       name: "Google",       requiresDetails: false },
+  { id: "social-media", name: "Social Media", requiresDetails: false },
+  { id: "friend",       name: "Friend",       requiresDetails: true  },
+  { id: "other",        name: "Other",        requiresDetails: true  },
+];
+
 const DEFAULTS = {
   groups:                 DEFAULT_GROUPS,
   requiredFields:         { email: false, phone: false, dateOfBirth: false, company: false, abn: false, billingAddress: false },
+  heardFromSources:       DEFAULT_HEARD_FROM_SOURCES,
   defaultGroup:           "Standard",
   loyaltyPointsPerDollar: 1,
   enableLoyalty:          true,
@@ -50,8 +59,9 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
   const sendDay = Number.isInteger(rawSendDay) && rawSendDay >= 0 && rawSendDay <= 6 ? rawSendDay : 1;
 
   const data = {
-    groups:                 JSON.stringify(body.groups         ?? DEFAULT_GROUPS),
-    requiredFields:         JSON.stringify(body.requiredFields ?? {}),
+    groups:                 JSON.stringify(body.groups              ?? DEFAULT_GROUPS),
+    requiredFields:         JSON.stringify(body.requiredFields      ?? {}),
+    heardFromSources:       JSON.stringify(body.heardFromSources    ?? []),
     defaultGroup:           String(body.defaultGroup ?? "Standard"),
     loyaltyPointsPerDollar: Number(body.loyaltyPointsPerDollar ?? 1),
     enableLoyalty:          String(body.enableLoyalty === false ? "false" : "true"),

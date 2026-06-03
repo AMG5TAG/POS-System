@@ -6,6 +6,7 @@ export const customerSettingsTable = pgTable("customer_settings", {
   merchantId:              integer("merchant_id").notNull().references(() => merchantsTable.id),
   groups:                  text("groups").notNull().default("[]"),
   requiredFields:          text("required_fields").notNull().default("{}"),
+  heardFromSources:        text("heard_from_sources").notNull().default("[]"),
   defaultGroup:            text("default_group").notNull().default("Standard"),
   loyaltyPointsPerDollar:  integer("loyalty_points_per_dollar").notNull().default(1),
   enableLoyalty:           text("enable_loyalty").notNull().default("true"),
