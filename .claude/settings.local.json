@@ -86,7 +86,8 @@
       "Bash(grep -v \"^$\")",
       "Bash(pnpm --filter @workspace/api-server exec tsc --noEmit)",
       "Bash(pnpm --filter @workspace/db exec tsc --project tsconfig.json)",
-      "Bash(pnpm --filter @workspace/api-client-react exec tsc --project tsconfig.json)"
+      "Bash(pnpm --filter @workspace/api-client-react exec tsc --project tsconfig.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")"
     ]
   }
 }

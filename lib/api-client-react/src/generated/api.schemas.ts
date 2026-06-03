@@ -2537,6 +2537,7 @@ export interface KpiSettings {
   trackServices: string;
   trackSuppliers: string;
   trackWastage: string;
+  weekStartDay: string;
   updatedAt: string;
 }
 
@@ -2546,6 +2547,7 @@ export interface KpiSettingsInput {
   trackServices?: string;
   trackSuppliers?: string;
   trackWastage?: string;
+  weekStartDay?: string;
 }
 
 export interface KpiTarget {
@@ -2560,6 +2562,8 @@ export interface KpiTarget {
   staffIds: string;
   reward?: string;
   notes: string;
+  startDate?: string | null;
+  endDate?: string | null;
   isActive: string;
   showOnDashboard: string;
   createdAt: string;
@@ -2576,6 +2580,8 @@ export interface KpiTargetInput {
   staffIds?: string;
   reward?: string;
   notes?: string;
+  startDate?: string | null;
+  endDate?: string | null;
   isActive?: string;
   showOnDashboard?: string;
 }

@@ -27,7 +27,7 @@ import {
   DollarSign, ShoppingCart, UserPlus, Star, CalendarClock,
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
-  SplitSquareHorizontal, Flame, Store, Banknote,
+  SplitSquareHorizontal, Flame, Store, Banknote, CalendarDays, Calendar,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -46,6 +46,7 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
+  startDate: string; endDate: string;
   showOnDashboard?: string;
 }
 
@@ -66,6 +67,8 @@ function apiToTarget(r: Record<string, unknown>): KpiTarget {
     staffIds,
     reward,
     notes: String(r.notes ?? ""),
+    startDate: String(r.startDate ?? ""),
+    endDate: String(r.endDate ?? ""),
     isActive: String(r.isActive) !== "false",
     showOnDashboard: String(r.showOnDashboard ?? "false"),
   };
@@ -123,6 +126,7 @@ function progressColor(pct: number, isInverse?: boolean) {
 const BLANK: Omit<KpiTarget, "id"> = {
   name: "", metric: "revenue", categoryId: "", period: "monthly",
   target: 0, staffIds: [], reward: null, notes: "", isActive: true,
+  startDate: "", endDate: "",
 };
 const BLANK_REWARD: KpiReward = { type: "cash", value: 0, label: "", note: "" };
 
@@ -163,6 +167,14 @@ function KpiCard({ kpi, onEdit, onDelete, onToggleDashboard, staffList }: {
             }
           </div>
           {!isStoreWide && assignedNames && <p className="text-xs text-muted-foreground mt-1.5 truncate">{assignedNames}</p>}
+          {(kpi.startDate || kpi.endDate) && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <CalendarDays className="w-3 h-3 text-muted-foreground shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {kpi.startDate || "—"}{kpi.endDate ? ` → ${kpi.endDate}` : " onwards"}
+              </p>
+            </div>
+          )}
           {kpi.reward && (
             <div className="flex items-center gap-1 mt-1.5">
               <Trophy className="w-3 h-3 text-amber-500" />
@@ -269,6 +281,25 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
               </div>
             </div>
           </div>
+          <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Budget Date Range <span className="text-muted-foreground font-normal text-xs">(optional — leave blank for rolling period)</span></p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Start Date</Label>
+                <Input type="date" value={form.startDate ?? ""} onChange={(e) => setField("startDate", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">End Date</Label>
+                <Input type="date" value={form.endDate ?? ""} onChange={(e) => setField("endDate", e.target.value)} min={form.startDate ?? ""} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              When set, progress tracks from the start date instead of the current {form.period === "weekly" ? "week" : form.period === "monthly" ? "month" : form.period === "daily" ? "day" : form.period === "quarterly" ? "quarter" : "year"}.
+            </p>
+          </div>
           {!staffOnly && (
             <div className="space-y-1.5">
               <Label>Assign to Staff <span className="text-muted-foreground text-xs">(leave blank for store-wide)</span></Label>
@@ -358,6 +389,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
       metric: selectedKpi.metric, categoryId: selectedKpi.categoryId, period: selectedKpi.period,
       target: perStaffTarget, staffIds: [staffId], reward: selectedKpi.reward,
       notes: `Spread from store target: ${selectedKpi.name}`, isActive: true,
+      startDate: selectedKpi.startDate ?? "", endDate: selectedKpi.endDate ?? "",
     }));
     onSpread(newTargets);
     onOpenChange(false);
@@ -473,6 +505,7 @@ export default function ManagementKpisPage() {
   const trackCategories   = settingsRaw ? String(settingsRaw.trackCategories)   !== "false" : true;
   const trackAppointments = settingsRaw ? String(settingsRaw.trackAppointments) !== "false" : true;
   const trackServices     = settingsRaw ? String(settingsRaw.trackServices)     !== "false" : true;
+  const weekStartDay      = settingsRaw ? String(settingsRaw.weekStartDay ?? "monday") : "monday";
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [spreadOpen, setSpreadOpen] = useState(false);
@@ -486,13 +519,13 @@ export default function ManagementKpisPage() {
   const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string; staffId?: number; createdAt?: string }[];
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
-    upsertSettings.mutate({
-      data: {
-        trackCategories:   key === "trackCategories"   ? (value ? "true" : "false") : (trackCategories   ? "true" : "false"),
-        trackAppointments: key === "trackAppointments" ? (value ? "true" : "false") : (trackAppointments ? "true" : "false"),
-        trackServices:     key === "trackServices"     ? (value ? "true" : "false") : (trackServices     ? "true" : "false"),
-      },
-    }, {
+    upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
+      onError: () => toast.error("Failed to save settings"),
+    });
+  };
+
+  const updateWeekStartDay = (day: string) => {
+    upsertSettings.mutate({ data: { weekStartDay: day } }, {
       onError: () => toast.error("Failed to save settings"),
     });
   };
@@ -511,6 +544,8 @@ export default function ManagementKpisPage() {
       reward: t.reward ? JSON.stringify(t.reward) : undefined,
       notes: t.notes,
       isActive: t.isActive ? "true" : "false",
+      startDate: t.startDate || null,
+      endDate: t.endDate || null,
     };
     if (editing) {
       updateTarget.mutate({ id: Number(editing.id), data: { ...payload, targetId: editing.id } }, {
@@ -740,6 +775,29 @@ export default function ManagementKpisPage() {
                       </div>
                     );
                   })}
+                  <div className="flex items-center justify-between py-3 last:pb-0">
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 rounded-lg bg-muted text-muted-foreground"><Calendar className="w-3.5 h-3.5" /></div>
+                      <div>
+                        <p className="text-sm font-medium">Week Starts On</p>
+                        <p className="text-xs text-muted-foreground">Affects how weekly KPI periods are calculated</p>
+                      </div>
+                    </div>
+                    <Select value={weekStartDay} onValueChange={updateWeekStartDay}>
+                      <SelectTrigger className="w-32 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monday">Monday</SelectItem>
+                        <SelectItem value="tuesday">Tuesday</SelectItem>
+                        <SelectItem value="wednesday">Wednesday</SelectItem>
+                        <SelectItem value="thursday">Thursday</SelectItem>
+                        <SelectItem value="friday">Friday</SelectItem>
+                        <SelectItem value="saturday">Saturday</SelectItem>
+                        <SelectItem value="sunday">Sunday</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -771,6 +829,7 @@ export default function ManagementKpisPage() {
       </div>
 
       <KpiDialog
+        key={editing?.id ?? "new"}
         open={dialogOpen} onOpenChange={setDialogOpen}
         initial={editing ? { ...editing } : null}
         staffList={staffList} onSave={handleSave} staffOnly={staffOnly}

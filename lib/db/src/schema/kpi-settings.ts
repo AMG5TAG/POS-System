@@ -9,6 +9,7 @@ export const kpiSettingsTable = pgTable("kpi_settings", {
   trackServices:       text("track_services").notNull().default("true"),
   trackSuppliers:      text("track_suppliers").notNull().default("false"),
   trackWastage:        text("track_wastage").notNull().default("false"),
+  weekStartDay:        text("week_start_day").notNull().default("monday"),
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

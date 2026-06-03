@@ -7,6 +7,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const PatchKpiSettings = z.object({
   trackCategories: z.string(), trackAppointments: z.string(),
   trackServices: z.string(), trackSuppliers: z.string(), trackWastage: z.string(),
+  weekStartDay: z.string(),
 }).partial();
 
 const router: IRouter = Router();
@@ -49,9 +50,9 @@ router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true" } = req.body;
+  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null } = req.body;
   if (!targetId || !name || !metric) { res.status(400).json({ error: "targetId, name, and metric are required" }); return; }
-  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive }).returning();
+  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive, startDate, endDate }).returning();
   res.status(201).json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
@@ -59,7 +60,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard } = req.body;
+  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard, startDate, endDate } = req.body;
 
   // When marking this KPI for dashboard display, unset all others first
   if (showOnDashboard === "true") {
@@ -79,6 +80,8 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   if (notes            !== undefined) updates.notes           = notes;
   if (isActive         !== undefined) updates.isActive        = isActive;
   if (showOnDashboard  !== undefined) updates.showOnDashboard = showOnDashboard;
+  if (startDate        !== undefined) updates.startDate       = startDate;
+  if (endDate          !== undefined) updates.endDate         = endDate;
 
   const [row] = await db.update(kpiTargetsTable)
     .set(updates)
@@ -97,7 +100,18 @@ router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =
 
 /* ── Dashboard KPI ─────────────────────────────────────────────────────────── */
 
-function getPeriodStartForKpi(period: string): Date {
+const WEEK_START_DAY: Record<string, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+  thursday: 4, friday: 5, saturday: 6,
+};
+
+function getPeriodStartForKpi(period: string, weekStartDay = "monday", startDate?: string | null): Date {
+  // Fixed-start budget: use the provided start date
+  if (startDate) {
+    const d = new Date(startDate + "T00:00:00");
+    if (!isNaN(d.getTime())) return d;
+  }
+
   const now = new Date();
   switch (period) {
     case "daily": {
@@ -105,8 +119,10 @@ function getPeriodStartForKpi(period: string): Date {
     }
     case "weekly": {
       const d = new Date(now);
+      const startDow = WEEK_START_DAY[weekStartDay] ?? 1;
       const dow = d.getDay();
-      d.setDate(d.getDate() - ((dow + 6) % 7)); // back to Monday
+      const daysBack = (dow - startDow + 7) % 7;
+      d.setDate(d.getDate() - daysBack);
       d.setHours(0, 0, 0, 0);
       return d;
     }
@@ -144,8 +160,11 @@ router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<
     return;
   }
 
+  const [settingsRow] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
+  const weekStartDay = settingsRow?.weekStartDay ?? "monday";
+
   const kpi = { ...kpiRow, target: parseFloat(kpiRow.target as unknown as string) };
-  const periodStart = getPeriodStartForKpi(kpi.period);
+  const periodStart = getPeriodStartForKpi(kpi.period, weekStartDay, kpi.startDate);
   const metric = kpi.metric as string;
 
   let actual: number | null = null;

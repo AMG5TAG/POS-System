@@ -118,6 +118,7 @@ import ManagementBackupPage from "@/pages/app/management-backup";
 import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import CamerasPage from "@/pages/app/cameras";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
+import ManagementLegalPage from "@/pages/app/management-legal";
 import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
 import LandingPagePublicView from "@/pages/marketing/landing-page-public";
@@ -469,6 +470,9 @@ function Router() {
       </Route>
       <Route path="/management/cameras">
         <ManagementProtectedRoute component={ManagementCamerasPage} />
+      </Route>
+      <Route path="/management/legal">
+        <ManagementProtectedRoute component={ManagementLegalPage} />
       </Route>
 
       {/* Marketing & Reports */}

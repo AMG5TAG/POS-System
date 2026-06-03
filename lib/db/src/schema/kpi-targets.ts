@@ -13,6 +13,8 @@ export const kpiTargetsTable = pgTable("kpi_targets", {
   staffIds:   text("staff_ids").notNull().default("[]"),
   reward:     text("reward").notNull().default("null"),
   notes:      text("notes").notNull().default(""),
+  startDate:         text("start_date"),
+  endDate:           text("end_date"),
   isActive:          text("is_active").notNull().default("true"),
   showOnDashboard:   text("show_on_dashboard").notNull().default("false"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
