@@ -457,7 +457,7 @@ router.post("/products/import", requireAuth, uploadMemoryProducts.single("file")
     merchantId,
     name:           r.name,
     price:          r.priceRaw.toString(),
-    costPrice:      !isNaN(r.costRaw) ? r.costRaw.toString() : null,
+    costPrice:      !isNaN(r.costRaw) ? r.costRaw.toString() : "0",
     sku:            r.sku     || null,
     barcode:        r.barcode || null,
     categoryId:     r.categoryName ? (catByName.get(r.categoryName.toLowerCase())?.id ?? null) : null,

@@ -153,7 +153,7 @@ export default function ManagementMarketingAutomationPage() {
   const [logLoading, setLogLoading] = useState(true);
 
   const { data: emailTemplatesResponse } = useListEmailTemplates({ query: { queryKey: ["email-templates"] } });
-  const emailTemplates: EmailTemplate[] = ((emailTemplatesResponse?.items ?? []) as Record<string, unknown>[]).map((t) => ({
+  const emailTemplates: EmailTemplate[] = ((emailTemplatesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((t) => ({
     id: String(t.templateId ?? t.id ?? ""),
     name: String(t.name ?? ""),
     subject: String(t.subject ?? ""),

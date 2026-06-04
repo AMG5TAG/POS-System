@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { KpiImportDialog, type KpiImportRow } from "@/components/kpi-import-dialog";
 import {
-  useListStaff, useListTransactions,
+  useListStaff, useListTransactions, useListProducts, useListInvoices,
   useListKpiTargets, useCreateKpiTarget, useUpdateKpiTarget, useDeleteKpiTarget,
   useGetKpiSettings, useUpsertKpiSettings,
 } from "@workspace/api-client-react";
@@ -575,8 +575,31 @@ export default function ManagementKpisPage() {
     { query: { queryKey: ["transactions", txFromISO] } },
   );
 
+  // Product cost prices, used to value COGS for net_profit / gross_margin when a
+  // line item doesn't carry a costPrice snapshot (historical or imported sales).
+  const { data: productsData } = useListProducts(
+    { limit: 1000 },
+    { query: { queryKey: ["kpi-products"] } },
+  );
+
+  // Paid invoices count toward the revenue / transactions / avg_transaction
+  // metrics (matching the server-side dashboard KPI), so the Progress Tracker
+  // reflects the same totals the dashboard tile shows.
+  const { data: invoicesData } = useListInvoices(
+    { status: "paid", limit: 1000 },
+    { query: { queryKey: ["kpi-invoices-paid"] } },
+  );
+
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
-  const txList = (txData?.items ?? []) as { total?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
+  const txList = (txData?.items ?? []) as { total?: number; taxTotal?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
+  const productList = (productsData?.items ?? []) as { id: number; costPrice?: number | null }[];
+  const paidInvoices = (invoicesData?.items ?? []) as { total?: number; paidAt?: string | null }[];
+
+  const productCostById = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of productList) if (p.costPrice != null) m.set(p.id, p.costPrice);
+    return m;
+  }, [productList]);
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
     upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
@@ -679,6 +702,17 @@ export default function ManagementKpisPage() {
   // Per-KPI actual values, each filtered to its own period window.
   const actualValuesByKpiId = useMemo(() => {
     const result: Record<string, number> = {};
+    // COGS for a set of transactions: prefer the line-item costPrice snapshot,
+    // fall back to the product's current cost price, then 0. Mirrors the
+    // server-side Net Profit / Gross Margin calculation in the KPI route.
+    const cogsOf = (txns: typeof txList) =>
+      txns.reduce((s, t) => {
+        const items = (t.items ?? []) as { quantity?: number; costPrice?: number; productId?: number }[];
+        return s + items.reduce((si, i) => {
+          const unitCost = i.costPrice ?? (i.productId != null ? productCostById.get(i.productId) ?? 0 : 0);
+          return si + unitCost * (i.quantity ?? 1);
+        }, 0);
+      }, 0);
     const allActive = targets.filter((t) => t.isActive);
     for (const kpi of allActive) {
       const periodStart = getPeriodStart(kpi.period, weekStartDay, kpi.startDate || null);
@@ -686,18 +720,30 @@ export default function ManagementKpisPage() {
         (t) => t.status === "completed" && t.createdAt != null && new Date(t.createdAt) >= periodStart,
       );
       const revenue = txInPeriod.reduce((s, t) => s + (t.total ?? 0), 0);
+      // Ex-GST revenue (total minus the GST component) is the basis for the
+      // COGS-derived profit metrics, matching the Profit & Loss report.
+      const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
       const count   = txInPeriod.length;
+
+      // Paid invoices in the same window contribute to the revenue family only.
+      const invInPeriod = paidInvoices.filter(
+        (inv) => inv.paidAt != null && new Date(inv.paidAt) >= periodStart,
+      );
+      const invRevenue = invInPeriod.reduce((s, inv) => s + (inv.total ?? 0), 0);
+      const invCount   = invInPeriod.length;
+      const salesRevenue = revenue + invRevenue;
+      const salesCount   = count + invCount;
 
       let actual = 0;
       switch (kpi.metric) {
         case "revenue":
-          actual = Math.round(revenue * 100) / 100;
+          actual = Math.round(salesRevenue * 100) / 100;
           break;
         case "transactions":
-          actual = count;
+          actual = salesCount;
           break;
         case "avg_transaction":
-          actual = count > 0 ? Math.round((revenue / count) * 100) / 100 : 0;
+          actual = salesCount > 0 ? Math.round((salesRevenue / salesCount) * 100) / 100 : 0;
           break;
         case "items_per_transaction": {
           const totalItems = txInPeriod.reduce((s, t) => {
@@ -708,19 +754,13 @@ export default function ManagementKpisPage() {
           break;
         }
         case "net_profit": {
-          const cogs = txInPeriod.reduce((s, t) => {
-            const items = (t.items ?? []) as { quantity?: number; costPrice?: number }[];
-            return s + items.reduce((si, i) => si + (i.costPrice ?? 0) * (i.quantity ?? 1), 0);
-          }, 0);
-          actual = Math.round((revenue - cogs) * 100) / 100;
+          const cogs = cogsOf(txInPeriod);
+          actual = Math.round((exGstRevenue - cogs) * 100) / 100;
           break;
         }
         case "gross_margin": {
-          const cogs = txInPeriod.reduce((s, t) => {
-            const items = (t.items ?? []) as { quantity?: number; costPrice?: number }[];
-            return s + items.reduce((si, i) => si + (i.costPrice ?? 0) * (i.quantity ?? 1), 0);
-          }, 0);
-          actual = revenue > 0 ? Math.round(((revenue - cogs) / revenue) * 10000) / 100 : 0;
+          const cogs = cogsOf(txInPeriod);
+          actual = exGstRevenue > 0 ? Math.round(((exGstRevenue - cogs) / exGstRevenue) * 10000) / 100 : 0;
           break;
         }
         default:
@@ -729,7 +769,7 @@ export default function ManagementKpisPage() {
       result[kpi.id] = actual;
     }
     return result;
-  }, [txList, targets, weekStartDay]);
+  }, [txList, paidInvoices, targets, weekStartDay, productCostById]);
 
   const { storeWide, staffTargets, allWithRewards, inactiveTargets } = useMemo(() => ({
     storeWide:       targets.filter((t) => t.staffIds.length === 0 && t.isActive),

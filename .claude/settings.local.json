@@ -97,7 +97,19 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(npx vite *)",
       "Bash(npx jest *)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(env)",
+      "Bash(sed -n '65,105p' /home/runner/workspace/artifacts/api-server/src/routes/purchase-orders.ts)",
+      "Bash(sed -n '320,360p' /home/runner/workspace/artifacts/api-server/src/routes/purchase-orders.ts)",
+      "Bash(sed -n '200,240p' /home/runner/workspace/artifacts/api-server/src/routes/products.ts)",
+      "Bash(sed -n '575,600p' /home/runner/workspace/artifacts/api-server/src/routes/products.ts)",
+      "Bash(git -C /home/runner/workspace log --oneline -10)",
+      "Bash(git -C /home/runner/workspace diff --name-only HEAD)",
+      "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/routes/kpi.ts artifacts/koapos/src/pages/app/management-kpis.tsx lib/db/src/schema/product-price-history.ts lib/db/src/schema/products.ts package.json scripts/package.json)",
+      "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/services/htmlToPdf.ts)",
+      "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/routes/purchase-orders.ts)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

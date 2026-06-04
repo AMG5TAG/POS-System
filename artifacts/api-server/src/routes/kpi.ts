@@ -197,15 +197,19 @@ router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<
       actual = Number(r?.count ?? 0);
 
     } else if (metric === "appointments") {
+      // Metric is "Appointments Completed" — only count completed ones, not
+      // those still scheduled/cancelled.
       const [r] = await db.select({ count: sql<string>`COUNT(*)` })
         .from(appointmentsTable)
-        .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, periodStart)));
+        .where(and(eq(appointmentsTable.merchantId, merchantId), eq(appointmentsTable.status, "completed"), gte(appointmentsTable.scheduledAt, periodStart)));
       actual = Number(r?.count ?? 0);
 
     } else if (metric === "services") {
+      // Metric is "Services Completed" — only count completed service jobs, not
+      // pending/in-progress ones.
       const [r] = await db.select({ count: sql<string>`COUNT(*)` })
         .from(serviceJobsTable)
-        .where(and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, periodStart)));
+        .where(and(eq(serviceJobsTable.merchantId, merchantId), eq(serviceJobsTable.status, "completed"), gte(serviceJobsTable.createdAt, periodStart)));
       actual = Number(r?.count ?? 0);
 
     } else if (metric === "items_per_transaction") {
@@ -223,30 +227,44 @@ router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<
       actual = Math.round(Number((rows.rows[0] as { avg_items: number })?.avg_items ?? 0) * 100) / 100;
 
     } else if (metric === "net_profit" || metric === "gross_margin") {
-      // Revenue from transactions + paid invoices
+      // Net Profit and Gross Margin are COGS-derived, so they are based on POS
+      // transactions only. Invoices are excluded: their line items are free-text
+      // services with no product link or cost price, so no COGS can be matched —
+      // including invoice revenue here would silently treat it as 100% margin and
+      // inflate both figures. (The revenue/transactions/avg_transaction metrics
+      // above still include paid invoices, since those are pure revenue figures.)
+      // Revenue is taken ex-GST (total minus the GST component) because GST is
+      // collected on behalf of the ATO, not income. This matches the Profit &
+      // Loss / Margin report convention so Net Profit reconciles across the app.
       const [txnAgg] = await db.select({
-        totalSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+        totalSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN (${transactionsTable.total} - ${transactionsTable.taxTotal})::numeric ELSE 0 END), 0)`,
       }).from(transactionsTable)
         .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart)));
 
-      const [invAgg] = await db.select({
-        invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
-      }).from(invoicesTable)
-        .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)));
+      const totalRevenue = parseFloat(txnAgg?.totalSales ?? "0");
 
-      const totalRevenue = parseFloat(txnAgg?.totalSales ?? "0") + parseFloat(invAgg?.invoiceSales ?? "0");
-
-      // COGS: sum cost_price stored in each transaction item's JSONB
+      // COGS: cost of goods sold for the period. Prefer the cost snapshotted on
+      // the line item at sale time; fall back to the product's current cost_price
+      // when the snapshot is missing (historical or imported sales). Matches the
+      // COGS calculation used by the dashboard summary and Margin report so Net
+      // Profit / Gross Margin stay consistent across the app. Filtering on
+      // costPrice IS NOT NULL (the previous behaviour) silently dropped every
+      // line that lacked a snapshot, forcing COGS to 0 and Net Profit to equal
+      // revenue.
       const cogsRows = await db.execute(sql`
         SELECT COALESCE(SUM(
-          (item->>'quantity')::numeric * (item->>'costPrice')::numeric
+          (item->>'quantity')::numeric
+          * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
         ), 0)::float AS total_cogs
-        FROM transactions, jsonb_array_elements(items) AS item
-        WHERE merchant_id = ${merchantId}
-          AND status = 'completed'
-          AND created_at >= ${periodStart}
-          AND jsonb_typeof(items) = 'array'
-          AND item->>'costPrice' IS NOT NULL
+        FROM transactions t
+        CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
+        LEFT JOIN products p
+          ON p.id = (item->>'productId')::int
+         AND p.merchant_id = t.merchant_id
+        WHERE t.merchant_id = ${merchantId}
+          AND t.status = 'completed'
+          AND t.created_at >= ${periodStart}
+          AND jsonb_typeof(t.items) = 'array'
       `);
       const totalCogs = Number((cogsRows.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
 

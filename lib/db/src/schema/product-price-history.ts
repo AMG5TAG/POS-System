@@ -8,6 +8,9 @@ export const productPriceHistoryTable = pgTable("product_price_history", {
   merchantId:   integer("merchant_id").notNull().references(() => merchantsTable.id),
   productId:    integer("product_id").notNull().references(() => productsTable.id),
   costPrice:    numeric("cost_price", { precision: 10, scale: 2 }).notNull(),
+  retailPrice:  numeric("retail_price", { precision: 10, scale: 2 }),
+  // "manual" = edited via product form, "po" = updated from Purchase Order, "import" = CSV import
+  source:       text("source").notNull().default("manual"),
   supplierName: text("supplier_name"),
   poNumber:     text("po_number"),
   poId:         integer("po_id").references(() => purchaseOrdersTable.id),

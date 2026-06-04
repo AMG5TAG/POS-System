@@ -124,7 +124,7 @@ export default function OnlineShippingPage() {
 
   // Merge ALL_CARRIERS with DB state (connected flag)
   const carriers: Carrier[] = ALL_CARRIERS.map((c) => {
-    const saved = (rawCarriers as Record<string, unknown>[]).find(
+    const saved = (rawCarriers as unknown as Record<string, unknown>[]).find(
       (r) => String(r.carrierId ?? r.id ?? "") === c.id
     );
     if (!saved) return c;

@@ -738,8 +738,8 @@ export default function MarketingQRCodesPage() {
   const createTemplate = useCreateQrSavedTemplate();
   const deleteTemplate = useDeleteQrSavedTemplate();
 
-  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as Record<string, unknown>[]).map(apiToEntry);
-  const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as Record<string, unknown>[]).map(apiToTemplate);
+  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as unknown as Record<string, unknown>[]).map(apiToEntry);
+  const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToTemplate);
 
   const [qrType,       setQrType]       = useState<QRCodeType>("website");
   const [content,      setContent]      = useState<QRTypeContent>({ url: "https://" });
