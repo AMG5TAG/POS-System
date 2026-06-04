@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -2542,6 +2542,17 @@ export default function CustomersPage() {
   const deleteMutation = useDeleteCustomer();
 
   const customers = customersData?.items || [];
+
+  /* ── Open customer from global search ── */
+  useLayoutEffect(() => {
+    const id = sessionStorage.getItem("koapos_open_customer");
+    if (!id || !customers.length) return;
+    const found = customers.find((c) => String(c.id) === id);
+    if (found) {
+      sessionStorage.removeItem("koapos_open_customer");
+      setSelectedCustomer(found);
+    }
+  }, [customers]);
 
   /* ── Full customer list (no search) for duplicate scanning ── */
   const { data: allCustomersRaw } = useListCustomers({ limit: 1000 });

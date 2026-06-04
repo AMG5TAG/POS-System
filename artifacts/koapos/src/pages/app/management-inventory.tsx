@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Boxes, Shuffle } from "lucide-react";
+import { Boxes } from "lucide-react";
 import { toast } from "sonner";
 import {
   useGetInventorySettings,
@@ -15,12 +15,8 @@ import {
 const INVENTORY_TABS = [
   { href: "#display",       label: "Display",        icon: Boxes },
   { href: "#group-pricing", label: "Group Pricing" },
-  { href: "#sku-generator", label: "SKU Generator",  icon: Shuffle },
 ];
 
-function previewSKU(prefix: string) {
-  return `${prefix || "KP"}-${Math.floor(10000 + Math.random() * 90000)}`;
-}
 
 export default function ManagementInventoryPage() {
   const { data: settings, isLoading } = useGetInventorySettings();
@@ -28,15 +24,11 @@ export default function ManagementInventoryPage() {
 
   const [showHideCostsBtn, setShowHideCostsBtnState] = useState(true);
   const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
-  const [skuPrefix, setSkuPrefix] = useState("KP");
-  const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
 
   useEffect(() => {
     if (settings) {
       setShowHideCostsBtnState(settings.showCosts !== "false");
       setEnableGroupPricingState(settings.groupPricing !== "false");
-      setSkuPrefix(settings.skuPrefix || "KP");
-      setSkuPreview(previewSKU(settings.skuPrefix || "KP"));
     }
   }, [settings]);
 
@@ -60,13 +52,6 @@ export default function ManagementInventoryPage() {
     setEnableGroupPricingState(v);
     persist({ groupPricing: v ? "true" : "false" });
     toast.success(v ? "Customer Group Pricing enabled" : "Customer Group Pricing disabled");
-  }
-
-  function handleSkuPrefixChange(v: string) {
-    const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-    setSkuPrefix(clean);
-    setSkuPreview(previewSKU(clean));
-    persist({ skuPrefix: clean });
   }
 
   if (isLoading) {
@@ -136,42 +121,6 @@ export default function ManagementInventoryPage() {
               </div>
               <Switch checked={enableGroupPricing} onCheckedChange={toggleGroupPricing} />
             </div>
-          </div>
-        </div>
-
-        <div id="sku-generator" className="rounded-lg border lg:col-span-2">
-          <div className="px-5 py-4 border-b">
-            <p className="font-semibold">SKU Generator</p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Set the prefix used when auto-generating SKU codes for products.
-            </p>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="flex items-end gap-3 flex-wrap">
-              <div className="w-[200px]">
-                <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
-                <Input
-                  value={skuPrefix}
-                  onChange={(e) => handleSkuPrefixChange(e.target.value)}
-                  placeholder="KP"
-                  maxLength={6}
-                  className="mt-1.5 font-mono uppercase"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 mb-0.5"
-                onClick={() => setSkuPreview(previewSKU(skuPrefix))}
-              >
-                <Shuffle className="w-3.5 h-3.5" /> Refresh Preview
-              </Button>
-              <span className="text-sm text-muted-foreground mb-1 font-mono">{skuPreview}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Generated format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span>
-            </p>
           </div>
         </div>
 

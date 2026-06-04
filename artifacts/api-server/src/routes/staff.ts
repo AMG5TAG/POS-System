@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, staffTable, transactionsTable } from "@workspace/db";
+import { db, staffTable, transactionsTable, merchantsTable } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -9,6 +9,7 @@ import {
   UpdateStaffBody,
   DeleteStaffParams,
 } from "@workspace/api-zod";
+import { sendEmail } from "../services/email";
 
 const router: IRouter = Router();
 
@@ -67,6 +68,30 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
       merchantId: req.session.merchantId!,
     })
     .returning();
+
+  if (member.email && parsed.data.pin) {
+    const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, req.session.merchantId!)).limit(1);
+    const businessName = merchant?.businessName ?? "Your employer";
+    const pin = parsed.data.pin;
+    const firstName = member.firstName ?? member.name.split(" ")[0];
+    await sendEmail(req.session.merchantId!, {
+      to: member.email,
+      subject: `Welcome to ${businessName} — your POS login PIN`,
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
+          <h2 style="margin-bottom:4px">Welcome, ${firstName}!</h2>
+          <p style="color:#555;margin-top:0">You've been added as a staff member at <strong>${businessName}</strong>.</p>
+          <p>Your PIN to sign into the POS system is:</p>
+          <div style="font-size:32px;font-weight:700;letter-spacing:12px;text-align:center;background:#f4f4f5;border-radius:8px;padding:20px 0;margin:16px 0">${pin}</div>
+          <p style="color:#555;font-size:13px">Use this PIN when prompted at the POS register to switch to your account. Keep it private.</p>
+          <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0"/>
+          <p style="color:#999;font-size:12px">This message was sent by ${businessName} via KoaPOS. If you were not expecting this email, please disregard it.</p>
+        </div>
+      `,
+      text: `Welcome, ${firstName}!\n\nYou've been added as a staff member at ${businessName}.\n\nYour POS PIN is: ${pin}\n\nUse this PIN at the register to switch to your account. Keep it private.`,
+    }).catch(() => { /* non-fatal — staff record is already saved */ });
+  }
+
   res.status(201).json(formatStaff(member));
 });
 

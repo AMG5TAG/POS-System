@@ -109,28 +109,6 @@ export default function SettingsTaxPage() {
     }
   }, [dbExt]);
 
-  const handleSaveExt = () => {
-    updateExt.mutate(
-      {
-        data: {
-          fiscalYearStart: String(ext.fiscalYearStart),
-          taxLabel: ext.taxLabel,
-          customTaxLabel: ext.customTaxLabel,
-          taxNumberLabel: ext.taxNumberLabel,
-          receiptPaperSize: ext.receiptPaperSize,
-          defaultTaxRate: ext.defaultTaxRate,
-        } as any,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Tax settings saved");
-          setDirtyExt(false);
-          queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
-        },
-        onError: () => toast.error("Failed to save tax settings"),
-      }
-    );
-  };
 
   const [form, setForm] = useState({
     gstEnabled: "true",
@@ -161,22 +139,38 @@ export default function SettingsTaxPage() {
         receiptFooter: settings.receiptFooter ?? "",
       });
     }
-  }, [settings]);
+  }, [settings, merchant]);
 
-  const handleSave = () => {
-    updateSettings.mutate(
-      { data: {
-        ...form,
-        gstRate: parseFloat(form.gstRate) || 10,
-        gstNumber: form.gstNumber || undefined,
-        receiptHeader: form.receiptHeader || undefined,
-        receiptFooter: form.receiptFooter || undefined,
-      } },
-      {
-        onSuccess: () => { toast.success("Tax settings saved"); setDirtyGst(false); },
-        onError: () => toast.error("Failed to save settings"),
-      }
-    );
+  const handleSave = async () => {
+    try {
+      await Promise.all([
+        updateSettings.mutateAsync({
+          data: {
+            ...form,
+            gstRate: parseFloat(form.gstRate) || 10,
+            gstNumber: form.gstNumber || undefined,
+            receiptHeader: form.receiptHeader || undefined,
+            receiptFooter: form.receiptFooter || undefined,
+          },
+        }),
+        updateExt.mutateAsync({
+          data: {
+            fiscalYearStart: String(ext.fiscalYearStart),
+            taxLabel: ext.taxLabel,
+            customTaxLabel: ext.customTaxLabel,
+            taxNumberLabel: ext.taxNumberLabel,
+            receiptPaperSize: ext.receiptPaperSize,
+            defaultTaxRate: ext.defaultTaxRate,
+          } as any,
+        }),
+      ]);
+      toast.success("Tax settings saved");
+      setDirtyGst(false);
+      setDirtyExt(false);
+      queryClient.invalidateQueries({ queryKey: ["regionalExtSettings"] });
+    } catch {
+      toast.error("Failed to save settings");
+    }
   };
 
   const bool = (v: string) => v === "true";
@@ -353,9 +347,6 @@ export default function SettingsTaxPage() {
                 Your fiscal year runs from <strong>{MONTHS[ext.fiscalYearStart - 1]}</strong> to <strong>{fiscalEnd}</strong>.
                 Australia &amp; NZ standard is 1 July — 30 June. US standard is January — December.
               </p>
-              <div className="flex justify-end">
-                <Button size="sm" onClick={handleSaveExt}>Save Fiscal Year</Button>
-              </div>
             </CardContent>
           </Card>
 
@@ -431,15 +422,12 @@ export default function SettingsTaxPage() {
                 className="max-w-40"
               />
             </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveExt}>Save Tax &amp; Compliance</Button>
-            </div>
           </CardContent>
         </Card>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={updateSettings.isPending} className="min-w-32">
-            {updateSettings.isPending ? "Saving..." : "Save Settings"}
+          <Button onClick={handleSave} disabled={updateSettings.isPending || updateExt.isPending} className="min-w-32">
+            {updateSettings.isPending || updateExt.isPending ? "Saving..." : "Save Settings"}
           </Button>
         </div>
 

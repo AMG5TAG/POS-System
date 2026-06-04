@@ -1210,7 +1210,7 @@ export default function POSInvoicesPage() {
                       <Mail className="w-3.5 h-3.5" /> Email
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => toast.info("SMS receipts require an SMS integration in Management → Integrations")}>
+                      onClick={() => toast.info("SMS receipts require an SMS integration — configure it in Management → Marketing and Reports → SMS")}>
                       <MessageSquare className="w-3.5 h-3.5" /> SMS
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"

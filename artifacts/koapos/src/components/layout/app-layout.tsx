@@ -90,9 +90,19 @@ const MARKETING_SUBNAV: NavItem[] = [
   {
     name: "Email",
     icon: Mail,
+    href: "/marketing/email/campaigns",
     children: [
       { name: "Campaigns", href: "/marketing/email/campaigns", icon: Send },
       { name: "Templates",       href: "/marketing/email/templates",  icon: FileText },
+    ],
+  },
+  {
+    name: "SMS",
+    icon: MessageSquare,
+    href: "/marketing/sms/campaigns",
+    children: [
+      { name: "Campaigns", href: "/marketing/sms/campaigns", icon: Send },
+      { name: "Templates", href: "/marketing/sms/templates",  icon: FileText },
     ],
   },
   {
@@ -188,7 +198,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
       { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
-      { name: "Email",          href: "/management/email",                icon: Mail       },
       { name: "Forms & Files",  href: "/management/forms",                icon: FileText   },
       { name: "AI Assistant",   href: "/management/ai",                   icon: Brain      },
     ],
@@ -210,6 +219,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
         ],
       },
       { name: "SMS",               href: "/management/sms",           icon: MessageSquare  },
+      { name: "Emails",            href: "/management/email",         icon: Mail           },
       { name: "Integrations",      href: "/management/integrations",  icon: Plug,
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
       { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
@@ -263,7 +273,7 @@ const SEARCH_INDEX = [
   { label: "Customers · Heard From", href: "/management/customers/heard-from", icon: Radio,         group: "Management" },
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
   { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
-  { label: "Email Settings",      href: "/management/email",                      icon: Mail,         group: "Management" },
+  { label: "Emails",              href: "/management/email",                      icon: Mail,         group: "Management" },
   { label: "SMS Settings",        href: "/management/sms",                        icon: MessageSquare, group: "Management" },
   { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
   { label: "Floor Plan",         href: "/management/floor-plan",       icon: Map,             group: "Management" },
@@ -293,8 +303,10 @@ const SEARCH_INDEX = [
   { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Marketing · Overview",             href: "/marketing",                          icon: BarChart2,  group: "Marketing" },
-  { label: "Marketing · Campaigns",            href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
+  { label: "Marketing · Email Campaigns",       href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
+  { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
+  { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
   { label: "Marketing · QR Codes",             href: "/marketing/generators/qr-codes",      icon: QrCode,     group: "Marketing" },
   { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
@@ -395,7 +407,7 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/product-types":    ["Management", "Inventory", "Product Types"],
   "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
   "/management/tax":              ["Management", "Tax Settings"],
-  "/management/email":            ["Management", "Email"],
+  "/management/email":            ["Management", "Settings & Integrations", "Emails"],
   "/management/sms":              ["Management", "Settings & Integrations", "SMS"],
   "/management/templates":        ["Management", "Templates", "Sales"],
   "/management/misc-templates":   ["Management", "Templates", "Misc"],
@@ -405,8 +417,10 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/stickers":          ["Management", "Templates", "Stickers"],
   "/management/sticker-templates": ["Management", "Templates", "Sticker Templates"],
   "/marketing":                            ["Marketing", "Overview"],
-  "/marketing/email/campaigns":            ["Marketing", "Campaigns"],
-  "/marketing/email/templates":            ["Marketing", "Email Templates"],
+  "/marketing/email/campaigns":            ["Marketing", "Email", "Campaigns"],
+  "/marketing/email/templates":            ["Marketing", "Email", "Templates"],
+  "/marketing/sms/campaigns":             ["Marketing", "SMS", "Campaigns"],
+  "/marketing/sms/templates":             ["Marketing", "SMS", "Templates"],
   "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
   "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
   "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
@@ -637,6 +651,10 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
         href: "/customers",
         icon: Users,
         group: "Customer",
+        action: () => {
+          sessionStorage.setItem("koapos_open_customer", String(c.id));
+          navigate("/customers");
+        },
       }));
     if (customers.length) sections.push({ title: "Customers", items: customers });
 
@@ -741,6 +759,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     setOpenWithCallback(false);
     setQuery("");
     setDebouncedQ("");
+    inputRef.current?.blur();
   };
 
   return (

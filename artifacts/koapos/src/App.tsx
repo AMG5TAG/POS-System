@@ -105,6 +105,8 @@ import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
 import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
 import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
 import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
+import MarketingSmsCampaignsPage from "@/pages/app/marketing-sms-campaigns";
+import MarketingSmsTemplatesPage from "@/pages/app/marketing-sms-templates";
 import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
 import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
 import ManagementMarketingAutomationPage from "@/pages/app/management-marketing-automation";
@@ -341,6 +343,9 @@ function Router() {
       </Route>
       <Route path="/service-jobs/new">
         <ProtectedRoute component={ServiceJobNewPage} />
+      </Route>
+      <Route path="/service-jobs/:id">
+        <ProtectedRoute component={ServiceJobsPage} />
       </Route>
       <Route path="/service-jobs">
         <ProtectedRoute component={ServiceJobsPage} />
@@ -595,11 +600,23 @@ function Router() {
       <Route path="/marketing">
         <ProtectedRoute component={MarketingPage} />
       </Route>
+      <Route path="/marketing/email">
+        <Redirect to="/marketing/email/campaigns" />
+      </Route>
       <Route path="/marketing/email/campaigns">
         <ProtectedRoute component={MarketingEmailCampaignsPage} />
       </Route>
       <Route path="/marketing/email/templates">
         <ProtectedRoute component={MarketingEmailTemplatesPage} />
+      </Route>
+      <Route path="/marketing/sms">
+        <Redirect to="/marketing/sms/campaigns" />
+      </Route>
+      <Route path="/marketing/sms/campaigns">
+        <ProtectedRoute component={MarketingSmsCampaignsPage} />
+      </Route>
+      <Route path="/marketing/sms/templates">
+        <ProtectedRoute component={MarketingSmsTemplatesPage} />
       </Route>
       <Route path="/marketing/landing-pages">
         <ProtectedRoute component={MarketingLandingPagesPage} />

@@ -414,7 +414,13 @@ import type {
   XeroSyncLogEntry,
   XeroSyncResult,
   XeroTenant,
-  XeroTenantSelectInput
+  XeroTenantSelectInput,
+  SmsCampaign,
+  SmsCampaignInput,
+  SmsCampaignListResponse,
+  SmsTemplate,
+  SmsTemplateInput,
+  SmsTemplateListResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -30672,3 +30678,150 @@ export function useGetPaymentTotals<
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/* ─── SMS Templates ─────────────────────────────────────────────────────── */
+
+export const getListSmsTemplatesUrl = () => `/api/sms-templates`;
+
+export const listSmsTemplates = async (options?: RequestInit): Promise<SmsTemplateListResponse> =>
+  customFetch<SmsTemplateListResponse>(getListSmsTemplatesUrl(), { ...options, method: 'GET' });
+
+export const getListSmsTemplatesQueryKey = () => [`/api/sms-templates`] as const;
+
+export const getListSmsTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listSmsTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSmsTemplates>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSmsTemplatesQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSmsTemplates>>> = ({ signal }) => listSmsTemplates({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listSmsTemplates>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListSmsTemplates<TData = Awaited<ReturnType<typeof listSmsTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSmsTemplates>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSmsTemplatesQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCreateSmsTemplateUrl = () => `/api/sms-templates`;
+
+export const createSmsTemplate = async (smsTemplateInput: SmsTemplateInput, options?: RequestInit): Promise<SmsTemplate> =>
+  customFetch<SmsTemplate>(getCreateSmsTemplateUrl(), { ...options, method: 'POST', headers: { 'Content-Type': 'application/json', ...options?.headers }, body: JSON.stringify(smsTemplateInput) });
+
+export const getCreateSmsTemplateMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createSmsTemplate>>, TError, { data: BodyType<SmsTemplateInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof createSmsTemplate>>, TError, { data: BodyType<SmsTemplateInput> }, TContext> => {
+  const mutationKey = ['createSmsTemplate'];
+  const { mutation: mutationOptions, request: requestOptions } = options ? (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ? options : { ...options, mutation: { ...options.mutation, mutationKey } }) : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSmsTemplate>>, { data: BodyType<SmsTemplateInput> }> = (props) => { const { data } = props ?? {}; return createSmsTemplate(data, requestOptions); };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useCreateSmsTemplate = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createSmsTemplate>>, TError, { data: BodyType<SmsTemplateInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof createSmsTemplate>>, TError, { data: BodyType<SmsTemplateInput> }, TContext> =>
+  useMutation(getCreateSmsTemplateMutationOptions(options));
+
+export const getUpdateSmsTemplateUrl = (id: number) => `/api/sms-templates/${id}`;
+
+export const updateSmsTemplate = async (id: number, smsTemplateInput: SmsTemplateInput, options?: RequestInit): Promise<SmsTemplate> =>
+  customFetch<SmsTemplate>(getUpdateSmsTemplateUrl(id), { ...options, method: 'PATCH', headers: { 'Content-Type': 'application/json', ...options?.headers }, body: JSON.stringify(smsTemplateInput) });
+
+export const getUpdateSmsTemplateMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateSmsTemplate>>, TError, { id: number; data: BodyType<SmsTemplateInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof updateSmsTemplate>>, TError, { id: number; data: BodyType<SmsTemplateInput> }, TContext> => {
+  const mutationKey = ['updateSmsTemplate'];
+  const { mutation: mutationOptions, request: requestOptions } = options ? (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ? options : { ...options, mutation: { ...options.mutation, mutationKey } }) : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSmsTemplate>>, { id: number; data: BodyType<SmsTemplateInput> }> = (props) => { const { id, data } = props ?? {}; return updateSmsTemplate(id, data, requestOptions); };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateSmsTemplate = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateSmsTemplate>>, TError, { id: number; data: BodyType<SmsTemplateInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof updateSmsTemplate>>, TError, { id: number; data: BodyType<SmsTemplateInput> }, TContext> =>
+  useMutation(getUpdateSmsTemplateMutationOptions(options));
+
+export const getDeleteSmsTemplateUrl = (id: number) => `/api/sms-templates/${id}`;
+
+export const deleteSmsTemplate = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteSmsTemplateUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteSmsTemplateMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSmsTemplate>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSmsTemplate>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteSmsTemplate'];
+  const { mutation: mutationOptions, request: requestOptions } = options ? (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ? options : { ...options, mutation: { ...options.mutation, mutationKey } }) : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSmsTemplate>>, { id: number }> = (props) => { const { id } = props ?? {}; return deleteSmsTemplate(id, requestOptions); };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteSmsTemplate = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSmsTemplate>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof deleteSmsTemplate>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteSmsTemplateMutationOptions(options));
+
+/* ─── SMS Campaigns ─────────────────────────────────────────────────────── */
+
+export const getListSmsCampaignsUrl = () => `/api/sms-campaigns`;
+
+export const listSmsCampaigns = async (options?: RequestInit): Promise<SmsCampaignListResponse> =>
+  customFetch<SmsCampaignListResponse>(getListSmsCampaignsUrl(), { ...options, method: 'GET' });
+
+export const getListSmsCampaignsQueryKey = () => [`/api/sms-campaigns`] as const;
+
+export const getListSmsCampaignsQueryOptions = <TData = Awaited<ReturnType<typeof listSmsCampaigns>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSmsCampaigns>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSmsCampaignsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSmsCampaigns>>> = ({ signal }) => listSmsCampaigns({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listSmsCampaigns>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListSmsCampaigns<TData = Awaited<ReturnType<typeof listSmsCampaigns>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSmsCampaigns>>, TError, TData>; request?: SecondParameter<typeof customFetch> },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSmsCampaignsQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCreateSmsCampaignUrl = () => `/api/sms-campaigns`;
+
+export const createSmsCampaign = async (smsCampaignInput: SmsCampaignInput, options?: RequestInit): Promise<SmsCampaign> =>
+  customFetch<SmsCampaign>(getCreateSmsCampaignUrl(), { ...options, method: 'POST', headers: { 'Content-Type': 'application/json', ...options?.headers }, body: JSON.stringify(smsCampaignInput) });
+
+export const getCreateSmsCampaignMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createSmsCampaign>>, TError, { data: BodyType<SmsCampaignInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof createSmsCampaign>>, TError, { data: BodyType<SmsCampaignInput> }, TContext> => {
+  const mutationKey = ['createSmsCampaign'];
+  const { mutation: mutationOptions, request: requestOptions } = options ? (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ? options : { ...options, mutation: { ...options.mutation, mutationKey } }) : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSmsCampaign>>, { data: BodyType<SmsCampaignInput> }> = (props) => { const { data } = props ?? {}; return createSmsCampaign(data, requestOptions); };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useCreateSmsCampaign = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createSmsCampaign>>, TError, { data: BodyType<SmsCampaignInput> }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof createSmsCampaign>>, TError, { data: BodyType<SmsCampaignInput> }, TContext> =>
+  useMutation(getCreateSmsCampaignMutationOptions(options));
+
+export const getDeleteSmsCampaignUrl = (id: number) => `/api/sms-campaigns/${id}`;
+
+export const deleteSmsCampaign = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteSmsCampaignUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteSmsCampaignMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSmsCampaign>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSmsCampaign>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteSmsCampaign'];
+  const { mutation: mutationOptions, request: requestOptions } = options ? (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ? options : { ...options, mutation: { ...options.mutation, mutationKey } }) : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSmsCampaign>>, { id: number }> = (props) => { const { id } = props ?? {}; return deleteSmsCampaign(id, requestOptions); };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteSmsCampaign = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSmsCampaign>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> },
+): UseMutationResult<Awaited<ReturnType<typeof deleteSmsCampaign>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteSmsCampaignMutationOptions(options));

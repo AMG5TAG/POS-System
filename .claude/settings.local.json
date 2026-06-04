@@ -87,7 +87,16 @@
       "Bash(pnpm --filter @workspace/api-server exec tsc --noEmit)",
       "Bash(pnpm --filter @workspace/db exec tsc --project tsconfig.json)",
       "Bash(pnpm --filter @workspace/api-client-react exec tsc --project tsconfig.json)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(xargs ls)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('version:', p.get\\('version'\\)\\); exports=p.get\\('exports',{}\\); print\\('has /v4:', '/v4' in exports\\)\")",
+      "Bash(python3 *)",
+      "Bash(pnpm *)",
+      "Bash(curl -s http://localhost:8080/api/kpi-settings)",
+      "Bash(grep -E \"^xlsx$|^exceljs$|^papaparse$\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(npx vite *)",
+      "Bash(npx jest *)"
     ]
   }
 }

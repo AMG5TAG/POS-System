@@ -8,6 +8,7 @@ import {
   useUpsertSalesTemplate,
   useGetRegionalExtSettings,
   useUpdateRegionalExtSettings,
+  useListPartnerReferrals,
   type SalesTemplate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -113,6 +114,7 @@ export interface TplOpts {
   jobNoFontSize:        string;
   showLogins:           boolean;
   showFormsFiles:       boolean;
+  defaultPrintCopies:   string;
   // Customer PDF section toggles
   showTransactions:     boolean;
   showAppointments:     boolean;
@@ -141,7 +143,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
-  showLogins: false, showFormsFiles: false,
+  showLogins: false, showFormsFiles: false, defaultPrintCopies: "1",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
   fontFamily: "inter",
@@ -306,6 +308,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Print",    key: "defaultPrintCopies",   label: "Default Print Copies",     type: "text",     placeholder: "1", hint: "Number of copies pre-filled in the print dialog" },
     ];
     case "Customer_PDF": return [
       { section: "Header", key: "showLogo",            label: "Show Business Logo",     type: "toggle", hint: "Renders your logo in the PDF header" },
@@ -329,19 +332,20 @@ function getOptionsConfig(category: Category): FieldDef[] {
 interface QuickCode   { code: string; label: string; example: string }
 interface QuickCodeGroup { id: string; label: string; icon: React.ElementType; color: string; chipBg: string; codes: QuickCode[] }
 
-function buildQuickCodeGroups(businessName: string, abn: string, email: string, website: string, tagline: string, address: string): QuickCodeGroup[] {
+function buildQuickCodeGroups(businessName: string, abn: string, email: string, website: string, tagline: string, address: string, partnerReferralCode: string): QuickCodeGroup[] {
   return [
     {
       id: "business", label: "Business Details", icon: Building2,
       color: "text-blue-700", chipBg: "bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700",
       codes: [
-        { code: "{{business.name}}",    label: "Business Name", example: businessName || "Your Business"      },
-        { code: "{{business.abn}}",     label: "ABN",           example: abn          || "12 345 678 901"     },
-        { code: "{{business.email}}",   label: "Email",         example: email        || "hello@biz.com.au"   },
-        { code: "{{business.phone}}",   label: "Phone",         example: "(03) 9000 0000"                     },
-        { code: "{{business.website}}", label: "Website",       example: website      || "www.yourbiz.com.au" },
-        { code: "{{business.tagline}}", label: "Tagline",       example: tagline      || "Quality you trust"  },
-        { code: "{{business.address}}", label: "Address",       example: address      || "Melbourne VIC 3000" },
+        { code: "{{business.name}}",                   label: "Business Name",          example: businessName       || "Your Business"      },
+        { code: "{{business.abn}}",                    label: "ABN",                    example: abn                || "12 345 678 901"     },
+        { code: "{{business.email}}",                  label: "Email",                  example: email              || "hello@biz.com.au"   },
+        { code: "{{business.phone}}",                  label: "Phone",                  example: "(03) 9000 0000"                           },
+        { code: "{{business.website}}",                label: "Website",                example: website            || "www.yourbiz.com.au" },
+        { code: "{{business.tagline}}",                label: "Tagline",                example: tagline            || "Quality you trust"  },
+        { code: "{{business.address}}",                label: "Address",                example: address            || "Melbourne VIC 3000" },
+        { code: "{{business.partner_referral_code}}", label: "KoaPOS Referral Code",   example: partnerReferralCode || "KOAPOS-XXXX"        },
       ],
     },
     {
@@ -874,19 +878,20 @@ interface PreviewProps {
   opts: TplOpts;
 }
 
-export function resolveCode(text: string, businessName: string, abn: string, website: string, email: string): string {
+export function resolveCode(text: string, businessName: string, abn: string, website: string, email: string, partnerReferralCode = ""): string {
   return text
-    .replace(/{{business\.name}}/g,    businessName)
-    .replace(/{{business\.abn}}/g,     abn)
-    .replace(/{{business\.email}}/g,   email)
-    .replace(/{{business\.website}}/g, website)
-    .replace(/{{business\.phone}}/g,   "(03) 9000 0000")
-    .replace(/{{customer\.name}}/g,    "Sarah Johnson")
-    .replace(/{{customer\.first_name}}/g, "Sarah")
-    .replace(/{{transaction\.total}}/g, "$19.50")
-    .replace(/{{transaction\.date}}/g,  "18/05/2026")
-    .replace(/{{transaction\.number}}/g,"#TXN-1042")
-    .replace(/{{[^}]+}}/g,             "…");
+    .replace(/{{business\.name}}/g,                   businessName)
+    .replace(/{{business\.abn}}/g,                    abn)
+    .replace(/{{business\.email}}/g,                  email)
+    .replace(/{{business\.website}}/g,                website)
+    .replace(/{{business\.phone}}/g,                  "(03) 9000 0000")
+    .replace(/{{business\.partner_referral_code}}/g,  partnerReferralCode || "KOAPOS-XXXX")
+    .replace(/{{customer\.name}}/g,                   "Sarah Johnson")
+    .replace(/{{customer\.first_name}}/g,             "Sarah")
+    .replace(/{{transaction\.total}}/g,               "$19.50")
+    .replace(/{{transaction\.date}}/g,                "18/05/2026")
+    .replace(/{{transaction\.number}}/g,              "#TXN-1042")
+    .replace(/{{[^}]+}}/g,                            "…");
 }
 
 /* ─── Visual QR Code (CSS grid pattern, preview only) ────────────────────── */
@@ -1689,6 +1694,8 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
+  const { data: partnerData } = useListPartnerReferrals({ query: { queryKey: ["partner-referrals"] } });
+  const partnerReferralCode = partnerData?.referralCode ?? "";
 
   const { data: tplData, isLoading: tplLoading } = useListSalesTemplates({
     query: { queryKey: ["sales-templates"] },
@@ -1736,6 +1743,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       (merchant as { city?: string } | undefined)?.city,
       profile.state, profile.postcode,
     ].filter(Boolean).join(", "),
+    partnerReferralCode,
   );
 
   const currentTemplates = TEMPLATES[activeCategory];

@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
+import { KpiImportDialog, type KpiImportRow } from "@/components/kpi-import-dialog";
 import {
   useListStaff, useListTransactions,
   useListKpiTargets, useCreateKpiTarget, useUpdateKpiTarget, useDeleteKpiTarget,
@@ -28,6 +30,7 @@ import {
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
   SplitSquareHorizontal, Flame, Store, Banknote, CalendarDays, Calendar,
+  FileSpreadsheet,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -266,7 +269,7 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
             <div className="space-y-1.5">
               <Label>Period</Label>
               <Select value={form.period} onValueChange={(v) => setField("period", v as KpiPeriod)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.entries(PERIOD_LABELS) as [KpiPeriod, string][]).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
                 </SelectContent>
@@ -492,6 +495,7 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementKpisPage() {
+  const queryClient = useQueryClient();
   const { data: kpiListData, refetch: refetchTargets } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const { data: rawSettings } = useGetKpiSettings({ query: { queryKey: ["kpi-settings"] } });
   const createTarget = useCreateKpiTarget();
@@ -509,6 +513,7 @@ export default function ManagementKpisPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [spreadOpen, setSpreadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<KpiTarget | null>(null);
   const [staffOnly, setStaffOnly] = useState(false);
 
@@ -520,12 +525,14 @@ export default function ManagementKpisPage() {
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
     upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kpi-settings"] }),
       onError: () => toast.error("Failed to save settings"),
     });
   };
 
   const updateWeekStartDay = (day: string) => {
     upsertSettings.mutate({ data: { weekStartDay: day } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kpi-settings"] }),
       onError: () => toast.error("Failed to save settings"),
     });
   };
@@ -547,14 +554,15 @@ export default function ManagementKpisPage() {
       startDate: t.startDate || null,
       endDate: t.endDate || null,
     };
+    const invalidateTargets = () => queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
     if (editing) {
       updateTarget.mutate({ id: Number(editing.id), data: { ...payload, targetId: editing.id } }, {
-        onSuccess: () => { refetchTargets(); toast.success("KPI updated"); },
+        onSuccess: () => { invalidateTargets(); toast.success("KPI updated"); },
         onError: () => toast.error("Failed to update KPI"),
       });
     } else {
       createTarget.mutate({ data: { ...payload, targetId: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` } }, {
-        onSuccess: () => { refetchTargets(); toast.success("KPI created"); },
+        onSuccess: () => { invalidateTargets(); toast.success("KPI created"); },
         onError: () => toast.error("Failed to create KPI"),
       });
     }
@@ -562,7 +570,7 @@ export default function ManagementKpisPage() {
 
   const handleDelete = (id: string) => {
     deleteTarget.mutate({ id: Number(id) }, {
-      onSuccess: () => { refetchTargets(); toast.success("KPI deleted"); },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["kpi-targets"] }); toast.success("KPI deleted"); },
       onError: () => toast.error("Failed to delete KPI"),
     });
   };
@@ -573,12 +581,33 @@ export default function ManagementKpisPage() {
       { id: Number(kpi.id), data: { targetId: kpi.id, name: kpi.name, metric: kpi.metric, period: kpi.period, target: kpi.target, showOnDashboard: currentlyOn ? "false" : "true" } },
       {
         onSuccess: () => {
-          refetchTargets();
+          queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
           toast.success(currentlyOn ? "Removed from dashboard" : `"${kpi.name}" will now show on the dashboard`);
         },
         onError: () => toast.error("Failed to update KPI"),
       },
     );
+  };
+
+  const handleImport = async (rows: KpiImportRow[]) => {
+    await Promise.all(rows.map((row, i) =>
+      createTarget.mutateAsync({
+        data: {
+          targetId: `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          name: row.name,
+          metric: row.metric,
+          period: row.period,
+          target: row.target,
+          staffIds: JSON.stringify([]),
+          notes: row.notes,
+          isActive: row.isActive ? "true" : "false",
+          startDate: row.startDate || null,
+          endDate: row.endDate || null,
+        },
+      })
+    ));
+    queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+    toast.success(`${rows.length} KPI${rows.length !== 1 ? "s" : ""} imported`);
   };
 
   const handleSpread = (newTargets: KpiTarget[]) => {
@@ -630,9 +659,14 @@ export default function ManagementKpisPage() {
             <h1 className="text-2xl font-bold">KPIs & Targets</h1>
             <p className="text-sm text-muted-foreground mt-1">Set performance targets for your store and team, track progress, and reward results.</p>
           </div>
-          <Button onClick={() => openNew()} className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="h-4 w-4 mr-1" />New KPI
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1" />Import
+            </Button>
+            <Button onClick={() => openNew()} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="h-4 w-4 mr-1" />New KPI
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -685,6 +719,29 @@ export default function ManagementKpisPage() {
                 </div>
               </section>
             )}
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" />Available Metrics</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  {(Object.entries(METRIC_META) as [KpiMetric, typeof METRIC_META[KpiMetric]][]).map(([k, m]) => {
+                    const Icon = m.icon;
+                    return (
+                      <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0">
+                        <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-sm flex-1 min-w-0 truncate">{m.label}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Badge variant="outline" className="text-xs font-mono">{m.unit}</Badge>
+                          {m.isInverse && <span className="text-xs text-rose-500">↓</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
@@ -801,28 +858,6 @@ export default function ManagementKpisPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" />Available Metrics</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                    {(Object.entries(METRIC_META) as [KpiMetric, typeof METRIC_META[KpiMetric]][]).map(([k, m]) => {
-                      const Icon = m.icon;
-                      return (
-                        <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0">
-                          <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm flex-1 min-w-0 truncate">{m.label}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Badge variant="outline" className="text-xs font-mono">{m.unit}</Badge>
-                            {m.isInverse && <span className="text-xs text-rose-500">↓</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
             </section>
           </div>
         </div>
@@ -837,6 +872,10 @@ export default function ManagementKpisPage() {
       <SpreadDialog
         open={spreadOpen} onOpenChange={setSpreadOpen}
         storeTargets={targets} staffList={staffList} onSpread={handleSpread}
+      />
+      <KpiImportDialog
+        open={importOpen} onOpenChange={setImportOpen}
+        onImport={handleImport}
       />
     </AppLayout>
   );

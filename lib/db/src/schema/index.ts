@@ -98,3 +98,5 @@ export * from "./merchant-security-settings";
 export * from "./merchant-backups";
 export * from "./partner-referrals";
 export * from "./staff-timesheets";
+export * from "./sms-campaigns";
+export * from "./sms-templates";

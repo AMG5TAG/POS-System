@@ -20,6 +20,7 @@ import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
   ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Download, Calendar, Receipt,
+  RefreshCw, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,10 +56,14 @@ type WizardForm = {
 
 const emptyAddress = (): AddressFields => ({ street: "", city: "", state: "", postcode: "", country: "Australia" });
 
+function generatePin(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 const defaultForm = (): WizardForm => ({
   firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "", company: "", abn: "",
   billing: emptyAddress(), postalSameAsBilling: true, postal: emptyAddress(),
-  role: "cashier", isActive: true, pin: "",
+  role: "cashier", isActive: true, pin: generatePin(),
   defaultRegisterType: "", payRate: "", loadingRate: "", superRate: "",
 });
 
@@ -372,17 +377,37 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                   <Lock className="w-3.5 h-3.5 text-primary" />
                   <span className="text-sm font-semibold text-primary">4-Digit POS PIN</span>
                 </div>
-                <Input
-                  type="password"
-                  maxLength={4}
-                  value={form.pin}
-                  onChange={(e) => { onTouched?.(); setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) })); }}
-                  placeholder="••••"
-                  className="rounded-md w-28 text-center tracking-widest font-mono"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type={editingStaff ? "password" : "text"}
+                    maxLength={4}
+                    value={form.pin}
+                    onChange={(e) => { onTouched?.(); setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) })); }}
+                    placeholder="••••"
+                    className="rounded-md w-28 text-center tracking-widest font-mono"
+                  />
+                  {!editingStaff && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={() => { onTouched?.(); setForm((f) => ({ ...f, pin: generatePin() })); }}
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Regenerate
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Used to quickly switch staff on the POS without logging out. Leave blank to disable PIN login for this employee.
                 </p>
+                {!editingStaff && form.email && form.pin && (
+                  <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
+                    <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>A welcome email containing this PIN will be sent to <strong>{form.email}</strong> when saved.</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

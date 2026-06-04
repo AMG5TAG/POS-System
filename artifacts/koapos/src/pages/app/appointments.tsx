@@ -31,6 +31,7 @@ import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
   ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
+  Printer, MessageSquare, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -162,6 +163,51 @@ function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className 
   );
 }
 
+/* ─── Print helper ───────────────────────────────────────────────────────── */
+
+function apptRefCode(id: number): string {
+  return `KA${String(id).padStart(5, "0")}`;
+}
+
+function printAppointment(appt: Appointment) {
+  const win = window.open("", "_blank", "width=600,height=700");
+  if (!win) return;
+  const fmt = (iso: string) => new Date(iso).toLocaleString("en-AU", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
+  win.document.write(`
+    <html><head><title>Appointment — ${apptRefCode(appt.id)}</title>
+    <style>
+      body { font-family: sans-serif; max-width: 480px; margin: 32px auto; color: #111; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      .ref { color: #777; font-size: 12px; margin-bottom: 20px; }
+      .block { border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+      .label { font-size: 11px; color: #888; margin-bottom: 2px; }
+      .value { font-size: 14px; font-weight: 500; }
+      .sub   { font-size: 12px; color: #666; margin-top: 2px; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <h1>${appt.title || "Appointment"}</h1>
+    <p class="ref">${apptRefCode(appt.id)} · ${appt.status ?? "Scheduled"}</p>
+    <div class="block">
+      <div class="label">Start</div><div class="value">${fmt(appt.scheduledAt)}</div>
+      ${appt.endAt ? `<div class="label" style="margin-top:8px">End</div><div class="value">${fmt(appt.endAt)}</div>` : ""}
+      ${appt.durationMinutes ? `<div class="sub">Duration: ${formatDuration(appt.durationMinutes)}</div>` : ""}
+    </div>
+    ${appt.customerName ? `<div class="block">
+      <div class="label">Customer</div><div class="value">${appt.customerName}</div>
+      ${appt.customerPhone ? `<div class="sub">${appt.customerPhone}</div>` : ""}
+      ${appt.customerEmail ? `<div class="sub">${appt.customerEmail}</div>` : ""}
+    </div>` : ""}
+    ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${appt.staffName}</div></div>` : ""}
+    ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal">${appt.notes}</div></div>` : ""}
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>
+  `);
+  win.document.close();
+}
+
 /* ─── Detail dialog ──────────────────────────────────────────────────────── */
 
 interface DetailDialogProps {
@@ -170,10 +216,6 @@ interface DetailDialogProps {
   onEdit: (a: Appointment) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
-}
-
-function apptRefCode(id: number): string {
-  return `KA${String(id).padStart(5, "0")}`;
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
@@ -304,8 +346,23 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+          <div className="flex flex-wrap gap-2 justify-end">
+            {appt.customerPhone && (
+              <a href={`sms:${appt.customerPhone}`}>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" /> SMS
+                </Button>
+              </a>
+            )}
+            {appt.customerEmail && (
+              <Button variant="outline" size="sm" className="gap-1.5"
+                onClick={() => { setComposeSubject(`Appointment — ${formatDateShort(appt.scheduledAt)}`); setComposeBody(""); setComposeOpen(true); }}>
+                <Mail className="w-3.5 h-3.5" /> Email
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
+              <Printer className="w-3.5 h-3.5" /> Print
+            </Button>
             <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
@@ -404,12 +461,18 @@ interface BookingDialogProps {
 
 function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
+  const [bookedAppt, setBookedAppt]   = useState<Appointment | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
+  const composeEmailMutation = useComposeEmail();
 
   useEffect(() => {
     if (open) {
+      setBookedAppt(null);
       setForm(editing ? {
         customerId: editing.customerId ? String(editing.customerId) : "",
         staffId:    editing.staffId    ? String(editing.staffId)    : "",
@@ -446,13 +509,82 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       });
     } else {
       createMutation.mutate({ data: payload }, {
-        onSuccess: () => { toast.success("Appointment booked"); invalidate(); onClose(); },
+        onSuccess: (data) => { invalidate(); setBookedAppt(data as unknown as Appointment); },
         onError:   () => toast.error("Failed to book appointment"),
       });
     }
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  if (bookedAppt) {
+    return (
+      <>
+      <Dialog open={open} onOpenChange={() => { setBookedAppt(null); onClose(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              Appointment Booked
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-1.5 text-sm">
+              <p className="font-semibold">{bookedAppt.customerName ?? "Customer"}</p>
+              <p className="text-muted-foreground">{formatDateTime(bookedAppt.scheduledAt)}</p>
+              {bookedAppt.staffName && <p className="text-muted-foreground">with {bookedAppt.staffName}</p>}
+            </div>
+            <p className="text-xs text-muted-foreground">Notify the customer:</p>
+            <div className="flex gap-2 flex-wrap">
+              {bookedAppt.customerPhone && (
+                <a href={`sms:${bookedAppt.customerPhone}`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5" /> SMS
+                  </Button>
+                </a>
+              )}
+              {bookedAppt.customerEmail && (
+                <Button variant="outline" size="sm" className="gap-1.5"
+                  onClick={() => { setComposeSubject(`Appointment — ${formatDateShort(bookedAppt.scheduledAt)}`); setComposeBody(""); setComposeOpen(true); }}>
+                  <Mail className="w-3.5 h-3.5" /> Email
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt)}>
+                <Printer className="w-3.5 h-3.5" /> Print
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { setBookedAppt(null); onClose(); }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={composeOpen} onOpenChange={(v) => { if (!v) setComposeOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" />Email Customer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">Sending to <strong>{bookedAppt.customerEmail}</strong></p>
+            <Input placeholder="Subject" value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} />
+            <Textarea placeholder="Message" rows={5} value={composeBody} onChange={(e) => setComposeBody(e.target.value)} />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+            <Button size="sm" disabled={composeEmailMutation.isPending || !composeSubject.trim()}
+              onClick={() => composeEmailMutation.mutate(
+                { data: { to: bookedAppt.customerEmail!, subject: composeSubject, body: composeBody } },
+                { onSuccess: () => { toast.success(`Email sent to ${bookedAppt.customerEmail}`); setComposeOpen(false); },
+                  onError: () => toast.error("Failed to send email — check your email settings in Management") },
+              )}>
+              {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

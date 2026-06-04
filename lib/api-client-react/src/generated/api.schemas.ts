@@ -4923,3 +4923,68 @@ export interface CreateStaffTimesheetInput {
   clockOut?: string | null;
 }
 
+export interface SmsCampaign {
+  id: number;
+  merchantId: number;
+  campaignId: string;
+  name: string;
+  audience: string;
+  audienceLabel: string;
+  body: string;
+  linkUrl: string;
+  scheduled: string;
+  scheduledAt: string;
+  status: string;
+  sentAt: string;
+  delivered: number;
+  failed: number;
+  recipientCount: number;
+  customerId?: number | null;
+  createdAt: string;
+}
+
+export interface SmsCampaignInput {
+  campaignId: string;
+  name: string;
+  audience?: string;
+  audienceLabel?: string;
+  body?: string;
+  linkUrl?: string;
+  scheduled?: string;
+  scheduledAt?: string;
+  status?: string;
+  sentAt?: string;
+  delivered?: number;
+  failed?: number;
+  recipientCount?: number;
+  customerId?: number;
+}
+
+export interface SmsCampaignListResponse {
+  items: SmsCampaign[];
+  total: number;
+}
+
+export interface SmsTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsTemplateInput {
+  templateId: string;
+  name: string;
+  category?: string;
+  body?: string;
+}
+
+export interface SmsTemplateListResponse {
+  items: SmsTemplate[];
+  total: number;
+}
+

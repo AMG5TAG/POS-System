@@ -49,6 +49,7 @@ export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
 export const DEFAULT_HEARD_FROM_SOURCES: HeardFromSource[] = [
   { id: "google",       name: "Google",       requiresDetails: false },
   { id: "social-media", name: "Social Media", requiresDetails: false },
+  { id: "local",        name: "Local",        requiresDetails: false },
   { id: "friend",       name: "Friend",       requiresDetails: true  },
   { id: "other",        name: "Other",        requiresDetails: true  },
 ];

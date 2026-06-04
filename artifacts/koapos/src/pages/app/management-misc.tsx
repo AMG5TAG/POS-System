@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Map, ExternalLink, Hash } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Map, ExternalLink, Hash, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPosSettings, useUpsertPosSettings,
   useGetPosCodePrefixes, useUpdatePosCodePrefixes,
+  useGetInventorySettings, useUpdateInventorySettings,
 } from "@workspace/api-client-react";
 
 export const MAP_PROVIDER_KEY = "koapos_map_provider";
@@ -57,7 +59,7 @@ export function buildMapUrl(address: string, provider?: MapProvider): string {
   }
 }
 
-/* ─── Document Code Prefixes ─────────────────────────────────────────────── */
+/* ─── Code Prefixes ──────────────────────────────────────────────────────── */
 
 export const CODE_PREFIX_KEY = "koapos_code_prefixes";
 
@@ -89,15 +91,23 @@ export function previewCode(prefix: string, digits: number) {
   return `${prefix}${"0".repeat(Math.max(1, digits - 1))}1`;
 }
 
+function previewSKU(prefix: string) {
+  return `${prefix || "KP"}-${Math.floor(10000 + Math.random() * 90000)}`;
+}
+
 export default function ManagementMiscPage() {
   const queryClient = useQueryClient();
   const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const { data: prefixesData } = useGetPosCodePrefixes({ query: { queryKey: ["pos-code-prefixes"] } });
+  const { data: invSettings } = useGetInventorySettings({ query: { queryKey: ["inventory-settings"] } });
   const upsertPosSettings = useUpsertPosSettings();
   const updatePrefixes = useUpdatePosCodePrefixes();
+  const updateInventory = useUpdateInventorySettings();
 
   const [provider, setProvider] = useState<MapProvider>("google");
   const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(CODE_PREFIX_DEFAULTS);
+  const [skuPrefix, setSkuPrefix] = useState("KP");
+  const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
 
   useEffect(() => {
     if (posSettings?.mapProvider) setProvider(posSettings.mapProvider as MapProvider);
@@ -114,6 +124,23 @@ export default function ManagementMiscPage() {
       });
     }
   }, [prefixesData]);
+
+  useEffect(() => {
+    if (invSettings?.skuPrefix) {
+      setSkuPrefix(invSettings.skuPrefix);
+      setSkuPreview(previewSKU(invSettings.skuPrefix));
+    }
+  }, [invSettings]);
+
+  function handleSkuPrefixChange(v: string) {
+    const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    setSkuPrefix(clean);
+    setSkuPreview(previewSKU(clean));
+    updateInventory.mutate({ data: { skuPrefix: clean } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory-settings"] }),
+      onError: () => toast.error("Failed to save SKU prefix"),
+    });
+  }
 
   const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
     setCodePrefixes((prev) => ({ ...prev, [key]: value }));
@@ -146,7 +173,7 @@ export default function ManagementMiscPage() {
           <p className="text-muted-foreground mt-1">Miscellaneous preferences for your KoaPOS system.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
         <Card>
           <CardHeader>
@@ -192,11 +219,11 @@ export default function ManagementMiscPage() {
           </CardContent>
         </Card>
 
-        {/* Document Code Prefixes */}
+        {/* Code Prefixes */}
         <Card id="code-prefixes">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Hash className="w-5 h-5" /> Document Code Prefixes
+              <Hash className="w-5 h-5" /> Code Prefixes
             </CardTitle>
             <CardDescription>
               Set the prefix and number length for receipts, invoices, service jobs, appointments and purchase orders.
@@ -245,6 +272,34 @@ export default function ManagementMiscPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" onClick={saveCodePrefixesHandler}>Save Code Prefixes</Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Shuffle className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-medium">SKU Generator</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Set the prefix used when auto-generating SKU codes for products.</p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="w-[160px] space-y-1">
+                  <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
+                  <Input
+                    value={skuPrefix}
+                    onChange={(e) => handleSkuPrefixChange(e.target.value)}
+                    placeholder="KP"
+                    maxLength={6}
+                    className="font-mono uppercase"
+                  />
+                </div>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 mb-0.5"
+                  onClick={() => setSkuPreview(previewSKU(skuPrefix))}>
+                  <Shuffle className="w-3.5 h-3.5" /> Preview
+                </Button>
+                <span className="text-sm text-muted-foreground mb-1 font-mono">{skuPreview}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
             </div>
           </CardContent>
         </Card>

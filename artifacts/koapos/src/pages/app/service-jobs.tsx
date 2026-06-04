@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListServiceJobs,
@@ -12,6 +12,8 @@ import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -185,11 +187,31 @@ function PrintChoiceDialog({
   job,
   onClose,
   onSelect,
+  defaultCopies,
+  initialMode,
 }: {
   job: ServiceJob | null;
   onClose: () => void;
-  onSelect: (mode: "sheet" | "sticker") => void;
+  onSelect: (mode: "sheet" | "sticker", copies: number) => void;
+  defaultCopies: number;
+  initialMode?: "sheet" | null;
 }) {
+  const [mode, setMode] = useState<"sheet" | "sticker" | null>(initialMode ?? null);
+  const [copies, setCopies] = useState(defaultCopies);
+
+  // Reset when dialog opens
+  useEffect(() => {
+    if (job) {
+      setMode(initialMode ?? null);
+      setCopies(defaultCopies);
+    }
+  }, [job, initialMode, defaultCopies]);
+
+  const handleCardClick = (m: "sheet" | "sticker") => {
+    if (m === "sticker") { onSelect("sticker", 1); return; }
+    setMode("sheet");
+  };
+
   return (
     <Dialog open={!!job} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
@@ -198,8 +220,8 @@ function PrintChoiceDialog({
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3 py-2">
           <button
-            onClick={() => onSelect("sheet")}
-            className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors"
+            onClick={() => handleCardClick("sheet")}
+            className={`flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-colors ${mode === "sheet" ? "border-primary bg-primary/5" : "border-border hover:border-primary hover:bg-primary/5"}`}
           >
             <Printer className="w-8 h-8 text-primary" />
             <div className="text-center">
@@ -208,7 +230,7 @@ function PrintChoiceDialog({
             </div>
           </button>
           <button
-            onClick={() => onSelect("sticker")}
+            onClick={() => handleCardClick("sticker")}
             className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors"
           >
             <Package className="w-8 h-8 text-primary" />
@@ -218,6 +240,28 @@ function PrintChoiceDialog({
             </div>
           </button>
         </div>
+        {mode === "sheet" && (
+          <div className="flex items-center justify-between border-t pt-4 gap-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm whitespace-nowrap">Copies</Label>
+              <Input
+                type="number"
+                min="1"
+                max="20"
+                value={copies}
+                onChange={(e) => setCopies(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                className="w-16 h-8 text-center text-sm"
+              />
+            </div>
+            <button
+              onClick={() => onSelect("sheet", copies)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print {copies > 1 ? `${copies} Copies` : "1 Copy"}
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -232,7 +276,7 @@ export default function ServiceJobsPage() {
   const [selected, setSelected]             = useState<Set<number>>(new Set());
   const [viewing, setViewing]               = useState<ServiceJob | null>(null);
   const [printChoiceJob, setPrintChoiceJob] = useState<ServiceJob | null>(null);
-  const [printState, setPrintState]         = useState<{ job: ServiceJob } | null>(null);
+  const [printState, setPrintState]         = useState<{ job: ServiceJob; copies: number } | null>(null);
   const [activeSortKey, setSortKey]         = useState<SortKey>("bookInDate");
   const [sortDir, setSortDir]               = useState<SortDir>("desc");
 
@@ -287,13 +331,20 @@ export default function ServiceJobsPage() {
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
   };
 
-  const startPrint = (job: ServiceJob, mode: "sheet" | "sticker") => {
+  const startPrint = (job: ServiceJob, mode: "sheet" | "sticker", copies = 1) => {
     if (mode === "sticker") { printRepairSticker(job); return; }
-    setPrintState({ job });
+    setPrintState({ job, copies });
   };
 
   const jobs   = Array.isArray(jobsData) ? jobsData : [];
   const active = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled").length;
+
+  const [, routeParams] = useRoute("/service-jobs/:id");
+  useEffect(() => {
+    if (!routeParams?.id || jobs.length === 0 || viewing) return;
+    const job = jobs.find((j) => j.id === Number(routeParams.id));
+    if (job) setViewing(job);
+  }, [routeParams?.id, jobs]);
 
   /* Filter */
   const filtered = jobs.filter((j) => {
@@ -554,18 +605,62 @@ export default function ServiceJobsPage() {
         onClose={() => setViewing(null)}
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
-        onPrint={(job, mode) => { setViewing(null); startPrint(job, mode); }}
+        onPrint={(job, mode) => {
+          setViewing(null);
+          if (mode === "sticker") { startPrint(job, "sticker"); return; }
+          setPrintChoiceJob(job);
+        }}
       />
 
       <PrintChoiceDialog
         job={printChoiceJob}
         onClose={() => setPrintChoiceJob(null)}
-        onSelect={(mode) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode); }}
+        onSelect={(mode, copies) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode, copies); }}
+        defaultCopies={Math.max(1, parseInt(serviceOpts.defaultPrintCopies ?? "1") || 1)}
       />
 
       {/* ── Print areas ─────────────────────────────────────────────────── */}
       {printState && (() => {
         const pj = printState.job;
+        const printCopies = printState.copies;
+        const sheetData = {
+          jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,
+          date: pj.bookInDate || null,
+          status: pj.status,
+          customerName: pj.customerName ?? "Walk-in",
+          customerPhone: pj.customerPhone ?? undefined,
+          customerEmail: pj.customerEmail ?? undefined,
+          deviceType: pj.deviceType ?? undefined,
+          deviceModel: pj.deviceDescription ?? undefined,
+          serialNumber: pj.serialNumber ?? undefined,
+          condition: pj.condition ?? undefined,
+          workDescription: pj.workDescription ?? undefined,
+          additionalEquipment: pj.additionalEquipment ?? undefined,
+          accounts: pj.accounts ?? undefined,
+          logins: pj.passwordOrPin ?? undefined,
+          notes: pj.notes ?? undefined,
+          photos: Array.isArray(pj.photos) ? (pj.photos as string[]) : undefined,
+          signature: pj.signature ?? undefined,
+          isCritical: !!pj.isCritical,
+          isUnderWarranty: !!pj.isUnderWarranty,
+          isPartnerRepair: !!pj.isPartnerRepair,
+          partnerRepairCode: pj.partnerRepairCode ?? undefined,
+        };
+        const sheetBranding = {
+          businessName,
+          abn: (profile as { abn?: string }).abn,
+          website: (profile as { website?: string }).website,
+          email: (profile as { contactEmail?: string }).contactEmail ?? merchant?.email ?? undefined,
+          address: [
+            (merchant as { address?: string } | undefined)?.address,
+            (merchant as { city?: string } | undefined)?.city,
+            (profile as { state?: string }).state,
+            (profile as { postcode?: string }).postcode,
+          ].filter(Boolean).join(", "),
+          brandColor,
+          logo: (profile as { logo?: string }).logo,
+          socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
+        };
         return (
           <>
             {/* Screen: hide the print area so it doesn't appear in the UI.
@@ -587,50 +682,20 @@ export default function ServiceJobsPage() {
               }
             `}</style>
 
-            {/* A4 service sheet (Service_Ticket template) */}
-            <ServiceJobSheet
-              id="sj-sheet-print-area"
-              opts={serviceOpts}
-              fontCss={serviceFontCss}
-              branding={{
-                businessName,
-                abn: (profile as { abn?: string }).abn,
-                website: (profile as { website?: string }).website,
-                email: (profile as { contactEmail?: string }).contactEmail ?? merchant?.email ?? undefined,
-                address: [
-                  (merchant as { address?: string } | undefined)?.address,
-                  (merchant as { city?: string } | undefined)?.city,
-                  (profile as { state?: string }).state,
-                  (profile as { postcode?: string }).postcode,
-                ].filter(Boolean).join(", "),
-                brandColor,
-                logo: (profile as { logo?: string }).logo,
-                socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
-              }}
-              data={{
-                jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,
-                date: pj.bookInDate || null,
-                status: pj.status,
-                customerName: pj.customerName ?? "Walk-in",
-                customerPhone: pj.customerPhone ?? undefined,
-                customerEmail: pj.customerEmail ?? undefined,
-                deviceType: pj.deviceType ?? undefined,
-                deviceModel: pj.deviceDescription ?? undefined,
-                serialNumber: pj.serialNumber ?? undefined,
-                condition: pj.condition ?? undefined,
-                workDescription: pj.workDescription ?? undefined,
-                additionalEquipment: pj.additionalEquipment ?? undefined,
-                accounts: pj.accounts ?? undefined,
-                logins: pj.passwordOrPin ?? undefined,
-                notes: pj.notes ?? undefined,
-                photos: Array.isArray(pj.photos) ? (pj.photos as string[]) : undefined,
-                signature: pj.signature ?? undefined,
-                isCritical: !!pj.isCritical,
-                isUnderWarranty: !!pj.isUnderWarranty,
-                isPartnerRepair: !!pj.isPartnerRepair,
-                partnerRepairCode: pj.partnerRepairCode ?? undefined,
-              }}
-            />
+            {/* A4 service sheet — rendered once per copy with page breaks */}
+            <div id="sj-sheet-print-area">
+              {Array.from({ length: printCopies }, (_, i) => (
+                <div key={i} style={i < printCopies - 1 ? { pageBreakAfter: "always" } : {}}>
+                  <ServiceJobSheet
+                    id={`sj-sheet-copy-${i}`}
+                    opts={serviceOpts}
+                    fontCss={serviceFontCss}
+                    branding={sheetBranding}
+                    data={sheetData}
+                  />
+                </div>
+              ))}
+            </div>
           </>
         );
       })()}
