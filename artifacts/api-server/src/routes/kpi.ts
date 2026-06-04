@@ -221,9 +221,42 @@ router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<
         ) sub
       `);
       actual = Math.round(Number((rows.rows[0] as { avg_items: number })?.avg_items ?? 0) * 100) / 100;
+
+    } else if (metric === "net_profit" || metric === "gross_margin") {
+      // Revenue from transactions + paid invoices
+      const [txnAgg] = await db.select({
+        totalSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+      }).from(transactionsTable)
+        .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart)));
+
+      const [invAgg] = await db.select({
+        invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+      }).from(invoicesTable)
+        .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)));
+
+      const totalRevenue = parseFloat(txnAgg?.totalSales ?? "0") + parseFloat(invAgg?.invoiceSales ?? "0");
+
+      // COGS: sum cost_price stored in each transaction item's JSONB
+      const cogsRows = await db.execute(sql`
+        SELECT COALESCE(SUM(
+          (item->>'quantity')::numeric * (item->>'costPrice')::numeric
+        ), 0)::float AS total_cogs
+        FROM transactions, jsonb_array_elements(items) AS item
+        WHERE merchant_id = ${merchantId}
+          AND status = 'completed'
+          AND created_at >= ${periodStart}
+          AND jsonb_typeof(items) = 'array'
+          AND item->>'costPrice' IS NOT NULL
+      `);
+      const totalCogs = Number((cogsRows.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
+
+      if (metric === "net_profit") {
+        actual = Math.round((totalRevenue - totalCogs) * 100) / 100;
+      } else {
+        // gross_margin as a percentage: (revenue - cogs) / revenue * 100
+        actual = totalRevenue > 0 ? Math.round(((totalRevenue - totalCogs) / totalRevenue) * 10000) / 100 : 0;
+      }
     }
-    // metrics like loyalty_signups, category_revenue, refund_rate, gross_margin, upsell_rate, net_profit
-    // are left as null (complex queries or require additional data)
   } catch {
     actual = null;
   }

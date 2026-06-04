@@ -271,13 +271,20 @@ function MergeWizardModal({
   const handleMerge = async () => {
     setPending(true);
     try {
-      // 1. Apply the operator-chosen contact-detail values to the primary record
+      // 1. Apply the operator-chosen contact-detail values to the primary record.
+      // Only include fields that have an actual value — null means no data to set,
+      // so omit them rather than sending null (which fails schema validation).
       const contactPatch: Record<string, unknown> = {};
       for (const { key } of MERGE_TEXT_FIELDS) {
         const src = selected[key as string] === "a" ? a : b;
-        contactPatch[key as string] = (src as unknown as Record<string, unknown>)[key as string] ?? null;
+        const val = (src as unknown as Record<string, unknown>)[key as string];
+        if (val !== null && val !== undefined) {
+          contactPatch[key as string] = val;
+        }
       }
-      await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
+      if (Object.keys(contactPatch).length > 0) {
+        await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
+      }
 
       // 2. Transactional merge: cascade FKs, aggregate loyalty, audit note, delete secondary
       await mergeMutation.mutateAsync({

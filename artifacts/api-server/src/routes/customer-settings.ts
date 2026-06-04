@@ -15,6 +15,7 @@ function fmt(row: typeof customerSettingsTable.$inferSelect) {
     enableLoyalty:          row.enableLoyalty === "true",
     weeklyDigestOptIn:      row.weeklyDigestOptIn === "true",
     weeklyDigestSendDay:    row.weeklyDigestSendDay,
+    referralSettings:       JSON.parse(row.referralSettings    || "{}"),
     updatedAt:              row.updatedAt,
   };
 }
@@ -43,6 +44,7 @@ const DEFAULTS = {
   enableLoyalty:          true,
   weeklyDigestOptIn:      false,
   weeklyDigestSendDay:    1,
+  referralSettings:       {},
 };
 
 router.get("/customer-settings", requireAuth, async (req, res): Promise<void> => {
@@ -67,6 +69,7 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
     enableLoyalty:          String(body.enableLoyalty === false ? "false" : "true"),
     weeklyDigestOptIn:      String(body.weeklyDigestOptIn === true ? "true" : "false"),
     weeklyDigestSendDay:    sendDay,
+    referralSettings:       JSON.stringify(body.referralSettings ?? {}),
   };
 
   const [existing] = await db.select({ id: customerSettingsTable.id }).from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));

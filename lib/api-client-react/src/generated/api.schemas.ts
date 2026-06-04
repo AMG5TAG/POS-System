@@ -1311,6 +1311,8 @@ export interface AppointmentInput {
   status: AppointmentInputStatus;
   /** @nullable */
   notes?: string | null;
+  sendSms?: boolean;
+  sendEmail?: boolean;
 }
 
 export interface DashboardConfigResponse {
@@ -2481,6 +2483,7 @@ export interface PosSettings {
   defaultSkuPrefix: string;
   mapProvider: string;
   roleDiscountLimits: string;
+  buttonStyle: string;
   updatedAt: string;
 }
 
@@ -2500,6 +2503,7 @@ export interface PosSettingsInput {
   defaultSkuPrefix?: string;
   mapProvider?: string;
   roleDiscountLimits?: string;
+  buttonStyle?: string;
 }
 
 export interface LaybySettings {
@@ -3705,6 +3709,15 @@ export type CustomerSettingsGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsRequiredFields = { [key: string]: unknown };
 
+export interface ReferralSettings {
+  enabled?: boolean;
+  minSpend?: number;
+  minVisits?: number;
+  qualifyDays?: number;
+  refereeRewardValue?: number;
+  referrerRewardValue?: number;
+}
+
 export interface CustomerSettings {
   groups?: CustomerSettingsGroupsItem[];
   requiredFields?: CustomerSettingsRequiredFields;
@@ -3718,6 +3731,7 @@ export interface CustomerSettings {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  referralSettings?: ReferralSettings;
   updatedAt?: string;
 }
 
@@ -3738,6 +3752,7 @@ export interface CustomerSettingsInput {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  referralSettings?: ReferralSettings;
 }
 
 export type StickerTemplateFields = { [key: string]: unknown };

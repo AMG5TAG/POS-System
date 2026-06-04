@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
   AddInvoiceEventBody,
@@ -30,6 +31,40 @@ import {
 import type * as zod from "zod";
 
 const router: IRouter = Router();
+
+// 1×1 transparent GIF — returned by the email tracking pixel endpoint
+const TRANSPARENT_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+
+const VIEW_PING_SECRET = process.env.SESSION_SECRET ?? "koapos-dev-secret";
+
+function makeViewKey(invoiceId: number, merchantId: number): string {
+  return crypto.createHmac("sha256", VIEW_PING_SECRET).update(`${invoiceId}:${merchantId}`).digest("hex").slice(0, 24);
+}
+
+// GET /invoices/:id/ping-view?key=:key — public tracking pixel called by email open
+router.get("/invoices/:id/ping-view", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const key = typeof req.query.key === "string" ? req.query.key : "";
+  if (!Number.isFinite(id) || !key) {
+    res.set("Content-Type", "image/gif").send(TRANSPARENT_GIF);
+    return;
+  }
+
+  const [row] = await db
+    .select({ merchantId: invoicesTable.merchantId, viewedAt: invoicesTable.viewedAt, events: invoicesTable.events })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.id, id));
+
+  if (row && key === makeViewKey(id, row.merchantId) && !row.viewedAt) {
+    const events: InvoiceEvent[] = [
+      ...((row.events as InvoiceEvent[] | null) ?? []),
+      { type: "viewed", timestamp: new Date().toISOString(), detail: "email-open" },
+    ];
+    await db.update(invoicesTable).set({ viewedAt: new Date(), events }).where(eq(invoicesTable.id, id));
+  }
+
+  res.set("Content-Type", "image/gif").send(TRANSPARENT_GIF);
+});
 
 /**
  * Validate an invoice API response body against its declared OpenAPI/Zod schema
@@ -928,10 +963,17 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     styleVariant:           emailTplRow?.selectedStyle || null,
   });
 
+  // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email
+  const baseUrl = process.env.REPLIT_DOMAINS
+    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`
+    : `${req.protocol}://${req.hostname}${req.hostname === "localhost" ? `:${process.env.PORT ?? 3000}` : ""}`;
+  const pingUrl = `${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}`;
+  const htmlWithPixel = html + `\n<img src="${pingUrl}" width="1" height="1" alt="" style="display:none" />`;
+
   const result = await sendEmail(merchantId, {
     to: email,
     subject,
-    html,
+    html: htmlWithPixel,
     text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
     attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
   });

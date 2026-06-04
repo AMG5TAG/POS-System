@@ -96,7 +96,8 @@
       "Bash(grep -E \"^xlsx$|^exceljs$|^papaparse$\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(npx vite *)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
     ]
   }
 }

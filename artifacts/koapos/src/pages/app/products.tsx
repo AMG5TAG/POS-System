@@ -34,6 +34,7 @@ import {
   useDeleteDigitalCode,
   useListSuppliers,
   useBulkUpdateProducts,
+  useGetInventorySettings,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
@@ -132,11 +133,11 @@ const defaultForm: ProductForm = {
   stockLocationOverflow: "",
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
-  { key: "stock",         label: "Stock"         },
+  { key: "stock",         label: "Stock",         hideForDigitalCode: true },
   { key: "compatibility", label: "Compatibility", hideForService: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
@@ -237,29 +238,72 @@ function TreeCategorySelect({
   onCreateCategory?: (name: string, onCreated: (id: number) => void) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [creatingInline, setCreatingInline] = useState(false);
   const [newCatNameInline, setNewCatNameInline] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const tree = buildCatTree(categories);
   const selected = categories.find((c) => c.id.toString() === value);
 
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const toggleExpand = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const searchLower = search.toLowerCase().trim();
+  const filteredFlat = searchLower
+    ? categories.filter((c) => c.name.toLowerCase().includes(searchLower))
+    : null;
+
   const renderNodes = (nodes: CatNode[], depth = 0): React.ReactNode =>
-    nodes.map((node) => (
-      <div key={node.id}>
-        <button
-          type="button"
-          onClick={() => { onChange(node.id.toString()); setOpen(false); }}
-          className={cn(
-            "w-full text-left py-1.5 text-sm rounded hover:bg-muted transition-colors flex items-center gap-1",
-            value === node.id.toString() && "bg-primary/10 text-primary font-medium",
-          )}
-          style={{ paddingLeft: `${8 + depth * 16}px`, paddingRight: "8px" }}
-        >
-          {depth > 0 && <span className="text-muted-foreground/40 text-xs shrink-0">└</span>}
-          {node.name}
-        </button>
-        {node.children.length > 0 && renderNodes(node.children, depth + 1)}
-      </div>
-    ));
+    nodes.map((node) => {
+      const isExpanded = expanded.has(node.id);
+      const hasChildren = node.children.length > 0;
+      return (
+        <div key={node.id}>
+          <div
+            className={cn(
+              "flex items-center rounded hover:bg-muted transition-colors",
+              value === node.id.toString() && "bg-primary/10",
+            )}
+            style={{ paddingLeft: `${(depth > 0 ? 4 : 0) + depth * 12}px` }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={(e) => toggleExpand(node.id, e)}
+                className="shrink-0 p-1 text-muted-foreground/50 hover:text-foreground"
+              >
+                <ChevronRight className={cn("w-3 h-3 transition-transform duration-150", isExpanded && "rotate-90")} />
+              </button>
+            ) : (
+              <span className="w-5 shrink-0" />
+            )}
+            <button
+              type="button"
+              onClick={() => { onChange(node.id.toString()); setOpen(false); }}
+              className={cn(
+                "flex-1 text-left py-1.5 pr-2 text-sm",
+                value === node.id.toString() ? "text-primary font-medium" : "text-foreground",
+              )}
+            >
+              {node.name}
+            </button>
+          </div>
+          {isExpanded && hasChildren && renderNodes(node.children, depth + 1)}
+        </div>
+      );
+    });
 
   const commitNewCat = () => {
     if (!newCatNameInline.trim() || !onCreateCategory) return;
@@ -285,21 +329,62 @@ function TreeCategorySelect({
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-1.5 max-h-72 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
-        <button
-          type="button"
-          onClick={() => { onChange(""); setOpen(false); }}
-          className={cn(
-            "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors",
-            !value && "bg-primary/10 text-primary font-medium",
+      <PopoverContent className="p-0 w-56" align="start">
+        {/* Search bar */}
+        <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search categories…"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground">
+              <XIcon className="w-3 h-3" />
+            </button>
           )}
-        >
-          {placeholder}
-        </button>
-        {renderNodes(tree)}
+        </div>
+        {/* Scrollable list */}
+        <div className="overflow-y-auto max-h-[240px] p-1.5">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={cn(
+              "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors",
+              !value && "bg-primary/10 text-primary font-medium",
+            )}
+          >
+            {placeholder}
+          </button>
+          {filteredFlat
+            ? filteredFlat.length > 0
+              ? filteredFlat.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => { onChange(c.id.toString()); setOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors",
+                      value === c.id.toString() && "bg-primary/10 text-primary font-medium",
+                    )}
+                  >
+                    {c.name}
+                    {c.parentId && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        · {categories.find((p) => p.id === c.parentId)?.name}
+                      </span>
+                    )}
+                  </button>
+                ))
+              : <p className="px-2 py-3 text-xs text-muted-foreground text-center">No categories found</p>
+            : renderNodes(tree)}
+        </div>
+        {/* Add new category */}
         {onCreateCategory && (
           creatingInline ? (
-            <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
+            <div className="border-t p-1.5 flex items-center gap-1.5">
               <input
                 autoFocus
                 value={newCatNameInline}
@@ -318,9 +403,128 @@ function TreeCategorySelect({
             <button
               type="button"
               onClick={() => setCreatingInline(true)}
-              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
+              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t flex items-center gap-1.5 hover:bg-muted/50 transition-colors"
             >
               <Plus className="w-3 h-3" /> Add New Category
+            </button>
+          )
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ─── Brand selector ─────────────────────────────────────────────────────── */
+
+function BrandSelect({
+  brands, value, onChange, onCreateBrand,
+}: {
+  brands: { id: number; name: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  onCreateBrand?: (name: string, onCreated: (id: number) => void) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const commitCreate = () => {
+    if (!newName.trim() || !onCreateBrand) return;
+    onCreateBrand(newName.trim(), (id) => { onChange(id.toString()); setOpen(false); });
+    setCreating(false);
+    setNewName("");
+  };
+
+  const filtered = search.trim()
+    ? brands.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
+    : brands;
+  const selected = brands.find((b) => b.id.toString() === value);
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { if (!o) { setCreating(false); setNewName(""); } setOpen(o); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {selected?.name ?? "No Brand"}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-52" align="start">
+        {/* Search bar */}
+        <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search brands…"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground">
+              <XIcon className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        {/* Scrollable list */}
+        <div className="overflow-y-auto max-h-[240px] p-1.5">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !value && "bg-primary/10 text-primary font-medium")}
+          >
+            No Brand
+          </button>
+          {filtered.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => { onChange(b.id.toString()); setOpen(false); }}
+              className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", value === b.id.toString() && "bg-primary/10 text-primary font-medium")}
+            >
+              {b.name}
+            </button>
+          ))}
+          {filtered.length === 0 && search.trim() && (
+            <p className="px-2 py-3 text-xs text-muted-foreground text-center">No brands found</p>
+          )}
+        </div>
+        {/* Add new brand */}
+        {onCreateBrand && (
+          creating ? (
+            <div className="border-t p-1.5 flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commitCreate(); }
+                  if (e.key === "Escape") { setCreating(false); setNewName(""); }
+                }}
+                placeholder="Brand name…"
+                className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
+              />
+              <button type="button" onClick={commitCreate} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
+              <button type="button" onClick={() => { setCreating(false); setNewName(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t flex items-center gap-1.5 hover:bg-muted/50 transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Add New Brand
             </button>
           )
         )}
@@ -855,8 +1059,9 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
   const [hideCosts, setHideCosts]       = useState(true);
-  const [showHideCostsBtn]              = useState(false);
-  const [enableGroupPricing]            = useState(false);
+  const { data: inventorySettings } = useGetInventorySettings();
+  const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
+  const enableGroupPricing = inventorySettings?.groupPricing !== "false";
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
@@ -872,24 +1077,18 @@ export default function ProductsPage() {
   const [bulkInvPopover, setBulkInvPopover]       = useState(false);
 
   /* ── Brands state ── */
-  const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
-  const [brandCreatingInline, setBrandCreatingInline] = useState(false);
   const [tagInput, setTagInput] = useState("");
-  const [newBrandName, setNewBrandName] = useState("");
 
   const { data: brandsListData } = useListBrands(undefined, { query: { queryKey: ["brands"] } });
   const brandsList = ((brandsListData?.items ?? []) as { id: number; name: string }[]);
   const createBrandMutation = useCreateBrand();
 
-  const createBrandInline = async (onCreated: (id: number) => void) => {
-    if (!newBrandName.trim()) return;
+  const createBrandInline = async (name: string, onCreated: (id: number) => void) => {
+    if (!name.trim()) return;
     try {
-      const brand = await createBrandMutation.mutateAsync({ data: { name: newBrandName.trim() } }) as { id: number; name: string };
+      const brand = await createBrandMutation.mutateAsync({ data: { name: name.trim() } }) as { id: number; name: string };
       queryClient.invalidateQueries({ queryKey: ["brands"] });
       onCreated(brand.id);
-      setNewBrandName("");
-      setBrandCreatingInline(false);
-      setBrandPopoverOpen(false);
     } catch {
       toast.error("Failed to create brand");
     }
@@ -1833,10 +2032,11 @@ export default function ProductsPage() {
           {/* Tab nav */}
           <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
             {FORM_TABS
-              .filter(({ digitalCodeOnly, variantOnly, hideForService }) =>
+              .filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
                 (!digitalCodeOnly || form.productType === "digital_code") &&
                 (!variantOnly || form.productType === "variant") &&
-                (!hideForService || form.productType !== "service")
+                (!hideForService || form.productType !== "service") &&
+                (!hideForDigitalCode || form.productType !== "digital_code")
               )
               .map(({ key, label }) => (
                 <button
@@ -1992,59 +2192,12 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Brand</Label>
-                    <Popover open={brandPopoverOpen} onOpenChange={(o) => { if (!o) { setBrandCreatingInline(false); setNewBrandName(""); } setBrandPopoverOpen(o); }}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
-                        >
-                          <span className={cn("truncate", !form.brandId && "text-muted-foreground")}>
-                            {brandsList.find((b) => b.id.toString() === form.brandId)?.name ?? "No Brand"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="p-1.5 max-h-64 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
-                        <button
-                          type="button"
-                          onClick={() => { setField("brandId", ""); setBrandPopoverOpen(false); }}
-                          className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !form.brandId && "bg-primary/10 text-primary font-medium")}
-                        >No Brand</button>
-                        {brandsList.map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => { setField("brandId", b.id.toString()); setBrandPopoverOpen(false); }}
-                            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", form.brandId === b.id.toString() && "bg-primary/10 text-primary font-medium")}
-                          >{b.name}</button>
-                        ))}
-                        {brandCreatingInline ? (
-                          <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
-                            <input
-                              autoFocus
-                              value={newBrandName}
-                              onChange={(e) => setNewBrandName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); void createBrandInline((id) => setField("brandId", id.toString())); }
-                                if (e.key === "Escape") { setBrandCreatingInline(false); setNewBrandName(""); }
-                              }}
-                              placeholder="Brand name…"
-                              className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
-                            />
-                            <button type="button" onClick={() => void createBrandInline((id) => setField("brandId", id.toString()))} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
-                            <button type="button" onClick={() => { setBrandCreatingInline(false); setNewBrandName(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setBrandCreatingInline(true)}
-                            className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
-                          >
-                            <Plus className="w-3 h-3" /> Add New Brand
-                          </button>
-                        )}
-                      </PopoverContent>
-                    </Popover>
+                    <BrandSelect
+                      brands={brandsList}
+                      value={form.brandId}
+                      onChange={(v) => setField("brandId", v)}
+                      onCreateBrand={createBrandInline}
+                    />
                   </div>
                   <div className="col-span-2 grid grid-cols-2 gap-4 items-start">
                     {/* Tags input */}

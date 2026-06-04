@@ -193,6 +193,7 @@ export default function POSInvoicesPage() {
     occurrences: 1,
   });
   const [pdfGeneratingId, setPdfGeneratingId] = useState<number | null>(null);
+  const [sendNowInvoice, setSendNowInvoice] = useState<Invoice | null>(null);
 
   const [discount, setDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
     enabled: false, type: "percent", value: "",
@@ -539,11 +540,15 @@ export default function POSInvoicesPage() {
           },
         }),
       };
-      await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] });
-      toast.success(recurring.enabled ? "Recurring invoice created" : "Invoice created");
+      const created = await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] }) as unknown as Invoice;
       setCreateOpen(false);
       resetCreate();
       invalidateInvoices();
+      if (recurring.enabled) {
+        setSendNowInvoice(created);
+      } else {
+        toast.success("Invoice created");
+      }
     } catch {
       toast.error("Failed to create invoice");
     } finally {
@@ -1967,6 +1972,41 @@ export default function POSInvoicesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Send First Recurring Invoice Prompt ─── */}
+      <AlertDialog open={!!sendNowInvoice} onOpenChange={(o) => { if (!o) { toast.success("Recurring invoice created"); setSendNowInvoice(null); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-blue-500" />
+              Recurring invoice created
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-mono font-medium">{sendNowInvoice?.invoiceNumber}</span> has been set up on a{" "}
+              <span className="font-medium">{FREQ_LABELS[(sendNowInvoice?.recurringFrequency ?? "monthly") as keyof typeof FREQ_LABELS]?.toLowerCase()}</span> schedule.
+              Would you like to send the first invoice to the customer now?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { toast.success("Recurring invoice created"); setSendNowInvoice(null); }}>
+              Not Now
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const inv = sendNowInvoice!;
+                setSendNowInvoice(null);
+                toast.success("Recurring invoice created");
+                const bizName = merchant?.businessName ?? "Your Business";
+                setEmailDialog({ open: true, invoiceId: inv.id });
+                setEmailAddr(inv.customerEmail ?? "");
+                setEmailSubject(`Invoice ${inv.invoiceNumber} from ${bizName}`);
+              }}
+            >
+              <Mail className="w-3.5 h-3.5 mr-1.5" /> Send Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Discard Changes Confirmation ─── */}
       <AlertDialog open={discardConfirmTarget !== null} onOpenChange={(o) => { if (!o) setDiscardConfirmTarget(null); }}>

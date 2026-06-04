@@ -31,7 +31,7 @@ import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
   ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
-  Printer, MessageSquare, CheckCircle2,
+  Printer, MessageSquare, CheckCircle2, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -445,11 +445,13 @@ type FormState = {
   status: AppointmentInputStatus;
   notes: string;
   selectedFormIds: number[];
+  sendSms: boolean;
+  sendEmail: boolean;
 };
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [] };
+  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
 }
 
 interface BookingDialogProps {
@@ -462,6 +464,7 @@ interface BookingDialogProps {
 function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
   const [bookedAppt, setBookedAppt]   = useState<Appointment | null>(null);
+  const [notificationsSent, setNotificationsSent] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false });
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
@@ -481,6 +484,8 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
         status:     editing.status as AppointmentInputStatus,
         notes:      editing.notes ?? "",
         selectedFormIds: [],
+        sendSms: false,
+        sendEmail: false,
       } : makeDefaultForm());
     }
   }, [open, editing]);
@@ -500,6 +505,8 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       endAt:       new Date(form.endTime).toISOString(),
       status: form.status,
       notes:  form.notes || null,
+      sendSms: form.sendSms,
+      sendEmail: form.sendEmail,
     };
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
     if (editing) {
@@ -509,7 +516,11 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       });
     } else {
       createMutation.mutate({ data: payload }, {
-        onSuccess: (data) => { invalidate(); setBookedAppt(data as unknown as Appointment); },
+        onSuccess: (data) => {
+          invalidate();
+          setNotificationsSent({ sms: form.sendSms, email: form.sendEmail });
+          setBookedAppt(data as unknown as Appointment);
+        },
         onError:   () => toast.error("Failed to book appointment"),
       });
     }
@@ -518,6 +529,10 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   if (bookedAppt) {
+    const anySent = notificationsSent.sms || notificationsSent.email;
+    const canSendSms   = !!bookedAppt.customerPhone && !notificationsSent.sms;
+    const canSendEmail = !!bookedAppt.customerEmail && !notificationsSent.email;
+
     return (
       <>
       <Dialog open={open} onOpenChange={() => { setBookedAppt(null); onClose(); }}>
@@ -534,16 +549,35 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
               <p className="text-muted-foreground">{formatDateTime(bookedAppt.scheduledAt)}</p>
               {bookedAppt.staffName && <p className="text-muted-foreground">with {bookedAppt.staffName}</p>}
             </div>
-            <p className="text-xs text-muted-foreground">Notify the customer:</p>
+
+            {/* Sent confirmations */}
+            {anySent && (
+              <div className="rounded-xl border bg-green-50 dark:bg-green-950/30 p-3 space-y-1.5">
+                <p className="text-xs font-medium text-green-700 dark:text-green-400">Confirmations sent</p>
+                {notificationsSent.sms && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> SMS sent to {bookedAppt.customerPhone}
+                  </p>
+                )}
+                {notificationsSent.email && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Email + calendar invite sent to {bookedAppt.customerEmail}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Manual options — always show print; show SMS/email if not already sent */}
+            <p className="text-xs text-muted-foreground">{anySent ? "Also notify via:" : "Notify the customer:"}</p>
             <div className="flex gap-2 flex-wrap">
-              {bookedAppt.customerPhone && (
+              {canSendSms && (
                 <a href={`sms:${bookedAppt.customerPhone}`}>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5" /> SMS
                   </Button>
                 </a>
               )}
-              {bookedAppt.customerEmail && (
+              {canSendEmail && (
                 <Button variant="outline" size="sm" className="gap-1.5"
                   onClick={() => { setComposeSubject(`Appointment — ${formatDateShort(bookedAppt.scheduledAt)}`); setComposeBody(""); setComposeOpen(true); }}>
                   <Mail className="w-3.5 h-3.5" /> Email
@@ -672,6 +706,44 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             <Textarea placeholder="Any additional details..." value={form.notes}
               onChange={(e) => setField("notes", e.target.value)} rows={3} className="text-sm resize-none" />
           </div>
+
+          {/* Notifications — only shown for new bookings */}
+          {!editing && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5" /> Send Confirmation To Customer
+              </p>
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                <label className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.sendSms}
+                    onChange={(e) => setForm((f) => ({ ...f, sendSms: e.target.checked }))}
+                    className="rounded border-muted-foreground/40 accent-primary"
+                  />
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span>Send SMS confirmation</span>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 px-4 py-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.sendEmail}
+                    onChange={(e) => setForm((f) => ({ ...f, sendEmail: e.target.checked }))}
+                    className="rounded border-muted-foreground/40 accent-primary mt-0.5"
+                  />
+                  <div className="flex flex-col gap-0.5 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                      Send email confirmation
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-6">Includes a calendar invitation (.ics) with automatic reminders</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
         </div>
 

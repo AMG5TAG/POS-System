@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Map, ExternalLink, Hash, Shuffle } from "lucide-react";
+import { Map, ExternalLink, Hash, Shuffle, LayoutPanelLeft, Type, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -105,12 +105,14 @@ export default function ManagementMiscPage() {
   const updateInventory = useUpdateInventorySettings();
 
   const [provider, setProvider] = useState<MapProvider>("google");
+  const [buttonStyle, setButtonStyle] = useState<"icon" | "icon_text" | "text">("icon");
   const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(CODE_PREFIX_DEFAULTS);
   const [skuPrefix, setSkuPrefix] = useState("KP");
   const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
 
   useEffect(() => {
     if (posSettings?.mapProvider) setProvider(posSettings.mapProvider as MapProvider);
+    if (posSettings?.buttonStyle) setButtonStyle(posSettings.buttonStyle as "icon" | "icon_text" | "text");
   }, [posSettings]);
 
   useEffect(() => {
@@ -152,6 +154,14 @@ export default function ManagementMiscPage() {
         toast.success("Map provider saved");
       },
       onError: () => toast.error("Failed to save map provider"),
+    });
+  }
+
+  function saveButtonStyle(style: "icon" | "icon_text" | "text") {
+    setButtonStyle(style);
+    upsertPosSettings.mutate({ data: { buttonStyle: style } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pos-settings"] }),
+      onError: () => toast.error("Failed to save button style"),
     });
   }
 
@@ -301,6 +311,85 @@ export default function ManagementMiscPage() {
               </div>
               <p className="text-xs text-muted-foreground">Format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* POS Button Style */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutPanelLeft className="w-5 h-5" />
+              POS Button Style
+            </CardTitle>
+            <CardDescription>
+              Choose how action buttons are displayed throughout KoaPOS — icon only, icon with text, or text only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup
+              value={buttonStyle}
+              onValueChange={(v) => saveButtonStyle(v as "icon" | "icon_text" | "text")}
+              className="grid grid-cols-3 gap-3"
+            >
+              {([
+                {
+                  value: "icon",
+                  label: "Icon",
+                  Icon: LayoutTemplate,
+                  description: "Icon only",
+                  preview: (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      {["🗑", "📝", "🔗"].map((e, i) => (
+                        <span key={i} className="w-7 h-7 rounded border flex items-center justify-center text-sm bg-muted/50">{e}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "icon_text",
+                  label: "Icon + Text",
+                  Icon: LayoutPanelLeft,
+                  description: "Icon with label",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {[["🗑", "Clear"], ["📝", "Notes"]].map(([e, t], i) => (
+                        <span key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">
+                          <span>{e}</span><span>{t}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "text",
+                  label: "Text",
+                  Icon: Type,
+                  description: "Text only",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {["Clear", "Notes", "Link"].map((t, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">{t}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+              ] as const).map(({ value, label, description, preview }) => (
+                <label
+                  key={value}
+                  htmlFor={`btn-style-${value}`}
+                  className={`cursor-pointer rounded-xl border-2 p-3 transition-colors flex flex-col ${
+                    buttonStyle === value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value={value} id={`btn-style-${value}`} />
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 ml-5">{description}</p>
+                  <div className="ml-5">{preview}</div>
+                </label>
+              ))}
+            </RadioGroup>
           </CardContent>
         </Card>
 

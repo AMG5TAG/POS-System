@@ -124,6 +124,44 @@ function progressColor(pct: number, isInverse?: boolean) {
   return "text-rose-500";
 }
 
+const WEEK_START_DAYS: Record<string, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+};
+
+function getPeriodStart(period: KpiPeriod, weekStartDay = "monday", startDate?: string | null): Date {
+  if (startDate) {
+    const d = new Date(startDate + "T00:00:00");
+    if (!isNaN(d.getTime())) return d;
+  }
+  const now = new Date();
+  switch (period) {
+    case "daily": {
+      const d = new Date(now); d.setHours(0, 0, 0, 0); return d;
+    }
+    case "weekly": {
+      const d = new Date(now);
+      const startDow = WEEK_START_DAYS[weekStartDay] ?? 1;
+      const daysBack = (d.getDay() - startDow + 7) % 7;
+      d.setDate(d.getDate() - daysBack);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "monthly": {
+      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+    case "quarterly": {
+      const q = Math.floor(now.getMonth() / 3);
+      return new Date(now.getFullYear(), q * 3, 1, 0, 0, 0, 0);
+    }
+    case "annual": {
+      return new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    }
+    default: {
+      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+  }
+}
+
 /* ─── Blank form ─────────────────────────────────────────────────────────── */
 
 const BLANK: Omit<KpiTarget, "id"> = {
@@ -518,10 +556,27 @@ export default function ManagementKpisPage() {
   const [staffOnly, setStaffOnly] = useState(false);
 
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
-  const { data: txData } = useListTransactions(undefined, { query: { queryKey: ["transactions"] } });
+
+  // Compute the earliest period start across all active KPI targets so we fetch
+  // enough transactions to cover every period (daily, weekly, monthly, etc.)
+  const txFromDate = useMemo(() => {
+    const activeTargets = (rawItems as unknown as Record<string, unknown>[])
+      .map(apiToTarget)
+      .filter((t) => t.isActive);
+    if (activeTargets.length === 0) return getPeriodStart("monthly", weekStartDay);
+    const starts = activeTargets.map((t) => getPeriodStart(t.period, weekStartDay, t.startDate || null));
+    return new Date(Math.min(...starts.map((d) => d.getTime())));
+  }, [rawItems, weekStartDay]);
+
+  const txFromISO = txFromDate.toISOString().slice(0, 10);
+
+  const { data: txData } = useListTransactions(
+    { from: txFromISO, limit: 5000 },
+    { query: { queryKey: ["transactions", txFromISO] } },
+  );
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
-  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string; staffId?: number; createdAt?: string }[];
+  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
     upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
@@ -621,14 +676,60 @@ export default function ManagementKpisPage() {
     )).then(() => { refetchTargets(); }).catch(() => toast.error("Failed to spread targets"));
   };
 
-  const { completedTx, totalRevenue, txCount, avgTransaction, actualValues } = useMemo(() => {
-    const completedTx    = txList.filter((t) => t.status === "completed");
-    const totalRevenue   = completedTx.reduce((s, t) => s + (t.total ?? 0), 0);
-    const txCount        = completedTx.length;
-    const avgTransaction = txCount > 0 ? totalRevenue / txCount : 0;
-    const actualValues: Partial<Record<KpiMetric, number>> = { revenue: totalRevenue, transactions: txCount, avg_transaction: avgTransaction };
-    return { completedTx, totalRevenue, txCount, avgTransaction, actualValues };
-  }, [txList]);
+  // Per-KPI actual values, each filtered to its own period window.
+  const actualValuesByKpiId = useMemo(() => {
+    const result: Record<string, number> = {};
+    const allActive = targets.filter((t) => t.isActive);
+    for (const kpi of allActive) {
+      const periodStart = getPeriodStart(kpi.period, weekStartDay, kpi.startDate || null);
+      const txInPeriod = txList.filter(
+        (t) => t.status === "completed" && t.createdAt != null && new Date(t.createdAt) >= periodStart,
+      );
+      const revenue = txInPeriod.reduce((s, t) => s + (t.total ?? 0), 0);
+      const count   = txInPeriod.length;
+
+      let actual = 0;
+      switch (kpi.metric) {
+        case "revenue":
+          actual = Math.round(revenue * 100) / 100;
+          break;
+        case "transactions":
+          actual = count;
+          break;
+        case "avg_transaction":
+          actual = count > 0 ? Math.round((revenue / count) * 100) / 100 : 0;
+          break;
+        case "items_per_transaction": {
+          const totalItems = txInPeriod.reduce((s, t) => {
+            const items = (t.items ?? []) as { quantity?: number }[];
+            return s + items.reduce((si, i) => si + (i.quantity ?? 1), 0);
+          }, 0);
+          actual = count > 0 ? Math.round((totalItems / count) * 100) / 100 : 0;
+          break;
+        }
+        case "net_profit": {
+          const cogs = txInPeriod.reduce((s, t) => {
+            const items = (t.items ?? []) as { quantity?: number; costPrice?: number }[];
+            return s + items.reduce((si, i) => si + (i.costPrice ?? 0) * (i.quantity ?? 1), 0);
+          }, 0);
+          actual = Math.round((revenue - cogs) * 100) / 100;
+          break;
+        }
+        case "gross_margin": {
+          const cogs = txInPeriod.reduce((s, t) => {
+            const items = (t.items ?? []) as { quantity?: number; costPrice?: number }[];
+            return s + items.reduce((si, i) => si + (i.costPrice ?? 0) * (i.quantity ?? 1), 0);
+          }, 0);
+          actual = revenue > 0 ? Math.round(((revenue - cogs) / revenue) * 10000) / 100 : 0;
+          break;
+        }
+        default:
+          actual = 0;
+      }
+      result[kpi.id] = actual;
+    }
+    return result;
+  }, [txList, targets, weekStartDay]);
 
   const { storeWide, staffTargets, allWithRewards, inactiveTargets } = useMemo(() => ({
     storeWide:       targets.filter((t) => t.staffIds.length === 0 && t.isActive),
@@ -704,7 +805,7 @@ export default function ManagementKpisPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     {targets.filter((t) => t.isActive).map((kpi) => (
-                      <ProgressRow key={kpi.id} kpi={kpi} current={actualValues[kpi.metric] ?? 0} />
+                      <ProgressRow key={kpi.id} kpi={kpi} current={actualValuesByKpiId[kpi.id] ?? 0} />
                     ))}
                   </CardContent>
                 </Card>

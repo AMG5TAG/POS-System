@@ -229,6 +229,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   const computedItems: {
     productId: number; productName: string; quantity: number;
     unitPrice: number; totalPrice: number; taxAmount: number;
+    costPrice?: number;
     discount?: number;
     giftCardIssue?: boolean; giftCardNumber?: string;
     digitalCodes?: string[];
@@ -274,6 +275,8 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const discount = round2(Math.min(rawDiscount, lineGross)); // clamp for sub-cent rounding
     const totalPrice = round2(lineGross - discount);
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
+    const product = i.productId !== 0 ? productMap.get(i.productId) : undefined;
+    const costPrice = product?.costPrice != null ? parseFloat(product.costPrice) : undefined;
     computedItems.push({
       productId: i.productId,
       productName: itemName,
@@ -281,6 +284,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       unitPrice,
       totalPrice,
       taxAmount,
+      ...(costPrice != null && costPrice > 0 ? { costPrice } : {}),
       discount: discount > 0 ? discount : undefined,
       giftCardIssue: i.giftCardIssue || undefined,
       // Preserve client-provided number; server will fill in blanks before the DB write

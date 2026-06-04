@@ -2708,7 +2708,9 @@ export const CreateAppointmentBody = zod.object({
   "scheduledAt": zod.coerce.date(),
   "endAt": zod.coerce.date(),
   "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "sendSms": zod.boolean().optional(),
+  "sendEmail": zod.boolean().optional()
 })
 
 

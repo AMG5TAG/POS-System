@@ -23,6 +23,7 @@ import {
   GiftCardValidateResponse,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { useButtonStyle } from "@/lib/button-style";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,6 +224,11 @@ export default function POSPage() {
 
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  // Use the global button-style context for bare <button> elements in the POS cart row.
+  // The <Button> component (capitalised) reads the same context automatically.
+  const { showIcon: pbShowIcon, showText: pbShowText } = useButtonStyle();
+  const pbPadding = pbShowText ? "px-2 py-1.5" : "p-1.5";
+
   const parsedRoleLimits = useMemo((): Record<string, { hardCap: number | null; approvalThreshold: number | null }> => {
     try {
       if (posSettingsData?.roleDiscountLimits) {
@@ -2396,8 +2402,8 @@ export default function POSPage() {
                 onClick={() => { setTempItemOpen(true); setTempItemForm({ name: "", price: "", cost: "" }); }}
                 title="Add a one-off custom item to the cart"
               >
-                <Package className="w-4 h-4" />
-                <span className="hidden sm:inline">Custom</span>
+                {pbShowIcon && <Package className="w-4 h-4" />}
+                {pbShowText && <span>Custom</span>}
               </Button>
               <Button
                 variant="outline"
@@ -2406,8 +2412,8 @@ export default function POSPage() {
                 onClick={() => { setGcIssueForm({ cardNumber: "", amount: "" }); setGcIssueOpen(true); }}
                 title="Sell a new gift card"
               >
-                <Gift className="w-4 h-4" />
-                <span className="hidden sm:inline">Gift Card</span>
+                {pbShowIcon && <Gift className="w-4 h-4" />}
+                {pbShowText && <span>Gift Card</span>}
               </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
@@ -2708,36 +2714,40 @@ export default function POSPage() {
               {!activeCustomerName && (
                 <button
                   onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
-                  className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0"
+                  className={cn("flex items-center gap-1 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0", pbPadding)}
                   title="Walk-in customer"
                 >
-                  <Footprints className="w-3.5 h-3.5" />
+                  {pbShowIcon && <Footprints className="w-3.5 h-3.5" />}
+                  {pbShowText && <span className="text-xs">Walk-in</span>}
                 </button>
               )}
               {/* Link */}
               <button
                 onClick={() => setServiceLinkOpen(true)}
                 title="Link to service or appointment"
-                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", (linkedService || linkedAppointment) ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+                className={cn("flex items-center gap-1 border rounded-lg transition-colors shrink-0", pbPadding, (linkedService || linkedAppointment) ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
               >
-                <LinkIcon className="w-3.5 h-3.5" />
+                {pbShowIcon && <LinkIcon className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Link</span>}
               </button>
               {/* Notes */}
               <button
                 onClick={() => setNotesOpen(true)}
-                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+                className={cn("flex items-center gap-1 border rounded-lg transition-colors shrink-0", pbPadding, notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
                 title="Sale notes"
               >
-                <NotebookPen className="w-3.5 h-3.5" />
+                {pbShowIcon && <NotebookPen className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Notes</span>}
               </button>
               {/* Clear Cart */}
               <button
                 onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }}
                 disabled={cart.length === 0}
                 title="Clear cart"
-                className="p-1.5 border border-dashed rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive disabled:opacity-30 disabled:cursor-not-allowed"
+                className={cn("flex items-center gap-1 border border-dashed rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive disabled:opacity-30 disabled:cursor-not-allowed", pbPadding)}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                {pbShowIcon && <Trash2 className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Clear</span>}
               </button>
             </div>
             {/* Inline customer dropdown */}
@@ -3224,8 +3234,8 @@ export default function POSPage() {
                 onClick={parkSale}
                 title="Park this sale and start a new one"
               >
-                <PauseCircle className="w-4 h-4" />
-                Park
+                {pbShowIcon && <PauseCircle className="w-4 h-4" />}
+                {pbShowText && <span>Park</span>}
               </Button>
               <Button
                 className="flex-1 h-12 text-base font-bold"
@@ -3811,21 +3821,24 @@ export default function POSPage() {
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("print"); }}
               >
-                <Printer className="w-4 h-4" /> Print Receipt
+                {pbShowIcon && <Printer className="w-4 h-4" />}
+                {pbShowText && <span>Print Receipt</span>}
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("email"); }}
               >
-                <Mail className="w-4 h-4" /> Email Receipt
+                {pbShowIcon && <Mail className="w-4 h-4" />}
+                {pbShowText && <span>Email Receipt</span>}
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("sms"); }}
               >
-                <MessageSquare className="w-4 h-4" /> SMS Receipt
+                {pbShowIcon && <MessageSquare className="w-4 h-4" />}
+                {pbShowText && <span>SMS Receipt</span>}
               </Button>
             </div>
           )}
@@ -3840,7 +3853,8 @@ export default function POSPage() {
                   printPosReceipt();
                 }}
               >
-                <Printer className="w-4 h-4" /> Thermal Receipt (80mm)
+                {pbShowIcon && <Printer className="w-4 h-4" />}
+                {pbShowText && <span>Thermal Receipt (80mm)</span>}
               </Button>
               <Button
                 variant="outline"
@@ -3851,7 +3865,8 @@ export default function POSPage() {
                   }
                 }}
               >
-                <FileText className="w-4 h-4" /> A4 Receipt
+                {pbShowIcon && <FileText className="w-4 h-4" />}
+                {pbShowText && <span>A4 Receipt</span>}
               </Button>
               <div className="flex gap-2 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setReceiptMode("idle")}>Back</Button>
