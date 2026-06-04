@@ -140,7 +140,7 @@ export default function StaffKpisPage() {
   const { data: txData } = useListTransactions(undefined, { query: { queryKey: ["transactions"] } });
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; role?: string }[];
-  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string }[];
+  const txList = (txData?.items ?? []) as { total?: number; status?: string }[];
 
   const { data: kpiData } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const rawTargets = (kpiData as { items?: unknown[] } | undefined)?.items ?? [];

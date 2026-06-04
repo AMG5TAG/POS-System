@@ -576,7 +576,7 @@ export default function ManagementKpisPage() {
   );
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
-  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
+  const txList = (txData?.items ?? []) as { total?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
     upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
