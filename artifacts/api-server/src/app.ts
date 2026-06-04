@@ -35,7 +35,12 @@ app.use(
 const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction && !process.env.SESSION_SECRET) {
-  logger.warn("SESSION_SECRET env var is not set — using insecure default. Set a strong random value in production.");
+  // Fail fast: the hardcoded fallback secret is public (it's in the repo), so
+  // running production with it would let anyone forge session cookies and
+  // impersonate any merchant. Mirror the VAULT_ENCRYPTION_KEY boot guard.
+  throw new Error(
+    "Fatal: SESSION_SECRET environment variable is required in production mode.",
+  );
 }
 if (isProduction && !process.env.UNSUBSCRIBE_SECRET) {
   logger.warn("UNSUBSCRIBE_SECRET env var is not set — unsubscribe tokens fall back to SESSION_SECRET or an insecure default. Set a strong random value in production.");

@@ -110,7 +110,15 @@
       "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/routes/purchase-orders.ts)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(echo \"=== exit: $? ===\")"
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(git ls-files *)",
+      "Bash(pnpm run *)",
+      "Bash(echo \"libs exit:$?\")",
+      "Bash(echo \"api exit:$?\")",
+      "Read(//tmp/**)",
+      "Bash(grep -iE \"high|moderate|critical|^.{0,3}\\(Package|Vulnerable|Patched|Paths\\)\")",
+      "Bash(echo \"koapos exit:$?\")",
+      "Bash(openssl rand *)"
     ]
   }
 }

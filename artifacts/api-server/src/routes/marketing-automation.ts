@@ -90,6 +90,10 @@ router.delete("/marketing-automation/:id", requireAuth, async (req, res): Promis
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  // Confirm ownership before deleting log rows keyed only on ruleId.
+  const [owned] = await db.select({ id: marketingAutomationRulesTable.id }).from(marketingAutomationRulesTable)
+    .where(and(eq(marketingAutomationRulesTable.id, id), eq(marketingAutomationRulesTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(marketingAutomationLogTable).where(eq(marketingAutomationLogTable.ruleId, id));
   await db
     .delete(marketingAutomationRulesTable)

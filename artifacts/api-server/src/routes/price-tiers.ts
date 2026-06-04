@@ -74,6 +74,11 @@ router.put("/price-tiers/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdatePriceTierParams.parse({ id: Number(req.params.id) });
   const body = UpdatePriceTierBody.parse(req.body);
+  // Confirm the tier belongs to this merchant before touching its child rows,
+  // otherwise the productPriceTiers delete below could wipe another merchant's overrides.
+  const [owned] = await db.select({ id: priceTiersTable.id }).from(priceTiersTable)
+    .where(and(eq(priceTiersTable.id, id), eq(priceTiersTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.update(priceTiersTable).set({
     ...(body.name ? { name: body.name } : {}),
     description: body.description ?? null,
@@ -97,6 +102,10 @@ router.put("/price-tiers/:id", requireAuth, async (req, res) => {
 router.delete("/price-tiers/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeletePriceTierParams.parse({ id: Number(req.params.id) });
+  // Confirm ownership before deleting child overrides keyed only on tierId.
+  const [owned] = await db.select({ id: priceTiersTable.id }).from(priceTiersTable)
+    .where(and(eq(priceTiersTable.id, id), eq(priceTiersTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(productPriceTiersTable).where(eq(productPriceTiersTable.tierId, id));
   await db.delete(priceTiersTable)
     .where(and(eq(priceTiersTable.id, id), eq(priceTiersTable.merchantId, merchantId)));

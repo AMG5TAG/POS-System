@@ -79,6 +79,11 @@ router.put("/product-bundles/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdateProductBundleParams.parse({ id: Number(req.params.id) });
   const body = UpdateProductBundleBody.parse(req.body);
+  // Confirm ownership before touching child items keyed only on bundleId,
+  // otherwise another merchant's bundle items could be overwritten.
+  const [owned] = await db.select({ id: productBundlesTable.id }).from(productBundlesTable)
+    .where(and(eq(productBundlesTable.id, id), eq(productBundlesTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.update(productBundlesTable).set({
     ...(body.name ? { name: body.name } : {}),
     description: body.description ?? null,
@@ -107,6 +112,10 @@ router.put("/product-bundles/:id", requireAuth, async (req, res) => {
 router.delete("/product-bundles/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeleteProductBundleParams.parse({ id: Number(req.params.id) });
+  // Confirm ownership before deleting child items keyed only on bundleId.
+  const [owned] = await db.select({ id: productBundlesTable.id }).from(productBundlesTable)
+    .where(and(eq(productBundlesTable.id, id), eq(productBundlesTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(productBundleItemsTable).where(eq(productBundleItemsTable.bundleId, id));
   await db.delete(productBundlesTable)
     .where(and(eq(productBundlesTable.id, id), eq(productBundlesTable.merchantId, merchantId)));

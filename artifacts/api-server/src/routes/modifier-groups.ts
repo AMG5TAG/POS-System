@@ -81,6 +81,11 @@ router.delete("/modifier-groups/:id", requireAuth, async (req, res): Promise<voi
   const groupId = parseInt(String(req.params.id), 10);
   if (isNaN(groupId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
+  // Confirm the group belongs to this merchant before deleting child rows keyed
+  // only on groupId, otherwise another merchant's modifiers/links could be wiped.
+  const [owned] = await db.select({ id: modifierGroupsTable.id }).from(modifierGroupsTable)
+    .where(and(eq(modifierGroupsTable.id, groupId), eq(modifierGroupsTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(modifiersTable).where(eq(modifiersTable.groupId, groupId));
   await db.delete(productModifierGroupsTable).where(eq(productModifierGroupsTable.groupId, groupId));
   await db.delete(modifierGroupsTable)

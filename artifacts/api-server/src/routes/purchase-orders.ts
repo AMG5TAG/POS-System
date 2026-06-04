@@ -214,6 +214,11 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdatePurchaseOrderParams.parse({ id: Number(req.params.id) });
   const body = UpdatePurchaseOrderBody.parse(req.body);
+  // Confirm ownership before touching child items keyed only on poId, otherwise
+  // another merchant's PO items could be deleted and overwritten.
+  const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
@@ -271,6 +276,10 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
 router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeletePurchaseOrderParams.parse({ id: Number(req.params.id) });
+  // Confirm ownership before deleting child items keyed only on poId.
+  const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
   await db.delete(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
