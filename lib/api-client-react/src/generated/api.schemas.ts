@@ -201,6 +201,7 @@ export interface RegisterInput {
   ownerName?: string;
   phone?: string;
   planId?: number;
+  tosAccepted: true;
 }
 
 export interface LoginInput {
@@ -245,6 +246,9 @@ export interface Merchant {
   passwordChangeAlertEmail?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
+  emailVerified?: boolean;
+  onboardingCompleted?: boolean;
+  isDemoAccount?: boolean;
 }
 
 export interface MerchantUpdate {

@@ -118,7 +118,8 @@
       "Read(//tmp/**)",
       "Bash(grep -iE \"high|moderate|critical|^.{0,3}\\(Package|Vulnerable|Patched|Paths\\)\")",
       "Bash(echo \"koapos exit:$?\")",
-      "Bash(openssl rand *)"
+      "Bash(openssl rand *)",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }

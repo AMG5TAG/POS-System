@@ -38,7 +38,10 @@ export const GetMeResponse = zod.object({
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
-  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
+  "emailVerified": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "isDemoAccount": zod.boolean().optional()
 })
 
 
@@ -56,7 +59,8 @@ export const RegisterBody = zod.object({
   "businessName": zod.string().min(1),
   "ownerName": zod.string().optional(),
   "phone": zod.string().optional(),
-  "planId": zod.number().optional()
+  "planId": zod.number().optional(),
+  "tosAccepted": zod.literal(true, { message: "You must accept the Terms of Service to continue." })
 })
 
 
@@ -87,7 +91,10 @@ export const LoginResponse = zod.object({
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
-  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
+  "emailVerified": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "isDemoAccount": zod.boolean().optional()
 })
 
 
@@ -177,7 +184,10 @@ export const GetMerchantResponse = zod.object({
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
-  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
+  "emailVerified": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "isDemoAccount": zod.boolean().optional()
 })
 
 
@@ -228,7 +238,10 @@ export const UpdateMerchantResponse = zod.object({
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
-  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional()
+  "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
+  "emailVerified": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "isDemoAccount": zod.boolean().optional()
 })
 
 

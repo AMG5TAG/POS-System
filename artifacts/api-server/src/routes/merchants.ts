@@ -30,6 +30,9 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     securityAlertEmail: m.securityAlertEmail === "true" ? true : false,
     passwordChangeAlertEmail: m.passwordChangeAlertEmail === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
+    emailVerified: m.emailVerifiedAt !== null,
+    onboardingCompleted: m.onboardingCompletedAt !== null,
+    isDemoAccount: m.isDemoAccount === "true",
   };
 }
 

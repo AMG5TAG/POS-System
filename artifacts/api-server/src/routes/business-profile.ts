@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, businessProfileTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { validateABN } from "../lib/abn";
 
 const router: IRouter = Router();
 
@@ -52,8 +53,14 @@ router.put("/business-profile", requireAuth, async (req, res): Promise<void> => 
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 
+  const abnRaw = String(body.abn ?? "").trim();
+  if (abnRaw && !validateABN(abnRaw)) {
+    res.status(400).json({ error: "Invalid ABN. Please enter a valid 11-digit Australian Business Number." });
+    return;
+  }
+
   const data = {
-    abn:          String(body.abn          ?? ""),
+    abn:          abnRaw,
     tagline:      String(body.tagline      ?? ""),
     description:  String(body.description  ?? ""),
     openingDate:  String(body.openingDate  ?? ""),

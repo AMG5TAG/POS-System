@@ -181,7 +181,6 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
-  const [typeFilter, setTypeFilter]     = useState<string | null>(null);
   const [activeRegisterId] = useState<string>("default");
 
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
@@ -2477,30 +2476,6 @@ export default function POSPage() {
             </ScrollArea>
           </div>
 
-          {/* ─ Type filter row — only rendered when there are multiple types ─ */}
-          {visibleTypeNames.length > 1 && (
-            <div className="px-3 pb-2 border-b">
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex w-max space-x-1.5 pt-2">
-                  <Button
-                    variant={typeFilter === null ? "secondary" : "ghost"}
-                    size="sm"
-                    className="rounded-full h-6 text-[11px] px-2.5 shrink-0"
-                    onClick={() => setTypeFilter(null)}
-                  >All types</Button>
-                  {visibleTypeNames.map(name => (
-                    <Button
-                      key={name}
-                      variant={typeFilter === name ? "secondary" : "ghost"}
-                      size="sm"
-                      className="rounded-full h-6 text-[11px] px-2.5 shrink-0"
-                      onClick={() => setTypeFilter(prev => prev === name ? null : name)}
-                    >{name}</Button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
 
           <ScrollArea className="flex-1 p-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">

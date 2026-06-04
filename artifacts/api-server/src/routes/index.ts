@@ -99,6 +99,8 @@ import backupsRouter from "./backups";
 import partnerReferralsRouter from "./partner-referrals";
 import unsubscribeRouter from "./unsubscribe";
 import staffTimesheetsRouter from "./staff-timesheets";
+import tyroSettingsRouter from "./tyro-settings";
+import demoDataRouter from "./demo-data";
 
 const router: IRouter = Router();
 
@@ -202,5 +204,7 @@ router.use(backupsRouter);
 router.use(partnerReferralsRouter);
 router.use(unsubscribeRouter);
 router.use(staffTimesheetsRouter);
+router.use(tyroSettingsRouter);
+router.use(demoDataRouter);
 
 export default router;

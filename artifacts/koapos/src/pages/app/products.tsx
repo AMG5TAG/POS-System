@@ -414,6 +414,84 @@ function TreeCategorySelect({
   );
 }
 
+/* ─── Supplier selector ──────────────────────────────────────────────────── */
+
+function SupplierSelect({
+  suppliers, value, onChange,
+}: {
+  suppliers: { id: number; name: string }[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const filtered = search.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+    : [...suppliers].sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value || "No supplier"}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-56" align="start">
+        <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search suppliers…"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground">
+              <XIcon className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <div className="overflow-y-auto max-h-[240px] p-1.5">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !value && "bg-primary/10 text-primary font-medium")}
+          >
+            No supplier
+          </button>
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { onChange(s.name); setOpen(false); }}
+              className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", value === s.name && "bg-primary/10 text-primary font-medium")}
+            >
+              {s.name}
+            </button>
+          ))}
+          {filtered.length === 0 && search.trim() && (
+            <p className="px-2 py-3 text-xs text-muted-foreground text-center">No suppliers found</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /* ─── Brand selector ─────────────────────────────────────────────────────── */
 
 function BrandSelect({
@@ -1815,8 +1893,11 @@ export default function ProductsPage() {
                     {!hideCosts && (
                       <>
                         <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Reseller Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">WL Margin</th>
+                        {customerGroups.map((group) => (
+                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">
+                            {group.name} Margin
+                          </th>
+                        ))}
                       </>
                     )}
                     <SortTh {...sh("Stock", "stock")} />
@@ -1871,16 +1952,27 @@ export default function ProductsPage() {
                                 ? <span className="text-[#16a34a] font-medium">{marginPct}%</span>
                                 : <span className="text-muted-foreground/50">—</span>}
                             </td>
-                            <td className="p-3 text-right text-muted-foreground/50">—</td>
-                            <td className="p-3 text-right text-muted-foreground/50">—</td>
+                            {customerGroups.map((group) => {
+                              const groupPrice = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
+                              const groupMarginPct = groupPrice != null && cost !== null && groupPrice > 0
+                                ? Math.round(((groupPrice - cost) / groupPrice) * 100)
+                                : null;
+                              return (
+                                <td key={group.id} className="p-3 text-right">
+                                  {groupMarginPct != null
+                                    ? <span className={cn("font-medium", groupMarginPct < 0 ? "text-red-500" : "text-[#16a34a]")}>{groupMarginPct}%</span>
+                                    : <span className="text-muted-foreground/50">—</span>}
+                                </td>
+                              );
+                            })}
                           </>
                         )}
                         <td className="p-3">
                           {isService
                             ? <span className="text-muted-foreground">—</span>
                             : product.trackInventory
-                              ? <span className={isLowStock ? "text-amber-600 font-medium" : ""}>{product.stockQuantity}</span>
-                              : <span className="text-muted-foreground">∞</span>}
+                              ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
+                              : <span className="text-[#16a34a] font-medium">∞</span>}
                         </td>
                         <td className="p-3">
                           <Badge variant={product.isActive !== false ? "default" : "secondary"} className="text-xs">
@@ -2344,22 +2436,11 @@ export default function ProductsPage() {
                   <div className="mt-3 grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs text-muted-foreground">Primary Supplier</Label>
-                      {suppliersList.length > 0 ? (
-                        <Select value={form.supplier || "__none__"} onValueChange={(v) => setField("supplier", v === "__none__" ? "" : v)}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="No supplier" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">No supplier</SelectItem>
-                            {[...suppliersList].sort((a, b) => a.name.localeCompare(b.name)).map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={form.supplier}
-                          onChange={(e) => setField("supplier", e.target.value)}
-                          placeholder="No supplier"
-                          className="mt-1.5"
-                        />
-                      )}
+                      <SupplierSelect
+                        suppliers={suppliersList}
+                        value={form.supplier}
+                        onChange={(name) => setField("supplier", name)}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Supplier Code</Label>

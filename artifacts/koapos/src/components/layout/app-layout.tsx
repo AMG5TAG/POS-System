@@ -49,6 +49,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
@@ -1680,8 +1682,16 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => logout() });
   const logoutPending = logoutMutation.isPending;
 
+  const wrappedChildren = (
+    <>
+      {user && !user.emailVerified && <EmailVerificationBanner />}
+      {user && !user.onboardingCompleted && <OnboardingWizard />}
+      {children}
+    </>
+  );
+
   const sharedProps: LayoutSharedProps = {
-    children, location, navigate: navigate as (href: string) => void,
+    children: wrappedChildren, location, navigate: navigate as (href: string) => void,
     user: user as MerchantUser, theme, toggleTheme, handleLogout, logoutPending,
   };
 

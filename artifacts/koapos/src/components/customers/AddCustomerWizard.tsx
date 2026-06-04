@@ -8,6 +8,7 @@ import {
   Customer,
 } from "@workspace/api-client-react";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { validateABN } from "@/lib/abn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -285,7 +286,15 @@ export function AddCustomerWizard({
               </FieldRow>
               <FieldRow>
                 <Field label="ABN">
-                  <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" />
+                  <Input
+                    value={form.abn}
+                    onChange={(e) => setField("abn", e.target.value)}
+                    placeholder="12 345 678 901"
+                    className={form.abn && !validateABN(form.abn) ? "border-destructive focus-visible:ring-destructive" : ""}
+                  />
+                  {form.abn && !validateABN(form.abn) && (
+                    <p className="text-xs text-destructive mt-1">Invalid ABN</p>
+                  )}
                 </Field>
                 <Field label="Heard From">
                   <Select value={form.heardFrom} onValueChange={(v) => { setField("heardFrom", v); setField("heardFromDetails", ""); }}>

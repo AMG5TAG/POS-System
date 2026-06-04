@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -29,6 +30,7 @@ const registerSchema = z.object({
   phone: z.string().optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   planId: z.coerce.number().optional(),
+  tosAccepted: z.literal(true, { errorMap: () => ({ message: "You must accept the Terms of Service to continue." }) }),
 });
 
 type RegisterValues = z.infer<typeof registerSchema>;
@@ -37,11 +39,9 @@ export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const registerMutation = useRegister();
-  
+
   const { data: plans, isLoading: plansLoading } = useListPlans({
-    query: {
-      queryKey: ["plans"]
-    }
+    query: { queryKey: ["plans"] }
   });
 
   const form = useForm<RegisterValues>({
@@ -53,20 +53,22 @@ export default function RegisterPage() {
       phone: "",
       password: "",
       planId: undefined,
+      tosAccepted: undefined as unknown as true,
     },
   });
 
   const onSubmit = (values: RegisterValues) => {
     registerMutation.mutate(
-      { data: values },
+      { data: { ...values, tosAccepted: true } },
       {
         onSuccess: (data) => {
           login(data);
           toast.success("Account created successfully");
           setLocation("/dashboard");
         },
-        onError: () => {
-          toast.error("Registration failed. Please check your details.");
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Registration failed. Please check your details.");
         },
       }
     );
@@ -189,6 +191,34 @@ export default function RegisterPage() {
                       )}
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tosAccepted"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/30">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value === true}
+                        onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="font-normal text-sm">
+                        I agree to the{" "}
+                        <Link href="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                          Terms of Service
+                        </Link>
+                        {" "}and{" "}
+                        <Link href="/privacy" target="_blank" className="text-primary hover:underline font-medium">
+                          Privacy Policy
+                        </Link>
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
                   </FormItem>
                 )}
               />

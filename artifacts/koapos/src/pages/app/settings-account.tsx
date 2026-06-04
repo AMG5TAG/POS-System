@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal, MapPin } from "lucide-react";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal, MapPin, Trash2, UserX } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -1177,6 +1178,12 @@ export default function SettingsAccountPage() {
           </CardContent>
         </Card>
 
+        {/* ── Demo Data Clear ─────────────────────────────────────────── */}
+        <DemoDataCard />
+
+        {/* ── Close Account ──────────────────────────────────────────── */}
+        <CloseAccountCard />
+
         </div>{/* end right column */}
 
         </div>
@@ -1184,5 +1191,170 @@ export default function SettingsAccountPage() {
 
       <AccountFormGuard />
     </AppLayout>
+  );
+}
+
+/* ── Demo Data Clear Card ───────────────────────────────────────────────── */
+
+function DemoDataCard() {
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const qc = useQueryClient();
+  const [loading, setLoading] = useState(false);
+
+  if (!merchant) return null;
+
+  const createdAt = new Date(merchant.createdAt);
+  const ageMs = Date.now() - createdAt.getTime();
+  const isEligible = merchant.isDemoAccount || ageMs < 30 * 24 * 60 * 60 * 1000;
+  if (!isEligible) return null;
+
+  const handleClear = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/demo-data", { method: "DELETE", credentials: "include" });
+      const data = await res.json().catch(() => ({})) as { ok?: boolean; deleted?: Record<string, number>; error?: string };
+      if (!res.ok) { toast.error(data.error ?? "Failed to clear demo data"); return; }
+      const d = data.deleted ?? {};
+      toast.success(`Demo data cleared — removed ${d.transactions ?? 0} transactions, ${d.products ?? 0} products, ${d.customers ?? 0} customers, ${d.staff ?? 0} staff.`);
+      qc.invalidateQueries();
+    } catch { toast.error("Failed to clear demo data"); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <Card className="border-amber-200 dark:border-amber-800/50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+          <Trash2 className="w-4 h-4" /> Clear Demo Data
+        </CardTitle>
+        <CardDescription>
+          Remove all sample products, customers, transactions, and non-owner staff so you can start fresh.
+          Available for the first 30 days after account creation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30" disabled={loading}>
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Clearing…</> : <><Trash2 className="w-4 h-4 mr-2" /> Clear demo data</>}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all demo data?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all sample products, customers, transactions, and non-owner staff from your account. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClear} className="bg-amber-600 hover:bg-amber-700 text-white">
+                Yes, clear demo data
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Close Account Card ─────────────────────────────────────────────────── */
+
+function CloseAccountCard() {
+  const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const canConfirm = confirmText === "DELETE" && password.length >= 8;
+
+  const handleClose = async () => {
+    if (!canConfirm) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/account", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: password }),
+      });
+      const data = await res.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!res.ok) { toast.error(data.error ?? "Failed to close account"); setLoading(false); return; }
+      toast.success("Your account has been closed.");
+      window.location.replace("/login");
+    } catch { toast.error("Failed to close account"); setLoading(false); }
+  };
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-destructive">
+          <UserX className="w-4 h-4" /> Close Account
+        </CardTitle>
+        <CardDescription>
+          Permanently delete your KoaPOS account and all associated data. This action is irreversible.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AlertDialog open={open} onOpenChange={setOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/5">
+              <UserX className="w-4 h-4 mr-2" /> Close my account
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Permanently close account?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-4">
+                  <p>This will <strong>permanently delete</strong> your KoaPOS account, all products, customers, transactions, staff, settings, and every other record. There is no recovery.</p>
+                  <div className="space-y-2">
+                    <Label>Type <strong>DELETE</strong> to confirm</Label>
+                    <Input
+                      value={confirmText}
+                      onChange={(e) => setConfirmText(e.target.value)}
+                      placeholder="DELETE"
+                      className={confirmText && confirmText !== "DELETE" ? "border-destructive" : ""}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Confirm with your password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Current password"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setConfirmText(""); setPassword(""); }}>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                onClick={handleClose}
+                disabled={!canConfirm || loading}
+              >
+                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Closing…</> : "Permanently close account"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   );
 }
