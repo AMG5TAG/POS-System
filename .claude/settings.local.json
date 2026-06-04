@@ -109,7 +109,8 @@
       "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/services/htmlToPdf.ts)",
       "Bash(git -C /home/runner/workspace diff HEAD -- artifacts/api-server/src/routes/purchase-orders.ts)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(echo \"=== exit: $? ===\")"
     ]
   }
 }
