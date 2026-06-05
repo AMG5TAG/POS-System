@@ -58,6 +58,20 @@ function applyButtonStyle(
 ): React.ReactNode {
   // Fast path: icon_text shows everything unchanged
   if (showIcon && showText) return children;
+
+  // If the button contains no icon elements (e.g. Save / Submit / Cancel buttons),
+  // leave it completely unchanged — hiding the text label would make it unusable.
+  let hasIcon = false;
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child)) {
+      const cls = String((child.props as Record<string, unknown>).className ?? "");
+      if (ICON_RE.test(cls) && /\bh-\d|\bh-\[/.test(cls) && !cls.includes("animate-spin")) {
+        hasIcon = true;
+      }
+    }
+  });
+  if (!hasIcon) return children;
+
   return React.Children.map(children, (child) => {
     if (child == null || child === false || child === true) return child;
     // Plain text / number nodes → treat as label text

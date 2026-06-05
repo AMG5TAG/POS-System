@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
@@ -139,6 +139,8 @@ function fmt(
     taxTotal: parseFloat(inv.taxTotal),
     total: parseFloat(inv.total),
     amountPaid: parseFloat(inv.amountPaid ?? "0"),
+    serviceJobId: inv.serviceJobId ?? null,
+    appointmentId: inv.appointmentId ?? null,
     discountType:  inv.discountType  ?? null,
     discountValue: inv.discountValue  ? parseFloat(inv.discountValue)  : null,
     discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
@@ -309,6 +311,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     invoiceDigits,
     recurring,
     discount: discountInput,
+    serviceJobId,
+    appointmentId,
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
@@ -338,6 +342,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     items: lines.length ? lines : null,
     dueDate: dueDate ?? null,
     notes: notes ?? null,
+    serviceJobId: serviceJobId ?? null,
+    appointmentId: appointmentId ?? null,
     isRecurring: recurring ? "true" : "false",
     recurringFrequency: recurring?.frequency ?? null,
     recurringOccurrences: recurring?.occurrences ?? null,
@@ -422,7 +428,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const { id } = paramsResult.data;
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
-  const { status, notes, dueDate, customerId, items, recurring, discount } = bodyParsed.data;
+  const { status, notes, dueDate, customerId, items, recurring, discount, serviceJobId, appointmentId } = bodyParsed.data;
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -437,6 +443,8 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ?? null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
+  if (serviceJobId !== undefined) updates.serviceJobId = serviceJobId ?? null;
+  if (appointmentId !== undefined) updates.appointmentId = appointmentId ?? null;
   if (items !== undefined || discount !== undefined) {
     // Fetch existing items/discount if only one was sent
     const [existing] = await db

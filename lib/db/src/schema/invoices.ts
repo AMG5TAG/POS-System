@@ -3,6 +3,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
 import { customersTable } from "./customers";
+import { serviceJobsTable } from "./service-jobs";
+import { appointmentsTable } from "./appointments";
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
@@ -28,6 +30,8 @@ export const invoicesTable = pgTable("invoices", {
   recurringOccurrences: integer("recurring_occurrences"),
   recurringStartDate: timestamp("recurring_start_date", { withTimezone: true }),
   parentInvoiceId: integer("parent_invoice_id").references((): AnyPgColumn => invoicesTable.id),
+  serviceJobId: integer("service_job_id").references(() => serviceJobsTable.id),
+  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -542,7 +542,7 @@ export default function ManagementKpisPage() {
   const upsertSettings = useUpsertKpiSettings();
 
   const rawItems = kpiListData?.items ?? [];
-  const targets: KpiTarget[] = (rawItems as unknown as Record<string, unknown>[]).map(apiToTarget);
+  const targets: KpiTarget[] = (rawItems as unknown as Record<string, unknown>[]).map(apiToTarget).filter((t) => t.metric in METRIC_META);
   const settingsRaw = rawSettings as Record<string, unknown> | undefined;
   const trackCategories   = settingsRaw ? String(settingsRaw.trackCategories)   !== "false" : true;
   const trackAppointments = settingsRaw ? String(settingsRaw.trackAppointments) !== "false" : true;

@@ -2959,6 +2959,8 @@ export const GetDashboardCalendarResponse = zod.object({
   "durationMinutes": zod.number().optional(),
   "status": zod.string(),
   "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
   "notes": zod.string().nullish()
 })),
   "customerBirthdays": zod.array(zod.object({
@@ -8432,6 +8434,8 @@ export const ListInvoicesResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish(),
   "invoiceNumber": zod.string(),
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
   "subtotal": zod.number(),
@@ -8491,6 +8495,8 @@ export const CreateInvoiceBody = zod.object({
   "customerId": zod.number().optional(),
   "dueDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
@@ -8531,6 +8537,8 @@ export const GetInvoiceResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish(),
   "invoiceNumber": zod.string(),
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
   "subtotal": zod.number(),
@@ -8593,6 +8601,8 @@ export const UpdateInvoiceBody = zod.object({
   "notes": zod.string().optional(),
   "dueDate": zod.coerce.date().nullish(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateInvoiceBodyItemsItemQuantityMin),

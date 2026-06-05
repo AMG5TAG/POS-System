@@ -8,6 +8,7 @@ import {
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
+  useListServiceJobs, useListAppointments,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -35,8 +36,9 @@ import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
-  Copy, GripVertical, Loader2,
+  Copy, GripVertical, Loader2, Link2, CalendarDays, Wrench,
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 
 /* ── PDF image compression helper ───────────────────────────────────────── */
@@ -108,6 +110,8 @@ type Invoice = {
   recurringStartDate: string | null;
   nextSendDate: string | null;
   parentInvoiceId: number | null;
+  serviceJobId: number | null;
+  appointmentId: number | null;
   createdAt: string;
 };
 
@@ -195,6 +199,17 @@ export default function POSInvoicesPage() {
   const [pdfGeneratingId, setPdfGeneratingId] = useState<number | null>(null);
   const [sendNowInvoice, setSendNowInvoice] = useState<Invoice | null>(null);
 
+  /* ── Link service/appointment ── */
+  const [linkDialogFor, setLinkDialogFor] = useState<"create" | "edit" | null>(null);
+  const [createLinkedServiceJob, setCreateLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
+  const [createLinkedAppointment, setCreateLinkedAppointment] = useState<{ id: number; title: string; label: string } | null>(null);
+  const [editLinkedServiceJob, setEditLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
+  const [editLinkedAppointment, setEditLinkedAppointment] = useState<{ id: number; title: string; label: string } | null>(null);
+  const { data: linkServiceJobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-invoice-link"], enabled: !!linkDialogFor } });
+  const { data: linkAppointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appointments-invoice-link"], enabled: !!linkDialogFor } });
+  const linkServiceJobs = (linkServiceJobsData as { items?: { id: number; jobNumber: string; deviceType?: string | null; deviceDescription?: string | null; status?: string | null; customerName?: string | null }[] } | undefined)?.items ?? [];
+  const linkAppointments = (linkAppointmentsData as { items?: { id: number; title: string; scheduledAt?: string | null; customerName?: string | null }[] } | undefined)?.items ?? [];
+
   const [discount, setDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
     enabled: false, type: "percent", value: "",
   });
@@ -218,13 +233,23 @@ export default function POSInvoicesPage() {
     historyParams,
     { query: { enabled: activeTab === "history", queryKey: getListInvoicesQueryKey(historyParams) } },
   );
-  const historyInvoices = useMemo(() =>
-    [...((historyData?.items ?? []) as unknown as Invoice[])].sort((a, b) => {
-      const ta = a.paidAt ? new Date(a.paidAt).getTime() : 0;
-      const tb = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+  const cancelledHistoryParams = { status: "cancelled" as ListInvoicesStatus, limit: 500 };
+  const { data: cancelledHistoryData, isLoading: cancelledHistoryLoading, refetch: refetchCancelledHistory } = useListInvoices(
+    cancelledHistoryParams,
+    { query: { enabled: activeTab === "history", queryKey: getListInvoicesQueryKey(cancelledHistoryParams) } },
+  );
+  const historyActuallyLoading = historyLoading || cancelledHistoryLoading;
+  const refetchAllHistory = () => { void refetchHistory(); void refetchCancelledHistory(); };
+
+  const historyInvoices = useMemo(() => {
+    const paid = (historyData?.items ?? []) as unknown as Invoice[];
+    const cancelled = (cancelledHistoryData?.items ?? []) as unknown as Invoice[];
+    return [...paid, ...cancelled].sort((a, b) => {
+      const ta = a.paidAt ? new Date(a.paidAt).getTime() : new Date(a.createdAt).getTime();
+      const tb = b.paidAt ? new Date(b.paidAt).getTime() : new Date(b.createdAt).getTime();
       return tb - ta;
-    }),
-  [historyData]);
+    });
+  }, [historyData, cancelledHistoryData]);
 
   /* ── Invoice mutation hooks ── */
   const createInvoiceMutation = useCreateInvoice();
@@ -240,6 +265,16 @@ export default function POSInvoicesPage() {
   const detailInvoice = (detailInvoiceRaw as unknown as Invoice | undefined) ?? detailInvoiceSeed;
 
   const invalidateInvoices = () => queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+
+  // Refresh the list when fresh detail data shows a viewedAt the cached list doesn't know about.
+  useEffect(() => {
+    if (!detailInvoiceRaw || !detailInvoiceSeed) return;
+    const freshViewed = (detailInvoiceRaw as unknown as Invoice).viewedAt;
+    if (freshViewed !== detailInvoiceSeed.viewedAt) {
+      invalidateInvoices();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailInvoiceRaw]);
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
@@ -441,6 +476,8 @@ export default function POSInvoicesPage() {
 
   /* ── Open edit dialog ── */
   const openEdit = (inv: Invoice) => {
+    setEditLinkedServiceJob(inv.serviceJobId ? { id: inv.serviceJobId, jobNumber: "", label: `Service Job #${inv.serviceJobId}` } : null);
+    setEditLinkedAppointment(inv.appointmentId ? { id: inv.appointmentId, title: "", label: `Appointment #${inv.appointmentId}` } : null);
     const newForm = {
       customerId: String(inv.customerId ?? ""),
       dueDate: inv.dueDate ? inv.dueDate.slice(0, 10) : "",
@@ -482,6 +519,8 @@ export default function POSInvoicesPage() {
           dueDate: editForm.dueDate || null,
           notes: editForm.notes || null,
           items: validLines,
+          serviceJobId: editLinkedServiceJob?.id ?? null,
+          appointmentId: editLinkedAppointment?.id ?? null,
           discount: editDiscount.enabled && editDiscount.value
             ? { type: editDiscount.type, value: parseFloat(editDiscount.value) }
             : undefined,
@@ -512,6 +551,8 @@ export default function POSInvoicesPage() {
     setLineDropOpen([false]);
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });
     setDiscount({ enabled: false, type: "percent", value: "" });
+    setCreateLinkedServiceJob(null);
+    setCreateLinkedAppointment(null);
   };
 
   /* ── Create invoice ── */
@@ -529,6 +570,8 @@ export default function POSInvoicesPage() {
         items: validLines,
         invoicePrefix: prefixSettings.invoicePrefix,
         invoiceDigits: prefixSettings.invoiceDigits,
+        serviceJobId: createLinkedServiceJob?.id ?? null,
+        appointmentId: createLinkedAppointment?.id ?? null,
         discount: discount.enabled && discount.value
           ? { type: discount.type, value: parseFloat(discount.value) }
           : undefined,
@@ -743,9 +786,9 @@ export default function POSInvoicesPage() {
     (inv.customerName ?? "").toLowerCase().includes(search.toLowerCase())
   ), [invoices, search]);
 
-  const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),  [filtered]);
+  const standardFiltered  = useMemo(() => filtered.filter((inv) => !inv.isRecurring && inv.status !== "cancelled").sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),  [filtered]);
   // Templates only: isRecurring=true and not a child instance generated by the scheduler
-  const recurringFiltered = useMemo(() => filtered.filter((inv) => inv.isRecurring && !inv.parentInvoiceId), [filtered]);
+  const recurringFiltered = useMemo(() => filtered.filter((inv) => inv.isRecurring && !inv.parentInvoiceId && inv.status !== "cancelled"), [filtered]);
 
   const kpiOutstanding = useMemo(() => invoices.filter((i) => !i.isRecurring && (i.status === "sent" || i.status === "overdue" || i.status === "partial")).reduce((s, i) => s + (i.total - (i.amountPaid ?? 0)), 0), [invoices]);
   const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
@@ -921,10 +964,24 @@ export default function POSInvoicesPage() {
                           {inv.dueDate ? formatDateOnly(inv.dueDate) : <span>—</span>}
                         </td>
                         <td className="p-3">
-                          <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
+                            {inv.serviceJobId && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700">
+                                <Wrench className="w-2.5 h-2.5" />SVC
+                              </span>
+                            )}
+                            {inv.appointmentId && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700">
+                                <CalendarDays className="w-2.5 h-2.5" />Appt
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 hidden lg:table-cell">
-                          {inv.viewedAt ? (
+                          {inv.status === "draft" ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : inv.viewedAt ? (
                             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Eye className="w-3.5 h-3.5 text-green-500" />{formatDate(inv.viewedAt)}
                             </span>
@@ -1065,14 +1122,14 @@ export default function POSInvoicesPage() {
 
           {/* ── Tab 3: Invoice History (fully paid, newest first) ── */}
           <TabsContent value="history" className="mt-0">
-            {historyLoading ? (
+            {historyActuallyLoading ? (
               <div className="text-center py-16 text-muted-foreground">Loading history…</div>
             ) : historyInvoices.length === 0 ? (
               <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
                 <History className="w-16 h-16 text-muted-foreground/30" />
                 <div>
-                  <p className="font-medium text-lg">No paid invoices yet</p>
-                  <p className="text-muted-foreground text-sm">Fully settled invoices will appear here ordered by completion date.</p>
+                  <p className="font-medium text-lg">No invoice history yet</p>
+                  <p className="text-muted-foreground text-sm">Paid and cancelled invoices will appear here.</p>
                 </div>
               </CardContent></Card>
             ) : (
@@ -1082,9 +1139,10 @@ export default function POSInvoicesPage() {
                     <tr>
                       <th className="text-left p-3 font-medium">Invoice #</th>
                       <th className="text-left p-3 font-medium hidden sm:table-cell">Customer</th>
-                      <th className="text-left p-3 font-medium hidden md:table-cell">Completed Date</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Date</th>
+                      <th className="text-left p-3 font-medium">Status</th>
                       <th className="text-left p-3 font-medium hidden lg:table-cell">Payment Method</th>
-                      <th className="text-right p-3 font-medium">Total Paid</th>
+                      <th className="text-right p-3 font-medium">Total</th>
                       <th className="p-3 w-40 text-right font-medium">Actions</th>
                     </tr>
                   </thead>
@@ -1113,7 +1171,10 @@ export default function POSInvoicesPage() {
                           <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">
                             {inv.paidAt
                               ? new Date(inv.paidAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-                              : <span>—</span>}
+                              : new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={STATUS_COLORS[inv.status]} className="capitalize text-xs">{STATUS_LABELS[inv.status]}</Badge>
                           </td>
                           <td className="p-3 hidden lg:table-cell">
                             {rawMethod ? (
@@ -1161,9 +1222,9 @@ export default function POSInvoicesPage() {
                 <div className="border-t bg-muted/30 px-4 py-2 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <History className="w-3 h-3" />
-                    {historyInvoices.length} fully paid invoice{historyInvoices.length !== 1 ? "s" : ""} · sorted by completion date, newest first
+                    {historyInvoices.length} invoice{historyInvoices.length !== 1 ? "s" : ""} · paid &amp; cancelled · sorted by date, newest first
                   </span>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={() => void refetchHistory()}>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={refetchAllHistory}>
                     <RefreshCw className="w-2.5 h-2.5" />
                     Refresh
                   </Button>
@@ -1260,6 +1321,25 @@ export default function POSInvoicesPage() {
                     </div>
                   )}
                 </div>
+
+                {(detailInvoice.serviceJobId || detailInvoice.appointmentId) && (
+                  <div className="rounded-lg border bg-muted/20 px-4 py-3 flex flex-wrap gap-3 text-sm">
+                    {detailInvoice.serviceJobId && (
+                      <span className="flex items-center gap-1.5 text-cyan-700">
+                        <Wrench className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-medium">Linked Service Job</span>
+                        <span className="text-muted-foreground">#{detailInvoice.serviceJobId}</span>
+                      </span>
+                    )}
+                    {detailInvoice.appointmentId && (
+                      <span className="flex items-center gap-1.5 text-violet-700">
+                        <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-medium">Linked Appointment</span>
+                        <span className="text-muted-foreground">#{detailInvoice.appointmentId}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <Separator />
 
@@ -1665,6 +1745,22 @@ export default function POSInvoicesPage() {
                 rows={2} placeholder="Payment terms, notes for customer..." />
             </div>
 
+            {/* Link to service / appointment */}
+            <div className="space-y-1.5">
+              <Label>Linked To</Label>
+              {(createLinkedServiceJob || createLinkedAppointment) ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                  {createLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{createLinkedServiceJob.jobNumber || createLinkedServiceJob.id}</span></>}
+                  {createLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{createLinkedAppointment.title || `Appointment #${createLinkedAppointment.id}`}</span></>}
+                  <button onClick={() => { setCreateLinkedServiceJob(null); setCreateLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("create")}>
+                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                </Button>
+              )}
+            </div>
+
             {/* Recurring */}
             <div className="rounded-xl border p-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -1923,6 +2019,22 @@ export default function POSInvoicesPage() {
                 rows={2} placeholder="Payment terms, notes for customer..." />
             </div>
 
+            {/* Link to service / appointment */}
+            <div className="space-y-1.5">
+              <Label>Linked To</Label>
+              {(editLinkedServiceJob || editLinkedAppointment) ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                  {editLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{editLinkedServiceJob.jobNumber || editLinkedServiceJob.id}</span></>}
+                  {editLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{editLinkedAppointment.title || `Appointment #${editLinkedAppointment.id}`}</span></>}
+                  <button onClick={() => { setEditLinkedServiceJob(null); setEditLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("edit")}>
+                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                </Button>
+              )}
+            </div>
+
             {/* Recurring */}
             <div className="rounded-xl border p-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -2007,6 +2119,75 @@ export default function POSInvoicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── Link to Service / Appointment ─── */}
+      <Dialog open={!!linkDialogFor} onOpenChange={(o) => { if (!o) setLinkDialogFor(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="w-4 h-4" /> Link to Service or Appointment
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
+              <ScrollArea className="max-h-44 border rounded-lg">
+                {linkServiceJobs.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
+                ) : (
+                  <div className="divide-y">
+                    {linkServiceJobs.slice(0, 20).map((sj) => {
+                      const isSelected = linkDialogFor === "create" ? createLinkedServiceJob?.id === sj.id : editLinkedServiceJob?.id === sj.id;
+                      return (
+                        <button key={sj.id} onClick={() => {
+                          const entry = { id: sj.id, jobNumber: sj.jobNumber, label: `#${sj.jobNumber} · ${sj.deviceType || sj.deviceDescription || "Service"}` };
+                          if (linkDialogFor === "create") { setCreateLinkedServiceJob(entry); setCreateLinkedAppointment(null); }
+                          else { setEditLinkedServiceJob(entry); setEditLinkedAppointment(null); }
+                          setLinkDialogFor(null);
+                        }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                          <Wrench className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">#{sj.jobNumber} · {sj.deviceType || sj.deviceDescription || "Service"}</p>
+                            <p className="text-xs text-muted-foreground">{sj.status} · {sj.customerName || "No customer"}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
+              <ScrollArea className="max-h-44 border rounded-lg">
+                {linkAppointments.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
+                ) : (
+                  <div className="divide-y">
+                    {linkAppointments.slice(0, 20).map((apt) => {
+                      const isSelected = linkDialogFor === "create" ? createLinkedAppointment?.id === apt.id : editLinkedAppointment?.id === apt.id;
+                      return (
+                        <button key={apt.id} onClick={() => {
+                          const entry = { id: apt.id, title: apt.title, label: apt.title };
+                          if (linkDialogFor === "create") { setCreateLinkedAppointment(entry); setCreateLinkedServiceJob(null); }
+                          else { setEditLinkedAppointment(entry); setEditLinkedServiceJob(null); }
+                          setLinkDialogFor(null);
+                        }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                          <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">#{apt.id} · {apt.title}</p>
+                            <p className="text-xs text-muted-foreground">{apt.scheduledAt ? new Date(apt.scheduledAt).toLocaleString("en-AU") : "—"} · {apt.customerName || "No customer"}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Discard Changes Confirmation ─── */}
       <AlertDialog open={discardConfirmTarget !== null} onOpenChange={(o) => { if (!o) setDiscardConfirmTarget(null); }}>

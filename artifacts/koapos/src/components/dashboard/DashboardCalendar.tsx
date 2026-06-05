@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -107,8 +107,32 @@ function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointm
           </div>
           {appt.customerName && (
             <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+              <User className="w-4 h-4 text-muted-foreground shrink-0" />
               <span>{appt.customerName}</span>
+            </div>
+          )}
+          {appt.customerPhone && (
+            <div className="flex items-center gap-2 text-sm">
+              <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+              <a
+                href={`tel:${appt.customerPhone}`}
+                className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+              >
+                {appt.customerPhone}
+              </a>
+            </div>
+          )}
+          {appt.customerAddress && (
+            <div className="flex items-start gap-2 text-sm">
+              <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(appt.customerAddress)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+              >
+                {appt.customerAddress}
+              </a>
             </div>
           )}
           {appt.notes && (

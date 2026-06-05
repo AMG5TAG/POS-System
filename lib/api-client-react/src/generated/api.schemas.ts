@@ -1101,6 +1101,10 @@ export interface CalendarAppointment {
   /** @nullable */
   customerName?: string | null;
   /** @nullable */
+  customerPhone?: string | null;
+  /** @nullable */
+  customerAddress?: string | null;
+  /** @nullable */
   notes?: string | null;
 }
 
@@ -4088,6 +4092,8 @@ export interface Invoice {
   id: number;
   merchantId: number;
   customerId?: number | null;
+  serviceJobId?: number | null;
+  appointmentId?: number | null;
   invoiceNumber: string;
   status: InvoiceStatus;
   subtotal: number;

@@ -12,6 +12,7 @@
     "setup-login-cleanup": "tsx ./src/setup-login-cleanup.ts",
     "setup-report-views": "tsx ./src/setup-report-views.ts",
     "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",
+    "add-invoice-link-columns": "tsx ./src/add-invoice-link-columns.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

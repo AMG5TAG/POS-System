@@ -145,7 +145,7 @@ export default function StaffKpisPage() {
   const { data: kpiData } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const rawTargets = (kpiData as { items?: unknown[] } | undefined)?.items ?? [];
   const targets = useMemo(
-    () => (rawTargets as Parameters<typeof mapKpiTarget>[0][]).map(mapKpiTarget).filter((t) => t.isActive),
+    () => (rawTargets as Parameters<typeof mapKpiTarget>[0][]).map(mapKpiTarget).filter((t) => t.isActive && t.metric in METRIC_META),
     [rawTargets],
   );
 

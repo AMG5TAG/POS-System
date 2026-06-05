@@ -532,7 +532,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     sales: number;
     serviceJobs: number;
     invoices: number;
-    appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; notes: string | null }[];
+    appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; customerPhone: string | null; customerAddress: string | null; notes: string | null }[];
     customerBirthdays: { id: number; firstName: string; lastName: string | null; phone: string | null; email: string | null }[];
   }> = {};
 
@@ -594,6 +594,8 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
       durationMinutes: a.durationMinutes,
       status: a.status,
       customerName: customer ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null : null,
+      customerPhone: customer?.phone ?? null,
+      customerAddress: customer?.address ?? null,
       notes: a.notes ?? null,
     });
   }

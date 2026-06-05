@@ -15,7 +15,7 @@ import {
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
-  useGetMerchant, useListPosRegisters, useListProductTypes,
+  useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   Product, Customer, Staff, ServiceJob, Appointment,
@@ -673,7 +673,6 @@ export default function POSPage() {
     { query: { queryKey: ["products", search, effectiveCategoryId] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
-  const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types-pos"] } });
   const { data: pricingRulesData } = useQuery<{ rules: PricingRule[] }>({
     queryKey: ["pricing-rules-pos"],
     queryFn: async () => {
@@ -706,39 +705,14 @@ export default function POSPage() {
   const activeCatId   = categoryPath.length > 0 ? categoryPath[categoryPath.length - 1] : null;
   const subCats       = activeCatId ? getChildren(activeCatId) : [];
 
-  /* Derive unique product type names visible in the current product set.
-     Uses productTypeName from the API response (reflects live type renames). */
-  const visibleTypeNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const p of allProducts) {
-      const ep = p as Product & { productTypeName?: string | null };
-      if (ep.productTypeName) names.add(ep.productTypeName);
-    }
-    const activeTypes = productTypesData?.items ?? [];
-    const ordered: string[] = [];
-    for (const t of activeTypes) {
-      if (names.has(t.name)) ordered.push(t.name);
-    }
-    for (const n of names) {
-      if (!ordered.includes(n)) ordered.push(n);
-    }
-    return ordered;
-  }, [allProducts, productTypesData]);
-
   /* Filter products: favourites mode → client-side filter by pinned IDs.
      When a search is active, always show all products regardless of tab
-     so the cashier can find items without switching tabs first.
-     typeFilter narrows further by productTypeName. */
+     so the cashier can find items without switching tabs first. */
   const products = useMemo(() => {
-    const base = (posTab === "favourites" && !search)
+    return (posTab === "favourites" && !search)
       ? allProducts.filter(p => favouriteIds.has(p.id))
       : allProducts;
-    if (!typeFilter) return base;
-    return base.filter(p => {
-      const ep = p as Product & { productTypeName?: string | null };
-      return ep.productTypeName === typeFilter;
-    });
-  }, [posTab, search, allProducts, favouriteIds, typeFilter]);
+  }, [posTab, search, allProducts, favouriteIds]);
 
   /* All products for barcode lookup (loaded once, unfiltered) */
   const { data: allProductsBarcodeData } = useListProducts(
@@ -2493,7 +2467,7 @@ export default function POSPage() {
                       ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                       : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
                     }
-                    {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
+                    {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
                     )}
                     {/* Pin to Favourites */}
