@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { StateSelectInput } from "@/components/ui/state-select-input";
+import { parseStaffPosPrefs, type StaffPosPrefs } from "@/lib/pos-local-settings";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -49,10 +50,22 @@ type WizardForm = {
   isActive: boolean;
   pin: string;
   defaultRegisterType: string;
+  /* Per-staff POS preferences — "" means "use store default". */
+  posPrefs: {
+    gridColumns: string;
+    tileSize: string;
+    showPrices: string;
+    showStockBadges: string;
+    cartPosition: string;
+  };
   payRate: string;
   loadingRate: string;
   superRate: string;
 };
+
+const emptyPosPrefs = (): WizardForm["posPrefs"] => ({
+  gridColumns: "", tileSize: "", showPrices: "", showStockBadges: "", cartPosition: "",
+});
 
 const emptyAddress = (): AddressFields => ({ street: "", city: "", state: "", postcode: "", country: "Australia" });
 
@@ -64,7 +77,8 @@ const defaultForm = (): WizardForm => ({
   firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "", company: "", abn: "",
   billing: emptyAddress(), postalSameAsBilling: true, postal: emptyAddress(),
   role: "cashier", isActive: true, pin: generatePin(),
-  defaultRegisterType: "", payRate: "", loadingRate: "", superRate: "",
+  defaultRegisterType: "", posPrefs: emptyPosPrefs(),
+  payRate: "", loadingRate: "", superRate: "",
 });
 
 function staffToForm(s: Staff): WizardForm {
@@ -84,8 +98,19 @@ function staffToForm(s: Staff): WizardForm {
     billing, postalSameAsBilling: false, postal,
     role:    s.role,
     isActive: s.isActive,
-    pin:     s.pin ?? "",
+    /* The server masks PINs ("****") — start blank; blank means "unchanged". */
+    pin:     "",
     defaultRegisterType: s.defaultRegisterType ?? "",
+    posPrefs: (() => {
+      const p = parseStaffPosPrefs(s.posPrefs);
+      return {
+        gridColumns:     p.gridColumns != null ? String(p.gridColumns) : "",
+        tileSize:        p.tileSize ?? "",
+        showPrices:      p.showPrices != null ? (p.showPrices ? "show" : "hide") : "",
+        showStockBadges: p.showStockBadges != null ? (p.showStockBadges ? "show" : "hide") : "",
+        cartPosition:    p.cartPosition ?? "",
+      };
+    })(),
     payRate:     s.payRate     ?? "",
     loadingRate: s.loadingRate ?? "",
     superRate:   s.superRate   ?? "",
@@ -383,7 +408,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                     maxLength={4}
                     value={form.pin}
                     onChange={(e) => { onTouched?.(); setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) })); }}
-                    placeholder="••••"
+                    placeholder={editingStaff ? (editingStaff.pin ? "•••• (unchanged)" : "No PIN set") : "••••"}
                     className="rounded-md w-28 text-center tracking-widest font-mono"
                   />
                   {!editingStaff && (
@@ -400,7 +425,9 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Used to quickly switch staff on the POS without logging out. Leave blank to disable PIN login for this employee.
+                  {editingStaff
+                    ? "Used for the day login and one-sale staff switching on the POS. Leave blank to keep the current PIN; enter a new 4-digit PIN to change it."
+                    : "Used for the day login and one-sale staff switching on the POS. Leave blank to disable PIN login for this employee."}
                 </p>
                 {!editingStaff && form.email && form.pin && (
                   <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
@@ -415,6 +442,42 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
           {step === 3 && (
             <div className="space-y-5">
               <PosRegisterSelect value={form.defaultRegisterType} onChange={set("defaultRegisterType")} />
+              <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
+                <SectionHeader icon={Monitor} label="POS Layout Preferences" />
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Applied to whichever terminal this employee signs in for the day. "Store default" uses the account-wide POS settings.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {([
+                    { key: "gridColumns",     label: "Grid Columns", options: [["2", "2 columns"], ["3", "3 columns"], ["4", "4 columns"], ["5", "5 columns"]] },
+                    { key: "tileSize",        label: "Tile Size",    options: [["compact", "Compact"], ["normal", "Normal"], ["large", "Large"]] },
+                    { key: "showPrices",      label: "Prices",       options: [["show", "Show"], ["hide", "Hide"]] },
+                    { key: "showStockBadges", label: "Stock Badges", options: [["show", "Show"], ["hide", "Hide"]] },
+                    { key: "cartPosition",    label: "Cart Side",    options: [["right", "Right"], ["left", "Left"]] },
+                  ] as const).map(({ key, label, options }) => (
+                    <div key={key} className="space-y-1.5">
+                      <Label className="text-xs font-medium text-foreground/80">{label}</Label>
+                      <Select
+                        value={form.posPrefs[key] || "__default__"}
+                        onValueChange={(v) => {
+                          onTouched?.();
+                          setForm((f) => ({ ...f, posPrefs: { ...f.posPrefs, [key]: v === "__default__" ? "" : v } }));
+                        }}
+                      >
+                        <SelectTrigger className="rounded-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__default__">Store default</SelectItem>
+                          {options.map(([v, l]) => (
+                            <SelectItem key={v} value={v}>{l}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="rounded-xl border p-4 bg-muted/10 space-y-3">
                 <SectionHeader icon={DollarSign} label="Payroll Details" />
                 <div className="grid grid-cols-3 gap-3">
@@ -901,6 +964,14 @@ export default function StaffPage() {
   const openEdit   = (s: Staff) => { setEditingStaff(s); markClean(); setDialogOpen(true); };
 
   const handleSave = (form: WizardForm) => {
+    /* Serialize only the explicitly-set POS preferences; "" = store default. */
+    const prefs: StaffPosPrefs = {};
+    if (form.posPrefs.gridColumns)     prefs.gridColumns = Number(form.posPrefs.gridColumns) as 2 | 3 | 4 | 5;
+    if (form.posPrefs.tileSize)        prefs.tileSize = form.posPrefs.tileSize as StaffPosPrefs["tileSize"];
+    if (form.posPrefs.showPrices)      prefs.showPrices = form.posPrefs.showPrices === "show";
+    if (form.posPrefs.showStockBadges) prefs.showStockBadges = form.posPrefs.showStockBadges === "show";
+    if (form.posPrefs.cartPosition)    prefs.cartPosition = form.posPrefs.cartPosition as StaffPosPrefs["cartPosition"];
+
     const payload = {
       firstName:   form.firstName   || undefined,
       lastName:    form.lastName    || undefined,
@@ -916,6 +987,7 @@ export default function StaffPage() {
       pin:         form.pin         || undefined,
       isActive:    form.isActive,
       defaultRegisterType: form.defaultRegisterType || undefined,
+      posPrefs:    JSON.stringify(prefs),
       payRate:     form.payRate     || undefined,
       loadingRate: form.loadingRate || undefined,
       superRate:   form.superRate   || undefined,

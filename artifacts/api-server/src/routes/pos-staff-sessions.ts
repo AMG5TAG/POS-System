@@ -19,7 +19,9 @@ router.get("/pos-staff-sessions", requireAuth, async (req, res): Promise<void> =
       )
     )
     .orderBy(desc(posStaffSessionsTable.loggedInAt));
-  res.json({ items, total: items.length });
+  /* Never echo PINs back to clients — older rows may have one stored. */
+  const safe = items.map((i) => ({ ...i, staffPin: "" }));
+  res.json({ items: safe, total: safe.length });
 });
 
 const CreatePosStaffSessionBody = z.object({

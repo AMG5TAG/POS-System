@@ -18,7 +18,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale,
+  CreditCard, Plug, Scale, Lock,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -32,11 +32,16 @@ import {
   useGetStaffClockStatus,
   useClockIn,
   useClockOut,
+  useListStaff,
+  useVerifyStaffPin,
+  useGetPosSettings,
   type Customer,
   type Appointment,
   type ServiceJob,
   type Product,
+  type Staff,
 } from "@workspace/api-client-react";
+import { useStaffSession } from "@/lib/staff-day-session";
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
   SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarFooter,
@@ -45,7 +50,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -1310,26 +1315,151 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   );
 }
 
-/* ─── Staff swap button ──────────────────────────────────────────────────── */
+/* ─── Staff day login (universal top bar) ────────────────────────────────── */
 
-function StaffSwapButton({ location, navigate }: { location: string; navigate: (href: string) => void }) {
-  const handleClick = () => {
-    if (location.startsWith("/pos")) {
-      window.dispatchEvent(new CustomEvent("koapos:open-staff-pin"));
-    } else {
-      navigate("/pos");
-      setTimeout(() => window.dispatchEvent(new CustomEvent("koapos:open-staff-pin")), 350);
-    }
+/**
+ * The day's staff login for THIS device. A staff member signs in here with
+ * their PIN at the start of the day; their session persists until Close Till
+ * or an explicit sign-out. The POS cart-header staff button is, by contrast,
+ * only a temporary one-sale switch that reverts back to this day login.
+ */
+function StaffLoginButton({ location }: { location: string }) {
+  const { dayStaff, signInForDay, signOutForDay } = useStaffSession();
+  const [open, setOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  const isPosPage = location === "/pos" || location.startsWith("/pos/");
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const forceStaffLogin = posSettingsData?.forceStaffLogin === "true";
+
+  /* The staff list only reveals whether a forced login is even possible
+     (PIN values are masked by the server); verification happens server-side. */
+  const needStaffList = open || (isPosPage && forceStaffLogin && !dayStaff);
+  const { data: staffListData } = useListStaff({ query: { queryKey: ["staff-pos"], enabled: needStaffList } });
+  const staffList = (staffListData as Staff[] | undefined) ?? [];
+  const pinStaffExists = staffList.some((s) => s.pin && s.isActive);
+  const verifyPin = useVerifyStaffPin();
+
+  /* Forced start-of-day login — on the POS with nobody signed in for the day,
+     the PIN dialog opens instantly and cannot be dismissed. */
+  const forced = isPosPage && forceStaffLogin && !dayStaff && pinStaffExists;
+  useEffect(() => {
+    if (forced) { setPin(""); setError(""); setOpen(true); }
+  }, [forced]);
+
+  /* The POS "Charge" guard dispatches this when a sale is attempted with no
+     day staff while forced login is on. */
+  useEffect(() => {
+    const handler = () => { setPin(""); setError(""); setOpen(true); };
+    window.addEventListener("koapos:open-day-staff-login", handler);
+    return () => window.removeEventListener("koapos:open-day-staff-login", handler);
+  }, []);
+
+  const handleSubmit = () => {
+    if (!pin || verifyPin.isPending) return;
+    verifyPin.mutate({ data: { pin } }, {
+      onSuccess: (res) => {
+        if (!res.ok || !res.staff) {
+          setError(res.reason === "rate_limited"
+            ? "Too many attempts — wait a minute and try again."
+            : "Incorrect PIN. Try again.");
+          setPin("");
+          return;
+        }
+        signInForDay(res.staff);
+        setOpen(false); setPin(""); setError("");
+        toast.success(`${res.staff.name} signed in for the day`);
+      },
+      onError: () => setError("Couldn't verify PIN — check your connection and try again."),
+    });
   };
+
+  const handleSignOut = () => {
+    const name = dayStaff?.staffName;
+    signOutForDay();
+    setPin(""); setError("");
+    toast.success(`${name ?? "Staff"} signed out`);
+  };
+
+  const handleOpenChange = (v: boolean) => {
+    if (!v && forced) return; /* must sign in before the dialog can close */
+    if (!v) { setPin(""); setError(""); }
+    setOpen(v);
+  };
+
   return (
-    <button
-      onClick={handleClick}
-      title="Swap staff member"
-      aria-label="Swap staff member"
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-    >
-      <UserCircle className="w-4 h-4" />
-    </button>
+    <>
+      <button
+        onClick={() => { setPin(""); setError(""); setOpen(true); }}
+        title={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+        aria-label={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+        className={cn(
+          "h-8 rounded-lg flex items-center justify-center gap-1.5 px-2 transition-colors",
+          dayStaff ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
+        )}
+      >
+        <UserCircle className="w-4 h-4 shrink-0" />
+        {dayStaff && (
+          <span className="hidden md:inline text-xs font-semibold max-w-[90px] truncate">
+            {dayStaff.staffName.split(" ")[0]}
+          </span>
+        )}
+      </button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className={cn("sm:max-w-xs", forced && "[&>button.absolute]:hidden")}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4" /> Staff Login
+            </DialogTitle>
+            <DialogDescription>
+              {dayStaff
+                ? <>Signed in for the day: <span className="font-semibold text-foreground">{dayStaff.staffName}</span></>
+                : forced
+                  ? "Enter your PIN to start the day on this register."
+                  : "Enter your PIN to sign in for the day on this device."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setError(""); }}
+              placeholder="••••"
+              className="text-center tracking-widest text-lg"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
+                <button
+                  key={ki} disabled={!k}
+                  onClick={() => { if (k === "⌫") setPin((p) => p.slice(0, -1)); else if (k) { setPin((p) => p + k); setError(""); } }}
+                  className={cn("h-11 rounded-xl border font-semibold text-base transition-colors", k ? "hover:bg-muted active:bg-muted/80" : "opacity-0 pointer-events-none", k === "⌫" && "text-destructive text-sm")}
+                >{k}</button>
+              ))}
+            </div>
+            {error && <p className="text-xs text-destructive text-center">{error}</p>}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {dayStaff && (
+              <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleSignOut}>
+                <LogOut className="w-3.5 h-3.5 mr-1.5" /> Sign Out
+              </Button>
+            )}
+            {!forced && (
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
+            )}
+            <Button onClick={handleSubmit} disabled={!pin || verifyPin.isPending}>
+              {verifyPin.isPending ? "Verifying…" : "Sign In"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1419,7 +1549,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
-          <StaffSwapButton location={location} navigate={navigate} />
+          <StaffLoginButton location={location} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1554,7 +1684,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
-          <StaffSwapButton location={location} navigate={navigate} />
+          <StaffLoginButton location={location} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1870,7 +2000,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
                   <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
                 </Button>
               </Link>
-              <StaffSwapButton location={location} navigate={navigate} />
+              <StaffLoginButton location={location} />
               <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
                 {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>

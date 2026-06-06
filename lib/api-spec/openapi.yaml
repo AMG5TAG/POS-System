@@ -1534,6 +1534,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/Staff"
 
+  /staff/verify-pin:
+    post:
+      operationId: verifyStaffPin
+      tags: [staff]
+      summary: Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyStaffPinBody"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyStaffPinResponse"
+
   /staff/sales-report:
     get:
       operationId: getStaffSalesReport
@@ -8706,10 +8725,14 @@ components:
           enum: [owner, manager, cashier]
         pin:
           type: ["string", "null"]
+          description: Masked in responses ("****" when a PIN is set, null otherwise) — raw PINs are never returned.
         isActive:
           type: boolean
         defaultRegisterType:
           type: ["string", "null"]
+        posPrefs:
+          type: ["string", "null"]
+          description: JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).
         payRate:
           type: ["string", "null"]
         loadingRate:
@@ -8752,6 +8775,8 @@ components:
           type: string
         defaultRegisterType:
           type: string
+        posPrefs:
+          type: string
         payRate:
           type: string
         loadingRate:
@@ -8791,12 +8816,38 @@ components:
           type: boolean
         defaultRegisterType:
           type: string
+        posPrefs:
+          type: string
         payRate:
           type: string
         loadingRate:
           type: string
         superRate:
           type: string
+
+    VerifyStaffPinBody:
+      type: object
+      required: [pin]
+      properties:
+        pin:
+          type: string
+          minLength: 1
+        requireManager:
+          type: boolean
+          description: When true, only manager/owner staff PINs are accepted (e.g. discount approvals).
+
+    VerifyStaffPinResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        reason:
+          type: string
+          enum: [invalid, role, rate_limited]
+          description: Present when ok is false.
+        staff:
+          $ref: "#/components/schemas/Staff"
 
     # ── Staff Sales Report ───────────────────────────────────────────────────
     StaffSalesReportRow:

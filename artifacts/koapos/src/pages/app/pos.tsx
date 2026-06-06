@@ -16,7 +16,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
-  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings,
+  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useVerifyStaffPin,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
@@ -39,8 +39,10 @@ import {
 } from "@/pages/app/management-registers";
 import {
   loadRegisterSession, saveRegisterSession, clearRegisterSession, getOrCreateDeviceId,
+  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs,
   type RegisterSession,
 } from "@/lib/pos-local-settings";
+import { useStaffSession } from "@/lib/staff-day-session";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -92,6 +94,22 @@ function openDenomTotal(counts: Record<number, string>): number {
     0,
   );
 }
+
+/* ─── POS layout class maps (account settings + per-staff overrides) ─────── */
+
+/* The chosen column count caps the grid on desktop; smaller screens scale down. */
+const GRID_COL_CLASSES: Record<2 | 3 | 4 | 5, string> = {
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-2 sm:grid-cols-3",
+  4: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
+};
+
+const TILE_SIZE_CLASSES: Record<"compact" | "normal" | "large", { image: string; body: string; name: string; price: string }> = {
+  compact: { image: "h-[110px]", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
+  normal:  { image: "h-[150px]", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
+  large:   { image: "h-[190px]", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
+};
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -181,7 +199,11 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
-  const [activeRegisterId] = useState<string>("default");
+  /* Which register THIS device operates — persisted per device so each
+     terminal's till is independent of the others. */
+  const [activeRegisterId, setActiveRegisterId] = useState<string>(() => {
+    try { return localStorage.getItem(ACTIVE_REGISTER_ID_KEY) || "default"; } catch { return "default"; }
+  });
 
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
 
@@ -223,6 +245,44 @@ export default function POSPage() {
 
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+
+  /* staff — fetched early because the signed-in staff drives role limits below */
+  const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
+  /* server-side PIN verification (one-sale switch + discount approvals) */
+  const verifyPinMutation = useVerifyStaffPin();
+
+  /* ── Staff identity ──
+     dayStaff      — the day's login from the universal top bar (persisted per device).
+     saleStaff     — temporary one-sale override from the POS staff button;
+                     reverts to the day staff as soon as the sale finishes.
+     currentStaff  — whoever the next transaction will be recorded under. */
+  const { dayStaff, signOutForDay } = useStaffSession();
+  const [saleStaff, setSaleStaff] = useState<Staff | null>(null);
+  const dayStaffMember = useMemo((): Staff | null => {
+    if (!dayStaff) return null;
+    const fromList = (staffList as Staff[] | undefined)?.find(s => s.id === dayStaff.staffId);
+    /* Fall back to the persisted snapshot so the name/role still resolve while
+       the staff list is loading. */
+    return fromList ?? ({ id: dayStaff.staffId, name: dayStaff.staffName, role: dayStaff.role } as Staff);
+  }, [dayStaff, staffList]);
+  const currentStaff = saleStaff ?? dayStaffMember;
+
+  /* ── Effective POS layout ──
+     Account-level grid settings (Management → Registers) form the base; the
+     day staff member's personal preferences (staff.posPrefs) override them on
+     this terminal for the day. */
+  const posLayout = useMemo(() => {
+    const cols = posSettingsData?.gridColumns;
+    const tile = posSettingsData?.gridTileSize;
+    const base = {
+      columns: (cols && [2, 3, 4, 5].includes(cols) ? cols : 3) as 2 | 3 | 4 | 5,
+      tileSize: (tile && ["compact", "normal", "large"].includes(tile) ? tile : "normal") as "compact" | "normal" | "large",
+      showPrices: posSettingsData ? posSettingsData.gridShowPrices === "true" : true,
+      showStockBadges: posSettingsData?.gridShowStockBadges === "true",
+      cartPosition: (posSettingsData?.gridCartPosition === "left" ? "left" : "right") as "left" | "right",
+    };
+    return { ...base, ...parseStaffPosPrefs(dayStaffMember?.posPrefs) };
+  }, [posSettingsData, dayStaffMember]);
   // Use the global button-style context for bare <button> elements in the POS cart row.
   // The <Button> component (capitalised) reads the same context automatically.
   const { showIcon: pbShowIcon, showText: pbShowText } = useButtonStyle();
@@ -364,8 +424,10 @@ export default function POSPage() {
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteShake, setNoteShake] = useState(false);
-  const [pendingPaymentAfterPin, setPendingPaymentAfterPin] = useState(false);
-  const forceStaffLogin = false;
+  /* Forced start-of-day staff login — managed in Management → POS Settings.
+     The top-bar StaffLoginButton auto-opens the PIN dialog; this flag also
+     blocks charging until somebody has signed in for the day. */
+  const forceStaffLogin = posSettingsData?.forceStaffLogin === "true";
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
   /* kode */
@@ -385,8 +447,7 @@ export default function POSPage() {
   const [upsellLoading, setUpsellLoading] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
 
-  /* staff PIN */
-  const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  /* staff PIN (one-sale switch dialog) */
   const [pinCapsLockOn, setPinCapsLockOn] = useState(false);
   const [approvalCapsLockOn, setApprovalCapsLockOn] = useState(false);
 
@@ -438,11 +499,19 @@ export default function POSPage() {
   const getSession = (): RegisterSession | null => sessionSnap;
 
   const handleOpenRegister = () => {
+    /* Hard per-terminal lock — this register's till is already open on another
+       device, so this machine cannot open a second session for it. */
+    if (deviceConflict) {
+      const who = deviceConflict.openedBy ? ` by ${deviceConflict.openedBy}` : "";
+      toast.error(`This till is already open on another device${who}. Close it there first.`);
+      setOpenRegisterDialogOpen(false);
+      return;
+    }
     const deviceId = getOrCreateDeviceId();
     const float = openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
-      openedBy: currentStaff?.name ?? null,
+      openedBy: dayStaffMember?.name ?? currentStaff?.name ?? null,
       openingFloat: float,
       openingNotes: openNotes,
       sales: {},
@@ -540,7 +609,16 @@ export default function POSPage() {
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
     setLastZReport(zReport as RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string });
     setEodPrintOpen(true);
-    toast.success("Register closed — Z-report saved");
+
+    /* Close Till ends the day — clear any one-sale override and sign the
+       day's staff member out so tomorrow starts with a fresh PIN login. */
+    setSaleStaff(null);
+    if (dayStaff) {
+      signOutForDay();
+      toast.success(`Register closed — Z-report saved. ${dayStaff.staffName} signed out.`);
+    } else {
+      toast.success("Register closed — Z-report saved");
+    }
 
     /* Sync close to server so other devices see the till is now free. */
     if (sid) {
@@ -688,7 +766,6 @@ export default function POSPage() {
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
-  const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
   const createTransactionMutation      = useCreateTransaction();
@@ -936,12 +1013,40 @@ export default function POSPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Listen for the staff-swap event dispatched by the universal top bar button. */
+  /* Apply the day staff member's default register to THIS device when they
+     sign in — but never mid-session, so an open till is left untouched. */
   useEffect(() => {
-    const handler = () => { setPinInput(""); setPinError(""); setPinDialogOpen(true); };
-    window.addEventListener("koapos:open-staff-pin", handler);
-    return () => window.removeEventListener("koapos:open-staff-pin", handler);
-  }, []);
+    if (!dayStaff?.defaultRegisterType || registerOpen) return;
+    const reg = (registersData?.items ?? []).find(r => String(r.id) === dayStaff.defaultRegisterType);
+    if (!reg?.registerId || reg.registerId === activeRegisterId) return;
+    setActiveRegisterId(reg.registerId);
+    try { localStorage.setItem(ACTIVE_REGISTER_ID_KEY, reg.registerId); } catch { /* ignore */ }
+    toast.info(`Register set to ${reg.name ?? reg.registerId} (${dayStaff.staffName}'s default)`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayStaff, registersData, registerOpen]);
+
+  /* Show the staff login message once per day login (the sign-in itself now
+     happens in the universal top bar, so it's surfaced here on the POS). */
+  useEffect(() => {
+    if (!dayStaff) return;
+    const msg = getStaffLoginMessage();
+    if (!msg?.enabled || !msg.text.trim()) return;
+    const shownKey = `koapos_login_msg_shown_${dayStaff.staffId}_${dayStaff.loggedInAt}`;
+    try { if (sessionStorage.getItem(shownKey)) return; } catch { /* ignore */ }
+    const merchantId = merchantData?.id ?? 0;
+    const alreadyAcked = msg.requireAck ? hasStaffAcknowledged(merchantId, dayStaff.staffId, msg) : false;
+    if (!alreadyAcked) {
+      setLoginMsg(msg);
+      setMsgAckChecked(false);
+      setLoginMsgOpen(true);
+    }
+    /* Ack-required messages re-show until acknowledged (tracked by
+       hasStaffAcknowledged); informational ones show once per login. */
+    if (!msg.requireAck) {
+      try { sessionStorage.setItem(shownKey, "1"); } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayStaff, merchantData?.id]);
 
   /* Detect open sessions on OTHER devices for this register. */
   useEffect(() => {
@@ -1663,6 +1768,7 @@ export default function POSPage() {
       setCart([]); setOverallDiscount(""); setSaleNotes("");
       setSelectedCustomer(null); setWalkIn(null);
       setDiscountExcessAmount(0);
+      setSaleStaff(null); /* parked — revert any one-sale staff switch */
       toast.success("Sale parked");
     } catch {
       toast.error("Failed to park sale");
@@ -1784,6 +1890,8 @@ export default function POSPage() {
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     idempotencyKeyRef.current = null;
     setDiscountExcessAmount(0);
+    /* Sale is over — any one-sale staff switch reverts to the day's staff. */
+    setSaleStaff(null);
   };
 
   const printPosReceipt = async () => {
@@ -2021,45 +2129,61 @@ export default function POSPage() {
     setSelectedCustomer(null); setWalkInDialogOpen(false); setWalkInForm({ firstName: "", lastName: "" }); setFormTouched(false);
   };
 
-  const handlePinSubmit = () => {
-    const staff = (staffList as Staff[] ?? []).find(s => s.pin && s.pin === pinInput && s.isActive);
-    if (!staff) { setPinError("Incorrect PIN. Try again."); setPinInput(""); return; }
-    setCurrentStaff(staff);
-    /* staff no longer persisted to localStorage */
-    setPinDialogOpen(false); setPinInput(""); setPinError("");
-    toast.success(`Signed in as ${staff.name}`);
-
-    /* Warn if there's an open till on another device. */
-    if (deviceConflict) {
-      const when = deviceConflict.openedAt
-        ? new Date(deviceConflict.openedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })
-        : "";
-      const who = deviceConflict.openedBy ? ` by ${deviceConflict.openedBy}` : "";
-      toast.warning(`Till is open on another device${who}${when ? ` (opened ${when})` : ""}. Close it there before opening a new session.`, { duration: 8000 });
-    }
-
-    /* staff login message */
-    const msg = getStaffLoginMessage();
-    if (msg?.enabled && msg.text.trim()) {
-      const merchantId = merchantData?.id ?? 0;
-      const alreadyAcked = msg.requireAck ? hasStaffAcknowledged(merchantId, staff.id, msg) : false;
-      if (!alreadyAcked) {
-        setLoginMsg(msg);
-        setMsgAckChecked(false);
-        setLoginMsgOpen(true);
+  /* One-sale staff switch — the POS staff button stamps a different staff
+     member on the CURRENT sale only; the moment the sale finishes (completed,
+     parked, or cleared) the terminal reverts to the day's signed-in staff.
+     PINs are verified server-side — raw PINs never reach the browser. */
+  const handlePinSubmit = async () => {
+    if (!pinInput || verifyPinMutation.isPending) return;
+    let staff: Staff;
+    try {
+      const res = await verifyPinMutation.mutateAsync({ data: { pin: pinInput } });
+      if (!res.ok || !res.staff) {
+        setPinError(res.reason === "rate_limited"
+          ? "Too many attempts — wait a minute and try again."
+          : "Incorrect PIN. Try again.");
+        setPinInput("");
+        return;
       }
+      staff = res.staff;
+    } catch {
+      setPinError("Couldn't verify PIN — check your connection and try again.");
+      return;
     }
-
-    if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
+    setPinDialogOpen(false); setPinInput(""); setPinError("");
+    if (dayStaffMember && staff.id === dayStaffMember.id) {
+      /* The day's staff member entered their own PIN — just drop any override. */
+      setSaleStaff(null);
+      toast.success(`Back to ${staff.name}`);
+      return;
+    }
+    setSaleStaff(staff);
+    toast.success(
+      dayStaffMember
+        ? `${staff.name} — this sale only, then back to ${dayStaffMember.name}`
+        : `${staff.name} — this sale only`,
+    );
   };
 
   const handleDiscountApprovalSubmit = async () => {
-    const authoriser = (staffList as Staff[] ?? []).find(
-      s => s.pin && s.pin === approvalPin && s.isActive && (s.role === "manager" || s.role === "owner"),
-    );
-    if (!authoriser) {
-      setApprovalPinError("Incorrect PIN or staff not authorised to approve discounts.");
-      setApprovalPin("");
+    if (!approvalPin || verifyPinMutation.isPending) return;
+    let authoriser: Staff;
+    try {
+      const res = await verifyPinMutation.mutateAsync({ data: { pin: approvalPin, requireManager: true } });
+      if (!res.ok || !res.staff) {
+        setApprovalPinError(
+          res.reason === "role"
+            ? "That staff member is not authorised to approve discounts."
+            : res.reason === "rate_limited"
+              ? "Too many attempts — wait a minute and try again."
+              : "Incorrect PIN. Try again.",
+        );
+        setApprovalPin("");
+        return;
+      }
+      authoriser = res.staff;
+    } catch {
+      setApprovalPinError("Couldn't verify PIN — check your connection and try again.");
       return;
     }
     if (!pendingApproval) return;
@@ -2168,6 +2292,7 @@ export default function POSPage() {
           setInvoicePay(null);
           setNumpadInput("");
           setPaymentModalOpen(false);
+          setSaleStaff(null); /* payment done — revert any one-sale staff switch */
           toast.success(`Payment recorded for invoice ${inv.invoiceNumber} via ${methodLabel}`);
           setTimeout(() => setReceiptOpen(true), 250);
         } catch {
@@ -2339,7 +2464,7 @@ export default function POSPage() {
   return (
     <AppLayout hideSidebar>
       <POSPageExpander>
-      <div className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
+      <div className={cn("flex w-full overflow-hidden", posLayout.cartPosition === "left" && "flex-row-reverse")} style={{ height: "calc(100dvh - 3.5rem)" }}>
 
         {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
@@ -2452,7 +2577,7 @@ export default function POSPage() {
 
 
           <ScrollArea className="flex-1 p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            <div className={cn("grid gap-3", GRID_COL_CLASSES[posLayout.columns])}>
               {products.map(product => (
                 <div
                   key={product.id}
@@ -2462,13 +2587,16 @@ export default function POSPage() {
                   onKeyDown={(e) => e.key === "Enter" && fetchModifiersAndShow(product)}
                   className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md cursor-pointer"
                 >
-                  <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
+                  <div className={cn("w-full bg-muted flex items-center justify-center relative overflow-hidden", TILE_SIZE_CLASSES[posLayout.tileSize].image)}>
                     {product.imageUrl
                       ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                       : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
                     }
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                    )}
+                    {posLayout.showStockBadges && product.trackInventory && product.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
+                      <Badge variant="secondary" className="absolute bottom-1.5 right-1.5 text-[10px] px-1 py-0 tabular-nums">{product.stockQuantity}</Badge>
                     )}
                     {/* Pin to Favourites */}
                     <button
@@ -2485,13 +2613,15 @@ export default function POSPage() {
                       <Star className={cn("w-3 h-3", favouriteIds.has(product.id) && "fill-current")} />
                     </button>
                   </div>
-                  <div className="p-2.5">
-                    <p className="font-semibold text-xs line-clamp-2 leading-snug min-h-[2rem]">{product.name}</p>
-                    <p className="font-bold text-primary text-sm mt-1">
-                      {(product.price ?? 0) === 0
-                        ? <span className="text-muted-foreground text-[11px] font-normal">Enter price</span>
-                        : formatCurrency(product.price)}
-                    </p>
+                  <div className={TILE_SIZE_CLASSES[posLayout.tileSize].body}>
+                    <p className={cn("font-semibold line-clamp-2 leading-snug", TILE_SIZE_CLASSES[posLayout.tileSize].name)}>{product.name}</p>
+                    {posLayout.showPrices && (
+                      <p className={cn("font-bold text-primary mt-1", TILE_SIZE_CLASSES[posLayout.tileSize].price)}>
+                        {(product.price ?? 0) === 0
+                          ? <span className="text-muted-foreground text-[11px] font-normal">Enter price</span>
+                          : formatCurrency(product.price)}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2513,7 +2643,7 @@ export default function POSPage() {
         </div>
 
         {/* ─── Cart sidebar ─── */}
-        <div className="w-[22rem] border-l bg-card flex flex-col shrink-0 overflow-x-hidden">
+        <div className={cn("w-[22rem] bg-card flex flex-col shrink-0 overflow-x-hidden", posLayout.cartPosition === "left" ? "border-r" : "border-l")}>
 
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-3 border-b shrink-0 gap-2">
@@ -2522,15 +2652,17 @@ export default function POSPage() {
                 <ShoppingCart className="w-4 h-4" /> Current Sale
               </h2>
               {currentStaff && (
-                <span className="text-[10px] text-primary ml-6 leading-none mt-0.5">{currentStaff.name}</span>
+                <span className={cn("text-[10px] ml-6 leading-none mt-0.5", saleStaff ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-primary")}>
+                  {currentStaff.name}{saleStaff ? " · this sale" : ""}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
-              {/* Staff Pin */}
+              {/* One-sale staff switch */}
               <button
                 onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
-                title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
-                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", currentStaff && "text-primary")}
+                title={saleStaff ? `This sale: ${saleStaff.name}` : "Switch staff for this sale"}
+                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", saleStaff ? "text-amber-500" : currentStaff && "text-primary")}
               >
                 <User className="w-4 h-4" />
               </button>
@@ -3195,8 +3327,8 @@ export default function POSPage() {
                     return;
                   }
                   if (forceStaffLogin && !currentStaff) {
-                    setPendingPaymentAfterPin(true);
-                    setPinInput(""); setPinError(""); setPinDialogOpen(true);
+                    toast.error("Sign in for the day before charging a sale.");
+                    window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login"));
                     return;
                   }
                   setPaymentModalOpen(true);
@@ -4060,11 +4192,16 @@ export default function POSPage() {
         prefillName={customerSearch}
       />
 
-      {/* ─── Staff PIN dialog ─── */}
+      {/* ─── One-sale staff switch dialog ─── */}
       <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinCapsLockOn(false); setPinDialogOpen(false); } }}>
         <DialogContent className="sm:max-w-xs">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Staff Login</DialogTitle></DialogHeader>
-          {currentStaff && <p className="text-sm text-muted-foreground text-center">Currently: <span className="font-semibold text-foreground">{currentStaff.name}</span></p>}
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Switch Staff — This Sale Only</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground text-center">
+            {dayStaffMember
+              ? <>The next sale is recorded under whoever enters their PIN, then the terminal reverts to <span className="font-semibold text-foreground">{dayStaffMember.name}</span>.</>
+              : <>The next sale is recorded under whoever enters their PIN. Use the staff button in the top bar to sign in for the whole day.</>}
+          </p>
+          {saleStaff && <p className="text-sm text-amber-600 dark:text-amber-400 text-center">This sale: <span className="font-semibold">{saleStaff.name}</span></p>}
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Enter PIN</Label>
@@ -4089,7 +4226,7 @@ export default function POSPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(false); }}>Cancel</Button>
-            <Button onClick={handlePinSubmit} disabled={!pinInput}>Sign In</Button>
+            <Button onClick={handlePinSubmit} disabled={!pinInput}>Switch</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -4189,8 +4326,8 @@ export default function POSPage() {
                   toast.error("Please tick the acknowledgment box to continue.");
                   return;
                 }
-                if (loginMsg && currentStaff && merchantData) {
-                  setStaffAcknowledged(merchantData.id, currentStaff.id, loginMsg);
+                if (loginMsg && dayStaffMember && merchantData) {
+                  setStaffAcknowledged(merchantData.id, dayStaffMember.id, loginMsg);
                 }
                 setLoginMsgOpen(false);
                 setMsgAckChecked(false);
@@ -4219,7 +4356,7 @@ export default function POSPage() {
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Staff</span>
-                <span className="font-medium text-foreground">{currentStaff?.name ?? "— not signed in —"}</span>
+                <span className="font-medium text-foreground">{dayStaffMember?.name ?? "— not signed in —"}</span>
               </div>
             </div>
 
@@ -4294,8 +4431,14 @@ export default function POSPage() {
             </div>
           </div>
           <DialogFooter>
+            {deviceConflict && (
+              <p className="text-xs text-destructive flex items-center gap-1.5 mr-auto">
+                <MonitorX className="w-3.5 h-3.5 shrink-0" />
+                Till already open on another device{deviceConflict.openedBy ? ` (${deviceConflict.openedBy})` : ""}.
+              </p>
+            )}
             <Button variant="outline" onClick={() => setOpenRegisterDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister}>
+            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister} disabled={!!deviceConflict}>
               <DoorOpen className="w-4 h-4 mr-1.5" /> Open Register
             </Button>
           </DialogFooter>

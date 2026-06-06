@@ -6,6 +6,8 @@ export const STAFF_LOGIN_MSG_KEY = "koapos_staff_login_msg";
 export const INTEGRATION_PAYMENT_METHODS_KEY = "koapos_enabled_integration_payments";
 export const POS_GRID_SETTINGS_KEY = "koapos_pos_grid_settings";
 export const ACTIVE_REGISTER_KEY = "koapos_active_register";
+/** Which register (registerId text, e.g. "default"/"MAIN") THIS device operates — per-terminal, never global. */
+export const ACTIVE_REGISTER_ID_KEY = "koapos_active_register_id";
 export const DEVICE_ID_KEY = "koapos_device_id";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
@@ -26,6 +28,39 @@ export interface PosGridSettings {
   showPrices: boolean;
   showStockBadges: boolean;
   cartPosition: "right" | "left";
+}
+
+/** Per-staff POS layout preferences stored as JSON in staff.posPrefs.
+ *  Every field is optional — missing fields fall back to the account-level
+ *  POS settings. Applied on whatever terminal the staff member signs in
+ *  for the day. */
+export interface StaffPosPrefs {
+  gridColumns?: 2 | 3 | 4 | 5;
+  tileSize?: "compact" | "normal" | "large";
+  showPrices?: boolean;
+  showStockBadges?: boolean;
+  cartPosition?: "right" | "left";
+}
+
+/** Parse staff.posPrefs JSON, dropping anything malformed or out of range. */
+export function parseStaffPosPrefs(raw: string | null | undefined): StaffPosPrefs {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const prefs: StaffPosPrefs = {};
+    if (typeof parsed.gridColumns === "number" && [2, 3, 4, 5].includes(parsed.gridColumns)) {
+      prefs.gridColumns = parsed.gridColumns as 2 | 3 | 4 | 5;
+    }
+    if (typeof parsed.tileSize === "string" && ["compact", "normal", "large"].includes(parsed.tileSize)) {
+      prefs.tileSize = parsed.tileSize as "compact" | "normal" | "large";
+    }
+    if (typeof parsed.showPrices === "boolean") prefs.showPrices = parsed.showPrices;
+    if (typeof parsed.showStockBadges === "boolean") prefs.showStockBadges = parsed.showStockBadges;
+    if (parsed.cartPosition === "right" || parsed.cartPosition === "left") {
+      prefs.cartPosition = parsed.cartPosition;
+    }
+    return prefs;
+  } catch { return {}; }
 }
 
 /** Shape of an active register (till) session persisted to localStorage.

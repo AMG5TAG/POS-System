@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { BrandColorProvider } from "@/lib/brand-color-context";
 import { ButtonStyleProvider } from "@/lib/button-style";
 import { NavLayoutProvider } from "@/lib/nav-layout";
+import { StaffSessionProvider } from "@/lib/staff-day-session";
 import { AccessibilityProvider } from "@/lib/accessibility";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -674,15 +675,17 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <TooltipProvider>
               <AuthProvider>
-                <ButtonStyleProvider>
-                  <BrandColorProvider>
-                    <AIProvider>
-                      <a href="#main-content" className="skip-link">Skip to main content</a>
-                      <Router />
-                      <Toaster />
-                    </AIProvider>
-                  </BrandColorProvider>
-                </ButtonStyleProvider>
+                <StaffSessionProvider>
+                  <ButtonStyleProvider>
+                    <BrandColorProvider>
+                      <AIProvider>
+                        <a href="#main-content" className="skip-link">Skip to main content</a>
+                        <Router />
+                        <Toaster />
+                      </AIProvider>
+                    </BrandColorProvider>
+                  </ButtonStyleProvider>
+                </StaffSessionProvider>
               </AuthProvider>
             </TooltipProvider>
           </QueryClientProvider>

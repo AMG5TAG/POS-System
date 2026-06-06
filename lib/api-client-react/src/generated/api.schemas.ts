@@ -897,11 +897,19 @@ export interface Staff {
   /** @nullable */
   postalAddress?: string | null;
   role: StaffRole;
-  /** @nullable */
+  /**
+     * Masked in responses ("****" when a PIN is set, null otherwise) — raw PINs are never returned.
+     * @nullable
+     */
   pin?: string | null;
   isActive: boolean;
   /** @nullable */
   defaultRegisterType?: string | null;
+  /**
+     * JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).
+     * @nullable
+     */
+  posPrefs?: string | null;
   /** @nullable */
   payRate?: string | null;
   /** @nullable */
@@ -935,6 +943,7 @@ export interface StaffInput {
   role: StaffInputRole;
   pin?: string;
   defaultRegisterType?: string;
+  posPrefs?: string;
   payRate?: string;
   loadingRate?: string;
   superRate?: string;
@@ -964,9 +973,36 @@ export interface StaffUpdate {
   pin?: string;
   isActive?: boolean;
   defaultRegisterType?: string;
+  posPrefs?: string;
   payRate?: string;
   loadingRate?: string;
   superRate?: string;
+}
+
+export interface VerifyStaffPinBody {
+  /** @minLength 1 */
+  pin: string;
+  /** When true, only manager/owner staff PINs are accepted (e.g. discount approvals). */
+  requireManager?: boolean;
+}
+
+/**
+ * Present when ok is false.
+ */
+export type VerifyStaffPinResponseReason = typeof VerifyStaffPinResponseReason[keyof typeof VerifyStaffPinResponseReason];
+
+
+export const VerifyStaffPinResponseReason = {
+  invalid: 'invalid',
+  role: 'role',
+  rate_limited: 'rate_limited',
+} as const;
+
+export interface VerifyStaffPinResponse {
+  ok: boolean;
+  /** Present when ok is false. */
+  reason?: VerifyStaffPinResponseReason;
+  staff?: Staff;
 }
 
 export interface StaffSalesReportRow {

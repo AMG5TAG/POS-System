@@ -1998,9 +1998,19 @@ export const CreateStaffBody = zod.object({
   "role": zod.enum(['owner', 'manager', 'cashier']),
   "pin": zod.string().optional(),
   "defaultRegisterType": zod.string().optional(),
+  "posPrefs": zod.string().optional(),
   "payRate": zod.string().optional(),
   "loadingRate": zod.string().optional(),
   "superRate": zod.string().optional()
+})
+
+
+/**
+ * @summary Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
+ */
+export const VerifyStaffPinBody = zod.object({
+  "pin": zod.string().min(1),
+  "requireManager": zod.boolean().optional().describe('When true, only manager\/owner staff PINs are accepted (e.g. discount approvals).')
 })
 
 
@@ -2083,6 +2093,7 @@ export const UpdateStaffBody = zod.object({
   "pin": zod.string().optional(),
   "isActive": zod.boolean().optional(),
   "defaultRegisterType": zod.string().optional(),
+  "posPrefs": zod.string().optional(),
   "payRate": zod.string().optional(),
   "loadingRate": zod.string().optional(),
   "superRate": zod.string().optional()

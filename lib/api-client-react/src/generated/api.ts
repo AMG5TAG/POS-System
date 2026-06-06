@@ -369,6 +369,8 @@ import type {
   StaffRosteringSettingsInput,
   StaffSalesReport,
   StaffUpdate,
+  VerifyStaffPinBody,
+  VerifyStaffPinResponse,
   StickerTemplate,
   StickerTemplateInput,
   StickerTemplateUpdateInput,
@@ -5536,6 +5538,77 @@ export const useCreateStaff = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateStaffMutationOptions(options));
+    }
+
+export const getVerifyStaffPinUrl = () => {
+
+
+
+
+  return `/api/staff/verify-pin`
+}
+
+/**
+ * @summary Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
+ */
+export const verifyStaffPin = async (verifyStaffPinBody: VerifyStaffPinBody, options?: RequestInit): Promise<VerifyStaffPinResponse> => {
+
+  return customFetch<VerifyStaffPinResponse>(getVerifyStaffPinUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      verifyStaffPinBody,)
+  }
+);}
+
+
+
+
+export const getVerifyStaffPinMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyStaffPin>>, TError,{data: BodyType<VerifyStaffPinBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyStaffPin>>, TError,{data: BodyType<VerifyStaffPinBody>}, TContext> => {
+
+const mutationKey = ['verifyStaffPin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyStaffPin>>, {data: BodyType<VerifyStaffPinBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  verifyStaffPin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyStaffPinMutationResult = NonNullable<Awaited<ReturnType<typeof verifyStaffPin>>>
+    export type VerifyStaffPinMutationBody = BodyType<VerifyStaffPinBody>
+    export type VerifyStaffPinMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
+ */
+export const useVerifyStaffPin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyStaffPin>>, TError,{data: BodyType<VerifyStaffPinBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyStaffPin>>,
+        TError,
+        {data: BodyType<VerifyStaffPinBody>},
+        TContext
+      > => {
+      return useMutation(getVerifyStaffPinMutationOptions(options));
     }
 
 export const getGetStaffSalesReportUrl = (params: GetStaffSalesReportParams,) => {
