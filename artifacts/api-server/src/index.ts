@@ -6,6 +6,7 @@ import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
 import { scheduleLoginAttemptsCleanup } from "./services/loginAttemptsCleanupScheduler";
 import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
+import { ensureReportViews } from "./services/reportViewsSetup";
 import { schedulePasswordResetTokensCleanup } from "./services/passwordResetTokensCleanupScheduler";
 import { scheduleBackups } from "./services/backupScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
@@ -44,6 +45,12 @@ app.listen(port, (err) => {
   }).catch((err) => {
     logger.error({ err }, "Failed to ensure login cleanup DB function; starting scheduler anyway");
     scheduleLoginAttemptsCleanup(logger);
+  });
+  // Report views can be dropped by a raw `drizzle-kit push` (they're not in
+  // the drizzle schema) — recreate them on every boot so the Sales Overview /
+  // P&L / Product Performance reports never 500 on a missing view.
+  ensureReportViews(logger).catch((err) => {
+    logger.error({ err }, "Failed to ensure report views; management reports may be unavailable");
   });
   // Migrate any tokens encrypted under VAULT_ENCRYPTION_KEY_PREVIOUS to the
   // current key first, then invalidate whatever is still unreadable.

@@ -164,7 +164,29 @@
       "Bash(sed -n '1,25p' /home/runner/workspace/artifacts/api-server/src/lib/auth.ts)",
       "Bash(sed -n '100,107p' /home/runner/workspace/artifacts/api-server/src/routes/index.ts)",
       "Bash(sed -n '127,135p' /home/runner/workspace/artifacts/api-server/src/routes/index.ts)",
-      "Bash(PORT=5173 npx vite build --config vite.config.ts)"
+      "Bash(PORT=5173 npx vite build --config vite.config.ts)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/api/health)",
+      "Bash(PORT=3000 node *)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" http://localhost:3000/api/health)",
+      "Bash(curl -s -H 'Cookie: connect.sid=s%3Aclaude-debug-027459f1bdb0f220.RAkqVxeFENuCDe4Vv9lu%2FG%2BFKd7wWiAqiMoZfqqhi%2Fk' http://localhost:3000/api/transactions?limit=5)",
+      "Bash(grep -rn \"fetch\\(\\\\\"/api\\\\|fetch\\(\\\\`/api\" /home/runner/workspace/artifacts/koapos/src/lib/use-auth.ts)",
+      "Bash(PORT=8080 BASE_PATH=/ npx vite *)",
+      "Bash(curl -s -o /dev/null -w \"vite:%{http_code} \" http://localhost:8080/)",
+      "Bash(curl -s -o /dev/null -w \"proxy-app:%{http_code} \" http://localhost:8081/)",
+      "Bash(curl -s -o /dev/null -w \"proxy-api:%{http_code}\\\\n\" -H \"Cookie: connect.sid=s%3Aclaude-debug-027459f1bdb0f220.RAkqVxeFENuCDe4Vv9lu%2FG%2BFKd7wWiAqiMoZfqqhi%2Fk\" http://localhost:8081/api/transactions)",
+      "Bash(NODE_PATH=/home/runner/workspace/node_modules node --experimental-default-type=module check-pages.mjs)",
+      "Bash(NODE_PATH=/home/runner/workspace/node_modules node check-pages.mjs)",
+      "Bash(npx puppeteer *)",
+      "Bash(grep -o \"\\\\`/[a-z/-]*sales-summary[^\\\\`]*\\\\`\\\\|\\\\\"/[a-z/-]*sales-summary[^\\\\\"]*\\\\\"\" /home/runner/workspace/lib/api-client-react/dist/generated/api.js)",
+      "Bash(PORT=3000 timeout 12 node --enable-source-maps ./dist/index.mjs)",
+      "Bash(sed -n '1,30p' /home/runner/workspace/artifacts/api-server/src/services/sms.ts)",
+      "Bash(sed -n '95,118p' /home/runner/workspace/artifacts/api-server/src/services/email.ts)",
+      "Bash(curl -s -H 'Cookie: __TRACKED_VAR__' http://localhost:3000/api/tech-app/settings)",
+      "Bash(curl -s -H 'Cookie: __TRACKED_VAR__' http://localhost:3000/api/tech-app/link)",
+      "Bash(curl -s -X PUT -H 'Cookie: __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"showCredentials\":false}' http://localhost:3000/api/tech-app/settings)",
+      "Bash(curl -s -c /tmp/claude-1000/techjar -X POST -H \"Content-Type: application/json\" -d '{\"pin\":\"1234\"}' http://localhost:3000/api/tech/b/demo-retail-store/login)",
+      "Bash(curl -s -b /tmp/claude-1000/techjar http://localhost:3000/api/tech/service-jobs/1)"
     ]
   }
 }

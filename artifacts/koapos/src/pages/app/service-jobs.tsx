@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,8 @@ import {
   Printer,
   Eye,
   Package,
+  Wrench,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -101,18 +104,16 @@ function getValue(job: ServiceJob, key: SortKey): string {
   }
 }
 
+/* Active and finished jobs live on separate tabs, so a plain sort suffices —
+   no need to pin completed jobs to the bottom any more. */
 function sortJobs(jobs: ServiceJob[], key: SortKey, dir: SortDir): ServiceJob[] {
-  const active    = jobs.filter((j) => j.status !== "completed");
-  const completed = jobs.filter((j) => j.status === "completed");
-
   const compare = (a: ServiceJob, b: ServiceJob) => {
     const av = getValue(a, key);
     const bv = getValue(b, key);
     const result = av < bv ? -1 : av > bv ? 1 : 0;
     return dir === "asc" ? result : -result;
   };
-
-  return [...active.sort(compare), ...completed.sort(compare)];
+  return [...jobs].sort(compare);
 }
 
 /* ─── Sortable column header ─────────────────────────────────────────────── */
@@ -270,6 +271,7 @@ function PrintChoiceDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ServiceJobsPage() {
+  const [tab, setTab]                       = useState<"active" | "history">("active");
   const [collapsed, setCollapsed]           = useState(false);
   const [priority, setPriority]             = useState("all");
   const [statusFilter, setStatus]           = useState("all");
@@ -336,25 +338,46 @@ export default function ServiceJobsPage() {
     setPrintState({ job, copies });
   };
 
-  const jobs   = Array.isArray(jobsData) ? jobsData : [];
-  const active = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled").length;
+  const jobs = Array.isArray(jobsData) ? jobsData : [];
+
+  /* History holds finished jobs — marking one completed (or cancelled) moves
+     it there, mirroring the Appointments page. */
+  const isFinished  = (j: ServiceJob) => j.status === "completed" || j.status === "cancelled";
+  const historyJobs = jobs.filter(isFinished);
+  const activeJobs  = jobs.filter((j) => !isFinished(j));
+  const tabJobs     = tab === "history" ? historyJobs : activeJobs;
+  const active      = activeJobs.length;
+
+  /* Switching tabs resets the filters/selection and sorts most-recent-first */
+  const switchTab = (t: "active" | "history") => {
+    setTab(t);
+    setPriority("all");
+    setStatus("all");
+    setSelected(new Set());
+    setSortKey("bookInDate");
+    setSortDir("desc");
+  };
 
   const [, routeParams] = useRoute("/service-jobs/:id");
   useEffect(() => {
     if (!routeParams?.id || jobs.length === 0 || viewing) return;
     const job = jobs.find((j) => j.id === Number(routeParams.id));
-    if (job) setViewing(job);
+    if (job) {
+      setViewing(job);
+      /* Land on the tab the job lives in so closing the dialog shows it */
+      if (isFinished(job)) switchTab("history");
+    }
   }, [routeParams?.id, jobs]);
 
   /* Filter */
-  const filtered = jobs.filter((j) => {
+  const filtered = tabJobs.filter((j) => {
     if (priority === "critical" && !j.isCritical) return false;
     if (priority === "normal"   &&  j.isCritical) return false;
     if (statusFilter !== "all"  && j.status !== statusFilter) return false;
     return true;
   });
 
-  /* Sort — completed always pinned to bottom */
+  /* Sort */
   const sorted = sortJobs(filtered, activeSortKey, sortDir);
 
   /* Column header click handler */
@@ -404,12 +427,31 @@ export default function ServiceJobsPage() {
           <h1 className="text-2xl font-bold">Service Jobs</h1>
           <p className="text-sm text-muted-foreground">Manage repair and service job tickets, status updates, and job history.</p>
         </div>
+
+        {/* Active / History tabs */}
+        <Tabs value={tab} onValueChange={(v) => switchTab(v as "active" | "history")}>
+          <TabsList>
+            <TabsTrigger value="active" className="gap-1.5">
+              <Wrench className="w-3.5 h-3.5" />
+              Services
+              <span className="text-xs text-muted-foreground tabular-nums">({activeJobs.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              Service History
+              <span className="text-xs text-muted-foreground tabular-nums">({historyJobs.length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
           <h2 className="text-base font-semibold">
-            All Services{" "}
+            {tab === "history" ? "Service History" : "All Services"}{" "}
             <span className="font-normal text-muted-foreground text-sm">
-              ({active} active job{active !== 1 ? "s" : ""})
+              {tab === "history"
+                ? `(${historyJobs.length} past)`
+                : `(${active} active job${active !== 1 ? "s" : ""})`}
             </span>
           </h2>
           <div className="flex items-center gap-3">
@@ -450,21 +492,28 @@ export default function ServiceJobsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="awaiting-parts">Awaiting Parts</SelectItem>
-                    <SelectItem value="awaiting-stock">Awaiting Stock</SelectItem>
-                    <SelectItem value="at-repairer">At Repairer</SelectItem>
-                    <SelectItem value="awaiting-partner-approval">Awaiting Partner Approval</SelectItem>
-                    <SelectItem value="partner-replacement">Partner Replacement</SelectItem>
-                    <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    {tab === "active" ? (
+                      <>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="awaiting-parts">Awaiting Parts</SelectItem>
+                        <SelectItem value="awaiting-stock">Awaiting Stock</SelectItem>
+                        <SelectItem value="at-repairer">At Repairer</SelectItem>
+                        <SelectItem value="awaiting-partner-approval">Awaiting Partner Approval</SelectItem>
+                        <SelectItem value="partner-replacement">Partner Replacement</SelectItem>
+                        <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{sorted.length} of {jobs.length}</span>
+                <span>{sorted.length} of {tabJobs.length}</span>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.print()}>
                   <Printer className="w-3.5 h-3.5" />
                   Print
@@ -478,7 +527,13 @@ export default function ServiceJobsPage() {
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading service jobs...</div>
               ) : sorted.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
-                  No service jobs match the current filters.
+                  {tab === "history"
+                    ? (historyJobs.length === 0
+                        ? "No completed service jobs yet. When a job is marked completed it moves here."
+                        : "No past service jobs match the current filters.")
+                    : (activeJobs.length === 0
+                        ? 'No active service jobs. Click "New Service" to book one in.'
+                        : "No service jobs match the current filters.")}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -513,8 +568,9 @@ export default function ServiceJobsPage() {
                             key={job.id}
                             className={cn(
                               "hover:bg-muted/30 transition-colors cursor-pointer",
-                              isChecked   && "bg-primary/5",
-                              isCompleted && "opacity-60"
+                              isChecked && "bg-primary/5",
+                              /* Dim finished rows only in the active list — History shows them at full strength */
+                              isCompleted && tab === "active" && "opacity-60"
                             )}
                             onClick={() => setViewing(job)}
                           >

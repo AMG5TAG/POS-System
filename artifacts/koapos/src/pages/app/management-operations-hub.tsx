@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { UserSquare2, Clock, Coins, Monitor, Map, Camera, Scale } from "lucide-react";
+import { UserSquare2, Clock, Coins, Monitor, Map, Camera, Scale, TabletSmartphone } from "lucide-react";
 
 import StaffPage from "@/pages/app/staff";
 import StaffTimesheetPage from "@/pages/app/staff-timesheet";
@@ -8,6 +8,7 @@ import StaffCostSummaryPage from "@/pages/app/staff-cost-summary";
 import ManagementRegistersPage from "@/pages/app/management-registers";
 import ManagementFloorPlanPage from "@/pages/app/management-floor-plan";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
+import ManagementTechAppPage from "@/pages/app/management-tech-app";
 import ManagementLegalPage from "@/pages/app/management-legal";
 
 const TABS: HubTab[] = [
@@ -17,6 +18,7 @@ const TABS: HubTab[] = [
   { label: "POS Registers",href: "/management/registers",          icon: Monitor     },
   { label: "Floor Plan",   href: "/management/floor-plan",         icon: Map         },
   { label: "Cameras",      href: "/management/cameras",            icon: Camera      },
+  { label: "Tech App",     href: "/management/tech-app",           icon: TabletSmartphone },
   { label: "Legal",        href: "/management/legal",              icon: Scale       },
 ];
 
@@ -28,6 +30,7 @@ function HubContent() {
   if (location === "/management/registers")          return <ManagementRegistersPage />;
   if (location === "/management/floor-plan")         return <ManagementFloorPlanPage />;
   if (location === "/management/cameras")            return <ManagementCamerasPage />;
+  if (location === "/management/tech-app")           return <ManagementTechAppPage />;
   if (location === "/management/legal")              return <ManagementLegalPage />;
   return <StaffPage />;
 }

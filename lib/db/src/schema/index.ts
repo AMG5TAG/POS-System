@@ -41,6 +41,7 @@ export * from "./product-return-auths";
 export * from "./pos-registers";
 export * from "./pos-settings";
 export * from "./layby-settings";
+export * from "./tech-app";
 export * from "./kpi-settings";
 export * from "./kpi-targets";
 export * from "./qr-codes";

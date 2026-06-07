@@ -102,6 +102,7 @@ import staffTimesheetsRouter from "./staff-timesheets";
 import tyroSettingsRouter from "./tyro-settings";
 import demoDataRouter from "./demo-data";
 import techRouter from "./tech";
+import techAppAdminRouter from "./tech-app-admin";
 
 const router: IRouter = Router();
 
@@ -130,6 +131,7 @@ router.use(storageRouter);
 router.use(loyaltyRouter);
 router.use(portalRouter);
 router.use(techRouter);
+router.use(techAppAdminRouter);
 router.use(cashDrawerRouter);
 router.use(parkedSalesRouter);
 router.use(purchaseOrdersRouter);

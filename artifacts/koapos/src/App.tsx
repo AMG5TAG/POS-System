@@ -125,6 +125,7 @@ import ManagementBackupPage from "@/pages/app/management-backup";
 import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import CamerasPage from "@/pages/app/cameras";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
+import ManagementTechAppPage from "@/pages/app/management-tech-app";
 import ManagementLegalPage from "@/pages/app/management-legal";
 import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
@@ -489,6 +490,9 @@ function Router() {
       </Route>
       <Route path="/management/cameras">
         <ManagementProtectedRoute component={ManagementCamerasPage} />
+      </Route>
+      <Route path="/management/tech-app">
+        <ManagementProtectedRoute component={ManagementTechAppPage} />
       </Route>
       <Route path="/management/legal">
         <ManagementProtectedRoute component={ManagementLegalPage} />

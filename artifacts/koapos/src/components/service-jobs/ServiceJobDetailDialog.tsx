@@ -149,7 +149,14 @@ export function ServiceJobDetailDialog({
     setLocalStatus(status);
     updateMutation.mutate(
       { id: job.id, data: { status } as never },
-      { onSuccess: invalidate, onError: () => toast.error("Failed to update status") }
+      {
+        onSuccess: () => {
+          invalidate();
+          if (status === "completed") toast.success("Service job completed — moved to Service History");
+          else if (status === "cancelled") toast.success("Service job cancelled — moved to Service History");
+        },
+        onError: () => toast.error("Failed to update status"),
+      }
     );
   };
 

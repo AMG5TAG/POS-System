@@ -1,36 +1,22 @@
-/**
- * Creates (or replaces) the PostgreSQL views that the management reports depend
- * on. drizzle-kit only manages tables declared in the schema, so these
- * report-only views have to be (re)created here.
- *
- * Views created:
- *   - view_daily_sales_summary       → /reports/profit-loss, /reports/sales-summary
- *   - view_payment_method_breakdown  → /reports/sales-summary
- *   - view_product_performance_ledger→ /reports/product-performance
- *
- * Accounting conventions (kept consistent with the rest of the app):
- *   - Prices/totals are GST-inclusive. `gross_revenue` is the inclusive amount.
- *   - `ex_gst_revenue` = gross_revenue − tax_collected.
- *   - COGS uses the cost price snapshotted on each line item at sale time and
- *     falls back to the product's current cost_price when the snapshot is
- *     missing (historical / imported sales) — matching the KPI and dashboard
- *     COGS calculations.
- *   - `net_profit` is ex-GST revenue − COGS (GST is collected on behalf of the
- *     ATO, not income), matching the gross-margin formula used by the report.
- *   - Product-level `total_revenue` is the GST-inclusive amount charged for the
- *     line (consistent with the inventory-valuation report's margin basis).
- *
- * Safe to run multiple times — every statement is idempotent (CREATE OR REPLACE).
- * Run via: pnpm --filter @workspace/scripts run setup-report-views
- *          (also called automatically by pnpm run db:push)
- *
- * KEEP IN SYNC with artifacts/api-server/src/services/reportViewsSetup.ts —
- * the API server re-runs the same statements on every boot as a guard against
- * the views being dropped (e.g. by a raw `drizzle-kit push`).
- */
 import { pool } from "@workspace/db";
+import type { Logger } from "pino";
 
-async function main() {
+/**
+ * Idempotently creates (or replaces) the PostgreSQL views the management
+ * reports depend on. drizzle-kit only manages tables declared in the schema,
+ * so these report-only views live outside it — and a raw `drizzle-kit push`
+ * (bypassing the `pnpm run db:push` wrapper) can drop them, which blanks the
+ * Sales Overview / Profit & Loss / Product Performance reports with 500s.
+ *
+ * Safe to call on every server startup — CREATE OR REPLACE VIEW is a no-op
+ * when the definition is unchanged. The setup-report-views script (run during
+ * `pnpm run db:push`) does the same work; this call is a belt-and-suspenders
+ * guard so the views always exist wherever the server runs.
+ *
+ * KEEP IN SYNC with scripts/src/setup-report-views.ts — both define the same
+ * three views (that file documents the accounting conventions).
+ */
+export async function ensureReportViews(logger: Logger): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -129,17 +115,11 @@ async function main() {
     `);
 
     await client.query("COMMIT");
-    console.log("Report views created/updated: view_daily_sales_summary, view_payment_method_breakdown, view_product_performance_ledger");
+    logger.info("Report views ensured: view_daily_sales_summary, view_payment_method_breakdown, view_product_performance_ledger");
   } catch (err) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
     client.release();
-    await pool.end();
   }
 }
-
-main().catch((err) => {
-  console.error("setup-report-views failed:", err);
-  process.exit(1);
-});

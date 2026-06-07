@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, merchantsTable, staffTable, serviceJobsTable, customersTable } from "@workspace/db";
+import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, techAppSettingsTable, techAppEventsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
@@ -49,6 +49,28 @@ function recordPinFailure(merchantId: number): void {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
+
+/** Per-merchant tech app settings with defaults when no row exists yet. */
+async function getTechSettings(merchantId: number) {
+  const [row] = await db
+    .select()
+    .from(techAppSettingsTable)
+    .where(eq(techAppSettingsTable.merchantId, merchantId))
+    .limit(1);
+  return {
+    enabled:             (row?.enabled ?? "true") === "true",
+    showCustomerContact: (row?.showCustomerContact ?? "true") === "true",
+    showCredentials:     (row?.showCredentials ?? "true") === "true",
+  };
+}
+
+/** Fire-and-forget moderation-trail entry (never blocks the response). */
+function logTechEvent(merchantId: number, staffId: number | null, staffName: string, action: string, detail = ""): void {
+  void db
+    .insert(techAppEventsTable)
+    .values({ merchantId, staffId, staffName, action, detail })
+    .catch(() => { /* audit logging must never break the request */ });
+}
 
 async function findMerchantByUsername(username: string) {
   const [m] = await db
@@ -112,7 +134,13 @@ function formatJobDetail(
 async function requireTech(
   req: Request,
   res: Response,
-): Promise<{ staffId: number; merchantId: number; staffName: string; role: string } | null> {
+): Promise<{
+  staffId: number;
+  merchantId: number;
+  staffName: string;
+  role: string;
+  settings: Awaited<ReturnType<typeof getTechSettings>>;
+} | null> {
   const tech = req.session?.tech;
   if (!tech) {
     res.status(401).json({ error: "Not signed in" });
@@ -126,7 +154,13 @@ async function requireTech(
     res.status(401).json({ error: "Not signed in" });
     return null;
   }
-  return { staffId: staff.id, merchantId: staff.merchantId, staffName: staff.name, role: staff.role };
+  /* Disabling the Tech App in Management cuts off existing sessions too */
+  const settings = await getTechSettings(tech.merchantId);
+  if (!settings.enabled) {
+    res.status(403).json({ error: "The Tech App is currently disabled for this business" });
+    return null;
+  }
+  return { staffId: staff.id, merchantId: staff.merchantId, staffName: staff.name, role: staff.role, settings };
 }
 
 /* ── Public: business info for the login screen ──────────────────────── */
@@ -153,6 +187,11 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     res.status(400).json({ error: "PIN is required" });
     return;
   }
+  const settings = await getTechSettings(merchant.id);
+  if (!settings.enabled) {
+    res.status(403).json({ error: "The Tech App is currently disabled for this business" });
+    return;
+  }
   if (pinRateLimited(merchant.id)) {
     res.status(429).json({ error: "Too many attempts — try again in a minute" });
     return;
@@ -168,6 +207,7 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     return;
   }
   req.session.tech = { staffId: match.id, merchantId: merchant.id };
+  logTechEvent(merchant.id, match.id, match.name, "login", "Signed in to the Tech App");
   res.json({
     staff: { id: match.id, name: match.name, role: match.role },
     business: { businessName: merchant.businessName, logoUrl: merchant.logoUrl ?? null },
@@ -188,7 +228,12 @@ router.get("/tech/me", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/tech/logout", (req, res): void => {
+router.post("/tech/logout", async (req, res): Promise<void> => {
+  const tech = req.session?.tech;
+  if (tech) {
+    const [staff] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, tech.staffId));
+    logTechEvent(tech.merchantId, tech.staffId, staff?.name ?? "", "logout", "Signed out of the Tech App");
+  }
   if (req.session) req.session.tech = undefined;
   res.json({ ok: true });
 });
@@ -236,6 +281,7 @@ router.get("/tech/service-jobs/:id", async (req, res): Promise<void> => {
   /* Privacy wall: a ticket from another business is never described — the
      client shows a privacy screen on this reason code. */
   if (job.merchantId !== tech.merchantId) {
+    logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "denied_foreign", "Scanned a ticket belonging to another business");
     res.status(403).json({ error: "This service ticket belongs to another business", reason: "foreign_business" });
     return;
   }
@@ -247,7 +293,19 @@ router.get("/tech/service-jobs/:id", async (req, res): Promise<void> => {
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, tech.merchantId))))[0] ?? null
     : null;
 
-  res.json(formatJobDetail(job, customer));
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "job_view", `Viewed service job ${job.jobNumber}`);
+
+  /* Field-visibility settings from Management > Staff & Operations > Tech App */
+  const detail = formatJobDetail(job, customer);
+  if (!tech.settings.showCustomerContact) {
+    detail.customerPhone = null;
+    detail.customerEmail = null;
+  }
+  if (!tech.settings.showCredentials) {
+    detail.passwordOrPin = null;
+    detail.accounts = null;
+  }
+  res.json(detail);
 });
 
 export default router;

@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -193,6 +193,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "POS Registers", href: "/management/registers",          icon: Monitor     },
       { name: "Floor Plan",    href: "/management/floor-plan",         icon: Map         },
       { name: "Cameras",       href: "/management/cameras",            icon: Camera      },
+      { name: "Tech App",      href: "/management/tech-app",           icon: TabletSmartphone },
       { name: "Legal",         href: "/management/legal",              icon: Scale       },
     ],
   },
