@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import {
   Wrench, ScanLine, Loader2, LogOut, ChevronLeft, Phone, Mail,
   AlertTriangle, ShieldAlert, Search, ShieldCheck, KeyRound, Camera,
+  StickyNote, Upload, FileText, Play, X, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,8 @@ type TechJobDetail = TechJobSummary & {
   partnerRepairCode: string | null;
   photos: string[];
   updatedAt: string;
+  /** From Management > Tech App — whether techs may change job status. */
+  canChangeStatus: boolean;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -105,6 +108,58 @@ async function techFetch<T>(path: string, init?: RequestInit): Promise<{ ok: boo
   } catch {
     return { ok: false, status: 0, data: null };
   }
+}
+
+/* ── Note + media helpers (formats match the admin Service Job dialog) ── */
+
+function parseNotes(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split("---").map((s) => s.trim()).filter(Boolean);
+}
+
+function buildNoteTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
+}
+
+/** Convert a picked file to a data URI. Images are downscaled and
+    re-encoded so phone camera shots fit the API's request size limit;
+    videos/PDFs pass through as-is (capped at 6 MB). */
+async function fileToDataUri(file: File): Promise<string> {
+  if (file.type.startsWith("image/")) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const MAX = 1600;
+      const scale = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      return canvas.toDataURL("image/jpeg", 0.85);
+    } catch { /* unsupported format — fall through to a raw read */ }
+  }
+  if (file.size > 6 * 1024 * 1024) {
+    throw new Error(`"${file.name}" is too large — videos and files must be under 6 MB.`);
+  }
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Couldn't read "${file.name}".`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Open a non-image data URI (e.g. PDF) in a new tab via a blob URL —
+    mobile browsers refuse to navigate to data: URIs directly. */
+function openDataUri(src: string) {
+  try {
+    const comma = src.indexOf(",");
+    const mime = src.slice(5, src.indexOf(";"));
+    const bytes = Uint8Array.from(atob(src.slice(comma + 1)), (c) => c.charCodeAt(0));
+    window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
+  } catch { /* malformed data URI — nothing to open */ }
 }
 
 /** Extract a service-job id from scanned QR text. Accepts the printed
@@ -268,6 +323,14 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
   const [job, setJob] = useState<TechJobDetail | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "notfound" | "error">("loading");
 
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     let cancelled = false;
     setState("loading");
@@ -278,6 +341,62 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
     });
     return () => { cancelled = true; };
   }, [jobId]);
+
+  const changeStatus = async (status: string) => {
+    if (!job || status === job.status || savingStatus) return;
+    setSavingStatus(true);
+    setActionError(null);
+    const r = await techFetch<{ status: string; notes: string | null }>(`/service-jobs/${jobId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    setSavingStatus(false);
+    if (r.ok && r.data) {
+      setJob((j) => (j ? { ...j, status: r.data!.status, notes: r.data!.notes } : j));
+    } else {
+      setActionError("Couldn't update the status — try again.");
+    }
+  };
+
+  const addNote = async () => {
+    const text = noteText.trim();
+    if (!text || savingNote) return;
+    setSavingNote(true);
+    setActionError(null);
+    const r = await techFetch<{ notes: string }>(`/service-jobs/${jobId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ text, timestamp: buildNoteTimestamp() }),
+    });
+    setSavingNote(false);
+    if (r.ok && r.data) {
+      setJob((j) => (j ? { ...j, notes: r.data!.notes } : j));
+      setNoteText("");
+    } else {
+      setActionError("Couldn't save the note — try again.");
+    }
+  };
+
+  const addFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || uploading) return;
+    setUploading(true);
+    setActionError(null);
+    try {
+      const photos: string[] = [];
+      for (const file of files) photos.push(await fileToDataUri(file));
+      const r = await techFetch<{ photos: string[] }>(`/service-jobs/${jobId}/photos`, {
+        method: "POST",
+        body: JSON.stringify({ photos }),
+      });
+      if (r.ok && r.data) setJob((j) => (j ? { ...j, photos: r.data!.photos } : j));
+      else setActionError("Upload failed — try again.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Upload failed — try again.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   return (
     <div className="space-y-4 pb-4">
@@ -301,8 +420,31 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
                   Booked in {new Date(job.bookInDate).toLocaleDateString("en-AU")}
                 </p>
               </div>
-              <StatusBadge status={job.status} />
+              {job.canChangeStatus ? (
+                /* Status select styled as the status badge — tap to change */
+                <span className={cn("relative inline-flex items-center rounded-full", STATUS_COLORS[job.status] ?? "bg-slate-100 text-slate-700", savingStatus && "opacity-60")}>
+                  <select
+                    value={job.status}
+                    onChange={(e) => void changeStatus(e.target.value)}
+                    disabled={savingStatus}
+                    aria-label="Job status"
+                    className="appearance-none bg-transparent pl-2.5 pr-6 py-0.5 text-[11px] font-semibold outline-none cursor-pointer"
+                  >
+                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 absolute right-1.5 pointer-events-none" />
+                </span>
+              ) : (
+                <StatusBadge status={job.status} />
+              )}
             </div>
+            {(job.status === "completed" || job.status === "cancelled") && (
+              <p className="text-[11px] text-muted-foreground">
+                This job is closed — it has moved to Service History and will leave the Services list.
+              </p>
+            )}
             <div className="flex gap-1.5 flex-wrap">
               {job.isCritical && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">
@@ -347,17 +489,113 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
             <DetailRow label="Equipment / Accessories" value={job.additionalEquipment} />
             <DetailRow label="Logins / PINs" value={job.passwordOrPin} mono />
             <DetailRow label="Accounts" value={job.accounts} mono />
-            <DetailRow label="Notes" value={job.notes} />
           </div>
 
-          {job.photos.length > 0 && (
-            <div className="rounded-2xl border bg-card p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Device Photos</p>
-              <div className="grid grid-cols-3 gap-2">
-                {job.photos.map((p, i) => (
-                  <img key={i} src={p} alt={`device ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border" />
-                ))}
+          {/* Notes — newest first, with an add form so techs can log work
+              from the bench. Entries share the admin dialog's format. */}
+          <div className="rounded-2xl border bg-card p-4 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
+            <div className="flex gap-2 items-stretch">
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note to this service…"
+                rows={2}
+                className="flex-1 resize-none rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+              <button
+                onClick={() => void addNote()}
+                disabled={!noteText.trim() || savingNote}
+                className="shrink-0 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 active:scale-95 transition-transform"
+              >
+                {savingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+              </button>
+            </div>
+            {parseNotes(job.notes).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No notes yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {[...parseNotes(job.notes)].reverse().map((note, i) => {
+                  const tsMatch = note.match(/^\[(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2})\]\s*/);
+                  const ts = tsMatch ? tsMatch[1] : null;
+                  const text = ts ? note.slice(tsMatch![0].length) : note;
+                  return (
+                    <div key={i} className="rounded-xl border bg-muted/30 p-3 text-sm space-y-1">
+                      {ts && (
+                        <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                          <StickyNote className="w-3 h-3" /> {ts}
+                        </p>
+                      )}
+                      <p className="whitespace-pre-wrap break-words leading-relaxed">{text}</p>
+                    </div>
+                  );
+                })}
               </div>
+            )}
+          </div>
+
+          {/* Photos & files — view what's on the sheet and add new ones
+              straight from the phone camera or gallery. */}
+          <div className="rounded-2xl border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Photos &amp; Files ({job.photos.length})
+              </p>
+              <label className={cn("inline-flex items-center gap-1 text-xs font-semibold select-none", uploading ? "text-muted-foreground" : "text-primary cursor-pointer")}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,.pdf"
+                  className="sr-only"
+                  onChange={(e) => void addFiles(e)}
+                  disabled={uploading}
+                />
+                {uploading
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                  : <><Upload className="w-3.5 h-3.5" /> Add</>}
+              </label>
+            </div>
+            {job.photos.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No photos or files yet.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {job.photos.map((p, i) =>
+                  p.startsWith("data:video") ? (
+                    <button key={i} onClick={() => setLightboxSrc(p)} className="relative w-full aspect-square rounded-lg border overflow-hidden bg-black">
+                      <video src={p} muted playsInline className="w-full h-full object-cover" />
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <Play className="w-6 h-6 text-white drop-shadow" />
+                      </span>
+                    </button>
+                  ) : p.startsWith("data:application") ? (
+                    <button key={i} onClick={() => openDataUri(p)} className="w-full aspect-square rounded-lg border bg-muted flex flex-col items-center justify-center gap-1">
+                      <FileText className="w-6 h-6 text-muted-foreground" />
+                      <span className="text-[10px] font-semibold text-muted-foreground">PDF</span>
+                    </button>
+                  ) : (
+                    <button key={i} onClick={() => setLightboxSrc(p)} className="w-full aspect-square rounded-lg border overflow-hidden">
+                      <img src={p} alt={`attachment ${i + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+
+          {actionError && <p className="text-sm text-center text-amber-600 font-medium px-4">{actionError}</p>}
+
+          {/* Lightbox for photos / videos */}
+          {lightboxSrc && (
+            <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4" onClick={() => setLightboxSrc(null)}>
+              <button className="absolute top-4 right-4 text-white/80" onClick={() => setLightboxSrc(null)} aria-label="Close">
+                <X className="w-7 h-7" />
+              </button>
+              {lightboxSrc.startsWith("data:video") ? (
+                <video src={lightboxSrc} controls autoPlay playsInline className="max-w-full max-h-full" onClick={(e) => e.stopPropagation()} />
+              ) : (
+                <img src={lightboxSrc} alt="Full size" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+              )}
             </div>
           )}
         </>

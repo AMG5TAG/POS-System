@@ -3,6 +3,7 @@ import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, techA
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
+import { sendSms } from "../services/sms";
 
 /**
  * Technician web app ("Tech App") API.
@@ -61,6 +62,7 @@ async function getTechSettings(merchantId: number) {
     enabled:             (row?.enabled ?? "true") === "true",
     showCustomerContact: (row?.showCustomerContact ?? "true") === "true",
     showCredentials:     (row?.showCredentials ?? "true") === "true",
+    allowStatusChange:   (row?.allowStatusChange ?? "true") === "true",
   };
 }
 
@@ -127,6 +129,23 @@ function formatJobDetail(
     photos: job.photos ? (() => { try { return JSON.parse(job.photos!) as string[]; } catch { return []; } })() : [],
     updatedAt: job.updatedAt.toISOString(),
   };
+}
+
+/* Notes are stored as a single text field; entries are separated the same
+   way the admin Service Job dialog does so both apps parse each other's
+   notes: "[dd/mm/yyyy hh:mm] text" joined by NOTE_SEP. */
+const NOTE_SEP = "\n\n---\n\n";
+const NOTE_TS_RE = /^\[\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\]$/;
+
+function parseNotes(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split("---").map((s) => s.trim()).filter(Boolean);
+}
+
+function buildNoteTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
 }
 
 /** Auth gate for tech endpoints — verifies the session technician still
@@ -305,7 +324,176 @@ router.get("/tech/service-jobs/:id", async (req, res): Promise<void> => {
     detail.passwordOrPin = null;
     detail.accounts = null;
   }
-  res.json(detail);
+  res.json({ ...detail, canChangeStatus: tech.settings.allowStatusChange });
+});
+
+/* ── Add notes / photos to a service sheet from the tech app ─────────── */
+
+/** Load a service job scoped to the technician's merchant. Writes the
+    error response (400/404/403) and returns null when not accessible. */
+async function loadScopedJob(
+  req: Request<{ id: string }>,
+  res: Response,
+  tech: NonNullable<Awaited<ReturnType<typeof requireTech>>>,
+): Promise<typeof serviceJobsTable.$inferSelect | null> {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid job id" });
+    return null;
+  }
+  const [job] = await db.select().from(serviceJobsTable).where(eq(serviceJobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Service job not found" });
+    return null;
+  }
+  if (job.merchantId !== tech.merchantId) {
+    logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "denied_foreign", "Tried to update a ticket belonging to another business");
+    res.status(403).json({ error: "This service ticket belongs to another business", reason: "foreign_business" });
+    return null;
+  }
+  return job;
+}
+
+const TechAddNoteBody = z.object({
+  text: z.string().trim().min(1).max(5000),
+  /* Built on the device so the time matches the technician's clock, same as
+     the admin dialog. Server time is the fallback for invalid/missing. */
+  timestamp: z.string().optional(),
+});
+
+router.post("/tech/service-jobs/:id/notes", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  const parsed = TechAddNoteBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Note text is required" });
+    return;
+  }
+  const job = await loadScopedJob(req, res, tech);
+  if (!job) return;
+
+  const ts = parsed.data.timestamp && NOTE_TS_RE.test(parsed.data.timestamp)
+    ? parsed.data.timestamp
+    : buildNoteTimestamp();
+  const entry = `${ts} ${tech.staffName}: ${parsed.data.text}`;
+  const notes = [...parseNotes(job.notes), entry].join(NOTE_SEP);
+
+  await db.update(serviceJobsTable).set({ notes }).where(eq(serviceJobsTable.id, job.id));
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "note_added", `Added a note to service job ${job.jobNumber}`);
+  res.json({ notes });
+});
+
+const TechAddPhotosBody = z.object({
+  /* Data URIs, same storage format the admin Service Job dialog uses. */
+  photos: z.array(z.string().regex(/^data:[\w.+-]+\/[\w.+-]+;base64,/)).min(1).max(12),
+});
+
+router.post("/tech/service-jobs/:id/photos", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  const parsed = TechAddPhotosBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "At least one photo or file is required" });
+    return;
+  }
+  const job = await loadScopedJob(req, res, tech);
+  if (!job) return;
+
+  const existing = job.photos ? (() => { try { return JSON.parse(job.photos!) as string[]; } catch { return []; } })() : [];
+  const photos = [...existing, ...parsed.data.photos];
+
+  await db.update(serviceJobsTable).set({ photos: JSON.stringify(photos) }).where(eq(serviceJobsTable.id, job.id));
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "photos_added", `Added ${parsed.data.photos.length} photo(s)/file(s) to service job ${job.jobNumber}`);
+  res.json({ photos });
+});
+
+/* ── Change a service job's status from the tech app ─────────────────── */
+
+const SERVICE_STATUSES = [
+  "pending", "in-progress", "awaiting-parts", "awaiting-stock", "at-repairer",
+  "awaiting-partner-approval", "partner-replacement", "awaiting-customer",
+  "completed", "cancelled",
+] as const;
+
+const STATUS_LABELS: Record<string, string> = {
+  "pending":                   "Pending",
+  "in-progress":               "In Progress",
+  "awaiting-parts":            "Awaiting Parts",
+  "awaiting-stock":            "Awaiting Stock",
+  "at-repairer":               "At Repairer",
+  "awaiting-partner-approval": "Awaiting Partner Approval",
+  "partner-replacement":       "Partner Replacement",
+  "awaiting-customer":         "Awaiting Customer",
+  "completed":                 "Completed",
+  "cancelled":                 "Cancelled",
+};
+
+const TechSetStatusBody = z.object({ status: z.enum(SERVICE_STATUSES) });
+
+router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  /* Management > Tech App can turn status changes off for technicians */
+  if (!tech.settings.allowStatusChange) {
+    res.status(403).json({ error: "Changing job status from the Tech App is disabled for this business" });
+    return;
+  }
+  const parsed = TechSetStatusBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid status" });
+    return;
+  }
+  const job = await loadScopedJob(req, res, tech);
+  if (!job) return;
+
+  const status = parsed.data.status;
+  if (status === job.status) {
+    res.json({ status, notes: job.notes ?? null });
+    return;
+  }
+
+  /* Status-change log entry in notes — same format the admin app writes */
+  const fromLabel = STATUS_LABELS[job.status] ?? job.status;
+  const toLabel = STATUS_LABELS[status] ?? status;
+  const logEntry = `${buildNoteTimestamp()} Status: ${fromLabel} → ${toLabel}`;
+  const notes = job.notes ? `${job.notes}\n${logEntry}` : logEntry;
+
+  await db.update(serviceJobsTable).set({ status, notes }).where(eq(serviceJobsTable.id, job.id));
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "status_changed", `Changed service job ${job.jobNumber} status to ${toLabel}`);
+
+  /* Auto-send SMS on key status transitions — mirrors the admin endpoint */
+  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "completed"]);
+  if (SMS_NOTIFY_STATUSES.has(status) && job.customerId) {
+    const [customer] = await db
+      .select({ phone: customersTable.phone, portalToken: customersTable.portalToken })
+      .from(customersTable)
+      .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, tech.merchantId)));
+    if (customer?.phone && customer.portalToken) {
+      const [merchant] = await db
+        .select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
+        .from(merchantsTable)
+        .where(eq(merchantsTable.id, tech.merchantId));
+      const bizName = merchant?.businessName ?? "Your repair shop";
+      const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+      const portalUrl = merchant?.portalDomain
+        ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
+        : merchant?.username
+          ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
+          : null;
+      const smsLabel: Record<string, string> = {
+        "in-progress":       "In Progress",
+        "awaiting-customer": "Ready — awaiting your decision",
+        "completed":         "Completed & ready for pickup",
+      };
+      const label = smsLabel[status] ?? status;
+      const smsBody = portalUrl
+        ? `${bizName}: Your repair #${job.jobNumber} is now ${label}. Track it here: ${portalUrl}`
+        : `${bizName}: Your repair #${job.jobNumber} is now ${label}.`;
+      sendSms({ to: customer.phone, body: smsBody }, tech.merchantId).catch(() => {});
+    }
+  }
+
+  res.json({ status, notes });
 });
 
 export default router;

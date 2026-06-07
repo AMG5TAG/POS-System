@@ -11,6 +11,8 @@ export const techAppSettingsTable = pgTable("tech_app_settings", {
   showCustomerContact: text("show_customer_contact").notNull().default("true"),
   /** Show device logins / PINs / accounts on job details in the tech app. */
   showCredentials:     text("show_credentials").notNull().default("true"),
+  /** Let technicians change a job's status from the tech app. */
+  allowStatusChange:   text("allow_status_change").notNull().default("true"),
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

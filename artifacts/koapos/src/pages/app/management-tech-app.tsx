@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   TabletSmartphone, Copy, ExternalLink, Send, Mail, MessageSquare,
   Loader2, History, ShieldAlert, Eye, LogIn, LogOut, RefreshCw, AlertTriangle,
+  StickyNote, Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ type TechSettings = {
   enabled: boolean;
   showCustomerContact: boolean;
   showCredentials: boolean;
+  allowStatusChange: boolean;
 };
 
 type TechEvent = {
@@ -43,6 +45,9 @@ const ACTION_META: Record<string, { label: string; icon: typeof Eye; className: 
   logout:         { label: "Signed Out",      icon: LogOut,      className: "bg-slate-50 text-slate-600 border-slate-300" },
   job_view:       { label: "Viewed Job",      icon: Eye,         className: "bg-blue-50 text-blue-700 border-blue-300" },
   denied_foreign: { label: "Blocked Scan",    icon: ShieldAlert, className: "bg-red-50 text-red-700 border-red-300" },
+  note_added:     { label: "Added Note",      icon: StickyNote,  className: "bg-amber-50 text-amber-700 border-amber-300" },
+  photos_added:   { label: "Added Files",     icon: Camera,      className: "bg-violet-50 text-violet-700 border-violet-300" },
+  status_changed: { label: "Changed Status",  icon: RefreshCw,   className: "bg-cyan-50 text-cyan-700 border-cyan-300" },
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -254,6 +259,7 @@ export default function ManagementTechAppPage() {
               ["enabled", "Enable Tech App", "Master switch — turning this off signs out all technicians and blocks new sign-ins."],
               ["showCustomerContact", "Show customer contact details", "Display the customer's phone number and email on job details."],
               ["showCredentials", "Show device logins & accounts", "Display device PINs/passwords and account details on job details."],
+              ["allowStatusChange", "Allow changing job status", "Let technicians update a job's status from the Tech App. Status changes are logged and send the same customer SMS notifications as the main app."],
             ] as const).map(([key, title, desc]) => (
               <div key={key} className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0">
                 <div>

@@ -35,6 +35,7 @@ function formatSettings(s: typeof techAppSettingsTable.$inferSelect) {
     enabled:             s.enabled === "true",
     showCustomerContact: s.showCustomerContact === "true",
     showCredentials:     s.showCredentials === "true",
+    allowStatusChange:   s.allowStatusChange === "true",
     updatedAt:           s.updatedAt.toISOString(),
   };
 }
@@ -57,6 +58,7 @@ const UpdateSettingsBody = z.object({
   enabled:             z.boolean().optional(),
   showCustomerContact: z.boolean().optional(),
   showCredentials:     z.boolean().optional(),
+  allowStatusChange:   z.boolean().optional(),
 });
 
 router.put("/tech-app/settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
@@ -71,6 +73,7 @@ router.put("/tech-app/settings", requireAuth, requireManagerOrOwner, async (req,
   if (parsed.data.enabled             !== undefined) patch.enabled             = String(parsed.data.enabled);
   if (parsed.data.showCustomerContact !== undefined) patch.showCustomerContact = String(parsed.data.showCustomerContact);
   if (parsed.data.showCredentials     !== undefined) patch.showCredentials     = String(parsed.data.showCredentials);
+  if (parsed.data.allowStatusChange   !== undefined) patch.allowStatusChange   = String(parsed.data.allowStatusChange);
   const [updated] = await db
     .update(techAppSettingsTable)
     .set(patch)
