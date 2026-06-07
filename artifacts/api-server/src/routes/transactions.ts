@@ -43,6 +43,9 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
           merchantId: customer.merchantId,
           firstName: customer.firstName ?? null,
           lastName: customer.lastName ?? null,
+          /* Needed so sale/receipt screens can fall back to the business
+             name for customers with no personal name recorded. */
+          company: customer.company ?? null,
           email: customer.email ?? null,
           phone: customer.phone ?? null,
           address: customer.address ?? null,

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { customerDisplayName } from "@/lib/customer-name";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -304,8 +305,8 @@ function MergeWizardModal({
     }
   };
 
-  const primaryName   = [primary.firstName,   primary.lastName].filter(Boolean).join(" ")   || "Unknown";
-  const secondaryName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || "Unknown";
+  const primaryName   = customerDisplayName(primary);
+  const secondaryName = customerDisplayName(secondary);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -340,7 +341,7 @@ function MergeWizardModal({
               {(["a", "b"] as const).map((side) => {
                 const cust      = side === "a" ? a : b;
                 const isPrimary = primarySide === side;
-                const name      = [cust.firstName, cust.lastName].filter(Boolean).join(" ") || "Unknown";
+                const name      = customerDisplayName(cust);
                 return (
                   <button
                     key={side}
@@ -589,7 +590,7 @@ function MultiMergeModal({
   const survivor    = customers.find((c) => c.id === survivorId);
   const secondaries = customers.filter((c) => c.id !== survivorId);
   const displayName = (c: Customer) =>
-    [c.firstName, c.lastName].filter(Boolean).join(" ") || `Customer #${c.id}`;
+    customerDisplayName(c, "") || `Customer #${c.id}`;
 
   const handleMerge = async () => {
     if (!survivorId) return;
@@ -763,8 +764,8 @@ function ManualMergePickerDialog({
               </div>
             ) : (
               results.map((c) => {
-                const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
-                const initials = [c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+                const name = customerDisplayName(c);
+                const initials = ([c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("") || c.company?.[0] || "?").toUpperCase();
                 return (
                   <button
                     key={c.id}
@@ -823,8 +824,8 @@ function DuplicateModal({
         <div className="space-y-3 mt-1">
           {pairs.map((pair) => {
             const { a, b, reason } = pair;
-            const nameA = [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unknown";
-            const nameB = [b.firstName, b.lastName].filter(Boolean).join(" ") || "Unknown";
+            const nameA = customerDisplayName(a);
+            const nameB = customerDisplayName(b);
             return (
               <div key={pair.key} className="rounded-lg border overflow-hidden">
                 {/* Reason badge row */}
@@ -1040,7 +1041,7 @@ function CustomerDetailInner({
    * values are passed as overrides; toggles for missing data are turned off so
    * the label never shows sample placeholder text. */
   const printCustomerLabel = () => {
-    const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "";
+    const name = customerDisplayName(customer, "") || customer.email || "";
     const group = customer.customerGroup || customer.tierName || "";
     const ok = printStickers({
       typeId: "customer",
@@ -1212,7 +1213,7 @@ function CustomerDetailInner({
     );
   };
 
-  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
+  const fullName = customerDisplayName(customer);
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
   const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
   const displayedNotes = showMergeOnly
@@ -1615,7 +1616,7 @@ function CustomerDetailInner({
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
-                      const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
+                      const custOverride = { name: customerDisplayName(customer, "") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
                       return (
                         <div key={j.id} className="px-4 py-2.5 text-sm space-y-2 hover:bg-muted/40 transition-colors group">
                           <div className="flex items-center justify-between">

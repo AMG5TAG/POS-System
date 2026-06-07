@@ -16,6 +16,7 @@ import { setOnUnauthorized } from "@workspace/api-client-react";
 
 import CustomerDisplayPage from "@/pages/app/customer-display";
 import PortalPage from "@/pages/portal";
+import TechAppPage from "@/pages/tech";
 import LandingPage from "@/pages/marketing/landing";
 import LoginPage from "@/pages/marketing/login";
 import RegisterPage from "@/pages/marketing/register";
@@ -257,6 +258,9 @@ function Router() {
       </Route>
       <Route path="/b/:businessUsername/c/:token">
         <PublicRoute component={PortalPage} />
+      </Route>
+      <Route path="/b/:businessUsername/t/webapp">
+        <PublicRoute component={TechAppPage} />
       </Route>
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />

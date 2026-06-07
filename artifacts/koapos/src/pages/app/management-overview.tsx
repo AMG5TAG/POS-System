@@ -12,9 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
-  DollarSign, ShoppingCart, TrendingUp, Users, Gift, TrendingDown,
+  DollarSign, ShoppingCart, TrendingUp, Gift, TrendingDown,
   Mail, Activity, MapPin, Monitor, AlertCircle,
-  RotateCcw, Receipt, Package, Percent, Package2, Calendar,
+  RotateCcw, Receipt, Percent, Package2, Calendar,
   ArrowUp, ArrowDown, Minus,
 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -150,7 +150,6 @@ export default function ManagementOverviewPage() {
   const newCustomers  = summary?.newCustomers     ?? 0;
   const refundTotal   = summary?.refundTotal      ?? 0;
   const discountTotal = summary?.discountTotal    ?? 0;
-  const itemsSold     = summary?.itemsSold        ?? 0;
 
   /* GST — use stored tax_total from transactions (accurate for mixed-rate merchants).
      Falls back to rate-based estimate only when no stored figure is available. */
@@ -235,7 +234,7 @@ export default function ManagementOverviewPage() {
           </div>
 
           {/* Row 1 — core financial KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
               title="Revenue"
               icon={DollarSign}
@@ -271,14 +270,6 @@ export default function ManagementOverviewPage() {
               href="/management/sales-overview"
             />
             <KpiCard
-              title="New Customers"
-              icon={Users}
-              iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600"
-              value={isLoading ? "—" : newCustomers.toString()}
-              sub={`Joined ${periodLabel}`}
-              href="/management/customers"
-            />
-            <KpiCard
               title="Loyalty Liability"
               icon={Gift}
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
@@ -289,7 +280,7 @@ export default function ManagementOverviewPage() {
           </div>
 
           {/* Row 2 — cost / adjustment KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
               title="Discounts"
               icon={TrendingDown}
@@ -316,14 +307,6 @@ export default function ManagementOverviewPage() {
               sub={storedTax != null ? "From transaction records" : `Estimated at ${gstRateStr} of revenue`}
               valueClass="text-amber-600"
               href="/management/tax"
-            />
-            <KpiCard
-              title="Items Sold"
-              icon={Package}
-              iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
-              value={isLoading ? "—" : itemsSold.toString()}
-              sub={`Units sold ${periodLabel}`}
-              href="/management/sales-overview"
             />
             <KpiCard
               title="Net Profit"

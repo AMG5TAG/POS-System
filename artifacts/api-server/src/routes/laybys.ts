@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, laybysTable, laybyPaymentsTable, customersTable } from "@workspace/db";
 import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import {
   GetLaybyParams,
   UpdateLaybyParams,
@@ -24,7 +25,7 @@ function fmtLayby(l: LaybyRow, customer?: CustomerRow | null) {
     reference: l.reference,
     customerId: l.customerId ?? null,
     customerName: customer
-      ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null
+      ? customerDisplayName(customer.firstName, customer.lastName, customer.company)
       : null,
     items: Array.isArray(l.items) ? l.items : [],
     totalAmount: total,

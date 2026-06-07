@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
@@ -70,7 +71,7 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       : [];
   const customerMap = new Map<number, CustomerInfo>(
     customers.map((c) => [c.id, {
-      name:  `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
+      name:  customerDisplayName(c.firstName, c.lastName, c.company),
       phone: c.phone ?? null,
       email: c.email ?? null,
       portalToken: c.portalToken ?? null,
@@ -131,7 +132,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   res.status(201).json(formatJob(job, customer));
@@ -217,7 +218,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   // Auto-send SMS on key status transitions
@@ -274,7 +275,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const customer: CustomerInfo | null = job.customerId
     ? await db.select().from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   const bodyPhone = (req.body as { phone?: string } | undefined)?.phone?.trim() || null;
@@ -341,7 +342,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     ? await db.select().from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
         .then(([c]) => c ? {
-          name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
+          name: customerDisplayName(c.firstName, c.lastName, c.company),
           phone: c.phone ?? null,
           email: c.email ?? null,
           portalToken: c.portalToken ?? null,

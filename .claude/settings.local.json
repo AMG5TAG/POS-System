@@ -151,7 +151,20 @@
       "Bash(curl -s -b /tmp/test-cookies.txt -X PATCH http://localhost:80/api/staff/5 -H 'Content-Type: application/json' -d '{\"posPrefs\":\"{\\\\\"gridColumns\\\\\":4,\\\\\"cartPosition\\\\\":\\\\\"left\\\\\",\\\\\"showPrices\\\\\":false}\"}')",
       "Bash(curl -s --max-time 15 \"http://localhost:19141/src/pages/app/staff.tsx\" -o /tmp/staff-c.js -w \"staff.tsx: %{http_code} \\(%{size_download}b\\)\\\\n\")",
       "Bash(curl -s --max-time 15 \"http://localhost:19141/src/pages/app/pos.tsx\" -o /tmp/pos-c.js -w \"pos.tsx: %{http_code} \\(%{size_download}b\\)\\\\n\")",
-      "Bash(curl -s --max-time 15 \"http://localhost:19141/src/components/layout/app-layout.tsx\" -o /tmp/layout-c.js -w \"app-layout: %{http_code} \\(%{size_download}b\\)\\\\n\")"
+      "Bash(curl -s --max-time 15 \"http://localhost:19141/src/components/layout/app-layout.tsx\" -o /tmp/layout-c.js -w \"app-layout: %{http_code} \\(%{size_download}b\\)\\\\n\")",
+      "Bash(curl -s -b /tmp/kpi-test.txt http://localhost:80/api/dashboard/summary?period=today)",
+      "Bash(sed -n '20,30p' /home/runner/workspace/artifacts/api-server/src/routes/laybys.ts)",
+      "Bash(sed -n '38,48p' /home/runner/workspace/artifacts/api-server/src/routes/appointments.ts)",
+      "Bash(sed -n '1,30p' /home/runner/workspace/artifacts/api-server/src/routes/laybys.ts)",
+      "Bash(sed -n '60,80p' /home/runner/workspace/artifacts/api-server/src/routes/service-jobs.ts)",
+      "Bash(sed -i 's|import { requireAuth } from \"../middlewares/requireAuth\";|import { requireAuth } from \"../middlewares/requireAuth\";\\\\nimport { customerDisplayName } from \"../lib/customer-name\";|' src/routes/service-jobs.ts)",
+      "Bash(sed -i 's|`${c.firstName ?? \"\"} ${c.lastName ?? \"\"}`.trim\\(\\) \\\\|\\\\| null|customerDisplayName\\(c.firstName, c.lastName, c.company\\)|g' src/routes/service-jobs.ts)",
+      "Bash(npx vitest *)",
+      "Bash(sed -n '1,60p' /home/runner/workspace/artifacts/api-server/src/routes/index.ts)",
+      "Bash(sed -n '1,25p' /home/runner/workspace/artifacts/api-server/src/lib/auth.ts)",
+      "Bash(sed -n '100,107p' /home/runner/workspace/artifacts/api-server/src/routes/index.ts)",
+      "Bash(sed -n '127,135p' /home/runner/workspace/artifacts/api-server/src/routes/index.ts)",
+      "Bash(PORT=5173 npx vite build --config vite.config.ts)"
     ]
   }
 }

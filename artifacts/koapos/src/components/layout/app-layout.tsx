@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/use-auth";
+import { customerDisplayName } from "@/lib/customer-name";
 import { useTheme } from "@/lib/theme";
 import { useNavLayout, type NavLayoutMode } from "@/lib/nav-layout";
 import { useAccessibility } from "@/lib/accessibility";
@@ -653,7 +654,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     const customers = ((custData as { items?: Customer[] } | undefined)?.items ?? [])
       .slice(0, 5)
       .map((c): SearchResultItem => ({
-        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || "Customer",
+        label: customerDisplayName(c, "") || c.email || "Customer",
         sub: c.email ?? c.phone ?? undefined,
         href: "/customers",
         icon: Users,

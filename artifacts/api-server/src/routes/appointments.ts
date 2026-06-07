@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, appointmentsTable, customersTable, staffTable, merchantsTable } from "@workspace/db";
 import { eq, and, gte, lt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, UpdateAppointmentParams } from "@workspace/api-zod";
 import { sendSms } from "../services/sms";
 import { sendEmail } from "../services/email";
@@ -40,7 +41,7 @@ async function formatAppointment(
     durationMinutes: a.durationMinutes,
     status: a.status,
     notes: a.notes ?? null,
-    customerName:    customer ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || null : null,
+    customerName:    customer ? customerDisplayName(customer.firstName, customer.lastName, customer.company) : null,
     customerPhone:   customer?.phone   ?? null,
     customerEmail:   customer?.email   ?? null,
     customerAddress: customerAddress,
@@ -210,7 +211,8 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
     if (found) {
       customer = found;
       if (!title) {
-        resolvedTitle = `Appointment — ${found.firstName ?? ""} ${found.lastName ?? ""}`.trim();
+        const who = customerDisplayName(found.firstName, found.lastName, found.company);
+        resolvedTitle = who ? `Appointment — ${who}` : "Appointment";
       }
     }
   }

@@ -866,6 +866,7 @@ export default function ServiceJobNewPage() {
         socialLinks: bizProfile?.socialLinks,
       }}
       data={{
+        jobId: successJob?.id ?? null,
         jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
         date: bookInDate || Date.now(),
         status,

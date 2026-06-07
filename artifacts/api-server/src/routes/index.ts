@@ -101,6 +101,7 @@ import unsubscribeRouter from "./unsubscribe";
 import staffTimesheetsRouter from "./staff-timesheets";
 import tyroSettingsRouter from "./tyro-settings";
 import demoDataRouter from "./demo-data";
+import techRouter from "./tech";
 
 const router: IRouter = Router();
 
@@ -128,6 +129,7 @@ router.use(integrationsRouter);
 router.use(storageRouter);
 router.use(loyaltyRouter);
 router.use(portalRouter);
+router.use(techRouter);
 router.use(cashDrawerRouter);
 router.use(parkedSalesRouter);
 router.use(purchaseOrdersRouter);

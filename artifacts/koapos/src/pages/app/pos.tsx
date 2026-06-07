@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
   getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
@@ -43,6 +44,7 @@ import {
   type RegisterSession,
 } from "@/lib/pos-local-settings";
 import { useStaffSession } from "@/lib/staff-day-session";
+import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -1444,7 +1446,7 @@ export default function POSPage() {
     const customerName = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
       : selectedCustomer
-      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ")
+      ? customerDisplayName(selectedCustomer, "")
       : null;
     const payload = {
       items: cart.map(i => ({
@@ -1546,7 +1548,8 @@ export default function POSPage() {
     const q = customerSearch.toLowerCase();
     return (customers).filter(c => {
       const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-      return !q || name.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
+      const company = (c.company ?? "").toLowerCase();
+      return !q || name.includes(q) || company.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
     });
   }, [customers, customerSearch]);
 
@@ -1740,7 +1743,7 @@ export default function POSPage() {
     const customerLabel = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
       : selectedCustomer
-        ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+        ? customerDisplayName(selectedCustomer, "Customer")
         : undefined;
     const items = cart.map(i => ({
       productId: i.product.id,
@@ -1792,7 +1795,7 @@ export default function POSPage() {
         const currentLabel = walkIn
           ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
           : selectedCustomer
-            ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+            ? customerDisplayName(selectedCustomer, "Customer")
             : undefined;
         const currentItems = cart.map(i => ({
           productId: i.product.id,
@@ -2266,7 +2269,7 @@ export default function POSPage() {
           setCompletedTaxTotal(0);
           setCompletedCustomer(
             inv.customerId != null
-              ? ({ id: inv.customerId, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer)
+              ? ({ id: inv.customerId, firstName: inv.customerName ?? "Customer", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as Customer)
               : null,
           );
           setCompletedLoyaltyAmount(0);
@@ -2282,17 +2285,23 @@ export default function POSPage() {
             items: [{ productId: inv.invoiceId, productName: `Invoice ${inv.invoiceNumber} Payment`, quantity: 1, unitPrice: amount, totalPrice: amount }],
             createdAt: new Date().toISOString(),
             customer: inv.customerId != null
-              ? { id: inv.customerId, merchantId: merchantData?.id ?? 0, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer
+              ? { id: inv.customerId, merchantId: merchantData?.id ?? 0, firstName: inv.customerName ?? "Customer", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as Customer
               : undefined,
           } as Transaction);
           setCompletedTotal(amount);
-          setReceiptEmail("");
-          setReceiptPhone("");
+          /* Prefill from the invoiced customer so Email / SMS receipt works
+             without retyping (mirrors the cart-sale path below). */
+          setReceiptEmail(inv.customerEmail ?? "");
+          setReceiptPhone(inv.customerPhone ?? "");
           setReceiptMode("idle");
           setInvoicePay(null);
           setNumpadInput("");
           setPaymentModalOpen(false);
           setSaleStaff(null); /* payment done — revert any one-sale staff switch */
+          /* A paid invoice counts toward revenue KPIs — refresh every KPI /
+             dashboard surface so the numbers move immediately. */
+          invalidateSalesKpiQueries(queryClient);
+          queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
           toast.success(`Payment recorded for invoice ${inv.invoiceNumber} via ${methodLabel}`);
           setTimeout(() => setReceiptOpen(true), 250);
         } catch {
@@ -2378,6 +2387,8 @@ export default function POSPage() {
     }, {
       onSuccess: (data) => {
         idempotencyKeyRef.current = null;
+        /* Completed sales drive the KPI / dashboard numbers — refresh them. */
+        invalidateSalesKpiQueries(queryClient);
         // Track session sales by payment method (in-memory only)
         try {
           if (sessionSnap) {
@@ -2457,7 +2468,7 @@ export default function POSPage() {
   const activeCustomerName = walkIn
     ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
     : selectedCustomer
-    ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Customer"
+    ? customerDisplayName(selectedCustomer, "Customer")
     : null;
 
   /* ── Render ── */
@@ -2859,8 +2870,8 @@ export default function POSPage() {
                     </div>
                   ) : (
                     filteredCustomers.map(c => {
-                      const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
-                      const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
+                      const name = customerDisplayName(c);
+                      const initials = (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
                       return (
                         <button
                           key={c.id}
@@ -4059,7 +4070,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="w-5 h-5" /> Customer Warning</DialogTitle></DialogHeader>
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-2">
-            <p className="font-semibold text-sm">{warningCustomer ? [warningCustomer.firstName, warningCustomer.lastName].filter(Boolean).join(" ") : ""}</p>
+            <p className="font-semibold text-sm">{warningCustomer ? customerDisplayName(warningCustomer, "") : ""}</p>
             <p className="text-sm text-destructive">{warningCustomer?.warningNote}</p>
           </div>
           <p className="text-sm text-muted-foreground">Please review this warning before proceeding with the sale.</p>

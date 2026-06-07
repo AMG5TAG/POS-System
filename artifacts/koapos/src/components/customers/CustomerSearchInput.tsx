@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useListCustomers, useGetCustomer, Customer } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { customerDisplayName } from "@/lib/customer-name";
 import { Search, UserSearch, X, AlertTriangle, UserPlus, Loader2 } from "lucide-react";
 import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
 
@@ -88,10 +89,9 @@ export function CustomerSearchInput({
   };
 
   const initials = (c: Customer) =>
-    ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
+    (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
 
-  const displayName = (c: Customer) =>
-    `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Unknown";
+  const displayName = (c: Customer) => customerDisplayName(c);
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>

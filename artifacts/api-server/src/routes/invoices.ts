@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
@@ -106,10 +107,9 @@ type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?:
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-function customerName(first: string | null, last: string | null): string | null {
-  const n = [first, last].filter(Boolean).join(" ");
-  return n || null;
-}
+/* Personal name first; business-only contacts fall back to their company
+   name so invoices/quotes never show a blank or "Unknown" customer. */
+const customerName = customerDisplayName;
 
 function fmt(
   inv: typeof invoicesTable.$inferSelect,
@@ -156,7 +156,7 @@ function fmt(
     nextSendDate,
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
-    customerName: customerName(cFirst ?? null, cLast ?? null),
+    customerName: customerName(cFirst ?? null, cLast ?? null, cCompany ?? null),
     customerEmail: cEmail ?? null,
     customerPhone: cPhone ?? null,
     customerAddress,
@@ -830,7 +830,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
-  const cName = customerName(row.customerFirstName, row.customerLastName);
+  const cName = customerName(row.customerFirstName, row.customerLastName, row.customerCompany);
   const lines = (inv.items as LineItem[] | null) ?? [];
 
   /* ── Resolve template options (with sensible defaults) ── */

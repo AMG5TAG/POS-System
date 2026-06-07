@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
+import { customerDisplayName } from "@/lib/customer-name";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -389,7 +390,7 @@ export default function POSLaybuysPage() {
                   setForm({
                     ...form,
                     customerId: id,
-                    customerName: c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "",
+                    customerName: c ? customerDisplayName(c, "") : "",
                   })
                 }
                 placeholder="Select customer"

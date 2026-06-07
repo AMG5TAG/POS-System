@@ -25,13 +25,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
   ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
-  Printer, MessageSquare, CheckCircle2, Bell,
+  Printer, MessageSquare, CheckCircle2, Bell, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -937,6 +938,7 @@ function AppointmentsCalendar({
 
 export default function AppointmentsPage() {
   const [collapsed, setCollapsed]     = useState(false);
+  const [tab, setTab]                 = useState<"active" | "history">("active");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeSortKey, setSortKey]   = useState<SortKey>("scheduledAt");
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
@@ -956,8 +958,25 @@ export default function AppointmentsPage() {
 
   const upcoming = appts.filter((a) => a.status === "scheduled").length;
 
+  /* History holds finished appointments — marking one complete moves it there. */
+  const isFinished = (a: Appointment) =>
+    a.status === "completed" || a.status === "cancelled" || a.status === "no-show";
+  const historyAppts = appts.filter(isFinished);
+  const activeAppts  = appts.filter((a) => !isFinished(a));
+  const tabAppts     = tab === "history" ? historyAppts : activeAppts;
+
+  /* Switching tabs resets the filter/selection and flips to the natural sort
+     (next upcoming first vs most recent history first). */
+  const switchTab = (t: "active" | "history") => {
+    setTab(t);
+    setStatusFilter("all");
+    setSelected(new Set());
+    setSortKey("scheduledAt");
+    setSortDir(t === "history" ? "desc" : "asc");
+  };
+
   /* Filter */
-  const filtered = appts.filter((a) => statusFilter === "all" || a.status === statusFilter);
+  const filtered = tabAppts.filter((a) => statusFilter === "all" || a.status === statusFilter);
 
   /* Sort — completed/cancelled pinned to bottom */
   const sorted = sortAppointments(filtered, activeSortKey, sortDir);
@@ -1008,7 +1027,7 @@ export default function AppointmentsPage() {
       },
       {
         onSuccess: () => {
-          toast.success("Appointment marked as completed");
+          toast.success("Appointment completed — moved to Appointment History");
           queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
         },
         onError: () => toast.error("Failed to update appointment"),
@@ -1031,12 +1050,31 @@ export default function AppointmentsPage() {
           <h1 className="text-2xl font-bold">Appointments</h1>
           <p className="text-sm text-muted-foreground">Schedule and manage customer appointments and service bookings.</p>
         </div>
+
+        {/* Active / History tabs */}
+        <Tabs value={tab} onValueChange={(v) => switchTab(v as "active" | "history")}>
+          <TabsList>
+            <TabsTrigger value="active" className="gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5" />
+              Appointments
+              <span className="text-xs text-muted-foreground tabular-nums">({activeAppts.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              Appointment History
+              <span className="text-xs text-muted-foreground tabular-nums">({historyAppts.length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
           <h2 className="text-base font-semibold">
-            All Appointments{" "}
+            {tab === "history" ? "Appointment History" : "All Appointments"}{" "}
             <span className="font-normal text-muted-foreground text-sm">
-              ({upcoming} upcoming)
+              {tab === "history"
+                ? `(${historyAppts.length} past)`
+                : `(${upcoming} upcoming)`}
             </span>
           </h2>
           <div className="flex items-center gap-3">
@@ -1065,14 +1103,19 @@ export default function AppointmentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="no-show">No Show</SelectItem>
+                    {tab === "active" ? (
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="no-show">No Show</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-              <span className="text-sm text-muted-foreground">{sorted.length} of {appts.length}</span>
+              <span className="text-sm text-muted-foreground">{sorted.length} of {tabAppts.length}</span>
             </div>
 
             {/* Table */}
@@ -1081,7 +1124,13 @@ export default function AppointmentsPage() {
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading appointments...</div>
               ) : sorted.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
-                  {appts.length === 0 ? 'No appointments yet. Click "New Appointment" to book one.' : "No appointments match the current filter."}
+                  {tab === "history"
+                    ? (historyAppts.length === 0
+                        ? "No past appointments yet. When an appointment is marked complete it moves here."
+                        : "No past appointments match the current filter.")
+                    : (activeAppts.length === 0
+                        ? 'No appointments yet. Click "New Appointment" to book one.'
+                        : "No appointments match the current filter.")}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1117,7 +1166,9 @@ export default function AppointmentsPage() {
                             className={cn(
                               "hover:bg-muted/30 transition-colors cursor-pointer",
                               isChecked && "bg-primary/5",
-                              isDone    && "opacity-60",
+                              /* In the active tab finished rows are dimmed; in the
+                                 History tab everything is past, so keep full contrast. */
+                              isDone && tab === "active" && "opacity-60",
                             )}
                             onClick={() => setViewing(appt)}
                           >

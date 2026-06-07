@@ -2,6 +2,7 @@ import type { Transaction } from "@workspace/api-client-react";
 import { buildInvoiceHtml } from "@workspace/sales-documents";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
+import { customerDisplayName } from "@/lib/customer-name";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -316,7 +317,7 @@ function printA4Document(
 
   const customer = tx.customer;
   const customerName = customer
-    ? [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || ""
+    ? customerDisplayName(customer, "") || customer.email || ""
     : "";
 
   const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number }>;
@@ -436,7 +437,7 @@ export async function printA4Receipt(
 
   const customer = tx.customer;
   const customerName = customer
-    ? esc([customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "")
+    ? esc(customerDisplayName(customer, "") || customer.email || "")
     : "";
   const customerEmail = customer ? esc(customer.email ?? "") : "";
   const customerPhone = customer ? esc((customer as { phone?: string }).phone ?? "") : "";

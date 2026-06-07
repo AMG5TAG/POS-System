@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   History, Eye, CreditCard, Banknote, Search,
   Send, Printer, Mail, MessageSquare, Check, X,
@@ -355,7 +356,7 @@ type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 function customerName(tx: Transaction): string {
   const c = tx.customer;
   if (!c) return "";
-  return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+  return customerDisplayName(c, "");
 }
 
 function discountLabel(tx: { discountPct?: number | null; discountTotal?: number }): string | null {

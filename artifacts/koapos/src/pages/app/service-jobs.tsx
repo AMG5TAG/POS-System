@@ -624,6 +624,7 @@ export default function ServiceJobsPage() {
         const pj = printState.job;
         const printCopies = printState.copies;
         const sheetData = {
+          jobId: pj.id ?? null,
           jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,
           date: pj.bookInDate || null,
           status: pj.status,
