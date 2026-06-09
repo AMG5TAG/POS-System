@@ -16,8 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
-import { Percent, Plus, Tag, Pencil, Trash2, Copy, CheckCircle } from "lucide-react";
+import { Percent, Plus, Tag, Pencil, Trash2, Copy, CheckCircle, DollarSign } from "lucide-react";
 import { toast } from "sonner";
+import { GroupPricingSection } from "@/components/pricing/group-pricing-section";
 
 type DiscountType = "percentage" | "fixed" | "bogo";
 
@@ -216,6 +217,20 @@ export default function ManagementDiscountsPage() {
             ))}
           </div>
         )}
+
+        {/* ── Pricing ─────────────────────────────────────────────────────── */}
+        <div className="pt-2 border-t">
+          <div className="flex items-center gap-3 mb-1 mt-4">
+            <DollarSign className="w-6 h-6 text-primary" />
+            <div>
+              <h2 className="text-xl font-bold">Pricing</h2>
+              <p className="text-sm text-muted-foreground">Automatic default prices for customer groups</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <GroupPricingSection />
+          </div>
+        </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

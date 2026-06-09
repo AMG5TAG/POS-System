@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -58,6 +58,7 @@ import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
+import { computeAllGroupPrices } from "@/lib/group-pricing";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
@@ -1281,6 +1282,22 @@ export default function ProductsPage() {
   const { settings: customerSettings }  = useCustomerSettings();
   const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
 
+  // Automatic group prices derived from the rules in Customers › Discounts &
+  // Pricing, for the product currently being edited. Used as the form
+  // placeholders and merged into the save payload (manual entries win).
+  const ruleGroupDefaults = useMemo(
+    () => computeAllGroupPrices(
+      {
+        price: parseFloat(form.price) || 0,
+        costPrice: form.costPrice ? parseFloat(form.costPrice) : 0,
+        taxRate: parseFloat(form.taxRate) || 10,
+        categoryId: form.categoryId ? parseInt(form.categoryId) : null,
+      },
+      customerSettings.groupPricing,
+    ),
+    [form.price, form.costPrice, form.taxRate, form.categoryId, customerSettings.groupPricing],
+  );
+
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
     { query: { queryKey: ["products", search, categoryFilter] } }
@@ -1419,11 +1436,16 @@ export default function ProductsPage() {
       tags: form.tags,
       stockLocation: form.stockLocationDisplay || undefined,
       overflowLocation: form.stockLocationOverflow || undefined,
-      groupPrices: Object.fromEntries(
-        Object.entries(form.groupPrices)
-          .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
-          .map(([k, v]) => [k, parseFloat(v)])
-      ),
+      // Rule-derived defaults are applied automatically; any price typed into
+      // the form for a group overrides its rule value.
+      groupPrices: {
+        ...ruleGroupDefaults,
+        ...Object.fromEntries(
+          Object.entries(form.groupPrices)
+            .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
+            .map(([k, v]) => [k, parseFloat(v)])
+        ),
+      },
     };
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
@@ -2520,7 +2542,7 @@ export default function ProductsPage() {
                   <div className="border-t pt-5">
                     <div className="flex items-center justify-between mb-3">
                       <SectionHeader label="Customer Group Pricing" />
-                      <span className="text-xs text-muted-foreground">Leave blank to use standard price</span>
+                      <span className="text-xs text-muted-foreground">Blank uses the group's automatic rule, or the standard price</span>
                     </div>
                     <div className="space-y-2">
                       {customerGroups.map((group) => (
@@ -2535,10 +2557,15 @@ export default function ProductsPage() {
                               type="number" step="0.01" min="0"
                               value={form.groupPrices[group.id] ?? ""}
                               onChange={(e) => setField("groupPrices", { ...form.groupPrices, [group.id]: e.target.value })}
-                              placeholder={form.price || "0.00"}
+                              placeholder={ruleGroupDefaults[group.id] != null ? ruleGroupDefaults[group.id].toFixed(2) : (form.price || "0.00")}
                               className="pl-7 text-sm"
                             />
                           </div>
+                          {!form.groupPrices[group.id] && ruleGroupDefaults[group.id] != null && (
+                            <span className="text-xs text-muted-foreground whitespace-nowrap" title="Automatic price from this group's pricing rule">
+                              auto ${ruleGroupDefaults[group.id].toFixed(2)}
+                            </span>
+                          )}
                           {form.groupPrices[group.id] && form.price && parseFloat(form.groupPrices[group.id]) < parseFloat(form.price) && (
                             <span className="text-xs text-amber-600 whitespace-nowrap">
                               -{Math.round((1 - parseFloat(form.groupPrices[group.id]) / parseFloat(form.price)) * 100)}%

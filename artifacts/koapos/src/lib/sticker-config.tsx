@@ -314,6 +314,11 @@ export function stickerBarcodeValue(typeId: string, f: (k: string) => string): s
  * no value or no DOM (SSR). Drawn at a fixed module width/height; callers stretch
  * the resulting <img> to the full sticker width — only the relative bar widths
  * matter to a scanner, and those are preserved under horizontal scaling.
+ *
+ * CODE128 is the format DYMO LabelWriters print and retail scanners read. Pure
+ * black (#000) bars on white at a wide module width keep the bars crisp at the
+ * printer's 300dpi so the print is scannable (callers also set image-rendering
+ * so the upscale to full-width stays hard-edged rather than blurred).
  */
 export function barcodeDataUrl(value: string): string {
   if (typeof document === "undefined" || !value) return "";
@@ -323,8 +328,10 @@ export function barcodeDataUrl(value: string): string {
       format: "CODE128",
       displayValue: false,
       margin: 0,
-      width: 2,
-      height: 100,
+      width: 4,
+      height: 160,
+      background: "#ffffff",
+      lineColor: "#000000",
     });
     return canvas.toDataURL("image/png");
   } catch {
@@ -339,6 +346,7 @@ export function LabelPreview({
   fillWidth, fillHeight,
   orientation = "horizontal",
   barcodePosition = "bottom",
+  colorMode = "bw",
 }: {
   type: StickerType;
   fields: Record<string, string>;
@@ -349,6 +357,7 @@ export function LabelPreview({
   fillHeight?: number;
   orientation?: "horizontal" | "vertical";
   barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
 }) {
   const isHoriz    = orientation === "horizontal";
   const natPortrait = size.widthMm <= size.heightMm;
@@ -378,6 +387,12 @@ export function LabelPreview({
   // Show helpers — default "true" unless explicitly "false"
   const show = (k: string) => f(k) !== "false";
 
+  // Colour mode — black & white by default. In B&W every accent prints black so
+  // the label renders cleanly on a thermal/mono printer; "color" keeps the brand
+  // and status colours.
+  const accent = colorMode === "color" ? brandColor : "#000";
+  const danger = colorMode === "color" ? "#ef4444" : "#000";
+
   // Scannable barcode strip (spans the full sticker width, sits at the bottom).
   // Falls back to a sample value so the editor preview always shows one.
   const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
@@ -398,7 +413,12 @@ export function LabelPreview({
     <img
       src={barcodeUrl}
       alt="barcode"
-      style={{ display: "block", width: "100%", height: Math.max(9, finalScale * 4) }}
+      style={{
+        display: "block",
+        width: "100%",
+        height: Math.max(9, finalScale * 4),
+        imageRendering: "pixelated",
+      }}
     />
   ) : null;
 
@@ -425,12 +445,12 @@ export function LabelPreview({
                 <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
               )}
               {show("showSku") && (
-                <div className="text-gray-400">SKU: {f("sku") || "BEV-001"}</div>
+                <div className="text-gray-400">{f("sku") || "BEV-001"}</div>
               )}
             </div>
             <div>
               {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: brandColor }}>
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: accent }}>
                   {f("price") || "$5.50"}
                 </div>
               )}
@@ -449,7 +469,7 @@ export function LabelPreview({
               </div>
             )}
             {show("showGroup") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: brandColor, fontSize: Math.max(6, finalScale * 2.2) }}>
+              <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: Math.max(6, finalScale * 2.2) }}>
                 {f("group") || "VIP Member"}
               </div>
             )}
@@ -471,7 +491,7 @@ export function LabelPreview({
         {type.id === "return" && (
           <>
             {show("showReturnNo") && (
-              <div className="font-bold" style={{ color: "#ef4444", fontSize: Math.max(7, finalScale * 2.8) }}>
+              <div className="font-bold" style={{ color: danger, fontSize: Math.max(7, finalScale * 2.8) }}>
                 RETURN {f("returnNo") || "RTN-0089"}
               </div>
             )}
@@ -482,7 +502,7 @@ export function LabelPreview({
               <div className="text-gray-500 truncate">{f("reason") || "Not as described"}</div>
             )}
             {show("showStatus") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: "#ef4444", fontSize: Math.max(6, finalScale * 2.2) }}>
+              <div className="px-1 rounded text-white truncate" style={{ background: danger, fontSize: Math.max(6, finalScale * 2.2) }}>
                 {f("status") || "Awaiting Inspection"}
               </div>
             )}
@@ -561,7 +581,7 @@ export function LabelPreview({
                 <div className="line-through text-gray-400">{f("wasPrice") || "$18.99"}</div>
               )}
               {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
                   {f("price") || "$12.99"}
                 </div>
               )}
@@ -578,10 +598,10 @@ export function LabelPreview({
               <div className="text-gray-400 truncate">{f("unitPrice") || "$2.20/100g"}</div>
             )}
             {show("showSku") && (
-              <div className="text-gray-400">SKU {f("sku") || "GR-250"}</div>
+              <div className="text-gray-400">{f("sku") || "GR-250"}</div>
             )}
             {show("showPrice") && (
-              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
                 {f("price") || "$5.50"}
               </div>
             )}
@@ -702,10 +722,14 @@ export interface BuildLabelHtmlArgs {
   orientation: "horizontal" | "vertical";
   quantity: number;
   barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
 }
 
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, orientation, quantity, barcodePosition = "bottom" } = args;
+  const { typeId, size, fields, businessName, brandColor, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
+  // B&W (default) prints every accent in black; "color" keeps brand/status hues.
+  const accent = colorMode === "color" ? brandColor : "#000";
+  const danger = colorMode === "color" ? "#ef4444" : "#000";
   const isHoriz = orientation === "horizontal";
   const pageW = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
   const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
@@ -727,26 +751,26 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         <div>
           ${show("showProductName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
           ${show("showCategory") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
-          ${show("showSku") ? `<div style="color:#888">SKU: ${f("sku")||"BEV-001"}</div>` : ""}
+          ${show("showSku") ? `<div style="color:#888">${f("sku")||"BEV-001"}</div>` : ""}
         </div>
         <div>
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
 
       case "customer": return `
         ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
-        ${show("showGroup") ? `<div style="background:${brandColor};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
+        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
         ${show("showCustomerId") ? `<div style="color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
         ${show("showLoyaltyNo") ? `<div style="color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
         ${show("showPhone") ? `<div style="color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "return": return `
-        ${show("showReturnNo") ? `<div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
+        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
         ${show("showItem") ? `<div style="font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
         ${show("showReason") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
-        ${show("showStatus") ? `<div style="background:#ef4444;color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
+        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
         ${show("showDate") ? `<div style="color:#888">${f("date")||"18/05/2026"}</div>` : ""}
         ${show("showCustomer") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
@@ -772,14 +796,14 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showSku") ? `<div style="color:#888">#${f("sku")||"HW-042"}</div>` : ""}
         <div>
           ${show("showWasPrice") ? `<div style="text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$12.99"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$12.99"}</div>` : ""}
         </div>`;
 
       case "shelf": return `
         ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
         ${show("showUnitPrice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
-        ${show("showSku") ? `<div style="color:#888">SKU ${f("sku")||"GR-250"}</div>` : ""}
-        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}`;
+        ${show("showSku") ? `<div style="color:#888">${f("sku")||"GR-250"}</div>` : ""}
+        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}`;
 
       default: return "";
     }
@@ -789,7 +813,7 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const bcH = Math.max(3.5, Math.min(7, shorter * 0.22));
 
   const barcodeBlock = (pad: string) =>
-    barcodeUrl ? `<div style="padding:${pad}"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm"/></div>` : "";
+    barcodeUrl ? `<div style="padding:${pad}"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated"/></div>` : "";
 
   const labelBlock = `
     <div style="
@@ -817,14 +841,19 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 <meta charset="utf-8">
 <title>Label Print</title>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  *,*::before,*::after{
+    box-sizing:border-box;margin:0;padding:0;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
   @page{size:${pageW}mm ${pageH}mm;margin:0}
   html,body{
     margin:0;padding:0;
     width:${pageW}mm;
     background:#fff;
     writing-mode:horizontal-tb;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
+  img{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated}
 </style>
 </head>
 <body>
@@ -849,11 +878,38 @@ function printLabelHtmlViaIframe(html: string): boolean {
   let removed = false;
   const cleanup = () => { if (!removed) { removed = true; setTimeout(() => iframe.remove(), 1000); } };
   win.onafterprint = cleanup;
-  setTimeout(() => {
-    try { win.focus(); win.print(); } catch { iframe.remove(); }
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try { win.focus(); win.print(); } catch { iframe.remove(); return; }
     // Safety net: some browsers never fire afterprint.
     setTimeout(cleanup, 60_000);
-  }, 300);
+  };
+
+  // The barcode is a base64 PNG <img>. If we print before it has decoded, the
+  // label prints with a blank barcode (visible on screen but missing on paper),
+  // so wait for every image to finish loading before invoking print().
+  const waitForImagesThenPrint = () => {
+    const imgs = Array.from(doc.images);
+    const pending = imgs.filter((img) => !img.complete || img.naturalWidth === 0);
+    if (pending.length === 0) { triggerPrint(); return; }
+    let settled = 0;
+    const onSettled = () => {
+      settled += 1;
+      if (settled >= pending.length) triggerPrint();
+    };
+    pending.forEach((img) => {
+      img.addEventListener("load", onSettled, { once: true });
+      img.addEventListener("error", onSettled, { once: true });
+    });
+    // Fallback: print anyway if an image never reports load/error.
+    setTimeout(triggerPrint, 3000);
+  };
+
+  // Let the written document parse, then wait on its images.
+  setTimeout(waitForImagesThenPrint, 50);
   return true;
 }
 
@@ -868,6 +924,7 @@ export interface PrintStickersArgs {
   quantity?: number;
   orientation?: "horizontal" | "vertical";
   barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
   /** Literal field values merged AFTER quick-code resolution (escape hatch for
    *  type-specific keys like returnNo / street that aren't in QUICK_CODES). */
   fieldsOverride?: Record<string, string>;
@@ -910,6 +967,7 @@ export function useStickerPrinter() {
       orientation: args.orientation ?? "horizontal",
       quantity: args.quantity ?? 1,
       barcodePosition: args.barcodePosition ?? "bottom",
+      colorMode: args.colorMode ?? "bw",
     });
     return printLabelHtmlViaIframe(html);
   };

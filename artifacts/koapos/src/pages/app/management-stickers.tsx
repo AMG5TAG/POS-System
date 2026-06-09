@@ -71,6 +71,7 @@ export default function ManagementStickersPage() {
   const [selectedSizeId, setSelectedSizeId] = useState<string>("S0722520");
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
   const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
+  const [colorMode,     setColorMode]       = useState<"bw" | "color">("bw");
   const [quantity,      setQuantity]        = useState(1);
   const [showTplPicker, setShowTplPicker]   = useState(false);
 
@@ -264,6 +265,7 @@ export default function ManagementStickersPage() {
       sizeOverride: selectedSizeId,
       orientation,
       barcodePosition,
+      colorMode,
       quantity,
       fieldsOverride: currentFields,
     });
@@ -513,6 +515,36 @@ export default function ManagementStickersPage() {
                   </div>
                 </div>
 
+                {/* Colour mode — black & white by default */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Colour</Label>
+                  <div className="flex rounded-lg border overflow-hidden w-fit">
+                    <button
+                      onClick={() => setColorMode("bw")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      <span className="w-3 h-3 rounded-full border border-current bg-black shrink-0" />
+                      Black & White
+                    </button>
+                    <button
+                      onClick={() => setColorMode("color")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
+                        colorMode === "color" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-current shrink-0"
+                        style={{ background: brandColor }}
+                      />
+                      Colour
+                    </button>
+                  </div>
+                </div>
+
                 {/* Barcode position — only for types that can show a barcode */}
                 {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
                   <div className="space-y-1.5">
@@ -583,6 +615,7 @@ export default function ManagementStickersPage() {
                     brandColor={brandColor}
                     orientation={orientation}
                     barcodePosition={barcodePosition}
+                    colorMode={colorMode}
                   />
                 </div>
 
