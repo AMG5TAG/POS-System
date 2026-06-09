@@ -208,8 +208,65 @@ export default function POSInvoicesPage() {
   const [editLinkedAppointment, setEditLinkedAppointment] = useState<{ id: number; title: string; label: string } | null>(null);
   const { data: linkServiceJobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-invoice-link"], enabled: !!linkDialogFor } });
   const { data: linkAppointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appointments-invoice-link"], enabled: !!linkDialogFor } });
-  const linkServiceJobs = (linkServiceJobsData as { items?: { id: number; jobNumber: string; deviceType?: string | null; deviceDescription?: string | null; status?: string | null; customerName?: string | null }[] } | undefined)?.items ?? [];
-  const linkAppointments = (linkAppointmentsData as { items?: { id: number; title: string; scheduledAt?: string | null; customerName?: string | null }[] } | undefined)?.items ?? [];
+  // Both endpoints return a plain array; tolerate an { items } envelope just in case.
+  type LinkServiceJob = { id: number; jobNumber: string; deviceType?: string | null; deviceDescription?: string | null; status?: string | null; customerName?: string | null };
+  type LinkAppointment = { id: number; title: string; scheduledAt?: string | null; status?: string | null; customerName?: string | null };
+  const asArray = <T,>(d: unknown): T[] =>
+    Array.isArray(d) ? (d as T[]) : ((d as { items?: T[] } | undefined)?.items ?? []);
+  const linkServiceJobs = asArray<LinkServiceJob>(linkServiceJobsData);
+  const linkAppointments = asArray<LinkAppointment>(linkAppointmentsData);
+
+  // "Unfinished" jobs/appointments sort to the top of the picker; finished ones
+  // (completed/cancelled/no-show) remain selectable below.
+  const isServiceJobDone = (s?: string | null) => ["completed", "cancelled"].includes((s ?? "").toLowerCase());
+  const isAppointmentDone = (s?: string | null) => ["completed", "cancelled", "no-show"].includes((s ?? "").toLowerCase());
+  const byIdDesc = <T extends { id: number }>(a: T, b: T) => b.id - a.id;
+  const sjUnfinished = linkServiceJobs.filter((j) => !isServiceJobDone(j.status)).sort(byIdDesc);
+  const sjDone       = linkServiceJobs.filter((j) =>  isServiceJobDone(j.status)).sort(byIdDesc);
+  const aptUnfinished = linkAppointments.filter((a) => !isAppointmentDone(a.status)).sort(byIdDesc);
+  const aptDone       = linkAppointments.filter((a) =>  isAppointmentDone(a.status)).sort(byIdDesc);
+
+  const renderLinkServiceJobRow = (sj: LinkServiceJob) => {
+    const isSelected = linkDialogFor === "create" ? createLinkedServiceJob?.id === sj.id : editLinkedServiceJob?.id === sj.id;
+    return (
+      <button key={sj.id} onClick={() => {
+        const entry = { id: sj.id, jobNumber: sj.jobNumber, label: `#${sj.jobNumber} · ${sj.deviceType || sj.deviceDescription || "Service"}` };
+        if (linkDialogFor === "create") { setCreateLinkedServiceJob(entry); setCreateLinkedAppointment(null); }
+        else { setEditLinkedServiceJob(entry); setEditLinkedAppointment(null); }
+        setLinkDialogFor(null);
+      }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+        <Wrench className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">#{sj.jobNumber} · {sj.deviceType || sj.deviceDescription || "Service"}</p>
+          <p className="text-xs text-muted-foreground truncate">{sj.customerName || "No customer"}</p>
+        </div>
+        <Badge variant="outline" className="capitalize text-[10px] shrink-0">{(sj.status ?? "").replace(/-/g, " ") || "—"}</Badge>
+      </button>
+    );
+  };
+
+  const renderLinkAppointmentRow = (apt: LinkAppointment) => {
+    const isSelected = linkDialogFor === "create" ? createLinkedAppointment?.id === apt.id : editLinkedAppointment?.id === apt.id;
+    return (
+      <button key={apt.id} onClick={() => {
+        const entry = { id: apt.id, title: apt.title, label: apt.title };
+        if (linkDialogFor === "create") { setCreateLinkedAppointment(entry); setCreateLinkedServiceJob(null); }
+        else { setEditLinkedAppointment(entry); setEditLinkedServiceJob(null); }
+        setLinkDialogFor(null);
+      }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+        <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">#{apt.id} · {apt.title}</p>
+          <p className="text-xs text-muted-foreground truncate">{apt.scheduledAt ? new Date(apt.scheduledAt).toLocaleString("en-AU") : "—"} · {apt.customerName || "No customer"}</p>
+        </div>
+        <Badge variant="outline" className="capitalize text-[10px] shrink-0">{(apt.status ?? "").replace(/-/g, " ") || "—"}</Badge>
+      </button>
+    );
+  };
+
+  const linkGroupHeader = (label: string) => (
+    <div className="px-3 py-1 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+  );
 
   const [discount, setDiscount] = useState<{ enabled: boolean; type: DiscountType; value: string }>({
     enabled: false, type: "percent", value: "",
@@ -2163,58 +2220,49 @@ export default function POSInvoicesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <p className="text-xs text-muted-foreground -mb-1">Unfinished jobs and appointments are listed first; completed ones appear below.</p>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className="max-h-56 border rounded-lg">
                 {linkServiceJobs.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
                 ) : (
-                  <div className="divide-y">
-                    {linkServiceJobs.slice(0, 20).map((sj) => {
-                      const isSelected = linkDialogFor === "create" ? createLinkedServiceJob?.id === sj.id : editLinkedServiceJob?.id === sj.id;
-                      return (
-                        <button key={sj.id} onClick={() => {
-                          const entry = { id: sj.id, jobNumber: sj.jobNumber, label: `#${sj.jobNumber} · ${sj.deviceType || sj.deviceDescription || "Service"}` };
-                          if (linkDialogFor === "create") { setCreateLinkedServiceJob(entry); setCreateLinkedAppointment(null); }
-                          else { setEditLinkedServiceJob(entry); setEditLinkedAppointment(null); }
-                          setLinkDialogFor(null);
-                        }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
-                          <Wrench className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">#{sj.jobNumber} · {sj.deviceType || sj.deviceDescription || "Service"}</p>
-                            <p className="text-xs text-muted-foreground">{sj.status} · {sj.customerName || "No customer"}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div>
+                    {sjUnfinished.length > 0 && (
+                      <>
+                        {linkGroupHeader("Unfinished")}
+                        <div className="divide-y">{sjUnfinished.slice(0, 30).map(renderLinkServiceJobRow)}</div>
+                      </>
+                    )}
+                    {sjDone.length > 0 && (
+                      <>
+                        {linkGroupHeader("Completed")}
+                        <div className="divide-y">{sjDone.slice(0, 30).map(renderLinkServiceJobRow)}</div>
+                      </>
+                    )}
                   </div>
                 )}
               </ScrollArea>
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className="max-h-56 border rounded-lg">
                 {linkAppointments.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
                 ) : (
-                  <div className="divide-y">
-                    {linkAppointments.slice(0, 20).map((apt) => {
-                      const isSelected = linkDialogFor === "create" ? createLinkedAppointment?.id === apt.id : editLinkedAppointment?.id === apt.id;
-                      return (
-                        <button key={apt.id} onClick={() => {
-                          const entry = { id: apt.id, title: apt.title, label: apt.title };
-                          if (linkDialogFor === "create") { setCreateLinkedAppointment(entry); setCreateLinkedServiceJob(null); }
-                          else { setEditLinkedAppointment(entry); setEditLinkedServiceJob(null); }
-                          setLinkDialogFor(null);
-                        }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
-                          <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">#{apt.id} · {apt.title}</p>
-                            <p className="text-xs text-muted-foreground">{apt.scheduledAt ? new Date(apt.scheduledAt).toLocaleString("en-AU") : "—"} · {apt.customerName || "No customer"}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div>
+                    {aptUnfinished.length > 0 && (
+                      <>
+                        {linkGroupHeader("Unfinished")}
+                        <div className="divide-y">{aptUnfinished.slice(0, 30).map(renderLinkAppointmentRow)}</div>
+                      </>
+                    )}
+                    {aptDone.length > 0 && (
+                      <>
+                        {linkGroupHeader("Completed")}
+                        <div className="divide-y">{aptDone.slice(0, 30).map(renderLinkAppointmentRow)}</div>
+                      </>
+                    )}
                   </div>
                 )}
               </ScrollArea>

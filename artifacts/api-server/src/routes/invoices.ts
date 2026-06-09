@@ -340,14 +340,16 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     discountValue: discountInput?.value != null ? String(discountInput.value) : null,
     discountTotal: discountAmount > 0 ? String(discountAmount) : null,
     items: lines.length ? lines : null,
-    dueDate: dueDate ?? null,
+    // dueDate / recurringStartDate columns are timestamps — they must be Date
+    // objects, not the raw "YYYY-MM-DD" strings from the client.
+    dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ?? null,
     serviceJobId: serviceJobId ?? null,
     appointmentId: appointmentId ?? null,
     isRecurring: recurring ? "true" : "false",
     recurringFrequency: recurring?.frequency ?? null,
     recurringOccurrences: recurring?.occurrences ?? null,
-    recurringStartDate: recurring?.startDate ?? null,
+    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
   }).returning();
 
   // Fetch with full customer details
@@ -441,7 +443,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
   if (notes !== undefined) updates.notes = notes;
-  if (dueDate !== undefined) updates.dueDate = dueDate ?? null;
+  if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
   if (serviceJobId !== undefined) updates.serviceJobId = serviceJobId ?? null;
   if (appointmentId !== undefined) updates.appointmentId = appointmentId ?? null;

@@ -331,48 +331,64 @@ export default function ManagementStickersPage() {
                       <p className="text-xs mt-0.5">Configure a label, then <strong>Save as Template</strong>.</p>
                     </div>
                   ) : (
-                    <div className="max-h-72 overflow-y-auto divide-y">
+                    <div className="max-h-80 overflow-y-auto divide-y">
                       {templates.map((tpl) => {
                         const type = STICKER_TYPES.find((t) => t.id === tpl.typeId);
                         const Icon = type?.icon ?? Tag;
                         const isActive = editingTemplateId === tpl.id;
                         return (
-                          <div key={tpl.id} className={cn("flex items-center gap-1 px-2 py-1.5", isActive && "bg-primary/5")}>
+                          <div key={tpl.id} className={cn("px-3 py-2.5", isActive && "bg-primary/5")}>
                             <button
                               onClick={() => applyTemplate(tpl)}
-                              className="flex items-center gap-2.5 min-w-0 flex-1 text-left px-1 py-1 rounded hover:bg-muted/60 transition-colors"
+                              className="w-full flex items-center gap-2.5 text-left"
                             >
                               <Icon className={cn("w-4 h-4 shrink-0", type?.color ?? "text-muted-foreground")} />
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate flex items-center gap-1">
+                                <p className="text-sm font-medium truncate flex items-center gap-1.5">
                                   {tpl.name}
-                                  {tpl.isDefault && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
+                                  {tpl.isDefault && (
+                                    <Badge className="h-4 px-1 text-[9px] gap-0.5 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+                                      <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />Default
+                                    </Badge>
+                                  )}
                                   {isActive && <Check className="w-3 h-3 text-primary shrink-0" />}
                                 </p>
                                 <p className="text-[10px] text-muted-foreground">{type?.label} · {tpl.sizeId}</p>
                               </div>
                             </button>
-                            <div className="flex items-center gap-0.5 shrink-0">
+                            {/* Row actions — labelled so each is obvious */}
+                            <div className="flex items-center gap-1.5 mt-2">
                               <button onClick={() => setDefault(tpl.id)}
-                                title={tpl.isDefault ? "Remove default" : "Set as default"}
-                                className={cn("p-1 rounded hover:bg-muted transition-colors",
-                                  tpl.isDefault ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-400")}
+                                title={tpl.isDefault ? "Remove as default for this type" : "Set as default for this type"}
+                                className={cn(
+                                  "flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors",
+                                  tpl.isDefault
+                                    ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                                )}
                               >
-                                <Star className={cn("w-3.5 h-3.5", tpl.isDefault && "fill-amber-500")} />
+                                <Star className={cn("w-3 h-3", tpl.isDefault && "fill-amber-500 text-amber-500")} />
+                                {tpl.isDefault ? "Default" : "Set default"}
                               </button>
-                              <button onClick={() => duplicateTemplate(tpl)} title="Duplicate"
-                                className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors">
-                                <Copy className="w-3.5 h-3.5" />
+                              <button onClick={() => duplicateTemplate(tpl)}
+                                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                                <Copy className="w-3 h-3" /> Copy
                               </button>
                               {confirmDeleteId === tpl.id ? (
-                                <button onClick={() => deleteTemplate(tpl.id)} title="Confirm delete"
-                                  className="p-1 rounded bg-destructive text-destructive-foreground">
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="ml-auto flex items-center gap-1">
+                                  <button onClick={() => deleteTemplate(tpl.id)}
+                                    className="text-[11px] px-2 py-1 rounded border border-destructive bg-destructive text-destructive-foreground">
+                                    Delete?
+                                  </button>
+                                  <button onClick={() => setConfirmDeleteId(null)}
+                                    className="text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:bg-muted">
+                                    Cancel
+                                  </button>
+                                </div>
                               ) : (
-                                <button onClick={() => setConfirmDeleteId(tpl.id)} title="Delete"
-                                  className="p-1 rounded hover:bg-destructive/10 text-destructive transition-colors">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <button onClick={() => setConfirmDeleteId(tpl.id)} title="Delete template"
+                                  className="ml-auto flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
+                                  <Trash2 className="w-3 h-3" /> Delete
                                 </button>
                               )}
                             </div>
