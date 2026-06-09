@@ -4,6 +4,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendSms } from "../services/sms";
+import { publicDomain } from "../lib/publicUrl";
 
 /**
  * Technician web app ("Tech App") API.
@@ -474,7 +475,7 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
         .from(merchantsTable)
         .where(eq(merchantsTable.id, tech.merchantId));
       const bizName = merchant?.businessName ?? "Your repair shop";
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+      const domain = publicDomain(req);
       const portalUrl = merchant?.portalDomain
         ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
         : merchant?.username

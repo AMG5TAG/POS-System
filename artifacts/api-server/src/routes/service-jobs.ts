@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
+import { publicDomain } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -227,7 +228,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
       .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
     const bizName = merchant?.businessName ?? "Your repair shop";
-    const domain  = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+    const domain  = publicDomain(req);
     const portalUrl = merchant?.portalDomain
       ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
       : merchant?.username
@@ -286,7 +287,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
     .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   const bizName   = merchant?.businessName ?? "Your repair shop";
-  const domain    = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const domain    = publicDomain(req);
   const portalUrl = customer?.portalToken
     ? merchant?.portalDomain
       ? `https://${merchant.portalDomain}/c/${customer.portalToken}`

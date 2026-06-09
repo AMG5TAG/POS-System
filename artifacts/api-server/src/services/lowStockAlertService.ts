@@ -1,6 +1,7 @@
 import { db, lowStockAlertSettingsTable, lowStockAlertLogTable, productsTable, merchantsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "./email";
+import { publicOrigin } from "../lib/publicUrl";
 import type { Logger } from "pino";
 
 export interface LowStockItem {
@@ -12,9 +13,7 @@ export interface LowStockItem {
 }
 
 function getInventoryUrl(): string {
-  const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim();
-  if (domain) return `https://${domain}/app/inventory`;
-  return "/app/inventory";
+  return `${publicOrigin()}/app/inventory`;
 }
 
 function buildEmailHtml(items: LowStockItem[], merchantName: string): string {

@@ -4,6 +4,7 @@ import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
+import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 import crypto from "node:crypto";
@@ -974,9 +975,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   });
 
   // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email
-  const baseUrl = process.env.REPLIT_DOMAINS
-    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`
-    : `${req.protocol}://${req.hostname}${req.hostname === "localhost" ? `:${process.env.PORT ?? 3000}` : ""}`;
+  const baseUrl = publicOrigin(req);
   const pingUrl = `${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}`;
   const htmlWithPixel = html + `\n<img src="${pingUrl}" width="1" height="1" alt="" style="display:none" />`;
 

@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { deflateSync } from "node:zlib";
 import forge from "node-forge";
+import { publicDomain } from "../lib/publicUrl";
 
 const router: IRouter = Router();
 
@@ -233,7 +234,7 @@ function buildPortalUrl(opts: {
   if (merchantPortalDomain) {
     return `https://${merchantPortalDomain}/c/${customerPortalToken}`;
   }
-  const platformDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const platformDomain = publicDomain(req);
   if (merchantUsername) {
     return `https://${platformDomain}/b/${merchantUsername}/c/${customerPortalToken}`;
   }

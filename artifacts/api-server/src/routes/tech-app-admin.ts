@@ -6,6 +6,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
+import { publicDomain } from "../lib/publicUrl";
 
 /**
  * Management-side administration for the technician web app
@@ -43,8 +44,7 @@ function formatSettings(s: typeof techAppSettingsTable.$inferSelect) {
 /** The public tech app URL for a merchant, or null when no username is set. */
 export function buildTechAppUrl(req: Request, username: string | null): string | null {
   if (!username) return null;
-  const platformDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
-  return `https://${platformDomain}/b/${username}/t/webapp`;
+  return `https://${publicDomain(req)}/b/${username}/t/webapp`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */

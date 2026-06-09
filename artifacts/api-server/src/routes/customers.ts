@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { publicOrigin } from "../lib/publicUrl";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -707,8 +708,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
   const [merchant] = await db.select({ username: merchantsTable.username })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, req.session.merchantId!));
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
-  const origin = `https://${domain}`;
+  const origin = publicOrigin(req);
   const username = merchant?.username;
   const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
   res.json({ token, portalUrl: `${origin}${portalPath}` });

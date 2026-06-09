@@ -9,6 +9,7 @@ import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requi
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail, sendSystemEmail } from "../services/email";
 import { validateABN } from "../lib/abn";
+import { publicOrigin } from "../lib/publicUrl";
 
 
 const FAILED_LOGIN_NOTIFY_COOLDOWN_MS = parseInt(
@@ -771,29 +772,15 @@ const resetPasswordLimiter = rateLimit({
 /**
  * Returns the trusted public origin for this app (used in password-reset links).
  *
- * Priority:
- *   1. APP_BASE_URL — operator-configured, most explicit (e.g. "https://my.koapos.com")
- *   2. REPLIT_DOMAINS — set by Replit infrastructure, not by inbound requests
+ * Delegates to the shared publicOrigin() helper, which resolves to the
+ * operator-configured APP_BASE_URL/PUBLIC_DOMAIN or the koapos.com.au default.
  *
  * Request headers (Host, X-Forwarded-Host, etc.) are intentionally NOT used
  * because they are attacker-controlled and can be poisoned to redirect reset
  * links to an attacker-owned domain.
- *
- * In development neither var may be set; we fall back to localhost so local
- * testing still works — but we never use request headers even then.
  */
 function getAppBaseUrl(): string {
-  const explicit = process.env.APP_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    const first = replitDomains.split(",")[0]?.trim();
-    if (first) return `https://${first}`;
-  }
-
-  // Development fallback — never used in production (REPLIT_DOMAINS is always set there)
-  return "http://localhost";
+  return publicOrigin();
 }
 
 router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Promise<void> => {
