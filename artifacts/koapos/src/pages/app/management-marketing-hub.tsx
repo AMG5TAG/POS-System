@@ -1,9 +1,6 @@
 import { useLocation } from "wouter";
-import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import {
-  BarChart2, TrendingUp, Target, UserPlus, Share2, Globe,
-  Mail, FileText, Brain,
-} from "lucide-react";
+import { ManagementHubLayout } from "@/components/layout/management-hub-layout";
+import { MARKETING_HUB_TABS } from "@/components/layout/management-hubs";
 
 import ManagementSalesPage from "@/pages/app/management-sales";
 import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
@@ -20,30 +17,6 @@ import ManagementReportsZReportPage from "@/pages/app/management-reports-z-repor
 import ManagementReportsVoidAuditPage from "@/pages/app/management-reports-void-audit";
 import ManagementReportsStaffLeaderboardPage from "@/pages/app/management-reports-staff-leaderboard";
 import ManagementReportsProductPerformancePage from "@/pages/app/management-reports-product-performance";
-
-const TABS: HubTab[] = [
-  { label: "Sales Overview",  href: "/management/sales-overview",       icon: BarChart2  },
-  {
-    label: "Reports",
-    href: "/management/reports/bas",
-    icon: TrendingUp,
-    matchPaths: [
-      "/management/reports/margin",
-      "/management/reports/z-report",
-      "/management/reports/void-audit",
-      "/management/reports/staff-leaderboard",
-      "/management/reports/product-performance",
-      "/management/daily-reports",
-    ],
-  },
-  { label: "KPIs & Targets",  href: "/management/kpis",                   icon: Target     },
-  { label: "Referrals",       href: "/management/marketing/referrals",     icon: UserPlus   },
-  { label: "Social Feed",     href: "/management/marketing/social-feed",   icon: Share2     },
-  { label: "Online Store",    href: "/management/online-store",            icon: Globe      },
-  { label: "Email",           href: "/management/email",                   icon: Mail       },
-  { label: "Forms & Files",   href: "/management/forms",                   icon: FileText   },
-  { label: "AI Assistant",    href: "/management/ai",                      icon: Brain      },
-];
 
 function HubContent() {
   const [location] = useLocation();
@@ -67,7 +40,7 @@ function HubContent() {
 
 export default function ManagementMarketingHub() {
   return (
-    <ManagementHubLayout title="Marketing & Reports" tabs={TABS}>
+    <ManagementHubLayout title="Marketing & Reports" tabs={MARKETING_HUB_TABS}>
       <HubContent />
     </ManagementHubLayout>
   );

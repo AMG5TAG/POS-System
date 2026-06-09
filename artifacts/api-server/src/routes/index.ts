@@ -103,6 +103,8 @@ import tyroSettingsRouter from "./tyro-settings";
 import demoDataRouter from "./demo-data";
 import techRouter from "./tech";
 import techAppAdminRouter from "./tech-app-admin";
+import dashboardAppAdminRouter from "./dashboard-app-admin";
+import dashboardAppPublicRouter from "./dashboard-app-public";
 
 const router: IRouter = Router();
 
@@ -132,6 +134,8 @@ router.use(loyaltyRouter);
 router.use(portalRouter);
 router.use(techRouter);
 router.use(techAppAdminRouter);
+router.use(dashboardAppAdminRouter);
+router.use(dashboardAppPublicRouter);
 router.use(cashDrawerRouter);
 router.use(parkedSalesRouter);
 router.use(purchaseOrdersRouter);

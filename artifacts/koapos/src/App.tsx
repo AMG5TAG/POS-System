@@ -17,6 +17,7 @@ import { setOnUnauthorized } from "@workspace/api-client-react";
 import CustomerDisplayPage from "@/pages/app/customer-display";
 import PortalPage from "@/pages/portal";
 import TechAppPage from "@/pages/tech";
+import DashboardAppPage from "@/pages/dashboard-app";
 import LandingPage from "@/pages/marketing/landing";
 import LoginPage from "@/pages/marketing/login";
 import RegisterPage from "@/pages/marketing/register";
@@ -125,6 +126,7 @@ import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import CamerasPage from "@/pages/app/cameras";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
 import ManagementTechAppPage from "@/pages/app/management-tech-app";
+import ManagementDashboardAppPage from "@/pages/app/management-dashboard-app";
 import ManagementLegalPage from "@/pages/app/management-legal";
 import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import MarketingReferralsPage from "@/pages/app/marketing-referrals";
@@ -261,6 +263,9 @@ function Router() {
       </Route>
       <Route path="/b/:businessUsername/t/webapp">
         <PublicRoute component={TechAppPage} />
+      </Route>
+      <Route path="/b/:businessUsername/t/dashboard">
+        <PublicRoute component={DashboardAppPage} />
       </Route>
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />
@@ -491,6 +496,9 @@ function Router() {
       </Route>
       <Route path="/management/tech-app">
         <ManagementProtectedRoute component={ManagementTechAppPage} />
+      </Route>
+      <Route path="/management/dashboard-app">
+        <ManagementProtectedRoute component={ManagementDashboardAppPage} />
       </Route>
       <Route path="/management/legal">
         <ManagementProtectedRoute component={ManagementLegalPage} />

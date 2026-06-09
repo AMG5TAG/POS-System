@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
-import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, DatabaseBackup, MessageSquare } from "lucide-react";
+import { ManagementHubLayout } from "@/components/layout/management-hub-layout";
+import { SETTINGS_HUB_TABS } from "@/components/layout/management-hubs";
 
 import SettingsAccountPage from "@/pages/app/settings-account";
 import SettingsBusinessPage from "@/pages/app/settings-business";
@@ -14,32 +14,6 @@ import ManagementKoaPOSPage from "@/pages/app/management-koapos";
 import ManagementMiscPage from "@/pages/app/management-misc";
 import ManagementFeedbackPage from "@/pages/app/management-feedback";
 import ManagementBackupPage from "@/pages/app/management-backup";
-
-const TABS: HubTab[] = [
-  { label: "Account",             href: "/management/account",       icon: UserCircle     },
-  {
-    label: "Business Details",
-    href: "/management/business",
-    icon: Building2,
-    matchPaths: ["/management/regional"],
-  },
-  { label: "Tax",                href: "/management/tax",            icon: Receipt        },
-  {
-    label: "Integrations",
-    href: "/management/integrations",
-    icon: Plug,
-    matchPaths: ["/management/tyro-eftpos", "/management/xero"],
-  },
-  { label: "Import / Export",    href: "/management/import-export",  icon: ArrowLeftRight },
-  { label: "Feedback",           href: "/management/feedback",        icon: MessageSquare  },
-  { label: "Backup & Restore",   href: "/management/backup",         icon: DatabaseBackup },
-  {
-    label: "System",
-    href: "/management/koapos",
-    icon: Sparkles,
-    matchPaths: ["/management/misc"],
-  },
-];
 
 function HubContent() {
   const [location] = useLocation();
@@ -60,7 +34,7 @@ function HubContent() {
 
 export default function ManagementSettingsHub() {
   return (
-    <ManagementHubLayout title="Settings & Integrations" tabs={TABS}>
+    <ManagementHubLayout title="Settings & Integrations" tabs={SETTINGS_HUB_TABS}>
       <HubContent />
     </ManagementHubLayout>
   );

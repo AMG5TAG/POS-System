@@ -61,7 +61,7 @@ import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-set
 import { computeAllGroupPrices } from "@/lib/group-pricing";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
-  ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
+  ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
@@ -1662,11 +1662,35 @@ export default function ProductsPage() {
     label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className,
   });
 
+  /* The tabs applicable to the current product type — the single source of
+     truth for both the tab bar and Next/Previous navigation, so navigation can
+     never land on a tab that isn't shown. */
+  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
+    (!digitalCodeOnly   || form.productType === "digital_code") &&
+    (!variantOnly       || form.productType === "variant") &&
+    (!hideForService    || form.productType !== "service") &&
+    (!hideForDigitalCode || form.productType !== "digital_code")
+  );
+
+  /* If the active tab stops being applicable (e.g. after changing the product
+     type), fall back to the first visible tab so content + bar stay in sync. */
+  useEffect(() => {
+    if (!visibleFormTabs.some((t) => t.key === formTab)) {
+      setFormTab(visibleFormTabs[0]?.key ?? "details");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.productType]);
+
   const goNextTab = () => {
-    const idx = FORM_TABS.findIndex((t) => t.key === formTab);
-    if (idx < FORM_TABS.length - 1) setFormTab(FORM_TABS[idx + 1].key);
+    const idx = visibleFormTabs.findIndex((t) => t.key === formTab);
+    if (idx > -1 && idx < visibleFormTabs.length - 1) setFormTab(visibleFormTabs[idx + 1].key);
   };
-  const isLastTab = formTab === FORM_TABS[FORM_TABS.length - 1].key;
+  const goPrevTab = () => {
+    const idx = visibleFormTabs.findIndex((t) => t.key === formTab);
+    if (idx > 0) setFormTab(visibleFormTabs[idx - 1].key);
+  };
+  const isFirstTab = visibleFormTabs[0]?.key === formTab;
+  const isLastTab = visibleFormTabs[visibleFormTabs.length - 1]?.key === formTab;
 
   const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) => {
     setFormTouched(true);
@@ -2234,14 +2258,8 @@ export default function ProductsPage() {
           </DialogHeader>
 
           {/* Tab nav */}
-          <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
-            {FORM_TABS
-              .filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
-                (!digitalCodeOnly || form.productType === "digital_code") &&
-                (!variantOnly || form.productType === "variant") &&
-                (!hideForService || form.productType !== "service") &&
-                (!hideForDigitalCode || form.productType !== "digital_code")
-              )
+          <div className="flex border-b px-6 gap-0 shrink-0 mt-3 overflow-x-auto scrollbar-none">
+            {visibleFormTabs
               .map(({ key, label }) => (
                 <button
                   key={key}
@@ -3249,13 +3267,18 @@ export default function ProductsPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
-            {!isLastTab ? (
-              <Button variant="outline" onClick={goNextTab} className="gap-1.5">
-                Next Tab <ChevronRight className="w-4 h-4" />
-              </Button>
-            ) : (
-              <div />
-            )}
+            <div className="flex gap-2">
+              {!isFirstTab && (
+                <Button variant="outline" onClick={goPrevTab} className="gap-1.5">
+                  <ChevronLeft className="w-4 h-4" /> Previous
+                </Button>
+              )}
+              {!isLastTab && (
+                <Button variant="outline" onClick={goNextTab} className="gap-1.5">
+                  Next Tab <ChevronRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => {
                 if (isDirtyProduct) { setPendingProductClose(true); return; }

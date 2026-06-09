@@ -75,6 +75,7 @@ export * from "./marketing-generators";
 export * from "./sales-templates";
 export * from "./dashboard-config";
 export * from "./dashboard-notes";
+export * from "./dashboard-app";
 export * from "./sms-settings";
 export * from "./business-profile";
 export * from "./customer-settings";

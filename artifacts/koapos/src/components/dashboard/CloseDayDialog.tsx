@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Stepper } from "@/components/ui/stepper";
 import {
   useGetDailyCloseCurrent,
   useCreateDailyClose,
@@ -37,36 +38,6 @@ const fmt$ = (n: number) =>
 
 const STEPS = ["Summary", "Cash Count", "Confirm"] as const;
 type Step = 0 | 1 | 2 | 3; // 3 = success screen
-
-function StepIndicator({ current }: { current: number }) {
-  return (
-    <div className="flex items-center gap-2 mb-6">
-      {STEPS.map((label, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className={cn(
-            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
-            current > i
-              ? "bg-emerald-500 text-white"
-              : current === i
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground"
-          )}>
-            {current > i ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
-          </div>
-          <span className={cn(
-            "text-xs font-medium",
-            current === i ? "text-foreground" : "text-muted-foreground"
-          )}>
-            {label}
-          </span>
-          {i < STEPS.length - 1 && (
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function MethodRow({ label, amount, icon: Icon }: { label: string; amount: number; icon: React.ComponentType<{ className?: string }> }) {
   return (
@@ -216,7 +187,7 @@ export function CloseDayDialog({ open, onOpenChange }: CloseDayDialogProps) {
         {/* ── Steps ────────────────────────────────────────────────────── */}
         {step !== 3 && !isLoading && summary && (
           <>
-            <StepIndicator current={step} />
+            <Stepper steps={STEPS.map((label) => ({ label }))} current={step} numbered alwaysShowLabel className="mb-6" />
 
             {/* Step 0 — Daily Summary */}
             {step === 0 && (

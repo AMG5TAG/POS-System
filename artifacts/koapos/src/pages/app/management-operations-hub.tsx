@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
-import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { UserSquare2, Clock, Coins, Monitor, Map, Camera, Scale, TabletSmartphone } from "lucide-react";
+import { ManagementHubLayout } from "@/components/layout/management-hub-layout";
+import { OPERATIONS_HUB_TABS } from "@/components/layout/management-hubs";
 
 import StaffPage from "@/pages/app/staff";
 import StaffTimesheetPage from "@/pages/app/staff-timesheet";
@@ -10,17 +10,6 @@ import ManagementFloorPlanPage from "@/pages/app/management-floor-plan";
 import ManagementCamerasPage from "@/pages/app/management-cameras";
 import ManagementTechAppPage from "@/pages/app/management-tech-app";
 import ManagementLegalPage from "@/pages/app/management-legal";
-
-const TABS: HubTab[] = [
-  { label: "Employees",    href: "/management/staff",              icon: UserSquare2 },
-  { label: "Timesheets",   href: "/management/staff/timesheet",    icon: Clock       },
-  { label: "Cost Summary", href: "/management/staff/cost-summary", icon: Coins       },
-  { label: "POS Registers",href: "/management/registers",          icon: Monitor     },
-  { label: "Floor Plan",   href: "/management/floor-plan",         icon: Map         },
-  { label: "Cameras",      href: "/management/cameras",            icon: Camera      },
-  { label: "Tech App",     href: "/management/tech-app",           icon: TabletSmartphone },
-  { label: "Legal",        href: "/management/legal",              icon: Scale       },
-];
 
 function HubContent() {
   const [location] = useLocation();
@@ -37,7 +26,7 @@ function HubContent() {
 
 export default function ManagementOperationsHub() {
   return (
-    <ManagementHubLayout title="Staff & Operations" tabs={TABS}>
+    <ManagementHubLayout title="Staff & Operations" tabs={OPERATIONS_HUB_TABS}>
       <HubContent />
     </ManagementHubLayout>
   );

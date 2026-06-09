@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
-import { ManagementHubLayout, type HubTab } from "@/components/layout/management-hub-layout";
-import { Users, Radio, Gift, Percent, Link2 } from "lucide-react";
+import { ManagementHubLayout } from "@/components/layout/management-hub-layout";
+import { CUSTOMERS_HUB_TABS } from "@/components/layout/management-hubs";
 
 import SettingsCustomersPage from "@/pages/app/settings-customers";
 import ManagementCustomersHeardFromPage from "@/pages/app/management-customers-heard-from";
@@ -11,21 +11,6 @@ import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
 import ManagementDiscountsPage from "@/pages/app/management-discounts";
 import ManagementLaybyPage from "@/pages/app/management-layby";
 import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
-
-const TABS: HubTab[] = [
-  { label: "Settings",            href: "/management/customers",            icon: Users         },
-  { label: "Heard From",          href: "/management/customers/heard-from", icon: Radio         },
-  { label: "Portal",              href: "/management/customers/portal",     icon: Link2         },
-  { label: "Loyalty",             href: "/management/loyalty",              icon: Gift,
-    matchPaths: ["/management/loyalty/leaderboard"] },
-  { label: "Gift Cards",          href: "/management/gift-cards",           icon: Gift          },
-  {
-    label: "Discounts & Pricing",
-    href: "/management/discounts",
-    icon: Percent,
-    matchPaths: ["/management/pricing-rules", "/management/layby"],
-  },
-];
 
 function HubContent() {
   const [location] = useLocation();
@@ -43,7 +28,7 @@ function HubContent() {
 
 export default function ManagementCustomersHub() {
   return (
-    <ManagementHubLayout title="Customers" tabs={TABS}>
+    <ManagementHubLayout title="Customers" tabs={CUSTOMERS_HUB_TABS}>
       <HubContent />
     </ManagementHubLayout>
   );

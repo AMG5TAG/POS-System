@@ -50,6 +50,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn, formatCurrency } from "@/lib/utils";
+import { HUB_ROUTE_LABELS } from "@/components/layout/management-hubs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -193,7 +194,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "POS Registers", href: "/management/registers",          icon: Monitor     },
       { name: "Floor Plan",    href: "/management/floor-plan",         icon: Map         },
       { name: "Cameras",       href: "/management/cameras",            icon: Camera      },
-      { name: "Tech App",      href: "/management/tech-app",           icon: TabletSmartphone },
+      {
+        name: "Apps", icon: LayoutGrid,
+        children: [
+          { name: "Tech App",  href: "/management/tech-app",      icon: TabletSmartphone },
+          { name: "Dashboard", href: "/management/dashboard-app", icon: LayoutDashboard  },
+        ],
+      },
       { name: "Legal",         href: "/management/legal",              icon: Scale       },
     ],
   },
@@ -348,7 +355,7 @@ const SEARCH_INDEX = [
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
 
-const ROUTE_LABEL: Record<string, string[]> = {
+const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/dashboard":                   ["Dashboard"],
   "/pos":                         ["POS", "Sell"],
   "/pos/history":                 ["POS", "History"],
@@ -444,8 +451,29 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
   "/management/misc":                      ["Management", "Misc"],
   "/cameras":                              ["Cameras"],
-  "/management/cameras":                   ["Management", "Cameras"],
 };
+
+/**
+ * Full route → breadcrumb-trail map. Management hub routes are derived from the
+ * shared hub registry (so the breadcrumb always matches a hub's tab structure)
+ * and take precedence over any static entry of the same path.
+ */
+const ROUTE_LABEL: Record<string, string[]> = { ...STATIC_ROUTE_LABEL, ...HUB_ROUTE_LABELS };
+
+/** Title-case a raw path segment, e.g. "purchase-orders" → "Purchase Orders". */
+function titleCaseSegment(seg: string): string {
+  return seg
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Breadcrumb labels for a route, falling back to a title-cased path trail. */
+function routeLabels(location: string): string[] {
+  const mapped = ROUTE_LABEL[location];
+  if (mapped) return mapped;
+  const segments = location.split("/").filter(Boolean);
+  return segments.length ? segments.map(titleCaseSegment) : ["Home"];
+}
 
 /* ─── Staff clock in/out dialog ──────────────────────────────────────────── */
 
@@ -839,7 +867,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
 /* ─── Breadcrumbs ────────────────────────────────────────────────────────── */
 
 function Breadcrumbs({ location }: { location: string }) {
-  const labels = ROUTE_LABEL[location] || [location.split("/").filter(Boolean).join(" / ") || "Home"];
+  const labels = routeLabels(location);
   return (
     <nav className="flex items-center gap-1.5 text-sm flex-wrap">
       <Link href="/dashboard" className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground">

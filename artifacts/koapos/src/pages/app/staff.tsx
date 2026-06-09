@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Stepper } from "@/components/ui/stepper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -124,40 +125,7 @@ const STEPS = [
   { label: "Address",    icon: MapPin     },
   { label: "Account",    icon: Settings2  },
   { label: "Employment", icon: DollarSign },
-] as const;
-
-function StepNav({ current }: { current: number }) {
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {STEPS.map((step, i) => {
-        const Icon   = step.icon;
-        const done   = i < current;
-        const active = i === current;
-        const future = i > current;
-        return (
-          <div key={step.label} className="flex items-center gap-1">
-            <div
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all",
-                active  && "bg-primary text-primary-foreground",
-                done    && "bg-background border border-primary/40 text-primary",
-                future  && "text-muted-foreground",
-              )}
-            >
-              {done
-                ? <Check className="w-3 h-3" />
-                : <Icon className="w-3 h-3 shrink-0" />}
-              <span className={cn("hidden sm:inline", future && "opacity-70")}>{step.label}</span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+];
 
 /* ─── POS Register selector ──────────────────────────────────────────────── */
 
@@ -320,7 +288,7 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
             {editingStaff ? "Edit Employee" : "Add Employee"}
           </DialogTitle>
           <div className="mt-3">
-            <StepNav current={step} />
+            <Stepper steps={STEPS} current={step} />
           </div>
         </DialogHeader>
 

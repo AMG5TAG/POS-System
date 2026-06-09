@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
 import { useLocation } from "wouter";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
@@ -60,7 +60,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  Search, Plus, Minus, Trash2, Receipt, CreditCard,
+  Search, Plus, Minus, Trash2, Receipt, CreditCard, ChevronRight,
   X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
@@ -2626,15 +2626,23 @@ export default function POSPage() {
                     {categoryPath.slice(0, -1).map((catId, idx) => {
                       const cat = categories.find(c => c.id === catId);
                       return cat ? (
-                        <Button key={catId} variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
-                          onClick={() => setCategoryPath(prev => prev.slice(0, idx + 1))}
-                        >{cat.name}</Button>
+                        <Fragment key={catId}>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                          <Button variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
+                            onClick={() => setCategoryPath(prev => prev.slice(0, idx + 1))}
+                          >{cat.name}</Button>
+                        </Fragment>
                       ) : null;
                     })}
                     {/* Current category (selected) */}
                     {(() => {
                       const cur = categories.find(c => c.id === categoryPath[categoryPath.length - 1]);
-                      return cur ? <Button variant="default" size="sm" className="rounded-full h-7 text-xs shrink-0">{cur.name}</Button> : null;
+                      return cur ? (
+                        <>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                          <Button variant="default" size="sm" className="rounded-full h-7 text-xs shrink-0">{cur.name}</Button>
+                        </>
+                      ) : null;
                     })()}
                     {/* Children of current category */}
                     {subCats.map(child => (

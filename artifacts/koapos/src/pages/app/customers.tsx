@@ -934,17 +934,6 @@ function ServiceJobPhotoStrip({ photos }: { photos: string[] }) {
   );
 }
 
-function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
-  return (
-    <div className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-      active ? "bg-primary text-primary-foreground" : done ? "bg-muted text-muted-foreground" : "text-muted-foreground",
-    )}>
-      {done && !active ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <span className="shrink-0">{icon}</span>}
-      {label}
-    </div>
-  );
-}
-
 function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>;
 }

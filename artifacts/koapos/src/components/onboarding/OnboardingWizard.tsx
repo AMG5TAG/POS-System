@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { validateABN } from "@/lib/abn";
-import { CheckCircle2, Building2, Receipt, Package, PartyPopper, ArrowRight, Loader2, ChevronLeft } from "lucide-react";
+import { Building2, Receipt, Package, PartyPopper, ArrowRight, Loader2, ChevronLeft } from "lucide-react";
+import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -117,34 +118,12 @@ export function OnboardingWizard() {
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {/* Progress bar */}
-        <div className="h-1 bg-muted">
-          <div
-            className="h-full bg-primary transition-all duration-500"
-            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-          />
-        </div>
-
         {/* Step header */}
         <div className="px-6 pt-5 pb-4 border-b">
-          <div className="flex items-center gap-3">
-            {STEPS.map((s, i) => {
-              const Icon = s.icon;
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all shrink-0",
-                    i < step  ? "bg-primary border-primary text-primary-foreground" :
-                    i === step ? "border-primary text-primary bg-primary/10" :
-                    "border-muted-foreground/20 text-muted-foreground/40",
-                  )}
-                >
-                  {i < step ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-                </div>
-              );
-            })}
-          </div>
+          <Stepper
+            steps={STEPS.map((s) => ({ label: s.title, icon: s.icon }))}
+            current={step}
+          />
           <h2 className="text-lg font-bold mt-3">{STEPS[step]?.title}</h2>
           <p className="text-sm text-muted-foreground">{STEPS[step]?.desc}</p>
         </div>

@@ -1,17 +1,11 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronRight } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
 import { cn } from "@/lib/utils";
+import type { HubTab } from "@/components/layout/management-hubs";
 
-export interface HubTab {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** Additional paths that should also highlight this tab (sub-routes / aliases). */
-  matchPaths?: string[];
-}
+export type { HubTab };
 
 interface Props {
   title: string;
@@ -63,41 +57,6 @@ function useHubLastTab(title: string, tabs: HubTab[], location: string) {
       if (target) navigate(target, { replace: true });
     }
   }, [location]);
-}
-
-function HubBreadcrumb({ title, tabs }: { title: string; tabs: HubTab[] }) {
-  const [location] = useLocation();
-  const activeTab = tabs.find((t) => isTabActive(t, location));
-  const defaultHref = tabs[0]?.href ?? "/management/overview";
-
-  return (
-    <nav
-      aria-label="Breadcrumb"
-      className="flex items-center gap-1 px-5 py-2.5 border-b bg-background text-sm text-muted-foreground"
-    >
-      <Link
-        href="/management/overview"
-        className="hover:text-foreground transition-colors"
-      >
-        Management
-      </Link>
-      <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-      {activeTab ? (
-        <>
-          <Link
-            href={defaultHref}
-            className="hover:text-foreground transition-colors"
-          >
-            {title}
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-          <span className="text-foreground font-medium">{activeTab.label}</span>
-        </>
-      ) : (
-        <span className="text-foreground font-medium">{title}</span>
-      )}
-    </nav>
-  );
 }
 
 /** Horizontal scrollable pill strip shown on mobile (< md). */
@@ -171,7 +130,6 @@ export function ManagementHubLayout({ title, tabs, children }: Props) {
         <div className="flex-1 min-w-0 overflow-auto flex flex-col">
           {/* Mobile pill strip — visible only on small screens */}
           <MobileTabStrip title={title} tabs={tabs} />
-          <HubBreadcrumb title={title} tabs={tabs} />
           <EmbeddedProvider>
             {children}
           </EmbeddedProvider>
