@@ -70,6 +70,7 @@ export default function ManagementStickersPage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("product");
   const [selectedSizeId, setSelectedSizeId] = useState<string>("S0722520");
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
+  const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
   const [quantity,      setQuantity]        = useState(1);
   const [showTplPicker, setShowTplPicker]   = useState(false);
 
@@ -262,6 +263,7 @@ export default function ManagementStickersPage() {
       typeId: selectedTypeId,
       sizeOverride: selectedSizeId,
       orientation,
+      barcodePosition,
       quantity,
       fieldsOverride: currentFields,
     });
@@ -511,6 +513,35 @@ export default function ManagementStickersPage() {
                   </div>
                 </div>
 
+                {/* Barcode position — only for types that can show a barcode */}
+                {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Barcode Position</Label>
+                    <div className="flex rounded-lg border overflow-hidden w-fit">
+                      <button
+                        onClick={() => setBarcodePosition("top")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <Barcode className="w-3.5 h-3.5 shrink-0" />
+                        Top
+                      </button>
+                      <button
+                        onClick={() => setBarcodePosition("bottom")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
+                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <Barcode className="w-3.5 h-3.5 shrink-0" />
+                        Bottom
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* DYMO info */}
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 flex gap-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -523,7 +554,7 @@ export default function ManagementStickersPage() {
                 {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Barcode className="w-3.5 h-3.5 shrink-0" />
-                    <span>A scannable barcode prints full-width along the bottom — any text value is encoded automatically.</span>
+                    <span>A scannable barcode prints full-width along the {barcodePosition} — any text value is encoded automatically.</span>
                   </div>
                 )}
               </CardContent>
@@ -551,6 +582,7 @@ export default function ManagementStickersPage() {
                     businessName={businessName}
                     brandColor={brandColor}
                     orientation={orientation}
+                    barcodePosition={barcodePosition}
                   />
                 </div>
 

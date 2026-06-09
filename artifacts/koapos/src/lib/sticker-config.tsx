@@ -338,6 +338,7 @@ export function LabelPreview({
   type, fields, size, businessName, brandColor,
   fillWidth, fillHeight,
   orientation = "horizontal",
+  barcodePosition = "bottom",
 }: {
   type: StickerType;
   fields: Record<string, string>;
@@ -347,6 +348,7 @@ export function LabelPreview({
   fillWidth?: number;
   fillHeight?: number;
   orientation?: "horizontal" | "vertical";
+  barcodePosition?: "top" | "bottom";
 }) {
   const isHoriz    = orientation === "horizontal";
   const natPortrait = size.widthMm <= size.heightMm;
@@ -392,16 +394,24 @@ export function LabelPreview({
     flexShrink: 0,
   };
 
+  const barcodeImg = barcodeUrl ? (
+    <img
+      src={barcodeUrl}
+      alt="barcode"
+      style={{ display: "block", width: "100%", height: Math.max(9, finalScale * 4) }}
+    />
+  ) : null;
+
   const labelEl = (
     <div
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
       style={baseStyle}
     >
-      {type.id !== "repair" && (
-        <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
-      )}
       <div className="absolute inset-0 flex flex-col">
-      <div className="flex-1 min-h-0 overflow-hidden px-[9%] pt-[10%] pb-[4%] flex flex-col justify-between">
+      {barcodeImg && barcodePosition === "top" && (
+        <div className="px-[6%] pt-[6%]">{barcodeImg}</div>
+      )}
+      <div className="flex-1 min-h-0 overflow-hidden px-[9%] py-[4%] flex flex-col justify-between">
 
         {type.id === "product" && (
           <>
@@ -579,14 +589,8 @@ export function LabelPreview({
         )}
 
       </div>
-      {barcodeUrl && (
-        <div className="px-[6%] pb-[6%]">
-          <img
-            src={barcodeUrl}
-            alt="barcode"
-            style={{ display: "block", width: "100%", height: Math.max(9, finalScale * 4) }}
-          />
-        </div>
+      {barcodeImg && barcodePosition === "bottom" && (
+        <div className="px-[6%] pb-[6%]">{barcodeImg}</div>
       )}
       </div>
     </div>
@@ -697,10 +701,11 @@ export interface BuildLabelHtmlArgs {
   brandColor: string;
   orientation: "horizontal" | "vertical";
   quantity: number;
+  barcodePosition?: "top" | "bottom";
 }
 
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, orientation, quantity } = args;
+  const { typeId, size, fields, businessName, brandColor, orientation, quantity, barcodePosition = "bottom" } = args;
   const isHoriz = orientation === "horizontal";
   const pageW = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
   const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
@@ -783,6 +788,9 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   // Barcode height scales with the short edge of the label (3.5–7mm).
   const bcH = Math.max(3.5, Math.min(7, shorter * 0.22));
 
+  const barcodeBlock = (pad: string) =>
+    barcodeUrl ? `<div style="padding:${pad}"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm"/></div>` : "";
+
   const labelBlock = `
     <div style="
       width:${pageW}mm;height:${pageH}mm;
@@ -796,11 +804,11 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       page-break-after:always;break-after:page;
       page-break-inside:avoid;break-inside:avoid;
     ">
-      ${typeId !== "repair" ? `<div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>` : ""}
-      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:2.5mm 3mm 1mm 3mm">
+      ${barcodePosition === "top" ? barcodeBlock("1.5mm 2mm 0 2mm") : ""}
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:1mm 3mm">
         ${inner}
       </div>
-      ${barcodeUrl ? `<div style="padding:0 2mm 1.5mm 2mm"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm"/></div>` : ""}
+      ${barcodePosition === "bottom" ? barcodeBlock("0 2mm 1.5mm 2mm") : ""}
     </div>`;
 
   return `<!DOCTYPE html>
@@ -859,6 +867,7 @@ export interface PrintStickersArgs {
   sizeOverride?: string;
   quantity?: number;
   orientation?: "horizontal" | "vertical";
+  barcodePosition?: "top" | "bottom";
   /** Literal field values merged AFTER quick-code resolution (escape hatch for
    *  type-specific keys like returnNo / street that aren't in QUICK_CODES). */
   fieldsOverride?: Record<string, string>;
@@ -900,6 +909,7 @@ export function useStickerPrinter() {
       brandColor,
       orientation: args.orientation ?? "horizontal",
       quantity: args.quantity ?? 1,
+      barcodePosition: args.barcodePosition ?? "bottom",
     });
     return printLabelHtmlViaIframe(html);
   };
