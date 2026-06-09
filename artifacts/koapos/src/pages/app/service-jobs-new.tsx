@@ -864,6 +864,7 @@ export default function ServiceJobNewPage() {
         brandColor,
         logo: bizProfile?.logo,
         socialLinks: bizProfile?.socialLinks,
+        techAppUsername: merchant?.username ?? undefined,
       }}
       data={{
         jobId: successJob?.id ?? null,

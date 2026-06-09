@@ -223,7 +223,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
         children: [
           { name: "Sales",             href: "/management/templates",        icon: LayoutTemplate },
           { name: "Stickers",          href: "/management/stickers",         icon: Printer,
-            matchPaths: ["/management/sticker-templates"] },
+            matchPaths: ["/management/sticker-templates"] }, // legacy path → redirects to /management/stickers
           { name: "Misc",              href: "/management/misc-templates",   icon: FileText },
         ],
       },
@@ -298,7 +298,7 @@ const SEARCH_INDEX = [
   { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
   { label: "Layby",              href: "/management/layby",            icon: Package2,        group: "Management" },
   { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
-  { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
+  { label: "Sticker Templates",  href: "/management/stickers",         icon: LayoutTemplate,  group: "Management" },
   { label: "Loyalty",            href: "/management/loyalty",          icon: Gift,            group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
   { label: "Marketing · Social Feed Settings", href: "/management/marketing/social-feed", icon: Share2, group: "Management" },
@@ -424,7 +424,6 @@ const ROUTE_LABEL: Record<string, string[]> = {
   "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
   "/pos/pc-builder":                     ["POS", "PC Builder"],
   "/management/stickers":          ["Management", "Templates", "Stickers"],
-  "/management/sticker-templates": ["Management", "Templates", "Sticker Templates"],
   "/marketing":                            ["Marketing", "Overview"],
   "/marketing/email/campaigns":            ["Marketing", "Email", "Campaigns"],
   "/marketing/email/templates":            ["Marketing", "Email", "Templates"],

@@ -163,8 +163,11 @@ function openDataUri(src: string) {
 }
 
 /** Extract a service-job id from scanned QR text. Accepts the printed
-    Service Ticket QR (a /service-jobs/:id URL) or a bare numeric id. */
+    Service Ticket QR — either the Tech App deep link (…/t/webapp?job=:id) or the
+    older /service-jobs/:id URL — or a bare numeric id. */
 function parseScannedJobId(text: string): number | null {
+  const jobParam = text.match(/[?&]job=(\d+)\b/);
+  if (jobParam) return parseInt(jobParam[1], 10);
   const urlMatch = text.match(/\/service-jobs\/(\d+)\b/);
   if (urlMatch) return parseInt(urlMatch[1], 10);
   if (/^\d+$/.test(text.trim())) return parseInt(text.trim(), 10);
@@ -818,6 +821,22 @@ export default function TechAppPage() {
 
   const [tab, setTab] = useState<"services" | "scan">("services");
   const [openJobId, setOpenJobId] = useState<number | null>(null);
+
+  /* Deep link: a printed sheet QR opens /b/:username/t/webapp?job=:id. Capture
+     the job id up front and open it once the technician is signed in. */
+  const [pendingJobId, setPendingJobId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("job");
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
+
+  useEffect(() => {
+    if (phase === "app" && pendingJobId != null) {
+      setOpenJobId(pendingJobId);
+      setPendingJobId(null);
+    }
+  }, [phase, pendingJobId]);
 
   /* Boot: resolve business + restore an existing tech session */
   useEffect(() => {

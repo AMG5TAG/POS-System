@@ -28,6 +28,9 @@ export interface ServiceSheetBranding {
   logo?: string;
   /** Configured social links (e.g. { facebook: "...", instagram: "..." }). */
   socialLinks?: Record<string, string>;
+  /** Business username — forms the Tech App address (/b/:username/t/webapp).
+      When present, the sheet QR deep-links into the Tech App for this job. */
+  techAppUsername?: string;
 }
 
 export interface ServiceSheetFormFile {
@@ -55,8 +58,9 @@ function humanizeStatus(s: string): string {
 }
 
 export interface ServiceSheetData {
-  /** Database id — drives the bottom-left QR code linking to the job's
-      Service View (/service-jobs/:id). Omit to print without a QR. */
+  /** Database id — drives the bottom-left QR code that deep-links into the
+      Tech App for this job (/b/:username/t/webapp?job=:id). Omit to print
+      without a QR. */
   jobId?: number | null;
   jobNumber: string;
   date?: string | number | Date | null;
@@ -173,12 +177,19 @@ export function ServiceJobSheet({
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
 
-  /* Bottom-left QR — scanning opens the job's Service View (/service-jobs/:id). */
-  const serviceViewUrl =
-    data.jobId != null && typeof window !== "undefined"
-      ? `${window.location.origin}/service-jobs/${data.jobId}`
-      : null;
-  const qr = useMemo(() => (serviceViewUrl ? buildQr(serviceViewUrl) : null), [serviceViewUrl]);
+  /* Bottom-left QR — scanning opens the job in the Tech App
+     (/b/:username/t/webapp?job=:id). Falls back to the staff Service View only
+     when no business username is configured (the Tech App can't exist without
+     one). The `?job=` deep link is also understood by the Tech App's in-app
+     scanner. */
+  const qrTarget = useMemo(() => {
+    if (data.jobId == null || typeof window === "undefined") return null;
+    if (branding.techAppUsername) {
+      return `${window.location.origin}/b/${encodeURIComponent(branding.techAppUsername)}/t/webapp?job=${data.jobId}`;
+    }
+    return `${window.location.origin}/service-jobs/${data.jobId}`;
+  }, [data.jobId, branding.techAppUsername]);
+  const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (
     <div
@@ -411,7 +422,7 @@ export function ServiceJobSheet({
         </div>
       )}
 
-      {/* ── Service View QR — bottom-left corner ───────────────── */}
+      {/* ── Tech App QR — bottom-left corner ───────────────────── */}
       {qr && (
         <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-start", alignItems: "flex-end", gap: "8px" }}>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "5px", background: "white" }}>
@@ -428,8 +439,8 @@ export function ServiceJobSheet({
             </svg>
           </div>
           <div style={{ fontSize: "9px", color: MUTED, lineHeight: 1.4, paddingBottom: "2px" }}>
-            Scan to open<br />
-            <strong>Service View</strong> — {data.jobNumber}
+            Scan to open in the<br />
+            <strong>Tech App</strong> — {data.jobNumber}
           </div>
         </div>
       )}

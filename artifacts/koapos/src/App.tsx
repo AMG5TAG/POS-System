@@ -85,7 +85,6 @@ import ManagementTemplatesPage from "@/pages/app/management-templates";
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
 import ManagementFormsPage from "@/pages/app/management-forms";
 import ManagementStickersPage from "@/pages/app/management-stickers";
-import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
 import InventoryWastagePage from "@/pages/app/inventory-wastage";
 import SettingsTaxPage from "@/pages/app/settings-tax";
 import SettingsEmailPage from "@/pages/app/settings-email";
@@ -459,9 +458,8 @@ function Router() {
       <Route path="/management/stickers">
         <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
-      <Route path="/management/sticker-templates">
-        <ManagementProtectedRoute component={ManagementStickerTemplatesPage} />
-      </Route>
+      {/* Sticker Templates merged into the unified Labels page */}
+      <Route path="/management/sticker-templates"><Redirect to="/management/stickers" /></Route>
       <Route path="/management/calculators">
         <Redirect to="/management/calculators/3d-printing" />
       </Route>

@@ -7,7 +7,6 @@ import SettingsProductTypesPage from "@/pages/app/settings-product-types";
 import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
 import ManagementTemplatesPage from "@/pages/app/management-templates";
 import ManagementStickersPage from "@/pages/app/management-stickers";
-import ManagementStickerTemplatesPage from "@/pages/app/management-sticker-templates";
 import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
 import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
 
@@ -20,7 +19,6 @@ const TABS: HubTab[] = [
     label: "Stickers",
     href: "/management/stickers",
     icon: Printer,
-    matchPaths: ["/management/sticker-templates"],
   },
   { label: "3D Prints",  href: "/management/calculators/3d-printing", icon: Cpu       },
   { label: "PC Builder", href: "/management/calculators/pc-builder",  icon: HardDrive },
@@ -33,7 +31,6 @@ function HubContent() {
   if (location === "/management/modifier-groups")        return <SettingsModifierGroupsPage />;
   if (location === "/management/templates")              return <ManagementTemplatesPage />;
   if (location === "/management/stickers")               return <ManagementStickersPage />;
-  if (location === "/management/sticker-templates")      return <ManagementStickerTemplatesPage />;
   if (location === "/management/calculators/pc-builder") return <ManagementCalculatorsPCBuilderPage />;
   if (location.startsWith("/management/calculators"))    return <ManagementCalculators3DPage />;
   return <ManagementInventoryPage />;

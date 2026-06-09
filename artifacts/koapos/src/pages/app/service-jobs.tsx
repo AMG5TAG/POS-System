@@ -717,6 +717,7 @@ export default function ServiceJobsPage() {
           brandColor,
           logo: (profile as { logo?: string }).logo,
           socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
+          techAppUsername: merchant?.username ?? undefined,
         };
         return (
           <>

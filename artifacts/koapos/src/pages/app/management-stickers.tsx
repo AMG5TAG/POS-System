@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Printer, Tag, Info, Barcode, Search, X, ChevronRight, LayoutTemplate, Check,
+  Save, Star, Copy, Trash2, Plus,
 } from "lucide-react";
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
@@ -72,6 +73,13 @@ export default function ManagementStickersPage() {
   const [showTplPicker, setShowTplPicker]   = useState(false);
   const tplPickerRef = useRef<HTMLDivElement>(null);
 
+  // Template save/manage (folded in from the former Sticker Templates page)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const saveFormRef = useRef<HTMLDivElement>(null);
+
   // Product search
   const [productQuery,     setProductQuery]     = useState("");
   const [showProdDropdown, setShowProdDropdown] = useState(false);
@@ -96,7 +104,7 @@ export default function ManagementStickersPage() {
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile }        = useBusinessProfile();
-  const { templates }      = useStickerTemplates();
+  const { templates, create, update, remove, setDefault } = useStickerTemplates();
   const { printStickers }  = useStickerPrinter();
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
@@ -124,9 +132,14 @@ export default function ManagementStickersPage() {
     }
     setProductQuery("");
     setShowProdDropdown(false);
+    // Switching type detaches any template currently loaded for editing.
+    setEditingTemplateId(null);
+    setTplName("");
   };
 
-  const applyTemplate = (tpl: { typeId: string; sizeId: string; fields: Record<string, string> }) => {
+  const applyTemplate = (
+    tpl: { id?: string; name?: string; typeId: string; sizeId: string; fields: Record<string, string> },
+  ) => {
     const type     = STICKER_TYPES.find((t) => t.id === tpl.typeId);
     const defaults = type ? Object.fromEntries(type.fields.map((f) => [f.key, f.defaultValue])) : {};
     setSelectedTypeId(tpl.typeId);
@@ -134,6 +147,56 @@ export default function ManagementStickersPage() {
     setFields((prev) => ({ ...prev, [tpl.typeId]: { ...defaults, ...tpl.fields } }));
     setProductQuery("");
     setShowTplPicker(false);
+    setEditingTemplateId(tpl.id ?? null);
+    setTplName(tpl.name ?? "");
+  };
+
+  /* ── Template save / manage (in-page, replacing the old Templates screen) ── */
+
+  // Templates only persist the configurable on/off fields for a type — not the
+  // transient product auto-fill text (which is filled per-print), matching the
+  // original template semantics.
+  const templateFieldsForSave = () =>
+    Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+
+  const startNewTemplate = () => {
+    setEditingTemplateId(null);
+    setTplName("");
+    setShowSaveForm(true);
+  };
+
+  const saveTemplate = () => {
+    const name = tplName.trim();
+    if (!name) { toast.error("Please enter a template name."); return; }
+    const data = {
+      name,
+      typeId: selectedTypeId,
+      sizeId: selectedSizeId,
+      fields: templateFieldsForSave(),
+    };
+    if (editingTemplateId) {
+      update(editingTemplateId, data);
+      toast.success("Template updated.");
+    } else {
+      const tpl = create(data);
+      setEditingTemplateId(tpl.id);
+      toast.success("Template saved.");
+    }
+    setShowSaveForm(false);
+  };
+
+  const duplicateTemplate = (tpl: { name: string; typeId: string; sizeId: string; fields: Record<string, string> }) => {
+    const copy = create({ name: `${tpl.name} (copy)`, typeId: tpl.typeId, sizeId: tpl.sizeId, fields: { ...tpl.fields } });
+    setEditingTemplateId(copy.id);
+    setTplName(copy.name);
+    toast.success("Template duplicated.");
+  };
+
+  const deleteTemplate = (id: string) => {
+    remove(id);
+    if (editingTemplateId === id) { setEditingTemplateId(null); setTplName(""); }
+    setConfirmDeleteId(null);
+    toast.success("Template deleted.");
   };
 
   const fillFromProduct = (p: Product) => {
@@ -190,11 +253,23 @@ export default function ManagementStickersPage() {
     const handler = (e: MouseEvent) => {
       if (tplPickerRef.current && !tplPickerRef.current.contains(e.target as Node)) {
         setShowTplPicker(false);
+        setConfirmDeleteId(null);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showTplPicker]);
+
+  useEffect(() => {
+    if (!showSaveForm) return;
+    const handler = (e: MouseEvent) => {
+      if (saveFormRef.current && !saveFormRef.current.contains(e.target as Node)) {
+        setShowSaveForm(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSaveForm]);
 
   const sizeGroups = DYMO_SIZES.reduce<Record<string, DymoSize[]>>((acc, s) => {
     (acc[s.series] ??= []).push(s);
@@ -228,55 +303,120 @@ export default function ManagementStickersPage() {
             <Tag className="w-6 h-6 text-primary" />
             <div>
               <h1 className="text-2xl font-bold">Labels</h1>
-              <p className="text-sm text-muted-foreground">Design and print labels on DYMO LabelWriter printers</p>
+              <p className="text-sm text-muted-foreground">Design, save reusable templates and print labels on DYMO LabelWriter printers</p>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Load Template button */}
+            {/* Templates: load / set-default / duplicate / delete */}
             <div className="relative" ref={tplPickerRef}>
               <Button variant="outline" size="sm" className="gap-1.5"
                 onClick={() => setShowTplPicker((p) => !p)}
               >
                 <LayoutTemplate className="w-3.5 h-3.5" />
-                Load Template
+                Templates
                 {templates.length > 0 && (
                   <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">{templates.length}</Badge>
                 )}
               </Button>
               {showTplPicker && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-popover border rounded-xl shadow-xl overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 z-50 w-80 bg-popover border rounded-xl shadow-xl overflow-hidden">
                   <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
                     <span className="text-xs font-semibold">Saved Templates</span>
-                    <a href="/management/sticker-templates" className="text-[10px] text-primary hover:underline">Manage →</a>
+                    <span className="text-[10px] text-muted-foreground">Tap to load</span>
                   </div>
                   {templates.length === 0 ? (
                     <div className="px-4 py-5 text-center text-sm text-muted-foreground">
                       <LayoutTemplate className="w-6 h-6 mx-auto mb-1 opacity-30" />
                       <p>No templates saved yet.</p>
-                      <a href="/management/sticker-templates" className="text-xs text-primary hover:underline">Create one →</a>
+                      <p className="text-xs mt-0.5">Configure a label, then <strong>Save as Template</strong>.</p>
                     </div>
                   ) : (
-                    <div className="max-h-64 overflow-y-auto divide-y">
+                    <div className="max-h-72 overflow-y-auto divide-y">
                       {templates.map((tpl) => {
                         const type = STICKER_TYPES.find((t) => t.id === tpl.typeId);
                         const Icon = type?.icon ?? Tag;
+                        const isActive = editingTemplateId === tpl.id;
                         return (
-                          <button
-                            key={tpl.id}
-                            onClick={() => applyTemplate(tpl)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 text-left transition-colors"
-                          >
-                            <Icon className={cn("w-4 h-4 shrink-0", type?.color ?? "text-muted-foreground")} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{tpl.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{type?.label} · {tpl.sizeId}</p>
+                          <div key={tpl.id} className={cn("flex items-center gap-1 px-2 py-1.5", isActive && "bg-primary/5")}>
+                            <button
+                              onClick={() => applyTemplate(tpl)}
+                              className="flex items-center gap-2.5 min-w-0 flex-1 text-left px-1 py-1 rounded hover:bg-muted/60 transition-colors"
+                            >
+                              <Icon className={cn("w-4 h-4 shrink-0", type?.color ?? "text-muted-foreground")} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate flex items-center gap-1">
+                                  {tpl.name}
+                                  {tpl.isDefault && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
+                                  {isActive && <Check className="w-3 h-3 text-primary shrink-0" />}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">{type?.label} · {tpl.sizeId}</p>
+                              </div>
+                            </button>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button onClick={() => setDefault(tpl.id)}
+                                title={tpl.isDefault ? "Remove default" : "Set as default"}
+                                className={cn("p-1 rounded hover:bg-muted transition-colors",
+                                  tpl.isDefault ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-400")}
+                              >
+                                <Star className={cn("w-3.5 h-3.5", tpl.isDefault && "fill-amber-500")} />
+                              </button>
+                              <button onClick={() => duplicateTemplate(tpl)} title="Duplicate"
+                                className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors">
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              {confirmDeleteId === tpl.id ? (
+                                <button onClick={() => deleteTemplate(tpl.id)} title="Confirm delete"
+                                  className="p-1 rounded bg-destructive text-destructive-foreground">
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button onClick={() => setConfirmDeleteId(tpl.id)} title="Delete"
+                                  className="p-1 rounded hover:bg-destructive/10 text-destructive transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
-                            <Check className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100" />
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Save current label as a (new or updated) template */}
+            <div className="relative" ref={saveFormRef}>
+              <Button variant="outline" size="sm" className="gap-1.5"
+                onClick={() => { if (!editingTemplateId) setTplName(""); setShowSaveForm((p) => !p); }}
+              >
+                <Save className="w-3.5 h-3.5" />
+                {editingTemplateId ? "Update Template" : "Save as Template"}
+              </Button>
+              {showSaveForm && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-popover border rounded-xl shadow-xl p-3 space-y-2.5">
+                  <p className="text-xs font-semibold">
+                    {editingTemplateId ? "Update template" : "Save current label as a template"}
+                  </p>
+                  <Input
+                    autoFocus
+                    value={tplName}
+                    onChange={(e) => setTplName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveTemplate(); }}
+                    placeholder="Template name…"
+                    className="h-8 text-sm"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    {editingTemplateId ? (
+                      <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
+                        className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
+                        <Plus className="w-3 h-3" /> Save as new
+                      </button>
+                    ) : <span />}
+                    <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
+                      <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

@@ -691,12 +691,12 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
             <LayoutTemplate className="w-10 h-10 text-muted-foreground/30 mx-auto" />
             <p className="font-medium">No product template found</p>
             <p className="text-sm text-muted-foreground">
-              Create a product template in Sticker Templates and mark it as the default
+              Create a product template on the Labels page and mark it as the default
               <Star className="w-3 h-3 text-amber-500 inline mb-0.5 mx-1" />
               to enable one-click printing here.
             </p>
-            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
-              Open Sticker Templates
+            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/stickers"); }}>
+              Open Labels
             </Button>
           </div>
         ) : (
@@ -753,7 +753,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               </Button>
 
               <Button variant="outline" size="sm" className="w-full gap-1.5"
-                onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
+                onClick={() => { onOpenChange(false); navigate("/management/stickers"); }}>
                 <LayoutTemplate className="w-3.5 h-3.5" /> Manage Templates
               </Button>
 
