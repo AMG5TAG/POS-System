@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
+import { computeGroupPrice } from "@/lib/group-pricing";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -851,13 +852,26 @@ export default function POSPage() {
   );
   const customerGroupIdRef = useRef<string | null>(null);
   customerGroupIdRef.current = customerGroupId;
+  // Pricing rules, via a ref so unitPriceFor stays stable but always current.
+  const groupPricingRef = useRef(customerSettings.groupPricing);
+  groupPricingRef.current = customerSettings.groupPricing;
 
   const unitPriceFor = useCallback((i: CartItem): number => {
     if (i.customPrice != null) return i.customPrice;
     const gid = customerGroupIdRef.current;
     if (gid) {
-      const gp = (i.product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[gid];
-      if (gp != null) return gp;
+      // Stored group price wins; otherwise fall back to the group's rule so the
+      // charged price matches what the product list / margins show.
+      const stored = (i.product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[gid];
+      if (stored != null) return stored;
+      const rule = (groupPricingRef.current ?? []).find((r) => r.groupId === gid);
+      const computed = rule
+        ? computeGroupPrice(
+            { price: i.product.price ?? 0, costPrice: (i.product as Product & { costPrice?: number | null }).costPrice ?? 0, taxRate: i.product.taxRate ?? 10, categoryId: i.product.categoryId ?? null },
+            rule,
+          )
+        : null;
+      if (computed != null) return computed;
     }
     return i.product.price ?? 0;
   }, []);

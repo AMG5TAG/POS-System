@@ -2016,6 +2016,14 @@ export default function ProductsPage() {
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
                     const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    // Effective group prices for the margin columns: a value stored
+                    // on the product wins, otherwise the price its group rule would
+                    // produce, otherwise the standard sell price — so the columns
+                    // reflect the pricing rules even before "Apply to existing".
+                    const ruleGroupPrices = computeAllGroupPrices(
+                      { price: sell, costPrice: cost ?? 0, taxRate: product.taxRate ?? 10, categoryId: product.categoryId ?? null },
+                      customerSettings.groupPricing,
+                    );
                     return (
                       <tr key={product.id}
                         className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
@@ -2056,8 +2064,9 @@ export default function ProductsPage() {
                                 : <span className="text-muted-foreground/50">—</span>}
                             </td>
                             {customerGroups.map((group) => {
-                              const groupPrice = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
-                              const groupMarginPct = groupPrice != null && cost !== null && groupPrice > 0
+                              const stored = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
+                              const groupPrice = stored ?? ruleGroupPrices[group.id] ?? sell;
+                              const groupMarginPct = cost !== null && groupPrice > 0
                                 ? Math.round(((groupPrice - cost) / groupPrice) * 100)
                                 : null;
                               return (
