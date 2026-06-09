@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
 } from "lucide-react";
+import JsBarcode from "jsbarcode";
 import { useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 
@@ -188,6 +189,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showLoyaltyNo",    label: "Loyalty Number", defaultValue: "true", type: "toggle" },
       { key: "showPhone",        label: "Phone",          defaultValue: "true", type: "toggle" },
       { key: "showGroup",        label: "Group",          defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",      label: "Barcode",        defaultValue: "false", type: "toggle" },
       { key: "showBizName",      label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
@@ -205,6 +207,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showReason",    label: "Reason",         defaultValue: "true", type: "toggle" },
       { key: "showStatus",    label: "Status",         defaultValue: "true", type: "toggle" },
       { key: "showCustomer",  label: "Customer",       defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",   label: "Barcode",        defaultValue: "false", type: "toggle" },
       { key: "showBizName",   label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
@@ -222,6 +225,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" },
       { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" },
       { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",  label: "Barcode",       defaultValue: "false", type: "toggle" },
       { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
     ],
   },
@@ -237,6 +241,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showCompany", label: "Company",                   defaultValue: "true", type: "toggle" },
       { key: "showStreet",  label: "Street",                    defaultValue: "true", type: "toggle" },
       { key: "showSuburb",  label: "Suburb / State / Postcode", defaultValue: "true", type: "toggle" },
+      { key: "showBarcode", label: "Barcode",                   defaultValue: "false", type: "toggle" },
       { key: "showBizName", label: "Business Name",             defaultValue: "true", type: "toggle" },
     ],
   },
@@ -252,6 +257,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPrice",       label: "Price",        defaultValue: "true",  type: "toggle" },
       { key: "showWasPrice",    label: "Was Price",    defaultValue: "false", type: "toggle" },
       { key: "showSku",         label: "SKU",          defaultValue: "true",  type: "toggle" },
+      { key: "showBarcode",     label: "Barcode",      defaultValue: "true",  type: "toggle" },
     ],
   },
   {
@@ -266,6 +272,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPrice",       label: "Price",        defaultValue: "true", type: "toggle" },
       { key: "showUnitPrice",   label: "Unit Price",   defaultValue: "true", type: "toggle" },
       { key: "showSku",         label: "SKU",          defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",     label: "Barcode",      defaultValue: "true", type: "toggle" },
     ],
   },
 ];
@@ -281,6 +288,49 @@ export const RECOMMENDED_SIZES: Record<string, string[]> = {
   pricetag: ["S0722520", "LW-2.5x1", "11354", "LW-2x1"],
   shelf:    ["S0722520", "30321", "LW-2.5x1", "11355"],
 };
+
+/* ─── Barcode helpers ────────────────────────────────────────────────────── */
+
+/**
+ * The value each sticker type encodes into its barcode. Any plain text works —
+ * CODE128 encodes the full ASCII range — so a value typed straight onto the
+ * product (SKU, loyalty no, job no, …) is turned into a scannable barcode.
+ */
+export function stickerBarcodeValue(typeId: string, f: (k: string) => string): string {
+  switch (typeId) {
+    case "product":  return f("barcode") || f("sku");
+    case "pricetag": return f("barcode") || f("sku");
+    case "shelf":    return f("barcode") || f("sku");
+    case "customer": return f("loyaltyNo") || f("customerId");
+    case "return":   return f("returnNo");
+    case "repair":   return f("jobNo");
+    case "address":  return f("name");
+    default:         return f("barcode") || "";
+  }
+}
+
+/**
+ * Render a scannable CODE128 barcode as a PNG data URL. Returns "" when there's
+ * no value or no DOM (SSR). Drawn at a fixed module width/height; callers stretch
+ * the resulting <img> to the full sticker width — only the relative bar widths
+ * matter to a scanner, and those are preserved under horizontal scaling.
+ */
+export function barcodeDataUrl(value: string): string {
+  if (typeof document === "undefined" || !value) return "";
+  try {
+    const canvas = document.createElement("canvas");
+    JsBarcode(canvas, String(value), {
+      format: "CODE128",
+      displayValue: false,
+      margin: 0,
+      width: 2,
+      height: 100,
+    });
+    return canvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
 
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
@@ -326,6 +376,11 @@ export function LabelPreview({
   // Show helpers — default "true" unless explicitly "false"
   const show = (k: string) => f(k) !== "false";
 
+  // Scannable barcode strip (spans the full sticker width, sits at the bottom).
+  // Falls back to a sample value so the editor preview always shows one.
+  const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
+  const barcodeUrl   = show("showBarcode") ? barcodeDataUrl(barcodeValue) : "";
+
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -345,7 +400,8 @@ export function LabelPreview({
       {type.id !== "repair" && (
         <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
       )}
-      <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">
+      <div className="absolute inset-0 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden px-[9%] pt-[10%] pb-[4%] flex flex-col justify-between">
 
         {type.id === "product" && (
           <>
@@ -363,13 +419,6 @@ export function LabelPreview({
               )}
             </div>
             <div>
-              {show("showBarcode") && (
-                <div className="flex items-center gap-0.5 mb-0.5 opacity-60">
-                  {Array.from({ length: 20 }).map((_, i) => (
-                    <div key={i} className="bg-black" style={{ width: i % 3 === 0 ? 1.5 : 1, height: Math.max(8, finalScale * 3) }} />
-                  ))}
-                </div>
-              )}
               {show("showPrice") && (
                 <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: brandColor }}>
                   {f("price") || "$5.50"}
@@ -530,6 +579,16 @@ export function LabelPreview({
         )}
 
       </div>
+      {barcodeUrl && (
+        <div className="px-[6%] pb-[6%]">
+          <img
+            src={barcodeUrl}
+            alt="barcode"
+            style={{ display: "block", width: "100%", height: Math.max(9, finalScale * 4) }}
+          />
+        </div>
+      )}
+      </div>
     </div>
   );
 
@@ -653,9 +712,9 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const shorter = Math.min(pageW, pageH);
   const bp      = Math.max(4.5, shorter * 0.36);
 
-  const barsBars = Array.from({ length: 20 }).map((_, i) =>
-    `<div style="background:#000;width:${i % 3 === 0 ? "0.8" : "0.5"}mm;height:3mm;display:inline-block;"></div>`
-  ).join("");
+  // Scannable CODE128 barcode, generated from whatever value the type encodes
+  // (plain text included). Rendered full-width at the bottom of the label.
+  const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
 
   const inner = (() => {
     switch (typeId) {
@@ -666,7 +725,6 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
           ${show("showSku") ? `<div style="color:#888">SKU: ${f("sku")||"BEV-001"}</div>` : ""}
         </div>
         <div>
-          ${show("showBarcode")&&f("barcode") ? `<div style="display:flex;gap:.3mm;margin-bottom:.5mm;opacity:.6">${barsBars}</div><div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt">${f("barcode")}</div>` : ""}
           ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
@@ -722,6 +780,9 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
     }
   })();
 
+  // Barcode height scales with the short edge of the label (3.5–7mm).
+  const bcH = Math.max(3.5, Math.min(7, shorter * 0.22));
+
   const labelBlock = `
     <div style="
       width:${pageW}mm;height:${pageH}mm;
@@ -729,15 +790,17 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       position:relative;
       font-family:Arial,Helvetica,sans-serif;
       font-size:${bp.toFixed(1)}pt;line-height:1.25;
-      padding:1.5mm 1.5mm 1.5mm 1.5mm;padding-top:2mm;
-      display:flex;flex-direction:column;justify-content:space-between;
+      display:flex;flex-direction:column;
       background:#fff;
       writing-mode:horizontal-tb;
       page-break-after:always;break-after:page;
       page-break-inside:avoid;break-inside:avoid;
     ">
       ${typeId !== "repair" ? `<div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>` : ""}
-      ${inner}
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:2.5mm 3mm 1mm 3mm">
+        ${inner}
+      </div>
+      ${barcodeUrl ? `<div style="padding:0 2mm 1.5mm 2mm"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm"/></div>` : ""}
     </div>`;
 
   return `<!DOCTYPE html>

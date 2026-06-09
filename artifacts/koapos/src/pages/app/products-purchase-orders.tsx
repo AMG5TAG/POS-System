@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -88,6 +89,7 @@ type PrintPO = Awaited<ReturnType<typeof import("@workspace/api-client-react").c
 export default function ProductsPurchaseOrdersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"active" | "history">("active");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -108,6 +110,14 @@ export default function ProductsPurchaseOrdersPage() {
   const { data: suppliersData } = useListSuppliers({}, { query: { enabled: dialogOpen, queryKey: ["suppliers"] } });
   const suppliers: SupplierOption[] = [...((suppliersData as { items?: SupplierOption[] })?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
+  /* Supplier inline search */
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState("");
+  const [showSupplierResults, setShowSupplierResults] = useState(false);
+  const supplierSearchRef = useRef<HTMLDivElement>(null);
+  const supplierResults = supplierSearchQuery.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearchQuery.toLowerCase()))
+    : suppliers;
+
   /* Product search */
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [showProductResults, setShowProductResults] = useState(false);
@@ -118,11 +128,14 @@ export default function ProductsPurchaseOrdersPage() {
     { query: { enabled: productSearchQuery.trim().length >= 1, queryKey: getListProductsQueryKey(productParams) } }
   );
 
-  /* Close product dropdown on outside click */
+  /* Close search dropdowns on outside click */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (productSearchRef.current && !productSearchRef.current.contains(e.target as Node)) {
         setShowProductResults(false);
+      }
+      if (supplierSearchRef.current && !supplierSearchRef.current.contains(e.target as Node)) {
+        setShowSupplierResults(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -136,11 +149,21 @@ export default function ProductsPurchaseOrdersPage() {
   const receivePO     = useReceivePurchaseOrderItems();
   const sendEmailMutation = useSendPurchaseOrderEmail();
 
-  const filtered = orders.filter((o) =>
+  // A fully received PO is locked (read-only) and lives in the History tab.
+  const isFullyReceived = (o: { status: string }) =>
+    o.status === "Fully Received" || o.status === "Received"; // "Received" = legacy value
+
+  const searchMatch = (o: PurchaseOrder) =>
     o.poNumber.toLowerCase().includes(search.toLowerCase()) ||
     (o.supplierName ?? "").toLowerCase().includes(search.toLowerCase()) ||
-    (o.orderNumber ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+    (o.orderNumber ?? "").toLowerCase().includes(search.toLowerCase());
+
+  const activeCount  = orders.filter((o) => !isFullyReceived(o)).length;
+  const historyCount = orders.filter(isFullyReceived).length;
+
+  const filtered = orders
+    .filter(searchMatch)
+    .filter((o) => (tab === "history" ? isFullyReceived(o) : !isFullyReceived(o)));
 
   const addItem = () => setItems((p) => [...p, { ...EMPTY_ITEM }]);
   const updateItem = (i: number, field: keyof POItem, value: string | number) =>
@@ -161,10 +184,16 @@ export default function ProductsPurchaseOrdersPage() {
     setForm(EMPTY_FORM);
     setItems([{ ...EMPTY_ITEM }]);
     setProductSearchQuery("");
+    setSupplierSearchQuery("");
     setDialogOpen(true);
   };
 
   const openEdit = (po: (typeof orders)[0]) => {
+    // Fully received POs are locked — editing is not permitted.
+    if (isFullyReceived(po)) {
+      toast.error("Fully received purchase orders can't be edited.");
+      return;
+    }
     setEditingId(po.id);
     setForm({
       supplierId:         po.supplierId ?? null,
@@ -185,6 +214,7 @@ export default function ProductsPurchaseOrdersPage() {
       productId:   i.productId ?? undefined,
     })));
     setProductSearchQuery("");
+    setSupplierSearchQuery(po.supplierName ?? "");
     setDialogOpen(true);
   };
 
@@ -295,6 +325,21 @@ export default function ProductsPurchaseOrdersPage() {
           <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
         </div>
 
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
+          <TabsList>
+            <TabsTrigger value="active" className="gap-1.5">
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Purchase Orders
+              <span className="text-xs text-muted-foreground tabular-nums">({activeCount})</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              History
+              <span className="text-xs text-muted-foreground tabular-nums">({historyCount})</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search by PO number, supplier or order number..." className="pl-9"
@@ -306,12 +351,24 @@ export default function ProductsPurchaseOrdersPage() {
         ) : filtered.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
-              <ShoppingCart className="w-16 h-16 text-muted-foreground/30" />
-              <div>
-                <p className="font-medium text-lg">No purchase orders yet</p>
-                <p className="text-muted-foreground text-sm">Create purchase orders to track stock ordered from suppliers.</p>
-              </div>
-              <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+              {tab === "history" ? (
+                <>
+                  <History className="w-16 h-16 text-muted-foreground/30" />
+                  <div>
+                    <p className="font-medium text-lg">No fully received orders</p>
+                    <p className="text-muted-foreground text-sm">Purchase orders move here once all their items have been received.</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="w-16 h-16 text-muted-foreground/30" />
+                  <div>
+                    <p className="font-medium text-lg">No purchase orders yet</p>
+                    <p className="text-muted-foreground text-sm">Create purchase orders to track stock ordered from suppliers.</p>
+                  </div>
+                  <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+                </>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -352,9 +409,11 @@ export default function ProductsPurchaseOrdersPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
+                      {!isFullyReceived(po) && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
                         title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po.id); }}>
                         <Trash2 className="w-3.5 h-3.5" />
@@ -555,9 +614,11 @@ export default function ProductsPurchaseOrdersPage() {
 
               <DialogFooter className="flex gap-2 pt-2 sm:justify-between">
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
-                    <Pencil className="w-4 h-4 mr-1.5" /> Edit
-                  </Button>
+                  {!isFullyReceived(po) && (
+                    <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
+                      <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                    </Button>
+                  )}
                   {(po.status === "Ordered" || po.status === "Partially Received" || po.status === "Sent" || po.status === "Partial") && (
                     <Button onClick={() => setReceiveDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
                       <PackageCheck className="w-4 h-4" /> Receive Inventory
@@ -656,32 +717,64 @@ export default function ProductsPurchaseOrdersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Supplier</Label>
-                <Select
-                  value={form.supplierId ? String(form.supplierId) : "__none__"}
-                  onValueChange={(v) => {
-                    if (v === "__none__") {
-                      setForm({ ...form, supplierId: null, supplierName: "" });
-                    } else {
-                      const s = suppliers.find((x) => String(x.id) === v);
-                      setForm({ ...form, supplierId: Number(v), supplierName: s?.name ?? "" });
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select supplier…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">
-                      <span className="text-muted-foreground">— No supplier —</span>
-                    </SelectItem>
-                    {suppliers.length === 0 && (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">No suppliers found</div>
-                    )}
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative" ref={supplierSearchRef}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search suppliers…"
+                    value={supplierSearchQuery}
+                    onChange={(e) => {
+                      // Typing clears the committed selection until one is picked again.
+                      setSupplierSearchQuery(e.target.value);
+                      setShowSupplierResults(true);
+                      setForm((prev) => ({ ...prev, supplierId: null, supplierName: "" }));
+                    }}
+                    onFocus={() => setShowSupplierResults(true)}
+                  />
+                  {supplierSearchQuery && (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setSupplierSearchQuery("");
+                        setShowSupplierResults(false);
+                        setForm((prev) => ({ ...prev, supplierId: null, supplierName: "" }));
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {showSupplierResults && (
+                    <div className={cn(
+                      "absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border bg-popover shadow-md",
+                      "max-h-48 overflow-y-auto"
+                    )}>
+                      {supplierResults.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground text-center">No suppliers found</p>
+                      ) : (
+                        supplierResults.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors text-left",
+                              form.supplierId === s.id && "bg-muted/40 font-medium"
+                            )}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setForm((prev) => ({ ...prev, supplierId: s.id, supplierName: s.name }));
+                              setSupplierSearchQuery(s.name);
+                              setShowSupplierResults(false);
+                            }}
+                          >
+                            <Truck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            {s.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Order Number</Label>

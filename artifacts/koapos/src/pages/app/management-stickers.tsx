@@ -392,10 +392,10 @@ export default function ManagementStickersPage() {
                   </div>
                 </div>
 
-                {(selectedType.id === "product" || selectedType.id === "shelf") && (
+                {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Barcode className="w-3.5 h-3.5 shrink-0" />
-                    <span>Barcode renders from the scanned/entered barcode value.</span>
+                    <span>A scannable barcode prints full-width along the bottom — any text value is encoded automatically.</span>
                   </div>
                 )}
               </CardContent>

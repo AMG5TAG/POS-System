@@ -3,7 +3,7 @@ import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
-  useListProducts, type Category,
+  useListProducts, getListCategoriesQueryKey, type Category,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -243,6 +243,17 @@ export default function ProductsCategoriesPage() {
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
 
+  // Categories are cached under two different query keys across the app: this
+  // page (and dashboards) read the default key, while the product form and POS
+  // read ["categories"]. The previous code only invalidated ["categories"],
+  // which never matched this page's list — so a new category didn't appear
+  // until a manual refresh. Invalidate both keys so it shows up instantly
+  // everywhere.
+  const invalidateCategories = () => {
+    queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ["categories"] });
+  };
+
   const cats: Category[] = categories ?? [];
   const products = productsData?.items ?? [];
 
@@ -306,7 +317,7 @@ export default function ProductsCategoriesPage() {
       icon: form.icon || undefined,
       parentId: form.parentId ? parseInt(form.parentId) : undefined,
     };
-    const inv = () => queryClient.invalidateQueries({ queryKey: ["categories"] });
+    const inv = invalidateCategories;
 
     if (editingCat) {
       updateCategory.mutate(
@@ -353,7 +364,7 @@ export default function ProductsCategoriesPage() {
         onSuccess: () => {
           toast.success("Category deleted");
           setDeleteTarget(null);
-          queryClient.invalidateQueries({ queryKey: ["categories"] });
+          invalidateCategories();
         },
         onError: () => toast.error("Failed to delete category"),
       }

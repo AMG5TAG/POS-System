@@ -25,6 +25,7 @@ import {
   useDeleteProductVariant,
   useUpdateProductVariant,
   getListProductVariantsQueryKey,
+  getListCategoriesQueryKey,
   Product,
   ProductType,
   useListBrands,
@@ -1556,7 +1557,15 @@ export default function ProductsPage() {
   const handleCreateCategory = () => {
     if (!newCategoryName) return;
     createCategoryMutation.mutate({ data: { name: newCategoryName } }, {
-      onSuccess: () => { toast.success("Category created"); setCategoryDialogOpen(false); setNewCategoryName(""); queryClient.invalidateQueries({ queryKey: ["categories"] }); },
+      onSuccess: () => {
+        toast.success("Category created");
+        setCategoryDialogOpen(false);
+        setNewCategoryName("");
+        // Invalidate both keys so the new category shows instantly here and on
+        // the Categories page / dashboards (which read the default query key).
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+        queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+      },
       onError: () => toast.error("Failed to create category"),
     });
   };
