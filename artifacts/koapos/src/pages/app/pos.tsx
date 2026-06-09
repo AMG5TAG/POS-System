@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
+import { useCustomerSettings } from "@/lib/customer-settings";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -186,6 +187,18 @@ type RecoveryDraft = {
   savedAt: number;
 };
 
+
+/* Map a customer's saved group (stored as either the group id or its name) to
+ * the group id used as the key in product.groupPrices. */
+function resolveCustomerGroupId(
+  customerGroup: string | null | undefined,
+  groups: { id: string; name: string }[],
+): string | null {
+  if (!customerGroup) return null;
+  const cg = customerGroup.trim().toLowerCase();
+  const g = groups.find((x) => x.id.toLowerCase() === cg || x.name.toLowerCase() === cg);
+  return g ? g.id : null;
+}
 
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
@@ -814,6 +827,31 @@ export default function POSPage() {
     }) ?? tiers[tiers.length - 1] ?? null;
   }, [loyaltySettings, selectedCustomer]);
 
+  /* ── Customer-group pricing ──────────────────────────────────────────────
+   * When a customer in a pricing group is selected, the register charges that
+   * group's price for each product by default (its product.groupPrices entry),
+   * unless the line has a manual custom price. unitPriceFor is the single source
+   * of truth for a line's unit price — used by every total, receipt and payload.
+   * It reads the current group via a ref so it stays correct inside unmount /
+   * beacon closures; memos that use it list customerGroupId in their deps. */
+  const { settings: customerSettings } = useCustomerSettings();
+  const customerGroupId = useMemo(
+    () => resolveCustomerGroupId(selectedCustomer?.customerGroup, customerSettings.groups),
+    [selectedCustomer?.customerGroup, customerSettings.groups],
+  );
+  const customerGroupIdRef = useRef<string | null>(null);
+  customerGroupIdRef.current = customerGroupId;
+
+  const unitPriceFor = useCallback((i: CartItem): number => {
+    if (i.customPrice != null) return i.customPrice;
+    const gid = customerGroupIdRef.current;
+    if (gid) {
+      const gp = (i.product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[gid];
+      if (gp != null) return gp;
+    }
+    return i.product.price ?? 0;
+  }, []);
+
   /* ── Re-evaluate pricing rules on cart items when rules change ── */
   useEffect(() => {
     if (cart.length === 0 || activePricingRules.length === 0) return;
@@ -834,7 +872,7 @@ export default function POSPage() {
     discountTotal, subtotal, taxTotal, total, kodeProfit,
     tierDiscountAmt,
   } = useMemo(() => {
-    const cartSubtotal       = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
+    const cartSubtotal       = cart.reduce((s, i) => s + (unitPriceFor(i)) * i.quantity, 0);
     const modifierTotal      = cart.reduce((s, i) => s + (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0) * i.quantity, 0);
     const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount + (i.pricingRuleDiscount ?? 0), 0);
     const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
@@ -847,14 +885,14 @@ export default function POSPage() {
     const total              = subtotal;                 // Prices already include GST
     const kodeProfit         = Math.floor(
       cart.reduce((s, i) => {
-        const price = i.customPrice ?? i.product.price;
+        const price = unitPriceFor(i);
         const cost  = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
         const modCost = (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0);
         return s + (price + modCost - cost) * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0);
       }, 0) - overallDiscountAmt - tierDiscountAmt,
     );
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
-  }, [cart, overallDiscount, customerTier]);
+  }, [cart, overallDiscount, customerTier, customerGroupId]);
 
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
      the locked remaining balance; otherwise it's the cart total. */
@@ -862,7 +900,7 @@ export default function POSPage() {
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
-    (i) => i.quantity < 1 || (i.customPrice ?? i.product.price) < 0,
+    (i) => i.quantity < 1 || (unitPriceFor(i)) < 0,
   );
   const cartBlocksCheckout = !invoicePay && (cart.length === 0 || cartHasInvalidItems || total < 0);
 
@@ -878,7 +916,7 @@ export default function POSPage() {
     /* eligible total after exclusions + discounts */
     const eligible = cart.reduce((s, i) => {
       if (i.product.excludeFromLoyalty) return s;
-      return s + (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount;
+      return s + (unitPriceFor(i)) * i.quantity - i.itemDiscount;
     }, 0) - overallDiscountAmt;
     if (eligible <= 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
 
@@ -970,7 +1008,7 @@ export default function POSPage() {
       loyaltyLabel: promoLabel ? `${label} — ${promoLabel}` : label,
       loyaltyUnit: unit,
     };
-  }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt]);
+  }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt, customerGroupId]);
 
   /* Quick cash amounts */
   const quickAmounts = useMemo(() => {
@@ -1268,13 +1306,13 @@ export default function POSPage() {
         productId: i.product.id,
         name: i.product.name ?? "",
         quantity: i.quantity,
-        price: i.customPrice ?? (i.product.price ?? 0),
+        price: unitPriceFor(i),
         itemDiscount: i.itemDiscount ?? 0,
         customPrice: i.customPrice ?? null,
         itemNote: i.itemNote ?? null,
       }));
       const rawTotal = c.reduce((sum, i) => {
-        const price = i.customPrice ?? (i.product.price ?? 0);
+        const price = unitPriceFor(i);
         return sum + price * i.quantity * (1 - (i.itemDiscount ?? 0) / 100);
       }, 0);
       const payload = {
@@ -1452,9 +1490,9 @@ export default function POSPage() {
       items: cart.map(i => ({
         name: i.product.name,
         qty: i.quantity,
-        unitPrice: i.customPrice ?? i.product.price,
+        unitPrice: unitPriceFor(i),
         itemDiscount: i.itemDiscount,
-        lineTotal: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
+        lineTotal: (unitPriceFor(i)) * i.quantity - i.itemDiscount,
       })),
       cartSubtotal, discountTotal, subtotal, taxTotal, total,
       tierDiscountAmt: tierDiscountAmt > 0 ? tierDiscountAmt : undefined,
@@ -1468,7 +1506,7 @@ export default function POSPage() {
       localStorage.setItem(DISPLAY_KEY, json);
       window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: json }));
     } catch { /* ignore */ }
-  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier]);
+  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier, customerGroupId]);
 
   /* AI Upsell Coach — refresh suggestions when cart items or customer changes */
   useEffect(() => {
@@ -1703,7 +1741,7 @@ export default function POSPage() {
             productId: item.product.id,
             productName: item.product.name,
             quantity: item.quantity,
-            unitPrice: item.customPrice ?? item.product.price,
+            unitPrice: unitPriceFor(item),
             action: "void",
             staffId: currentStaff?.id ?? null,
             staffName: currentStaff?.name ?? null,
@@ -1718,7 +1756,7 @@ export default function POSPage() {
     const amt = parseFloat(value) || 0;
     setCart(prev => prev.map(i => {
       if (i.product.id !== productId) return i;
-      const linePrice = (i.customPrice ?? i.product.price) * i.quantity;
+      const linePrice = (unitPriceFor(i)) * i.quantity;
       const maxByCart = linePrice;
       const maxByRole = (!bypassRoleLimit && maxDiscountPct != null) ? (maxDiscountPct / 100) * linePrice : Infinity;
       const clamped = Math.min(Math.max(0, amt), maxByCart, maxByRole);
@@ -1749,7 +1787,7 @@ export default function POSPage() {
       productId: i.product.id,
       name: i.product.name ?? "",
       quantity: i.quantity,
-      price: i.customPrice ?? (i.product.price ?? 0),
+      price: unitPriceFor(i),
       itemDiscount: i.itemDiscount,
       customPrice: i.customPrice ?? null,
       itemNote: i.itemNote ?? null,
@@ -1801,7 +1839,7 @@ export default function POSPage() {
           productId: i.product.id,
           name: i.product.name ?? "",
           quantity: i.quantity,
-          price: i.customPrice ?? (i.product.price ?? 0),
+          price: unitPriceFor(i),
           itemDiscount: i.itemDiscount,
           customPrice: i.customPrice ?? null,
           itemNote: i.itemNote ?? null,
@@ -1942,7 +1980,7 @@ export default function POSPage() {
     const pmLabel   = completedPaymentMethod.toUpperCase();
 
     const itemRows = completedCart.map((i) => {
-      const price     = i.customPrice ?? i.product.price;
+      const price     = unitPriceFor(i);
       const lineTotal = price * i.quantity;
       const rawName   = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
       const name      = esc(rawName);
@@ -2320,7 +2358,7 @@ export default function POSPage() {
     let _allocated = 0;
     const txItems = cart.map((i, idx) => {
       const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
-      const lineGross = (i.customPrice ?? i.product.price) * i.quantity;
+      const lineGross = (unitPriceFor(i)) * i.quantity;
       const lineAfterItemDisc = Math.max(0, lineGross + modAdj * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
       let proportional: number;
       if (idx === cart.length - 1) {
@@ -2341,7 +2379,7 @@ export default function POSPage() {
         productId: i.giftCardNumber ? 0 : i.product.id,
         productName: i.product.name,
         quantity: i.quantity,
-        unitPrice: i.customPrice ?? i.product.price,
+        unitPrice: unitPriceFor(i),
         totalPrice: lineTotal,
         taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
         discount: totalDiscount > 0 ? totalDiscount : undefined,
@@ -2957,18 +2995,18 @@ export default function POSPage() {
               <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
                   const modAdj = (item.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
-                  const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
+                  const linePrice = (unitPriceFor(item)) * item.quantity;
                   const lineTotal = linePrice + modAdj * item.quantity - item.itemDiscount - (item.pricingRuleDiscount ?? 0);
                   const discExpanded = expandedDiscounts.has(item.product.id);
                   const isInvalidItem =
-                    item.quantity < 1 || (item.customPrice ?? item.product.price) < 0;
+                    item.quantity < 1 || (unitPriceFor(item)) < 0;
                   return (
                     <div key={item.product.id} className={cn("border rounded-xl overflow-hidden bg-background", isInvalidItem && "border-destructive border-l-[3px]")}>
                       <div className="flex items-center gap-2 px-2.5 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-xs leading-snug truncate">{item.product.name}</p>
                           <p className="text-muted-foreground text-[11px]">
-                            {formatCurrency(item.customPrice ?? item.product.price)}
+                            {formatCurrency(unitPriceFor(item))}
                             {item.itemNote && <span className="ml-1 italic text-muted-foreground/60">· {item.itemNote}</span>}
                             {item.pricingRuleLabel && <span className="ml-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">· {item.pricingRuleLabel}</span>}
                           </p>

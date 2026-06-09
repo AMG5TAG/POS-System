@@ -166,6 +166,26 @@ function generateSKU(prefix: string) {
   return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
 }
 
+/* Derive a scannable EAN-13 barcode deterministically from a SKU, so the same
+ * SKU always yields the same barcode. Builds 12 digits from the SKU's character
+ * codes, then appends the EAN-13 check digit. */
+function generateBarcodeFromSku(sku: string): string {
+  const s = sku.trim().toUpperCase();
+  let base = "";
+  for (let i = 0; i < s.length && base.length < 12; i++) {
+    base += (s.charCodeAt(i) % 10).toString();
+  }
+  while (base.length < 12) base += ((base.length * 7 + 3) % 10).toString();
+  base = base.slice(0, 12);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const d = base.charCodeAt(i) - 48;
+    sum += i % 2 === 0 ? d : d * 3;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return base + check.toString();
+}
+
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
 function SortTh({ label, sortKey, active, dir, onSort, className }: {
@@ -1105,6 +1125,10 @@ export default function ProductsPage() {
   const queryClient = useQueryClient();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const initialProductFormRef = useRef<ProductForm>(defaultForm);
+  // Customer groups whose price the user has typed manually — these are left
+  // alone by the auto pre-fill; every other group is kept filled from its rule
+  // (or the sell price when no rule applies).
+  const manualGroupsRef = useRef<Set<string>>(new Set());
   const [search, setSearch]             = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
@@ -1298,6 +1322,38 @@ export default function ProductsPage() {
     [form.price, form.costPrice, form.taxRate, form.categoryId, customerSettings.groupPricing],
   );
 
+  // Keep Customer Group Pricing pre-filled while the dialog is open: each group
+  // that hasn't been manually edited shows its rule price, or the sell price
+  // when no rule applies. Uses setForm directly so it doesn't mark the form
+  // dirty. Manual entries (tracked in manualGroupsRef) are never overwritten.
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const sell = parseFloat(form.price);
+    const fallback = isNaN(sell) ? "" : sell.toFixed(2);
+    setForm((prev) => {
+      let changed = false;
+      const next = { ...prev.groupPrices };
+      for (const g of customerGroups) {
+        if (manualGroupsRef.current.has(g.id)) continue;
+        const ruleVal = ruleGroupDefaults[g.id];
+        const desired = ruleVal != null ? ruleVal.toFixed(2) : fallback;
+        if (desired !== "" && next[g.id] !== desired) { next[g.id] = desired; changed = true; }
+      }
+      return changed ? { ...prev, groupPrices: next } : prev;
+    });
+  }, [dialogOpen, ruleGroupDefaults, form.price, customerGroups]);
+
+  // Default a new product to the Physical / Standard product type once the type
+  // list has loaded (the fallback icon grid already defaults to "standard").
+  useEffect(() => {
+    if (!dialogOpen || editingProduct || form.productTypeId || productTypesList.length === 0) return;
+    const phys =
+      productTypesList.find((t) => t.isActive && /physical|standard/i.test(`${t.slug} ${t.name}`)) ??
+      productTypesList.find((t) => t.isActive) ??
+      productTypesList[0];
+    if (phys) setForm((prev) => ({ ...prev, productTypeId: phys.id.toString(), productType: phys.slug }));
+  }, [dialogOpen, editingProduct, productTypesList, form.productTypeId]);
+
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
     { query: { queryKey: ["products", search, categoryFilter] } }
@@ -1366,6 +1422,7 @@ export default function ProductsPage() {
 
   const openCreate = () => {
     initialProductFormRef.current = defaultForm;
+    manualGroupsRef.current = new Set();
     setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
@@ -1401,6 +1458,9 @@ export default function ProductsPage() {
       stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
     };
     initialProductFormRef.current = editForm;
+    // Treat any price already stored on the product as a manual entry to keep,
+    // and pre-fill the rest from rules / sell price.
+    manualGroupsRef.current = new Set(Object.keys(ep.groupPrices ?? {}));
     setForm(editForm);
     const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
     setPcPartType(_c?.partType || "");
@@ -1436,16 +1496,22 @@ export default function ProductsPage() {
       tags: form.tags,
       stockLocation: form.stockLocationDisplay || undefined,
       overflowLocation: form.stockLocationOverflow || undefined,
-      // Rule-derived defaults are applied automatically; any price typed into
-      // the form for a group overrides its rule value.
-      groupPrices: {
-        ...ruleGroupDefaults,
-        ...Object.fromEntries(
+      // Every customer group always gets a price so downstream features never
+      // see a blank: a manually-typed value wins, otherwise the group's rule
+      // price, otherwise the standard sell price.
+      groupPrices: (() => {
+        const sell = parseFloat(form.price) || 0;
+        const manual = Object.fromEntries(
           Object.entries(form.groupPrices)
             .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
             .map(([k, v]) => [k, parseFloat(v)])
-        ),
-      },
+        );
+        const full: Record<string, number> = {};
+        for (const g of customerGroups) {
+          full[g.id] = manual[g.id] ?? ruleGroupDefaults[g.id] ?? sell;
+        }
+        return full;
+      })(),
     };
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
@@ -1609,6 +1675,12 @@ export default function ProductsPage() {
 
   const handleGenerateSKU = () => {
     setField("sku", generateSKU(skuPrefix));
+  };
+
+  const handleGenerateBarcode = () => {
+    const sku = form.sku.trim();
+    if (!sku) { toast.error("Enter a SKU code first to generate a barcode"); return; }
+    setField("barcode", generateBarcodeFromSku(sku));
   };
 
   const handleSkuPrefixChange = (v: string) => {
@@ -2234,27 +2306,29 @@ export default function ProductsPage() {
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Product Type</Label>
                     {productTypesList.length > 0 ? (
-                      <Select
-                        value={form.productTypeId || ""}
-                        onValueChange={(v) => {
-                          const pt = productTypesList.find((t) => t.id.toString() === v);
-                          if (pt) { setField("productTypeId", v); setField("productType", pt.slug); }
-                        }}
-                      >
-                        <SelectTrigger className="mt-1.5">
-                          <SelectValue placeholder="Select type…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productTypesList.filter((t) => t.isActive).map((t) => (
-                            <SelectItem key={t.id} value={t.id.toString()}>
-                              <div className="flex flex-col">
-                                <span>{t.name}</span>
-                                {t.description && <span className="text-xs text-muted-foreground">{t.description}</span>}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="grid grid-cols-3 gap-2 mt-1.5">
+                        {productTypesList.filter((t) => t.isActive).map((t) => {
+                          const Icon = PRODUCT_TYPES.find((pt) => pt.value === t.slug)?.icon ?? Package;
+                          const active = form.productTypeId === t.id.toString();
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => { setField("productTypeId", t.id.toString()); setField("productType", t.slug); }}
+                              title={t.description || t.name}
+                              className={cn(
+                                "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
+                                active
+                                  ? "border-primary bg-primary/5 text-primary"
+                                  : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              <Icon className="w-4 h-4" />
+                              <span className="text-[11px] font-medium leading-tight">{t.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 mt-1.5">
                         {PRODUCT_TYPES.map(({ value, label, icon: Icon }) => (
@@ -2286,7 +2360,7 @@ export default function ProductsPage() {
                         className="flex-1"
                       />
                       <Button
-                        type="button" variant="outline" size="icon" className="shrink-0 h-9 w-9"
+                        type="button" variant="outline" size="icon" className="shrink-0 h-10 w-10"
                         onClick={handleGenerateSKU} title="Generate SKU"
                       >
                         <Shuffle className="w-3.5 h-3.5" />
@@ -2295,12 +2369,20 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Barcode</Label>
-                    <Input
-                      value={form.barcode}
-                      onChange={(e) => setField("barcode", e.target.value)}
-                      placeholder="Scan or type barcode"
-                      className="mt-1.5"
-                    />
+                    <div className="flex gap-1.5 mt-1.5">
+                      <Input
+                        value={form.barcode}
+                        onChange={(e) => setField("barcode", e.target.value)}
+                        placeholder="Scan or type barcode"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button" variant="outline" size="icon" className="shrink-0 h-10 w-10"
+                        onClick={handleGenerateBarcode} title="Generate barcode from SKU"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Category</Label>
@@ -2556,7 +2638,12 @@ export default function ProductsPage() {
                             <Input
                               type="number" step="0.01" min="0"
                               value={form.groupPrices[group.id] ?? ""}
-                              onChange={(e) => setField("groupPrices", { ...form.groupPrices, [group.id]: e.target.value })}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") manualGroupsRef.current.delete(group.id);
+                                else manualGroupsRef.current.add(group.id);
+                                setField("groupPrices", { ...form.groupPrices, [group.id]: v });
+                              }}
                               placeholder={ruleGroupDefaults[group.id] != null ? ruleGroupDefaults[group.id].toFixed(2) : (form.price || "0.00")}
                               className="pl-7 text-sm"
                             />

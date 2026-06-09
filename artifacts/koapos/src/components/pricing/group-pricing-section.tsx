@@ -262,8 +262,10 @@ export function GroupPricingSection() {
     toast.success("Pricing rules saved. New products use these automatically.");
   };
 
-  // Apply current (saved or edited) rules to every existing product.
-  const activeRules = groups.map((g) => rules[g.id] ?? makeDefaultRule(g.id)).filter((r) => r.enabled);
+  // Apply current (saved or edited) rules to every existing product. Every group
+  // is filled so products are never left with a blank group price: an enabled
+  // rule sets the computed price (or the sell price when it's excluded / has no
+  // cost); groups without a rule keep their value or fall back to the sell price.
   const applyToExisting = async () => {
     if (!products.length) { toast.error("No products to update."); return; }
     setApplying(true);
@@ -274,15 +276,13 @@ export function GroupPricingSection() {
         const batch = products.slice(i, i + 8);
         await Promise.all(batch.map(async (p) => {
           const ep = p as Product & { groupPrices?: Record<string, number> };
+          const sell = p.price ?? 0;
           const next: Record<string, number> = { ...(ep.groupPrices ?? {}) };
           let touched = false;
-          for (const rule of activeRules) {
-            const price = computeGroupPrice(p, rule);
-            if (price != null) {
-              if (next[rule.groupId] !== price) { next[rule.groupId] = price; touched = true; }
-            } else if (rule.groupId in next) {
-              delete next[rule.groupId]; touched = true;
-            }
+          for (const g of groups) {
+            const rule = rules[g.id] ?? makeDefaultRule(g.id);
+            const val = rule.enabled ? (computeGroupPrice(p, rule) ?? sell) : (next[g.id] ?? sell);
+            if (next[g.id] !== val) { next[g.id] = val; touched = true; }
           }
           if (!touched) return;
           await updateProduct.mutateAsync({ id: p.id, data: { groupPrices: next } });
@@ -297,8 +297,6 @@ export function GroupPricingSection() {
       setApplying(false);
     }
   };
-
-  const enabledCount = groups.filter((g) => rules[g.id]?.enabled).length;
 
   return (
     <div className="space-y-4">
@@ -330,7 +328,7 @@ export function GroupPricingSection() {
         <Button
           variant="outline"
           onClick={applyToExisting}
-          disabled={applying || enabledCount === 0}
+          disabled={applying || products.length === 0}
           className="gap-2"
         >
           <RefreshCw className={cn("w-4 h-4", applying && "animate-spin")} />
