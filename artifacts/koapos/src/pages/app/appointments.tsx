@@ -364,9 +364,11 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </Button>
+            {appt.status === "scheduled" && (
+              <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
+                <Pencil className="w-3.5 h-3.5" /> Edit
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -1223,12 +1225,14 @@ export default function AppointmentsPage() {
                                 >
                                   <Eye className="w-3 h-3" /> View
                                 </button>
-                                <button
-                                  onClick={() => openEdit(appt)}
-                                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
-                                >
-                                  <Pencil className="w-3 h-3" /> Edit
-                                </button>
+                                {!isFinished(appt) && (
+                                  <button
+                                    onClick={() => openEdit(appt)}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                  >
+                                    <Pencil className="w-3 h-3" /> Edit
+                                  </button>
+                                )}
                                 {appt.status === "scheduled" && (
                                   <button
                                     onClick={() => handleComplete(appt)}

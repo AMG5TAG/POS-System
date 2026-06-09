@@ -1739,9 +1739,24 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
 function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const { dayStaff, signOutForDay } = useStaffSession();
   const { theme, toggleTheme } = useTheme();
   const { navLayout } = useNavLayout();
   const logoutMutation = useLogout();
+
+  /* When the platform user logs in, immediately prompt for a staff PIN so a till
+     is bound to whoever is operating this device for the duration of the session.
+     The day-staff session is hydrated from localStorage, so a plain refresh (where
+     dayStaff is already set) never re-opens the dialog — only a genuine new login
+     with nobody signed in for the day. The binding is released on logout below. */
+  const wasAuthedRef = useRef(false);
+  useEffect(() => {
+    const authed = !!user;
+    if (authed && !wasAuthedRef.current && !dayStaff) {
+      window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login"));
+    }
+    wasAuthedRef.current = authed;
+  }, [user, dayStaff]);
 
   // Scroll only the main content area to the top when the pathname changes — ignore hash/query
   const scrollPathRef = useRef("");
@@ -1811,7 +1826,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
 
   const canManage = !!user;
 
-  const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => logout() });
+  const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => { signOutForDay(); logout(); } });
   const logoutPending = logoutMutation.isPending;
 
   const wrappedChildren = (
