@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -100,19 +101,27 @@ function openDenomTotal(counts: Record<number, string>): number {
 
 /* ─── POS layout class maps (account settings + per-staff overrides) ─────── */
 
-/* The chosen column count caps the grid on desktop; smaller screens scale down. */
-const GRID_COL_CLASSES: Record<2 | 3 | 4 | 5, string> = {
-  2: "grid-cols-1 sm:grid-cols-2",
-  3: "grid-cols-2 sm:grid-cols-3",
-  4: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
-  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
-};
-
 const TILE_SIZE_CLASSES: Record<"compact" | "normal" | "large", { image: string; body: string; name: string; price: string }> = {
   compact: { image: "h-[110px]", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
   normal:  { image: "h-[150px]", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
   large:   { image: "h-[190px]", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
 };
+
+/* Minimum tile width per size — drives how many columns fit. The grid fills as
+   many columns as the available width allows (down to 1 on a phone), capped at
+   the staff/account preferred column count on wide screens. */
+const TILE_MIN_WIDTH: Record<"compact" | "normal" | "large", number> = {
+  compact: 116,
+  normal:  150,
+  large:   190,
+};
+
+/* A responsive grid-template-columns that adds/removes columns with the
+   container width: each column is at least `minPx`, but never more than
+   `maxCols` columns (gap = 0.75rem to match `gap-3`). */
+function responsiveGridColumns(minPx: number, maxCols: number): string {
+  return `repeat(auto-fill, minmax(max(${minPx}px, (100% - ${maxCols - 1} * 0.75rem) / ${maxCols}), 1fr))`;
+}
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -835,6 +844,7 @@ export default function POSPage() {
    * It reads the current group via a ref so it stays correct inside unmount /
    * beacon closures; memos that use it list customerGroupId in their deps. */
   const { settings: customerSettings } = useCustomerSettings();
+  const defaultProductImage = useDefaultProductImage();
   const customerGroupId = useMemo(
     () => resolveCustomerGroupId(selectedCustomer?.customerGroup, customerSettings.groups),
     [selectedCustomer?.customerGroup, customerSettings.groups],
@@ -2626,7 +2636,10 @@ export default function POSPage() {
 
 
           <ScrollArea className="flex-1 p-3">
-            <div className={cn("grid gap-3", GRID_COL_CLASSES[posLayout.columns])}>
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: responsiveGridColumns(TILE_MIN_WIDTH[posLayout.tileSize], posLayout.columns) }}
+            >
               {products.map(product => (
                 <div
                   key={product.id}
@@ -2637,10 +2650,12 @@ export default function POSPage() {
                   className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md cursor-pointer"
                 >
                   <div className={cn("w-full bg-muted flex items-center justify-center relative overflow-hidden", TILE_SIZE_CLASSES[posLayout.tileSize].image)}>
-                    {product.imageUrl
-                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
-                      : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
-                    }
+                    {(() => {
+                      const imgSrc = productImageSrc(product.imageUrl, defaultProductImage);
+                      return imgSrc
+                        ? <img src={imgSrc} alt={product.name} className="w-full h-full object-contain" />
+                        : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
+                    })()}
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
                     )}

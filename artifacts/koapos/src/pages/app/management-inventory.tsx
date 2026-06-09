@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Boxes } from "lucide-react";
+import { ImageUploader } from "@/components/ui/image-uploader";
+import { Boxes, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   useGetInventorySettings,
@@ -13,8 +14,9 @@ import {
 } from "@workspace/api-client-react";
 
 const INVENTORY_TABS = [
-  { href: "#display",       label: "Display",        icon: Boxes },
-  { href: "#group-pricing", label: "Group Pricing" },
+  { href: "#display",        label: "Display",        icon: Boxes },
+  { href: "#default-image",  label: "Default Image" },
+  { href: "#group-pricing",  label: "Group Pricing" },
 ];
 
 
@@ -24,15 +26,17 @@ export default function ManagementInventoryPage() {
 
   const [showHideCostsBtn, setShowHideCostsBtnState] = useState(true);
   const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
+  const [defaultImageUrl, setDefaultImageUrl] = useState("");
 
   useEffect(() => {
     if (settings) {
       setShowHideCostsBtnState(settings.showCosts !== "false");
       setEnableGroupPricingState(settings.groupPricing !== "false");
+      setDefaultImageUrl(settings.defaultImageUrl ?? "");
     }
   }, [settings]);
 
-  function persist(patch: { showCosts?: string; groupPricing?: string; skuPrefix?: string }) {
+  function persist(patch: { showCosts?: string; groupPricing?: string; skuPrefix?: string; defaultImageUrl?: string | null }) {
     update.mutate(
       { data: patch },
       {
@@ -52,6 +56,12 @@ export default function ManagementInventoryPage() {
     setEnableGroupPricingState(v);
     persist({ groupPricing: v ? "true" : "false" });
     toast.success(v ? "Customer Group Pricing enabled" : "Customer Group Pricing disabled");
+  }
+
+  function handleDefaultImageChange(url: string) {
+    setDefaultImageUrl(url);
+    persist({ defaultImageUrl: url || null });
+    toast.success(url ? "Default product image saved" : "Default product image removed");
   }
 
   if (isLoading) {
@@ -99,6 +109,30 @@ export default function ManagementInventoryPage() {
                 </p>
               </div>
               <Switch checked={showHideCostsBtn} onCheckedChange={toggleShowHideCosts} />
+            </div>
+          </div>
+        </div>
+
+        <div id="default-image" className="rounded-lg border">
+          <div className="px-5 py-4 border-b">
+            <p className="font-semibold flex items-center gap-2"><ImageIcon className="w-4 h-4 text-muted-foreground" /> Default Product Image</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Used automatically anywhere a product has no image of its own — on the POS, product lists and receipts.
+            </p>
+          </div>
+          <div className="p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-28 shrink-0">
+                <ImageUploader
+                  value={defaultImageUrl}
+                  onChange={handleDefaultImageChange}
+                  aspectRatio="square"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
+                <p>Upload a fallback picture (e.g. your logo or a “no image” placeholder).</p>
+                <p>Products with their own image are unaffected. Remove it to fall back to the default letter / icon placeholder.</p>
+              </div>
             </div>
           </div>
         </div>

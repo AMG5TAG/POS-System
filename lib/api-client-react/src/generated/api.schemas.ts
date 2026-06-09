@@ -3297,12 +3297,16 @@ export interface InventorySettings {
   skuPrefix: string;
   showCosts: string;
   groupPricing: string;
+  /** @nullable */
+  defaultImageUrl?: string | null;
 }
 
 export interface InventorySettingsInput {
   skuPrefix?: string;
   showCosts?: string;
   groupPricing?: string;
+  /** @nullable */
+  defaultImageUrl?: string | null;
 }
 
 export interface RegionalExtSettings {

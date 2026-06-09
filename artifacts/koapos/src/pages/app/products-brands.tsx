@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
 
 type Brand = {
   id: number;
@@ -162,6 +163,7 @@ function BrandProducts({ brandId, showCost }: { brandId: number; showCost: boole
     { query: { queryKey: getListProductsQueryKey(params) } },
   );
   const products = (data?.items ?? []) as Product[];
+  const defaultProductImage = useDefaultProductImage();
 
   if (loading) return (
     <div className="flex items-center justify-center py-4">
@@ -180,9 +182,12 @@ function BrandProducts({ brandId, showCost }: { brandId: number; showCost: boole
       {products.map((p) => (
         <div key={p.id} className="flex items-center gap-3 px-14 py-2.5">
           <div className="w-7 h-7 rounded-md bg-muted border flex items-center justify-center shrink-0 overflow-hidden">
-            {p.imageUrl
-              ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
-              : <Package className="w-3.5 h-3.5 text-muted-foreground/50" />}
+            {(() => {
+              const imgSrc = productImageSrc(p.imageUrl, defaultProductImage);
+              return imgSrc
+                ? <img src={imgSrc} alt={p.name} className="w-full h-full object-contain" />
+                : <Package className="w-3.5 h-3.5 text-muted-foreground/50" />;
+            })()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{p.name}</p>
