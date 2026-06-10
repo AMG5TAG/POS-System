@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import QRCodeStyling, { type Options as QROptions, type DotType, type CornerSquareType, type CornerDotType } from "qr-code-styling";
 import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
@@ -334,6 +335,133 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
     } : {}),
     qrOptions: { errorCorrectionLevel: settings.level },
   };
+}
+
+/* ── Framed SVG export ─────────────────────────────────────────────────────
+   Composes the QR together with its template frame into a single vector SVG so
+   downloads match the live preview (PNG export rasterises this same SVG). This
+   mirrors the visual logic of <TemplateWrapper> in vector primitives. */
+async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number }> {
+  const qr = new QRCodeStyling(buildQROptions(settings, data || "https://koapos.com", qrSize));
+  const blob = await qr.getRawData("svg");
+  if (!blob) throw new Error("QR render failed");
+  let qrSvg = (await (blob as Blob).text())
+    .replace(/<\?xml[^>]*\?>/i, "")
+    .replace(/<!DOCTYPE[^>]*>/i, "")
+    .trim();
+
+  // Embed the QR as a nested <svg> at (x, y); force width/height so it renders
+  // at qrSize regardless of how qr-code-styling emitted its root attributes.
+  const place = (x: number, y: number) =>
+    qrSvg.replace(/^<svg\s/i, `<svg x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" `);
+
+  const tpl     = settings.template;
+  const pattern = settings.patternColor;
+  const bg      = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
+  const textOn  = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
+  const font    = "system-ui, sans-serif";
+
+  // Frame metrics scale with the QR so proportions match the on-screen preview.
+  const s      = qrSize / 240;
+  const pad    = Math.round(8 * s);
+  const radius = Math.round(16 * s);
+  const bw     = Math.max(1, Math.round(3 * s));
+  const fs     = Math.round(11 * s);
+  const gap    = Math.round(4 * s);
+  const innerR = Math.round(8 * s);
+
+  const wrap = (w: number, h: number, body: string) => ({
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
+    width: w, height: h,
+  });
+  const clip = (id: string, shape: string, inner: string, extra = "") =>
+    `<defs><clipPath id="${id}">${shape}</clipPath></defs><g clip-path="url(#${id})"${extra}>${inner}</g>`;
+  const text = (x: number, y: number, fill: string, ls: number, str: string) =>
+    `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${fill}" font-family="${font}" font-size="${fs}" font-weight="700" letter-spacing="${ls}">${str}</text>`;
+
+  if (tpl === "border") {
+    const W = qrSize + 2 * (pad + bw);
+    return wrap(W, W,
+      `<rect x="${bw / 2}" y="${bw / 2}" width="${W - bw}" height="${W - bw}" rx="${radius}" fill="${bg}" stroke="${pattern}" stroke-width="${bw}"/>` +
+      place(pad + bw, pad + bw));
+  }
+
+  if (tpl === "scan-me-dark") {
+    const barH = Math.round(fs * 1.35) + 2 * Math.round(5 * s);
+    const H = qrSize + barH;
+    const body = place(0, 0) +
+      `<rect x="0" y="${qrSize}" width="${qrSize}" height="${barH}" fill="${pattern}"/>` +
+      text(qrSize / 2, qrSize + barH / 2, textOn, 0.15 * fs, "SCAN ME ▲");
+    return wrap(qrSize, H, clip("fclip", `<rect width="${qrSize}" height="${H}" rx="${radius}"/>`, body));
+  }
+
+  if (tpl === "scan-me-light") {
+    const textH = Math.round(fs * 1.35);
+    const W = qrSize + 2 * (pad + bw);
+    const H = bw * 2 + pad * 2 + qrSize + gap + textH;
+    const qrX = (W - qrSize) / 2, qrY = bw + pad;
+    return wrap(W, H,
+      `<rect x="${bw / 2}" y="${bw / 2}" width="${W - bw}" height="${H - bw}" rx="${radius}" fill="${bg}" stroke="${pattern}" stroke-width="${bw}"/>` +
+      clip("fclip", `<rect x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" rx="${innerR}"/>`, place(qrX, qrY)) +
+      text(W / 2, qrY + qrSize + gap + textH / 2, pattern, 0.12 * fs, "▲ SCAN ME"));
+  }
+
+  if (tpl === "circle") {
+    const r = qrSize / 2;
+    return wrap(qrSize, qrSize, clip("fclip", `<circle cx="${r}" cy="${r}" r="${r}"/>`, place(0, 0)));
+  }
+
+  if (tpl === "circle-dashed" || tpl === "circle-dots") {
+    const pad6 = Math.round(6 * s), bwc = Math.max(2, Math.round(3 * s));
+    const W = qrSize + 2 * (pad6 + bwc), c = W / 2;
+    const dash = tpl === "circle-dots"
+      ? `stroke-dasharray="${bwc} ${bwc * 1.8}" stroke-linecap="round"`
+      : `stroke-dasharray="${bwc * 3} ${bwc * 2}"`;
+    return wrap(W, W,
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(pad6 + bwc, pad6 + bwc)) +
+      `<circle cx="${c}" cy="${c}" r="${(W - bwc) / 2}" fill="none" stroke="${pattern}" stroke-width="${bwc}" ${dash}/>`);
+  }
+
+  if (tpl === "dark-circle") {
+    const pad4 = Math.round(4 * s);
+    const W = qrSize + 2 * pad4, c = W / 2;
+    return wrap(W, W,
+      `<circle cx="${c}" cy="${c}" r="${c}" fill="${pattern}"/>` +
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(pad4, pad4), ` opacity="0.85"`));
+  }
+
+  if (tpl === "circle-ring") {
+    const pad6 = Math.round(6 * s), bwr = Math.max(2, Math.round(2 * s)), off = Math.round(4 * s);
+    const borderBox = qrSize + 2 * pad6 + 2 * bwr;
+    const W = borderBox + 2 * (off + bwr), c = W / 2;
+    return wrap(W, W,
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(c - qrSize / 2, c - qrSize / 2)) +
+      `<circle cx="${c}" cy="${c}" r="${(borderBox - bwr) / 2}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>` +
+      `<circle cx="${c}" cy="${c}" r="${borderBox / 2 + off + bwr / 2}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>`);
+  }
+
+  // standard (and any unknown template): rounded-corner clip only.
+  return wrap(qrSize, qrSize, clip("fclip", `<rect width="${qrSize}" height="${qrSize}" rx="${radius}"/>`, place(0, 0)));
+}
+
+/* Rasterise a framed SVG string to a PNG blob, or return it verbatim as SVG. */
+async function svgToImageBlob(svg: string, format: "png" | "svg", width: number, height: number): Promise<Blob> {
+  if (format === "svg") return new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const img = new Image();
+  img.decoding = "async";
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Failed to rasterise SVG"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  ctx.drawImage(img, 0, 0, width, height);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to encode PNG"))), "image/png"));
 }
 
 /* ── Template wrapper ──────────────────────────────────────────────────── */
@@ -999,29 +1127,33 @@ export default function MarketingQRCodesPage() {
     });
   }, [qrData, label, settings, hasValidContent, qrType, content, createCode, refetchCodes]);
 
-  /* Download helpers */
-  const downloadBlob = useCallback((blob: Blob, name: string) => {
+  /* Download helpers — export the framed SVG so the file matches the preview. */
+  const downloadFile = useCallback((blob: Blob, name: string, ext: string) => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${name.replace(/\s+/g, "_")}.png`;
+    a.download = `${name.replace(/\s+/g, "_")}.${ext}`;
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Downloaded");
   }, []);
 
-  const downloadLive = useCallback(async () => {
-    const qr = new QRCodeStyling(buildQROptions(settings, qrData || "https://koapos.com", settings.size));
-    const raw = await qr.getRawData("png");
-    if (!raw) { toast.error("Download failed"); return; }
-    downloadBlob(raw as Blob, label || "qrcode");
-  }, [settings, qrData, label, downloadBlob]);
+  const downloadFramed = useCallback(async (s: QRSettings, data: string, name: string, format: "png" | "svg") => {
+    try {
+      const { svg, width, height } = await buildFramedQrSvg(s, data, s.size);
+      const blob = await svgToImageBlob(svg, format, width, height);
+      downloadFile(blob, name, format);
+    } catch {
+      toast.error("Download failed");
+    }
+  }, [downloadFile]);
 
-  const downloadEntry = useCallback(async (entry: QREntry) => {
-    const qr = new QRCodeStyling(buildQROptions(entry.settings, entry.url, entry.settings.size));
-    const raw = await qr.getRawData("png");
-    if (!raw) { toast.error("Download failed"); return; }
-    downloadBlob(raw as Blob, entry.label || "qrcode");
-  }, [downloadBlob]);
+  const downloadLive = useCallback((format: "png" | "svg" = "png") =>
+    downloadFramed(settings, qrData || "https://koapos.com", label || "qrcode", format),
+    [settings, qrData, label, downloadFramed]);
+
+  const downloadEntry = useCallback((entry: QREntry, format: "png" | "svg" = "png") =>
+    downloadFramed(entry.settings, entry.url, entry.label || "qrcode", format),
+    [downloadFramed]);
 
   const deleteEntry = (id: string) => {
     deleteCode.mutate({ id: Number(id) }, {
@@ -1093,9 +1225,10 @@ export default function MarketingQRCodesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] gap-6 items-start">
+        {/* ── Content + Live Preview side by side ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
-          {/* ── Left: Config ── */}
+          {/* ── Content ── */}
           <div className="space-y-4">
 
             {/* QR Type + Content */}
@@ -1142,6 +1275,74 @@ export default function MarketingQRCodesPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* ── Live Preview (beside Content) ── */}
+          <div className="md:sticky md:top-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily}>
+                    <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
+                  </TemplateWrapper>
+                  <div className="text-center space-y-1">
+                    <p className="text-xs font-medium">{label || <span className="text-muted-foreground italic">No label</span>}</p>
+                    <p className="text-[10px] text-muted-foreground break-all max-w-[260px] line-clamp-2">{qrData}</p>
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      <Badge variant="secondary" className="text-[10px]">{activeTypeMeta?.label}</Badge>
+                      <Badge variant="outline" className="text-[10px]">ECC {settings.level} · {settings.size}px</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="gap-1.5" disabled={!hasValidContent}>
+                        <Download className="w-4 h-4" /> Download <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => downloadLive("png")}>
+                        <File className="w-3.5 h-3.5 mr-2" /> PNG image
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => downloadLive("svg")}>
+                        <FileText className="w-3.5 h-3.5 mr-2" /> SVG vector
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent || createCode.isPending}>
+                    <Save className="w-4 h-4" /> Save
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {activeEntry && (
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selected</p>
+                  <p className="text-sm font-medium truncate">{activeEntry.label}</p>
+                  <p className="text-[10px] text-muted-foreground break-all line-clamp-2">{activeEntry.url}</p>
+                  <div className="flex gap-1.5 pt-1">
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => downloadEntry(activeEntry)}>
+                      <Download className="w-3 h-3" /> PNG
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => copyUrl(activeEntry.url)}>
+                      <Copy className="w-3 h-3" /> Copy
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-7 text-xs p-0" onClick={() => window.open(activeEntry.url, "_blank")}>
+                      <ExternalLink className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+
+        {/* ── Styling controls (full width) ── */}
+        <div className="space-y-4">
 
             {/* Colors */}
             <Card>
@@ -1365,58 +1566,6 @@ export default function MarketingQRCodesPage() {
                 </CardContent>
               )}
             </Card>
-          </div>
-
-          {/* ── Right: Live Preview ── */}
-          <div className="md:sticky md:top-4 space-y-4">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-col items-center gap-4 py-2">
-                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily}>
-                    <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
-                  </TemplateWrapper>
-                  <div className="text-center space-y-1">
-                    <p className="text-xs font-medium">{label || <span className="text-muted-foreground italic">No label</span>}</p>
-                    <p className="text-[10px] text-muted-foreground break-all max-w-[260px] line-clamp-2">{qrData}</p>
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      <Badge variant="secondary" className="text-[10px]">{activeTypeMeta?.label}</Badge>
-                      <Badge variant="outline" className="text-[10px]">ECC {settings.level} · {settings.size}px</Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="gap-1.5" onClick={downloadLive} disabled={!hasValidContent}>
-                    <Download className="w-4 h-4" /> Download
-                  </Button>
-                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent || createCode.isPending}>
-                    <Save className="w-4 h-4" /> Save
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {activeEntry && (
-              <Card>
-                <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selected</p>
-                  <p className="text-sm font-medium truncate">{activeEntry.label}</p>
-                  <p className="text-[10px] text-muted-foreground break-all line-clamp-2">{activeEntry.url}</p>
-                  <div className="flex gap-1.5 pt-1">
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => downloadEntry(activeEntry)}>
-                      <Download className="w-3 h-3" /> PNG
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => copyUrl(activeEntry.url)}>
-                      <Copy className="w-3 h-3" /> Copy
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 w-7 text-xs p-0" onClick={() => window.open(activeEntry.url, "_blank")}>
-                      <ExternalLink className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
         </div>
 
         {/* ── History ── */}
