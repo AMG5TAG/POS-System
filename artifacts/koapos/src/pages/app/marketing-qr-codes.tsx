@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useBusinessProfile } from "@/lib/business-profile";
 import {
   useListQrCodes,
   useCreateQrCode,
@@ -93,6 +94,29 @@ const DEFAULT_SETTINGS: QRSettings = {
 
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
 const LIGHT_SWATCHES = ["transparent", "#ffffff", "#e8e4f7", "#fde8e8", "#fef3c7", "#e9d5ff", "#dcfce7", "#bae6fd"];
+
+const DEFAULT_FONT_STACK = "system-ui, sans-serif";
+
+/* Resolve the merchant's brand font into a CSS font-family stack (with fallback). */
+function brandFontStack(brandFont?: string): string {
+  return brandFont ? `'${brandFont}', ${DEFAULT_FONT_STACK}` : DEFAULT_FONT_STACK;
+}
+
+/* Lazily pull the brand font in from Google Fonts so the preview/export render it. */
+const loadedBrandFonts = new Set<string>();
+function loadBrandFont(name?: string) {
+  if (!name || loadedBrandFonts.has(name)) return;
+  loadedBrandFonts.add(name);
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, "+")}:wght@400;600;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+/* De-duplicate swatches while preserving order (brand colours lead the palette). */
+function mergeSwatches(brand: string[], base: string[]): string[] {
+  return Array.from(new Set([...brand.filter(Boolean), ...base]));
+}
 
 const DOT_STYLES: { value: DotType; label: string }[] = [
   { value: "square",         label: "Square"  },
@@ -186,19 +210,19 @@ function apiToTemplate(r: Record<string, unknown>): SavedQRTemplate {
   };
 }
 
-function apiToSettings(r: Record<string, unknown>): QRSettings {
+function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAULT_SETTINGS): QRSettings {
   return {
-    patternColor:       String(r.patternColor       ?? DEFAULT_SETTINGS.patternColor),
-    eyeColor:           String(r.eyeColor           ?? DEFAULT_SETTINGS.eyeColor),
-    eyeDotColor:        String(r.eyeDotColor        ?? DEFAULT_SETTINGS.eyeDotColor),
-    bgColor:            String(r.bgColor            ?? DEFAULT_SETTINGS.bgColor),
-    dotStyle:           (String(r.dotStyle          ?? DEFAULT_SETTINGS.dotStyle)) as QRSettings["dotStyle"],
-    cornerSquareStyle:  (String(r.cornerSquareStyle ?? DEFAULT_SETTINGS.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
-    cornerDotStyle:     (String(r.cornerDotStyle    ?? DEFAULT_SETTINGS.cornerDotStyle)) as QRSettings["cornerDotStyle"],
-    template:           String(r.template           ?? DEFAULT_SETTINGS.template),
-    size:               Number(r.size               ?? DEFAULT_SETTINGS.size),
-    level:              (String(r.level             ?? DEFAULT_SETTINGS.level)) as QRSettings["level"],
-    logoUrl:            String(r.logoUrl            ?? DEFAULT_SETTINGS.logoUrl),
+    patternColor:       String(r.patternColor       ?? defaults.patternColor),
+    eyeColor:           String(r.eyeColor           ?? defaults.eyeColor),
+    eyeDotColor:        String(r.eyeDotColor        ?? defaults.eyeDotColor),
+    bgColor:            String(r.bgColor            ?? defaults.bgColor),
+    dotStyle:           (String(r.dotStyle          ?? defaults.dotStyle)) as QRSettings["dotStyle"],
+    cornerSquareStyle:  (String(r.cornerSquareStyle ?? defaults.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
+    cornerDotStyle:     (String(r.cornerDotStyle    ?? defaults.cornerDotStyle)) as QRSettings["cornerDotStyle"],
+    template:           String(r.template           ?? defaults.template),
+    size:               Number(r.size               ?? defaults.size),
+    level:              (String(r.level             ?? defaults.level)) as QRSettings["level"],
+    logoUrl:            String(r.logoUrl            ?? defaults.logoUrl),
   };
 }
 
@@ -301,9 +325,9 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
 /* ── Template wrapper ──────────────────────────────────────────────────── */
 
 function TemplateWrapper({
-  template, bgColor, patternColor, children, scale = 1,
+  template, bgColor, patternColor, children, scale = 1, fontFamily = DEFAULT_FONT_STACK,
 }: {
-  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number;
+  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number; fontFamily?: string;
 }) {
   const isCircle = TEMPLATES.find((t) => t.id === template)?.circle ?? false;
   const p  = Math.round(8 * scale);
@@ -326,13 +350,13 @@ function TemplateWrapper({
   if (template === "scan-me-dark") return (
     <div style={{ display: "inline-flex", flexDirection: "column", borderRadius: br, overflow: "hidden" }}>
       {children}
-      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, textAlign: "center", fontSize: fs, fontWeight: 700, letterSpacing: "0.15em", padding: `${Math.round(5 * scale)}px 0`, fontFamily: "system-ui, sans-serif" }}>SCAN ME ▲</div>
+      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, textAlign: "center", fontSize: fs, fontWeight: 700, letterSpacing: "0.15em", padding: `${Math.round(5 * scale)}px 0`, fontFamily }}>SCAN ME ▲</div>
     </div>
   );
   if (template === "scan-me-light") return (
     <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: Math.round(4 * scale), border: `${bw}px solid ${patternColor}`, borderRadius: br, padding: p, background: bgColor === "transparent" ? "white" : bgColor }}>
       <div style={{ lineHeight: 0, borderRadius: Math.round(8 * scale), overflow: "hidden" }}>{children}</div>
-      <div style={{ fontSize: fs, fontWeight: 700, letterSpacing: "0.12em", color: patternColor, fontFamily: "system-ui, sans-serif" }}>▲ SCAN ME</div>
+      <div style={{ fontSize: fs, fontWeight: 700, letterSpacing: "0.12em", color: patternColor, fontFamily }}>▲ SCAN ME</div>
     </div>
   );
   if (template === "circle")        return <div style={{ borderRadius: "50%", overflow: "hidden", lineHeight: 0 }}>{inner}</div>;
@@ -455,8 +479,8 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
 
 /* ── Template mini preview ─────────────────────────────────────────────── */
 
-function TemplateMini({ template, settings, data, selected, onClick }: {
-  template: typeof TEMPLATES[number]; settings: QRSettings; data: string; selected: boolean; onClick: () => void;
+function TemplateMini({ template, settings, data, selected, onClick, fontFamily }: {
+  template: typeof TEMPLATES[number]; settings: QRSettings; data: string; selected: boolean; onClick: () => void; fontFamily?: string;
 }) {
   const previewSettings = { ...settings, template: template.id };
   return (
@@ -465,7 +489,7 @@ function TemplateMini({ template, settings, data, selected, onClick }: {
         selected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/40")}
       style={{ width: 100 }}>
       <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
-        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6}>
+        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6} fontFamily={fontFamily}>
           <StyledQR settings={previewSettings} data={data || "https://koapos.com"} size={72} />
         </TemplateWrapper>
       </div>
@@ -729,8 +753,32 @@ function QRContentEditor({ type, content, onChange }: {
 
 export default function MarketingQRCodesPage() {
   const { data: codesResponse,     refetch: refetchCodes }     = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
-  const { data: rawSettings }                                   = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
+  const { data: rawSettings, isFetched: settingsFetched }       = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
   const { data: templatesResponse, refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
+
+  // Brand colours & font from Management > Settings & Integrations > Business Details
+  const { profile, isLoading: profileLoading } = useBusinessProfile();
+
+  // Brand-aware default QR settings: primary brand colour drives the QR, the
+  // lightest brand background drives the canvas. These seed the colour pickers.
+  const brandDefaults = useMemo<QRSettings>(() => {
+    const primary = profile.brandColors?.[0];
+    const bg      = profile.bgColors?.[0];
+    return {
+      ...DEFAULT_SETTINGS,
+      patternColor: primary || DEFAULT_SETTINGS.patternColor,
+      eyeColor:     primary || DEFAULT_SETTINGS.eyeColor,
+      eyeDotColor:  primary || DEFAULT_SETTINGS.eyeDotColor,
+      bgColor:      bg      || DEFAULT_SETTINGS.bgColor,
+    };
+  }, [profile.brandColors, profile.bgColors]);
+
+  // Surface brand colours as the leading swatches in each picker.
+  const darkSwatches  = useMemo(() => mergeSwatches(profile.brandColors ?? [], DARK_SWATCHES),  [profile.brandColors]);
+  const lightSwatches = useMemo(() => mergeSwatches(profile.bgColors    ?? [], LIGHT_SWATCHES), [profile.bgColors]);
+
+  const brandFontFamily = useMemo(() => brandFontStack(profile.brandFont), [profile.brandFont]);
+  useEffect(() => { loadBrandFont(profile.brandFont); }, [profile.brandFont]);
 
   const createCode     = useCreateQrCode();
   const deleteCode     = useDeleteQrCode();
@@ -756,12 +804,14 @@ export default function MarketingQRCodesPage() {
   const templateNameRef  = useRef<HTMLInputElement>(null);
   const saveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load settings from API on mount
+  // Hydrate settings once both the saved QR settings and the business profile
+  // have loaded: saved values win, otherwise the brand colours/font defaults apply.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (rawSettings) {
-      setSettings(apiToSettings(rawSettings as unknown as Record<string, unknown>));
-    }
-  }, [rawSettings]);
+    if (hydratedRef.current || !settingsFetched || profileLoading) return;
+    hydratedRef.current = true;
+    setSettings(apiToSettings((rawSettings ?? {}) as unknown as Record<string, unknown>, brandDefaults));
+  }, [settingsFetched, profileLoading, rawSettings, brandDefaults]);
 
   // Debounce settings save to API
   const scheduleSettingsSave = useCallback((next: QRSettings) => {
@@ -985,12 +1035,12 @@ export default function MarketingQRCodesPage() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Colours</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <ColourRow label="Pattern color" value={settings.patternColor} swatches={DARK_SWATCHES} onChange={(v) => set("patternColor", v)} />
-                <ColourRow label="Eye color" value={settings.eyeColor} swatches={DARK_SWATCHES} onChange={(v) => set("eyeColor", v)}
+                <ColourRow label="Pattern color" value={settings.patternColor} swatches={darkSwatches} onChange={(v) => set("patternColor", v)} />
+                <ColourRow label="Eye color" value={settings.eyeColor} swatches={darkSwatches} onChange={(v) => set("eyeColor", v)}
                   onCopy={() => set("eyeColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={DARK_SWATCHES} onChange={(v) => set("eyeDotColor", v)}
+                <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
                   onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                <ColourRow label="Background color" value={settings.bgColor} swatches={LIGHT_SWATCHES} onChange={(v) => set("bgColor", v)} />
+                <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
               </CardContent>
             </Card>
 
@@ -1110,7 +1160,7 @@ export default function MarketingQRCodesPage() {
                 <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
                   {TEMPLATES.map((t) => (
                     <TemplateMini key={t.id} template={t} settings={settings} data={qrData || "https://koapos.com"}
-                      selected={settings.template === t.id} onClick={() => set("template", t.id)} />
+                      selected={settings.template === t.id} onClick={() => set("template", t.id)} fontFamily={brandFontFamily} />
                   ))}
                 </div>
               </CardContent>
@@ -1192,7 +1242,7 @@ export default function MarketingQRCodesPage() {
               <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col items-center gap-4 py-2">
-                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor}>
+                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily}>
                     <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
                   </TemplateWrapper>
                   <div className="text-center space-y-1">
