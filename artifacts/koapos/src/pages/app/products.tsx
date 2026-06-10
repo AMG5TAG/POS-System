@@ -483,16 +483,21 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   const type = defaultTpl ? (STICKER_TYPES.find((t) => t.id === defaultTpl.typeId) ?? STICKER_TYPES[0]) : STICKER_TYPES[0];
   const size = defaultTpl ? (DYMO_SIZES.find((s) => s.id === defaultTpl.sizeId) ?? DYMO_SIZES[2]) : DYMO_SIZES[2];
 
-  const resolvedFields = defaultTpl ? resolveQuickCodes(defaultTpl.fields, {
-    product: {
-      name:     product.name,
-      sku:      product.sku      ?? "",
-      price:    product.price,
-      barcode:  product.barcode  ?? "",
-      category: product.category?.name ?? "",
-    },
-    merchant: { name: businessName },
-  }) : {};
+  // The real product values, keyed by the data fields buildLabelHtml / LabelPreview
+  // read. Saved templates only persist on/off toggles (not product data), so these
+  // must be supplied per-print — otherwise the label falls back to the sample
+  // placeholder text baked into the renderer ("Product Name", "Beverages", "$5.50").
+  const productFields: Record<string, string> = {
+    productName: product.name,
+    sku:         product.sku     ?? "",
+    price:       product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+    barcode:     product.barcode ?? "",
+    category:    product.category?.name ?? "",
+  };
+
+  const resolvedFields = defaultTpl
+    ? { ...resolveQuickCodes(defaultTpl.fields, { merchant: { name: businessName } }), ...productFields }
+    : {};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -552,16 +557,11 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
                   typeId: "product",
                   template: defaultTpl,
                   quantity,
-                  context: {
-                    product: {
-                      name:     product.name,
-                      sku:      product.sku      ?? "",
-                      price:    product.price,
-                      barcode:  product.barcode  ?? "",
-                      category: product.category?.name ?? "",
-                    },
-                    merchant: { name: businessName },
-                  },
+                  context: { merchant: { name: businessName } },
+                  // Pass the actual product data as literal field overrides; the
+                  // template only carries toggles, so without this the renderer
+                  // prints its built-in sample placeholders instead of the product.
+                  fieldsOverride: productFields,
                 });
                 if (!ok) toast.error("Couldn't open the print dialog — please try again");
               }}>
