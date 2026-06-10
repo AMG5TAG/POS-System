@@ -12,11 +12,12 @@ import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
   ChevronDown, ChevronUp, Globe, FileText, RefreshCcw, User, Share2,
   File, Wifi, Calendar, Mail, MessageSquare, Minimize2, LayoutTemplate,
-  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2,
+  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2, Rocket, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { publicOrigin } from "@/lib/public-url";
 import {
   useListQrCodes,
   useCreateQrCode,
@@ -26,6 +27,10 @@ import {
   useListQrSavedTemplates,
   useCreateQrSavedTemplate,
   useDeleteQrSavedTemplate,
+  useListLandingPages,
+  useListShortlinks,
+  useGetShortlinkSettings,
+  useGetMerchant,
 } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -49,15 +54,18 @@ interface QRSettings {
   size: number;
   level: "L" | "M" | "Q" | "H";
   logoUrl: string;
+  logoSize: number;
 }
 
 type QRCodeType =
-  | "website" | "static" | "dynamic" | "vcard" | "social" | "document"
+  | "website" | "landing" | "shortlink" | "static" | "dynamic" | "vcard" | "social" | "document"
   | "wifi" | "event" | "email" | "sms" | "micro" | "frame" | "sqrc" | "iqr";
 
 interface QRTypeContent {
   url?: string;
   text?: string;
+  landingId?: string;
+  shortlinkId?: string;
   vcName?: string; vcPhone?: string; vcEmail?: string; vcOrg?: string; vcUrl?: string; vcAddress?: string;
   socialPlatform?: string; socialHandle?: string;
   wifiSsid?: string; wifiPass?: string; wifiSec?: "WPA" | "WEP" | "nopass";
@@ -90,6 +98,7 @@ const DEFAULT_SETTINGS: QRSettings = {
   size: 256,
   level: "M",
   logoUrl: "",
+  logoSize: 0.35,
 };
 
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
@@ -155,6 +164,8 @@ const ECC_LEVELS = [
 
 const QR_TYPES: { id: QRCodeType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
   { id: "website",  label: "Website URL",    icon: Globe,          desc: "Link to any webpage"          },
+  { id: "landing",  label: "Landing Page",   icon: Rocket,         desc: "Link to a landing page"       },
+  { id: "shortlink",label: "Shortlink",      icon: Link2,          desc: "Link to a shortlink"          },
   { id: "static",   label: "Static",         icon: FileText,       desc: "Plain text or custom data"    },
   { id: "dynamic",  label: "Dynamic",        icon: RefreshCcw,     desc: "Editable redirect URL"        },
   { id: "vcard",    label: "vCard / meCard", icon: User,           desc: "Shareable contact card"       },
@@ -223,6 +234,7 @@ function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAUL
     size:               Number(r.size               ?? defaults.size),
     level:              (String(r.level             ?? defaults.level)) as QRSettings["level"],
     logoUrl:            String(r.logoUrl            ?? defaults.logoUrl),
+    logoSize:           Number(r.logoSize           ?? defaults.logoSize),
   };
 }
 
@@ -234,6 +246,8 @@ function buildQRDataString(type: QRCodeType, content: QRTypeContent): string {
     case "document":
     case "frame":
     case "dynamic":
+    case "landing":
+    case "shortlink":
       return (content.url ?? "").trim() || "https://koapos.com";
 
     case "static":
@@ -316,7 +330,7 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
     backgroundOptions: { color: settings.bgColor === "transparent" ? "rgba(0,0,0,0)" : settings.bgColor },
     ...(settings.logoUrl ? {
       image: settings.logoUrl,
-      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize: 0.35, margin: 4 },
+      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize: settings.logoSize, margin: 4 },
     } : {}),
     qrOptions: { errorCorrectionLevel: settings.level },
   };
@@ -509,8 +523,11 @@ function SpecialtyNote({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-function QRContentEditor({ type, content, onChange }: {
+interface LinkOption { id: string; label: string; url: string; }
+
+function QRContentEditor({ type, content, onChange, landingPages = [], shortlinks = [] }: {
   type: QRCodeType; content: QRTypeContent; onChange: (c: QRTypeContent) => void;
+  landingPages?: LinkOption[]; shortlinks?: LinkOption[];
 }) {
   const set = <K extends keyof QRTypeContent>(k: K, v: QRTypeContent[K]) => onChange({ ...content, [k]: v });
 
@@ -539,6 +556,54 @@ function QRContentEditor({ type, content, onChange }: {
         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
           <Info className="w-3 h-3 shrink-0" /> Select a Scan Me template below to add a frame with a call-to-action.
         </p>
+      </div>
+    );
+  }
+
+  if (type === "landing") {
+    return (
+      <div className="space-y-2">
+        {landingPages.length === 0 ? (
+          <SpecialtyNote title="No landing pages yet" desc="Create one under Marketing → Landing Pages, then return here to generate its QR code." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Choose a landing page</Label>
+            <Select value={content.landingId ?? ""} onValueChange={(v) => {
+              const p = landingPages.find((x) => x.id === v);
+              onChange({ ...content, landingId: v, url: p?.url ?? "" });
+            }}>
+              <SelectTrigger><SelectValue placeholder="Select a landing page…" /></SelectTrigger>
+              <SelectContent>
+                {landingPages.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {content.url && <p className="text-[11px] text-muted-foreground font-mono break-all">{content.url}</p>}
+      </div>
+    );
+  }
+
+  if (type === "shortlink") {
+    return (
+      <div className="space-y-2">
+        {shortlinks.length === 0 ? (
+          <SpecialtyNote title="No shortlinks yet" desc="Create one under Marketing → Shortlinks, then return here to generate its QR code." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Choose a shortlink</Label>
+            <Select value={content.shortlinkId ?? ""} onValueChange={(v) => {
+              const s = shortlinks.find((x) => x.id === v);
+              onChange({ ...content, shortlinkId: v, url: s?.url ?? "" });
+            }}>
+              <SelectTrigger><SelectValue placeholder="Select a shortlink…" /></SelectTrigger>
+              <SelectContent>
+                {shortlinks.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {content.url && <p className="text-[11px] text-muted-foreground font-mono break-all">{content.url}</p>}
       </div>
     );
   }
@@ -756,6 +821,12 @@ export default function MarketingQRCodesPage() {
   const { data: rawSettings, isFetched: settingsFetched }       = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
   const { data: templatesResponse, refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
 
+  // Landing pages & shortlinks the merchant has already created — selectable as QR targets.
+  const { data: landingResponse }   = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
+  const { data: shortlinksResponse } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
+  const { data: merchant }           = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: shortlinkSettings }  = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
+
   // Brand colours & font from Management > Settings & Integrations > Business Details
   const { profile, isLoading: profileLoading } = useBusinessProfile();
 
@@ -788,6 +859,33 @@ export default function MarketingQRCodesPage() {
 
   const history:        QREntry[]          = ((codesResponse?.items     ?? []) as unknown as Record<string, unknown>[]).map(apiToEntry);
   const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToTemplate);
+
+  // Resolve the merchant's landing pages and shortlinks into selectable QR targets.
+  const landingOptions = useMemo<LinkOption[]>(() => {
+    const username = String((merchant as Record<string, unknown> | undefined)?.username ?? "").toLowerCase();
+    return ((landingResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((p) => {
+      const slug = String(p.slug ?? "");
+      return {
+        id:    String(p.id ?? slug),
+        label: String(p.title || slug || "Untitled page"),
+        url:   `${publicOrigin()}/b/${username || "your-username"}/a/${slug}`,
+      };
+    });
+  }, [landingResponse, merchant]);
+
+  const shortlinkOptions = useMemo<LinkOption[]>(() => {
+    const sl = shortlinkSettings as Record<string, unknown> | undefined;
+    const fallbackBase = `${String(sl?.baseDomain ?? "go.koapos.com")}/${String(sl?.prefix ?? "s")}`;
+    return ((shortlinksResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((s) => {
+      const slug = String(s.slug ?? s.linkId ?? "");
+      const base = String(s.baseDomain ?? fallbackBase);
+      return {
+        id:    String(s.linkId ?? s.id ?? slug),
+        label: String(s.label || s.longUrl || slug || "Shortlink"),
+        url:   `https://${base}/${slug}`,
+      };
+    });
+  }, [shortlinksResponse, shortlinkSettings]);
 
   const [qrType,       setQrType]       = useState<QRCodeType>("website");
   const [content,      setContent]      = useState<QRTypeContent>({ url: "https://" });
@@ -837,6 +935,8 @@ export default function MarketingQRCodesPage() {
     if (qrType === "website" || qrType === "dynamic" || qrType === "document" || qrType === "frame") {
       return (content.url ?? "").trim().length > 5;
     }
+    if (qrType === "landing")   return !!(content.landingId && (content.url ?? "").trim());
+    if (qrType === "shortlink") return !!(content.shortlinkId && (content.url ?? "").trim());
     if (qrType === "vcard")  return !!(content.vcName?.trim());
     if (qrType === "wifi")   return !!(content.wifiSsid?.trim());
     if (qrType === "event")  return !!(content.evTitle?.trim());
@@ -993,7 +1093,7 @@ export default function MarketingQRCodesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] gap-6 items-start">
 
           {/* ── Left: Config ── */}
           <div className="space-y-4">
@@ -1011,7 +1111,7 @@ export default function MarketingQRCodesPage() {
                 {/* Type selector */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">QR Code Type</Label>
-                  <div className="grid grid-cols-7 gap-1">
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
                     {QR_TYPES.map((t) => {
                       const Icon = t.icon;
                       return (
@@ -1031,7 +1131,8 @@ export default function MarketingQRCodesPage() {
                 </div>
 
                 <div className="border-t pt-4">
-                  <QRContentEditor type={qrType} content={content} onChange={setContent} />
+                  <QRContentEditor type={qrType} content={content} onChange={setContent}
+                    landingPages={landingOptions} shortlinks={shortlinkOptions} />
                 </div>
 
                 {/* Label */}
@@ -1238,14 +1339,26 @@ export default function MarketingQRCodesPage() {
                     </div>
                     <input ref={logoFileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                     {settings.logoUrl && (
-                      <div className="flex items-center gap-2.5 mt-1 p-2 rounded-lg bg-muted/40 border">
-                        <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded border bg-white" />
-                        <p className="text-[10px] text-muted-foreground">
-                          Logo active · {settings.level === "L" || settings.level === "M"
-                            ? <span className="text-amber-600">Switch to ECC Q or H for best results</span>
-                            : "ECC level is good"}
-                        </p>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-2.5 mt-1 p-2 rounded-lg bg-muted/40 border">
+                          <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded border bg-white" />
+                          <p className="text-[10px] text-muted-foreground">
+                            Logo active · {settings.level === "L" || settings.level === "M"
+                              ? <span className="text-amber-600">Switch to ECC Q or H for best results</span>
+                              : "ECC level is good"}
+                          </p>
+                        </div>
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Logo size</Label>
+                            <span className="text-[10px] text-muted-foreground font-mono">{Math.round(settings.logoSize * 100)}%</span>
+                          </div>
+                          <input type="range" min={0.15} max={0.5} step={0.01} value={settings.logoSize}
+                            onChange={(e) => set("logoSize", parseFloat(e.target.value))}
+                            className="w-full accent-primary cursor-pointer" />
+                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code — keep ECC at Q or H so it still scans.</p>
+                        </div>
+                      </>
                     )}
                     <p className="text-[10px] text-muted-foreground">Use Error Correction Q or H when adding a logo.</p>
                   </div>
@@ -1255,7 +1368,7 @@ export default function MarketingQRCodesPage() {
           </div>
 
           {/* ── Right: Live Preview ── */}
-          <div className="lg:sticky lg:top-4 space-y-4">
+          <div className="md:sticky md:top-4 space-y-4">
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
               <CardContent className="space-y-4">
