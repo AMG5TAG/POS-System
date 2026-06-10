@@ -12,7 +12,7 @@ import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
   ChevronDown, ChevronUp, Globe, FileText, RefreshCcw, User, Share2,
   File, Wifi, Calendar, Mail, MessageSquare, Minimize2, LayoutTemplate,
-  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check,
+  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -865,6 +865,17 @@ export default function MarketingQRCodesPage() {
     e.target.value = "";
   }, [settings.level]);
 
+  /* Import the logo from Management > Business Details */
+  const importBusinessLogo = useCallback(() => {
+    if (!profile.logo) {
+      toast.error("No business logo found. Add one in Business Details first.");
+      return;
+    }
+    set("logoUrl", profile.logo);
+    if (settings.level === "L" || settings.level === "M") set("level", "Q");
+    toast.success("Business logo imported");
+  }, [profile.logo, settings.level]);
+
   /* Save to history via API */
   const saveToHistory = useCallback(() => {
     if (!hasValidContent) { toast.error("Enter valid content first"); return; }
@@ -1203,11 +1214,18 @@ export default function MarketingQRCodesPage() {
                   {/* Logo upload */}
                   <div className="space-y-2">
                     <Label className="text-xs">Centre Logo <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0"
                         onClick={() => logoFileRef.current?.click()}>
                         <Upload className="w-3.5 h-3.5" /> Upload image
                       </Button>
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0"
+                        onClick={importBusinessLogo} disabled={!profile.logo}
+                        title={profile.logo ? "Use the logo from Business Details" : "Add a logo in Business Details first"}>
+                        <Building2 className="w-3.5 h-3.5" /> Use business logo
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
                       <Input placeholder="…or paste image URL" value={settings.logoUrl.startsWith("data:") ? "" : settings.logoUrl}
                         onChange={(e) => set("logoUrl", e.target.value)}
                         className="font-mono text-xs flex-1 min-w-0" />

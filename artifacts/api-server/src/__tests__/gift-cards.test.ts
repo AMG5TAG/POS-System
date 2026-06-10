@@ -22,6 +22,11 @@ vi.mock("@workspace/db", () => {
   };
 });
 
+vi.mock("../middlewares/requireAuth", () => ({
+  requireAuth: (_req: any, _res: any, next: any) => next(),
+  invalidateMerchantStatusCache: () => {},
+}));
+
 vi.mock("../services/lowStockAlertService", () => ({
   maybeQueueImmediateAlert: vi.fn(),
 }));

@@ -20,6 +20,11 @@ vi.mock("@workspace/db", () => {
   };
 });
 
+vi.mock("../middlewares/requireAuth", () => ({
+  requireAuth: (_req: any, _res: any, next: any) => next(),
+  invalidateMerchantStatusCache: () => {},
+}));
+
 let app: express.Express;
 
 beforeAll(async () => {
