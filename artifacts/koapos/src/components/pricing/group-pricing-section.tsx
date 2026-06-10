@@ -19,11 +19,12 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TreeCategorySelect } from "@/components/ui/tree-category-select";
 import { cn } from "@/lib/utils";
 import { Tags, Plus, X, Save, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 
-interface Cat { id: number; name: string }
+interface Cat { id: number; name: string; parentId?: number | null }
 
 /* ── Reusable formula editor: quick preset + always-visible custom controls ── */
 
@@ -189,12 +190,15 @@ function GroupRuleCard({
 
               {availableCats.length > 0 && (
                 <div className="flex items-center gap-2 pt-0.5">
-                  <Select value={addCatId} onValueChange={setAddCatId}>
-                    <SelectTrigger className="h-8 w-[200px] text-sm"><SelectValue placeholder="Add a category…" /></SelectTrigger>
-                    <SelectContent>
-                      {availableCats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <TreeCategorySelect
+                    categories={categories}
+                    value={addCatId}
+                    onChange={setAddCatId}
+                    placeholder="Add a category…"
+                    showClearOption={false}
+                    disabledIds={usedCatIds}
+                    triggerClass="h-8 w-[200px] text-sm"
+                  />
                   <Button
                     type="button" variant="outline" size="sm" className="h-8 gap-1"
                     disabled={!addCatId}
@@ -225,7 +229,7 @@ export function GroupPricingSection() {
   const groups = settings.groups.length ? settings.groups : DEFAULT_CUSTOMER_GROUPS;
 
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
-  const categories = ((categoriesData as unknown as Cat[]) ?? []).map((c) => ({ id: c.id, name: c.name }));
+  const categories = ((categoriesData as unknown as Cat[]) ?? []).map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null }));
 
   const { data: productsData } = useListProducts(
     { limit: 1000 },
