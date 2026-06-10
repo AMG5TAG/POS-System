@@ -95,7 +95,6 @@ const ONLINE_SUBNAV: NavItem[] = [
 
 const MARKETING_SUBNAV: NavItem[] = [
   { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
-  { name: "Landing Pages", href: "/marketing/landing-pages",        icon: LayoutTemplate },
   {
     name: "Email",
     icon: Mail,
@@ -112,14 +111,6 @@ const MARKETING_SUBNAV: NavItem[] = [
     children: [
       { name: "Campaigns", href: "/marketing/sms/campaigns", icon: Send },
       { name: "Templates", href: "/marketing/sms/templates",  icon: FileText },
-    ],
-  },
-  {
-    name: "Generators",
-    icon: QrCode,
-    children: [
-      { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
-      { name: "Shortlinks", href: "/marketing/generators/shortlinks",  icon: Link2  },
     ],
   },
   {
@@ -213,6 +204,14 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
       { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
+      { name: "Landing Pages",  href: "/marketing/landing-pages",         icon: LayoutTemplate },
+      {
+        name: "Generators", icon: QrCode,
+        children: [
+          { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
+          { name: "Shortlinks", href: "/marketing/generators/shortlinks", icon: Link2  },
+        ],
+      },
       { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
       { name: "Forms & Files",  href: "/management/forms",                icon: FileText   },
       { name: "AI Assistant",   href: "/management/ai",                   icon: Brain      },
