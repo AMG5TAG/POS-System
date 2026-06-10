@@ -16,6 +16,13 @@ import {
 import { toast } from "sonner";
 import { Wallet, Plug, Link2Off, Building2 } from "lucide-react";
 
+/** Supported payroll providers. The selected provider drives the OAuth flow. */
+const PROVIDERS: Array<{ key: string; label: string }> = [
+  { key: "xero_payroll", label: "Xero Payroll" },
+  { key: "myob_payroll", label: "MYOB" },
+];
+const providerLabel = (key: string) => PROVIDERS.find((p) => p.key === key)?.label ?? key;
+
 /** Account-mapping fields used when posting the payroll journal to accounting. */
 const MAPPING_FIELDS: Array<{ key: string; label: string }> = [
   { key: "wagesExpenseAccount", label: "Wages Expense account code" },
@@ -28,12 +35,14 @@ export default function SettingsPayrollPage() {
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useGetPayrollStatus();
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = useGetPayrollSettings();
 
+  const [providerKey, setProviderKey] = useState("xero_payroll");
   const [region, setRegion] = useState("AU");
   const [payCalendarId, setPayCalendarId] = useState("");
   const [mappings, setMappings] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (settings) {
+      setProviderKey(settings.providerKey ?? "xero_payroll");
       setRegion(settings.region ?? "AU");
       setPayCalendarId(settings.payCalendarId ?? "");
       setMappings((settings.accountMappings as Record<string, string>) ?? {});
@@ -45,13 +54,20 @@ export default function SettingsPayrollPage() {
       onSuccess: () => {
         toast.success("Payroll settings saved");
         refetchSettings();
+        refetchStatus();
       },
       onError: () => toast.error("Failed to save settings"),
     },
   });
 
   const save = () =>
-    update.mutate({ data: { region, payCalendarId: payCalendarId || null, accountMappings: mappings } });
+    update.mutate({ data: { providerKey, region, payCalendarId: payCalendarId || null, accountMappings: mappings } });
+
+  // Persist the provider immediately so the Connect flow uses the latest choice.
+  const changeProvider = (key: string) => {
+    setProviderKey(key);
+    update.mutate({ data: { providerKey: key } });
+  };
 
   const disconnect = async () => {
     try {
@@ -89,9 +105,20 @@ export default function SettingsPayrollPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-1.5 max-w-xs">
+                  <Label>Provider</Label>
+                  <Select value={providerKey} onValueChange={changeProvider}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PROVIDERS.map((p) => (
+                        <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">Xero Payroll</p>
+                    <p className="text-sm font-medium">{providerLabel(providerKey)}</p>
                     <p className="text-xs text-muted-foreground">
                       {status?.connected
                         ? `Connected${status.accountHandle ? ` — ${status.accountHandle}` : ""}`

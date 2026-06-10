@@ -60,6 +60,14 @@ describe("POST /api/payroll/sync/journal — body validation", () => {
   });
 });
 
+describe("PUT /api/payroll/settings — provider validation", () => {
+  it("returns 400 for an unknown payroll provider", async () => {
+    const res = await request(app).put("/api/payroll/settings").send({ providerKey: "bogus_payroll" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
 describe("GET /api/payroll/pay-runs/:id — route param validation", () => {
   it("returns 400 for a non-integer id", async () => {
     const res = await request(app).get("/api/payroll/pay-runs/abc");

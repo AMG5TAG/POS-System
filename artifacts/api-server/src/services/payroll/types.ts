@@ -13,11 +13,17 @@
 export type PayrollRegion = "AU" | "NZ" | "UK";
 
 /** Authenticated context passed to every adapter call. The route obtains this
- *  by refreshing the merchant's stored OAuth token before delegating. */
+ *  by refreshing the merchant's stored OAuth token before delegating.
+ *
+ *  `tenantId` is the provider's connection identifier interpreted by each
+ *  adapter: a Xero tenant GUID, or a MYOB company-file URI. `apiKey` carries
+ *  the OAuth client id where the provider requires it as an API header (MYOB's
+ *  `x-myobapi-key`). */
 export interface PayrollAuth {
   accessToken: string;
   tenantId: string;
   region: PayrollRegion;
+  apiKey?: string;
 }
 
 export interface ProviderEmployee {

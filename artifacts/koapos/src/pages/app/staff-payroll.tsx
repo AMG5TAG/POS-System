@@ -137,7 +137,7 @@ export default function StaffPayrollPage() {
                   <p className="text-sm font-medium">No payroll provider connected</p>
                   <p className="text-xs text-muted-foreground">
                     {status?.configured
-                      ? "Connect Xero Payroll to create pay runs."
+                      ? "Connect a payroll provider to create pay runs."
                       : "Payroll OAuth is not configured on this server yet."}
                   </p>
                 </div>

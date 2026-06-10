@@ -14,18 +14,20 @@ import { and, eq, gte, lte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getPayrollProvider,
-  XERO_OAUTH_SCOPES,
+  getOAuthConfig,
+  isProviderConfigured,
+  buildAuthorizeUrl,
+  exchangeCode,
+  refreshTokens,
+  clientId,
   type PayrollAuth,
   type PayrollRegion,
 } from "../services/payroll";
 
 const router: IRouter = Router();
 
-const PROVIDER_KEY = "xero_payroll"; // integrationKey used for payroll OAuth tokens
-const XERO_AUTH_URL = "https://login.xero.com/identity/connect/authorize";
-const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
-const XERO_CONNECTIONS = "https://api.xero.com/connections";
-const XERO_ACCOUNTING_API = "https://api.xero.com/api.xro/2.0";
+const DEFAULT_PROVIDER_KEY = "xero_payroll";
+const XERO_ACCOUNTING_API = "https://api.xero.com/api.xro/2.0"; // journal sync (accounting connection)
 
 type PayrollIntegrationCreds = { tenantId?: string; tenantName?: string };
 
@@ -44,9 +46,15 @@ async function ensureSettings(merchantId: number) {
   if (existing) return existing;
   const [row] = await db
     .insert(payrollSettingsTable)
-    .values({ merchantId, providerKey: PROVIDER_KEY, region: "AU", status: "disconnected" })
+    .values({ merchantId, providerKey: DEFAULT_PROVIDER_KEY, region: "AU", status: "disconnected" })
     .returning();
   return row!;
+}
+
+/** The payroll provider this merchant has selected (defaults to Xero). */
+async function activeProviderKey(merchantId: number): Promise<string> {
+  const s = await getSettings(merchantId);
+  return s?.providerKey ?? DEFAULT_PROVIDER_KEY;
 }
 
 function parseMappings(json: string | null): Record<string, string> {
@@ -58,16 +66,16 @@ function parseMappings(json: string | null): Record<string, string> {
   }
 }
 
-/* ── OAuth / token helpers (payroll connection, integrationKey xero_payroll) ── */
+/* ── OAuth / token helpers (token row keyed by the active provider key) ──── */
 
-async function getIntegrationRow(merchantId: number) {
+async function getIntegrationRow(merchantId: number, providerKey: string) {
   const [row] = await db
     .select()
     .from(merchantIntegrationsTable)
     .where(
       and(
         eq(merchantIntegrationsTable.merchantId, merchantId),
-        eq(merchantIntegrationsTable.integrationKey, PROVIDER_KEY),
+        eq(merchantIntegrationsTable.integrationKey, providerKey),
       ),
     );
   return row ?? null;
@@ -77,46 +85,39 @@ function buildCallbackUrl(proto: string, host: string): string {
   return `${proto}://${host}/api/payroll/auth/callback`;
 }
 
-/** Refresh the payroll OAuth token if needed and return an adapter auth context. */
+/** Refresh the OAuth token if needed and return an adapter auth context. */
 async function withFreshPayrollAuth(merchantId: number): Promise<PayrollAuth | null> {
-  const row = await getIntegrationRow(merchantId);
+  const settings = await getSettings(merchantId);
+  const providerKey = settings?.providerKey ?? DEFAULT_PROVIDER_KEY;
+  const cfg = getOAuthConfig(providerKey);
+  if (!cfg) return null;
+
+  const row = await getIntegrationRow(merchantId, providerKey);
   if (!row?.accessToken) return null;
   const creds: PayrollIntegrationCreds = row.credentials ? JSON.parse(row.credentials) : {};
   if (!creds.tenantId) return null;
 
-  const settings = await getSettings(merchantId);
   const region = (settings?.region as PayrollRegion) ?? "AU";
 
   const now = Date.now();
   if (row.tokenExpiresAt && row.tokenExpiresAt.getTime() - now > 3 * 60 * 1000) {
-    return { accessToken: row.accessToken, tenantId: creds.tenantId, region };
+    return cfg.buildAuth({ accessToken: row.accessToken, tenantId: creds.tenantId, region, clientId: clientId(cfg) });
   }
 
-  const clientId = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret || !row.refreshToken) return null;
-
-  const r = await fetch(XERO_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-    },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: row.refreshToken }),
-  });
-  if (!r.ok) return null;
-  const data = (await r.json()) as { access_token: string; refresh_token?: string; expires_in: number };
+  if (!row.refreshToken) return null;
+  const tokens = await refreshTokens(cfg, row.refreshToken);
+  if (!tokens) return null;
 
   await db
     .update(merchantIntegrationsTable)
     .set({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? row.refreshToken,
-      tokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token ?? row.refreshToken,
+      tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
     })
     .where(eq(merchantIntegrationsTable.id, row.id));
 
-  return { accessToken: data.access_token, tenantId: creds.tenantId, region };
+  return cfg.buildAuth({ accessToken: tokens.access_token, tenantId: creds.tenantId, region, clientId: clientId(cfg) });
 }
 
 async function appendSyncLog(merchantId: number, type: string, message: string): Promise<void> {
@@ -191,16 +192,19 @@ function normaliseStatus(providerStatus: string): string {
 
 router.get("/payroll/status", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const configured = !!(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET);
-  const row = await getIntegrationRow(merchantId);
   const settings = await getSettings(merchantId);
+  const providerKey = settings?.providerKey ?? DEFAULT_PROVIDER_KEY;
+  const cfg = getOAuthConfig(providerKey);
+  const configured = cfg ? isProviderConfigured(cfg) : false;
+
+  const row = await getIntegrationRow(merchantId, providerKey);
   const creds: PayrollIntegrationCreds = row?.credentials ? JSON.parse(row.credentials) : {};
   const connected = !!(row?.status === "connected" && row.accessToken && creds.tenantId);
 
   res.json({
     configured,
     connected,
-    providerKey: settings?.providerKey ?? PROVIDER_KEY,
+    providerKey,
     region: settings?.region ?? "AU",
     accountHandle: creds.tenantName ?? null,
     payCalendarId: settings?.payCalendarId ?? null,
@@ -210,91 +214,72 @@ router.get("/payroll/status", requireAuth, async (req, res): Promise<void> => {
 
 /* ── OAuth start / callback (browser redirects; not in generated client) ── */
 
-router.get("/payroll/auth/start", requireAuth, (req, res): void => {
-  const clientId = process.env.XERO_CLIENT_ID;
-  if (!clientId) {
-    res.redirect("/staff/payroll?error=not_configured");
+router.get("/payroll/auth/start", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const providerKey = await activeProviderKey(merchantId);
+  const cfg = getOAuthConfig(providerKey);
+  if (!cfg || !isProviderConfigured(cfg)) {
+    res.redirect("/settings/payroll?error=not_configured");
     return;
   }
   const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const host = req.headers.host ?? "";
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: clientId,
-    redirect_uri: buildCallbackUrl(proto, host),
-    scope: XERO_OAUTH_SCOPES,
-    state: String(req.session.merchantId!),
-  });
-  res.redirect(`${XERO_AUTH_URL}?${params.toString()}`);
+  const redirectUri = buildCallbackUrl(proto, req.headers.host ?? "");
+  const url = buildAuthorizeUrl(cfg, redirectUri, String(merchantId));
+  if (!url) {
+    res.redirect("/settings/payroll?error=not_configured");
+    return;
+  }
+  res.redirect(url);
 });
 
 router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
   if (error || !code) {
-    res.redirect("/staff/payroll?error=oauth_denied");
+    res.redirect("/settings/payroll?error=oauth_denied");
     return;
   }
   const merchantId = parseInt(state ?? "", 10);
   if (Number.isNaN(merchantId)) {
-    res.redirect("/staff/payroll?error=invalid_state");
+    res.redirect("/settings/payroll?error=invalid_state");
     return;
   }
-  const clientId = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    res.redirect("/staff/payroll?error=not_configured");
+  const providerKey = await activeProviderKey(merchantId);
+  const cfg = getOAuthConfig(providerKey);
+  if (!cfg) {
+    res.redirect("/settings/payroll?error=not_configured");
     return;
   }
 
   const cbProto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const cb = buildCallbackUrl(cbProto, req.headers.host ?? "");
+  const redirectUri = buildCallbackUrl(cbProto, req.headers.host ?? "");
 
-  let tokens: { access_token: string; refresh_token: string; expires_in: number };
-  try {
-    const r = await fetch(XERO_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      },
-      body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }),
-    });
-    if (!r.ok) {
-      res.redirect("/staff/payroll?error=token_failed");
-      return;
-    }
-    tokens = (await r.json()) as typeof tokens;
-  } catch {
-    res.redirect("/staff/payroll?error=token_failed");
+  const tokens = await exchangeCode(cfg, code, redirectUri);
+  if (!tokens) {
+    res.redirect("/settings/payroll?error=token_failed");
     return;
   }
 
-  // Auto-select the first connected Xero organisation as the payroll tenant.
+  // Resolve the provider's connection identifier (Xero tenant / MYOB company file).
   let tenantId = "";
   let tenantName = "";
   try {
-    const cr = await fetch(XERO_CONNECTIONS, {
-      headers: { Authorization: `Bearer ${tokens.access_token}`, "Content-Type": "application/json" },
-    });
-    if (cr.ok) {
-      const tenants = (await cr.json()) as Array<{ tenantId: string; tenantName: string }>;
-      tenantId = tenants[0]?.tenantId ?? "";
-      tenantName = tenants[0]?.tenantName ?? "";
-    }
+    const resolved = await cfg.resolveTenant(tokens.access_token, clientId(cfg));
+    tenantId = resolved.tenantId;
+    tenantName = resolved.tenantName;
   } catch {
     /* best-effort */
   }
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
   const credentials = JSON.stringify({ tenantId, tenantName } satisfies PayrollIntegrationCreds);
-  const existing = await getIntegrationRow(merchantId);
+  const existing = await getIntegrationRow(merchantId, providerKey);
   if (existing) {
     await db
       .update(merchantIntegrationsTable)
       .set({
         status: "connected",
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        refreshToken: tokens.refresh_token ?? null,
         tokenExpiresAt: expiresAt,
         credentials,
         connectedAt: new Date(),
@@ -303,10 +288,10 @@ router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
   } else {
     await db.insert(merchantIntegrationsTable).values({
       merchantId,
-      integrationKey: PROVIDER_KEY,
+      integrationKey: providerKey,
       status: "connected",
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
+      refreshToken: tokens.refresh_token ?? null,
       tokenExpiresAt: expiresAt,
       credentials,
       connectedAt: new Date(),
@@ -324,12 +309,13 @@ router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
 
 router.delete("/payroll/disconnect", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
+  const providerKey = await activeProviderKey(merchantId);
   await db
     .delete(merchantIntegrationsTable)
     .where(
       and(
         eq(merchantIntegrationsTable.merchantId, merchantId),
-        eq(merchantIntegrationsTable.integrationKey, PROVIDER_KEY),
+        eq(merchantIntegrationsTable.integrationKey, providerKey),
       ),
     );
   const settings = await getSettings(merchantId);
@@ -365,6 +351,11 @@ router.put("/payroll/settings", requireAuth, async (req, res): Promise<void> => 
     payCalendarId?: string | null;
     accountMappings?: Record<string, string> | null;
   };
+  // Reject unknown providers so the connect flow always has a config.
+  if (providerKey !== undefined && !getOAuthConfig(providerKey)) {
+    res.status(400).json({ error: "Unknown payroll provider" });
+    return;
+  }
   const s = await ensureSettings(merchantId);
   const updates: Partial<typeof payrollSettingsTable.$inferInsert> = {};
   if (providerKey !== undefined) updates.providerKey = providerKey;
@@ -390,12 +381,13 @@ router.put("/payroll/settings", requireAuth, async (req, res): Promise<void> => 
 
 router.post("/payroll/sync/employees", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
+  const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
     res.status(401).json({ error: "Payroll provider not connected" });
     return;
   }
-  const provider = getPayrollProvider(PROVIDER_KEY);
+  const provider = getPayrollProvider(providerKey);
   if (!provider) {
     res.status(400).json({ error: "Unknown payroll provider" });
     return;
@@ -429,7 +421,7 @@ router.post("/payroll/sync/employees", requireAuth, async (req, res): Promise<vo
           and(
             eq(payrollEmployeeLinksTable.merchantId, merchantId),
             eq(payrollEmployeeLinksTable.staffId, member.id),
-            eq(payrollEmployeeLinksTable.providerKey, PROVIDER_KEY),
+            eq(payrollEmployeeLinksTable.providerKey, providerKey),
           ),
         );
       if (existing) {
@@ -441,7 +433,7 @@ router.post("/payroll/sync/employees", requireAuth, async (req, res): Promise<vo
         await db.insert(payrollEmployeeLinksTable).values({
           merchantId,
           staffId: member.id,
-          providerKey: PROVIDER_KEY,
+          providerKey,
           providerEmployeeId: match.employeeId,
           status: "linked",
           lastSyncedAt: new Date(),
@@ -468,12 +460,13 @@ router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<v
     res.status(400).json({ error: "periodStart and periodEnd are required" });
     return;
   }
+  const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
     res.status(401).json({ error: "Payroll provider not connected" });
     return;
   }
-  const provider = getPayrollProvider(PROVIDER_KEY)!;
+  const provider = getPayrollProvider(providerKey)!;
 
   const links = await db
     .select()
@@ -481,7 +474,7 @@ router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<v
     .where(
       and(
         eq(payrollEmployeeLinksTable.merchantId, merchantId),
-        eq(payrollEmployeeLinksTable.providerKey, PROVIDER_KEY),
+        eq(payrollEmployeeLinksTable.providerKey, providerKey),
       ),
     );
   const staffToEmployee = new Map(links.map((l) => [l.staffId, l.providerEmployeeId]));
@@ -506,7 +499,6 @@ router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<v
       return { employeeId: staffToEmployee.get(e.staffId)!, date: e.date, hours: Math.round(hours * 100) / 100 };
     });
 
-  let failed = 0;
   if (lines.length === 0) {
     res.json({ synced: 0, failed: 0, message: "No matched timesheet entries in range" });
     return;
@@ -515,9 +507,8 @@ router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<v
     const { pushed } = await provider.pushTimesheets(auth, lines);
     const message = `Pushed timesheets for ${pushed} employee${pushed !== 1 ? "s" : ""}`;
     await appendSyncLog(merchantId, "timesheets", message);
-    res.json({ synced: pushed, failed, message });
+    res.json({ synced: pushed, failed: 0, message });
   } catch (err) {
-    failed = lines.length;
     res.status(502).json({ error: `Provider error: ${(err as Error).message}` });
   }
 });
@@ -545,12 +536,13 @@ router.post("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> =>
     res.status(400).json({ error: "periodStart and periodEnd are required" });
     return;
   }
+  const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
     res.status(401).json({ error: "Payroll provider not connected" });
     return;
   }
-  const provider = getPayrollProvider(PROVIDER_KEY)!;
+  const provider = getPayrollProvider(providerKey)!;
   const settings = await getSettings(merchantId);
 
   let providerRun;
@@ -570,7 +562,7 @@ router.post("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> =>
     .insert(payrollPayRunsTable)
     .values({
       merchantId,
-      providerKey: PROVIDER_KEY,
+      providerKey,
       providerPayRunId: providerRun.payRunId,
       periodStart: providerRun.periodStart || periodStart,
       periodEnd: providerRun.periodEnd || periodEnd,
@@ -591,12 +583,12 @@ router.post("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> =>
 /** Refresh and persist payslips for a mirrored pay run from the provider. */
 async function refreshPayslips(
   merchantId: number,
+  providerKey: string,
   auth: PayrollAuth,
   payRun: typeof payrollPayRunsTable.$inferSelect,
 ): Promise<(typeof payrollPayslipsTable.$inferSelect)[]> {
-  const provider = getPayrollProvider(PROVIDER_KEY)!;
+  const provider = getPayrollProvider(providerKey)!;
   const slips = await provider.getPayslips(auth, payRun.providerPayRunId);
-  // staff lookup by provider employee id
   const links = await db
     .select()
     .from(payrollEmployeeLinksTable)
@@ -648,7 +640,7 @@ router.get("/payroll/pay-runs/:id", requireAuth, async (req, res): Promise<void>
     const auth = await withFreshPayrollAuth(merchantId);
     if (auth) {
       try {
-        payslips = await refreshPayslips(merchantId, auth, run);
+        payslips = await refreshPayslips(merchantId, await activeProviderKey(merchantId), auth, run);
       } catch {
         /* leave payslips empty on provider error */
       }
@@ -673,12 +665,13 @@ router.post("/payroll/pay-runs/:id/post", requireAuth, async (req, res): Promise
     res.status(404).json({ error: "Not found" });
     return;
   }
+  const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
     res.status(401).json({ error: "Payroll provider not connected" });
     return;
   }
-  const provider = getPayrollProvider(PROVIDER_KEY)!;
+  const provider = getPayrollProvider(providerKey)!;
 
   let posted;
   try {
@@ -702,7 +695,7 @@ router.post("/payroll/pay-runs/:id/post", requireAuth, async (req, res): Promise
     .returning();
 
   try {
-    await refreshPayslips(merchantId, auth, updated!);
+    await refreshPayslips(merchantId, providerKey, auth, updated!);
   } catch {
     /* best-effort */
   }
@@ -739,10 +732,11 @@ router.get("/payroll/leave-balances", requireAuth, async (req, res): Promise<voi
 
   // Refresh from provider on first load (empty mirror) if connected.
   if (rows.length === 0) {
+    const providerKey = await activeProviderKey(merchantId);
     const auth = await withFreshPayrollAuth(merchantId);
     if (auth) {
       try {
-        const provider = getPayrollProvider(PROVIDER_KEY)!;
+        const provider = getPayrollProvider(providerKey)!;
         const balances = await provider.getLeaveBalances(auth);
         const links = await db
           .select()
@@ -807,7 +801,7 @@ router.post("/payroll/sync/journal", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  // Journal uses the ACCOUNTING (xero) connection, not the payroll one.
+  // Journal uses the ACCOUNTING (xero) connection, independent of the payroll provider.
   const [acct] = await db
     .select()
     .from(merchantIntegrationsTable)
