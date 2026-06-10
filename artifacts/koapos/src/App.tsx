@@ -60,6 +60,11 @@ import StaffTimesheetPage from "@/pages/app/staff-timesheet";
 import StaffRosteringPage from "@/pages/app/staff-rostering";
 import StaffLeaveRequestsPage from "@/pages/app/staff-leave-requests";
 import StaffCostSummaryPage from "@/pages/app/staff-cost-summary";
+import StaffPayrollPage from "@/pages/app/staff-payroll";
+import StaffPayrollRunsPage from "@/pages/app/staff-payroll-runs";
+import StaffPayrollPayslipsPage from "@/pages/app/staff-payroll-payslips";
+import StaffPayrollLeavePage from "@/pages/app/staff-payroll-leave";
+import SettingsPayrollPage from "@/pages/app/settings-payroll";
 import ModulesPage from "@/pages/app/modules";
 import SettingsPage from "@/pages/app/settings";
 import SettingsBusinessPage from "@/pages/app/settings-business";
@@ -381,6 +386,18 @@ function Router() {
       <Route path="/staff/leave-requests">
         <ProtectedRoute component={StaffLeaveRequestsPage} />
       </Route>
+      <Route path="/staff/payroll/runs">
+        <ProtectedRoute component={StaffPayrollRunsPage} />
+      </Route>
+      <Route path="/staff/payroll/payslips">
+        <ProtectedRoute component={StaffPayrollPayslipsPage} />
+      </Route>
+      <Route path="/staff/payroll/leave">
+        <ProtectedRoute component={StaffPayrollLeavePage} />
+      </Route>
+      <Route path="/staff/payroll">
+        <ProtectedRoute component={StaffPayrollPage} />
+      </Route>
       <Route path="/staff/cost-summary">
         <ProtectedRoute component={StaffCostSummaryPage} />
       </Route>
@@ -612,6 +629,9 @@ function Router() {
       </Route>
       <Route path="/settings/pos">
         <ProtectedRoute component={SettingsPOSPage} />
+      </Route>
+      <Route path="/settings/payroll">
+        <ProtectedRoute component={SettingsPayrollPage} />
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={SettingsPage} />

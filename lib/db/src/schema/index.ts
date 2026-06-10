@@ -103,3 +103,8 @@ export * from "./staff-timesheets";
 export * from "./sms-campaigns";
 export * from "./sms-templates";
 export * from "./tyro-settings";
+export * from "./payroll-settings";
+export * from "./payroll-employee-links";
+export * from "./payroll-pay-runs";
+export * from "./payroll-payslips";
+export * from "./payroll-leave-balances";

@@ -9,7 +9,7 @@ import { useAccessibility } from "@/lib/accessibility";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
-  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock,
+  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock, Wallet,
   Wrench, ChevronDown, LayoutGrid, Layers, ClipboardList, Clock,
   RotateCcw, Truck, Bookmark, Tag, Hash, AlertTriangle, History,
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
@@ -81,6 +81,7 @@ const CUSTOMERS_SUBNAV = [
 const STAFF_SUBNAV: NavItem[] = [
   { name: "Overview",    href: "/staff/overview",     icon: LayoutGrid    },
   { name: "Rostering",   href: "/staff/rostering",    icon: CalendarClock },
+  { name: "Payroll",     href: "/staff/payroll",      icon: Wallet        },
   { name: "Notes",       href: "/staff/notes",        icon: StickyNote    },
   { name: "KPIs",        href: "/staff/kpis",         icon: Target        },
   { name: "Links",       href: "/staff/links",        icon: Link2         },

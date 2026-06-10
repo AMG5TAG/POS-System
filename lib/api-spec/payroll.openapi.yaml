@@ -1,0 +1,342 @@
+openapi: 3.0.3
+info:
+  title: Api
+  version: 0.1.0
+  description: |
+    KoaPOS Payroll API. Provider-backed payroll (Xero Payroll first). This spec is
+    generated independently of the main openapi.yaml into an isolated client module
+    (generated-payroll) so it never disturbs the existing generated surface.
+
+    OAuth connect/callback endpoints are intentionally omitted — they are browser
+    redirects served by the API and navigated to directly from the UI.
+servers:
+  - url: /api
+tags:
+  - name: payroll
+
+paths:
+  /payroll/status:
+    get:
+      operationId: getPayrollStatus
+      tags: [payroll]
+      summary: Payroll provider connection status
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollStatus" }
+        "401": { description: Unauthorized }
+
+  /payroll/settings:
+    get:
+      operationId: getPayrollSettings
+      tags: [payroll]
+      summary: Get payroll settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSettings" }
+        "401": { description: Unauthorized }
+    put:
+      operationId: updatePayrollSettings
+      tags: [payroll]
+      summary: Update payroll settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePayrollSettingsInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSettings" }
+        "401": { description: Unauthorized }
+
+  /payroll/sync/employees:
+    post:
+      operationId: syncPayrollEmployees
+      tags: [payroll]
+      summary: Sync staff to provider employees
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSyncResult" }
+        "401": { description: Unauthorized }
+
+  /payroll/sync/timesheets:
+    post:
+      operationId: syncPayrollTimesheets
+      tags: [payroll]
+      summary: Push timesheets for a period to the provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyncTimesheetsInput" }
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSyncResult" }
+        "401": { description: Unauthorized }
+
+  /payroll/sync/journal:
+    post:
+      operationId: syncPayrollJournal
+      tags: [payroll]
+      summary: Push a posted pay run's journal to accounting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyncJournalInput" }
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSyncResult" }
+        "401": { description: Unauthorized }
+
+  /payroll/pay-runs:
+    get:
+      operationId: listPayRuns
+      tags: [payroll]
+      summary: List pay runs
+      responses:
+        "200":
+          description: Pay runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayRunList" }
+        "401": { description: Unauthorized }
+    post:
+      operationId: createPayRun
+      tags: [payroll]
+      summary: Create a draft pay run for a period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePayRunInput" }
+      responses:
+        "201":
+          description: Created pay run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayRun" }
+        "401": { description: Unauthorized }
+
+  /payroll/pay-runs/{id}:
+    get:
+      operationId: getPayRun
+      tags: [payroll]
+      summary: Get a pay run with its payslips
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Pay run detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayRunDetail" }
+        "404": { description: Not found }
+        "401": { description: Unauthorized }
+
+  /payroll/pay-runs/{id}/post:
+    post:
+      operationId: postPayRun
+      tags: [payroll]
+      summary: Finalise (post) a pay run so the provider lodges STP
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Posted pay run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayRun" }
+        "404": { description: Not found }
+        "401": { description: Unauthorized }
+
+  /payroll/payslips:
+    get:
+      operationId: listPayslips
+      tags: [payroll]
+      summary: List payslips
+      parameters:
+        - { name: payRunId, in: query, required: false, schema: { type: integer } }
+        - { name: staffId, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Payslips
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayslipList" }
+        "401": { description: Unauthorized }
+
+  /payroll/leave-balances:
+    get:
+      operationId: listLeaveBalances
+      tags: [payroll]
+      summary: List leave balances
+      parameters:
+        - { name: staffId, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Leave balances
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeaveBalanceList" }
+        "401": { description: Unauthorized }
+
+components:
+  schemas:
+    PayrollStatus:
+      type: object
+      required: [configured, connected, providerKey, region]
+      properties:
+        configured: { type: boolean, description: Server OAuth client credentials present }
+        connected: { type: boolean }
+        providerKey: { type: string }
+        region: { type: string }
+        accountHandle: { type: string, nullable: true }
+        payCalendarId: { type: string, nullable: true }
+        lastSyncAt: { type: string, nullable: true }
+
+    PayrollSettings:
+      type: object
+      required: [providerKey, region, status]
+      properties:
+        providerKey: { type: string }
+        region: { type: string }
+        status: { type: string }
+        payCalendarId: { type: string, nullable: true }
+        accountMappings: { type: object, additionalProperties: { type: string }, nullable: true }
+        lastSyncAt: { type: string, nullable: true }
+
+    UpdatePayrollSettingsInput:
+      type: object
+      properties:
+        providerKey: { type: string }
+        region: { type: string }
+        payCalendarId: { type: string, nullable: true }
+        accountMappings: { type: object, additionalProperties: { type: string }, nullable: true }
+
+    PayrollSyncResult:
+      type: object
+      required: [synced, message]
+      properties:
+        synced: { type: integer }
+        failed: { type: integer }
+        message: { type: string }
+
+    SyncTimesheetsInput:
+      type: object
+      required: [periodStart, periodEnd]
+      properties:
+        periodStart: { type: string, description: "YYYY-MM-DD" }
+        periodEnd: { type: string, description: "YYYY-MM-DD" }
+
+    SyncJournalInput:
+      type: object
+      required: [payRunId]
+      properties:
+        payRunId: { type: integer }
+
+    CreatePayRunInput:
+      type: object
+      required: [periodStart, periodEnd]
+      properties:
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        paymentDate: { type: string, nullable: true }
+
+    PayRun:
+      type: object
+      required: [id, providerPayRunId, periodStart, periodEnd, status, grossCents, paygCents, superCents, netCents, employeeCount]
+      properties:
+        id: { type: integer }
+        providerPayRunId: { type: string }
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        paymentDate: { type: string, nullable: true }
+        status: { type: string }
+        grossCents: { type: integer }
+        paygCents: { type: integer }
+        superCents: { type: integer }
+        netCents: { type: integer }
+        employeeCount: { type: integer }
+        createdAt: { type: string }
+
+    PayRunList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PayRun" }
+
+    PayRunDetail:
+      type: object
+      required: [payRun, payslips]
+      properties:
+        payRun: { $ref: "#/components/schemas/PayRun" }
+        payslips:
+          type: array
+          items: { $ref: "#/components/schemas/Payslip" }
+
+    Payslip:
+      type: object
+      required: [id, payRunId, providerPayslipId, employeeName, grossCents, paygCents, superCents, netCents]
+      properties:
+        id: { type: integer }
+        payRunId: { type: integer }
+        staffId: { type: integer, nullable: true }
+        providerPayslipId: { type: string }
+        providerEmployeeId: { type: string }
+        employeeName: { type: string }
+        grossCents: { type: integer }
+        paygCents: { type: integer }
+        superCents: { type: integer }
+        netCents: { type: integer }
+        leaveAccruedHours: { type: string, nullable: true }
+        pdfRef: { type: string, nullable: true }
+
+    PayslipList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Payslip" }
+
+    LeaveBalance:
+      type: object
+      required: [id, providerEmployeeId, employeeName, leaveType, leaveTypeName, balanceHours]
+      properties:
+        id: { type: integer }
+        staffId: { type: integer, nullable: true }
+        providerEmployeeId: { type: string }
+        employeeName: { type: string }
+        leaveType: { type: string }
+        leaveTypeName: { type: string }
+        balanceHours: { type: string }
+        accruedHours: { type: string, nullable: true }
+        asAtDate: { type: string, nullable: true }
+
+    LeaveBalanceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LeaveBalance" }
