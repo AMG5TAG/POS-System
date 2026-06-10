@@ -204,12 +204,12 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
       { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
-      { name: "Landing Pages",  href: "/marketing/landing-pages",         icon: LayoutTemplate },
+      { name: "Landing Pages",  href: "/management/marketing/landing-pages", icon: LayoutTemplate },
       {
         name: "Generators", icon: QrCode,
         children: [
-          { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
-          { name: "Shortlinks", href: "/marketing/generators/shortlinks", icon: Link2  },
+          { name: "QR Codes",   href: "/management/marketing/generators/qr-codes",   icon: QrCode },
+          { name: "Shortlinks", href: "/management/marketing/generators/shortlinks", icon: Link2  },
         ],
       },
       { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
@@ -322,8 +322,9 @@ const SEARCH_INDEX = [
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
   { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
-  { label: "Marketing · QR Codes",             href: "/marketing/generators/qr-codes",      icon: QrCode,     group: "Marketing" },
-  { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
+  { label: "Marketing · QR Codes",             href: "/management/marketing/generators/qr-codes",   icon: QrCode,     group: "Management" },
+  { label: "Marketing · Shortlinks",           href: "/management/marketing/generators/shortlinks", icon: Link2,      group: "Management" },
+  { label: "Marketing · Landing Pages",        href: "/management/marketing/landing-pages",         icon: LayoutTemplate, group: "Management" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
   { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
@@ -435,9 +436,9 @@ const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/email/templates":            ["Marketing", "Email", "Templates"],
   "/marketing/sms/campaigns":             ["Marketing", "SMS", "Campaigns"],
   "/marketing/sms/templates":             ["Marketing", "SMS", "Templates"],
-  "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
-  "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
-  "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
+  "/management/marketing/landing-pages":           ["Management", "Marketing & Reports", "Landing Pages"],
+  "/management/marketing/generators/qr-codes":     ["Management", "Marketing & Reports", "Generators", "QR Codes"],
+  "/management/marketing/generators/shortlinks":   ["Management", "Marketing & Reports", "Generators", "Shortlinks"],
   "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
   "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
   "/management/koapos":                    ["Management", "KoaPOS"],
@@ -451,6 +452,13 @@ const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/management/misc":                      ["Management", "Misc"],
   "/cameras":                              ["Cameras"],
 };
+
+function inMarketingSection(loc: string): boolean {
+  return loc === "/marketing" || loc.startsWith("/marketing/");
+}
+function inManagementSection(loc: string): boolean {
+  return loc.startsWith("/management/") || loc === "/modules" || loc.startsWith("/settings/");
+}
 
 /**
  * Full route → breadcrumb-trail map. Management hub routes are derived from the
@@ -1504,12 +1512,12 @@ function useHeaderScrollShadow() {
   return scrolled;
 }
 
-function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
+function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending, canManage }: LayoutSharedProps) {
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
-  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
+  const isManagementSection = inManagementSection(location);
+  const isMarketingSection  = inMarketingSection(location);
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const isCamerasSection    = location === "/cameras";
 
@@ -1556,8 +1564,10 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
             isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/delivery-orders" />
           <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
-          <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
-            isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
+          {canManage && (
+            <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
+              isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
+          )}
         </nav>
 
         {/* Flex spacer */}
@@ -1591,10 +1601,10 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
 /* ─── Bottom nav components ──────────────────────────────────────────────── */
 
-function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, logoutPending }: {
+function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, logoutPending, canManage }: {
   open: boolean; onClose: () => void; location: string; navigate: (href: string) => void;
   user: { ownerName?: string | null; email?: string } | null;
-  onLogout: () => void; logoutPending: boolean;
+  onLogout: () => void; logoutPending: boolean; canManage: boolean;
 }) {
   if (!open) return null;
 
@@ -1614,7 +1624,8 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
     { label: "Marketing",  items: flattenNavItems(MARKETING_SUBNAV) },
     { label: "Online",     items: flattenNavItems(ONLINE_SUBNAV) },
     { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
-    { label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) },
+    // Management menus are restricted to Owner/Manager roles.
+    ...(canManage ? [{ label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) }] : []),
   ];
 
   return (
@@ -1671,11 +1682,11 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
   );
 }
 
-function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
+function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending, canManage }: LayoutSharedProps) {
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
+  const isManagementSection = inManagementSection(location);
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1733,7 +1744,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
       <BottomMoreSheet
         open={moreOpen} onClose={() => setMoreOpen(false)}
         location={location} navigate={navigate} user={user}
-        onLogout={handleLogout} logoutPending={logoutPending}
+        onLogout={handleLogout} logoutPending={logoutPending} canManage={canManage}
       />
     </div>
   );
@@ -1752,6 +1763,8 @@ interface LayoutSharedProps {
   toggleTheme: () => void;
   handleLogout: () => void;
   logoutPending: boolean;
+  /** Owner/Manager — controls visibility of the Management section menus. */
+  canManage: boolean;
 }
 
 /* ─── Main AppLayout ─────────────────────────────────────────────────────── */
@@ -1826,10 +1839,8 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
-  const isManagementSection =
-    location.startsWith("/management/") ||
-    location === "/modules" || location.startsWith("/settings/");
+  const isMarketingSection  = inMarketingSection(location);
+  const isManagementSection = inManagementSection(location);
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
 
@@ -1850,7 +1861,8 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const [custsOpen,    setCustsOpen]    = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const canManage = !!user;
+  // Management menus & routes are restricted to Owner and Manager staff roles.
+  const canManage = ["owner", "manager"].includes(user?.staffRole ?? "");
 
   const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => { signOutForDay(); logout(); } });
   const logoutPending = logoutMutation.isPending;
@@ -1865,7 +1877,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
 
   const sharedProps: LayoutSharedProps = {
     children: wrappedChildren, location, navigate: navigate as (href: string) => void,
-    user: user as MerchantUser, theme, toggleTheme, handleLogout, logoutPending,
+    user: user as MerchantUser, theme, toggleTheme, handleLogout, logoutPending, canManage,
   };
 
   /* ── Top nav layout ─────────────────────────────────────────────────── */

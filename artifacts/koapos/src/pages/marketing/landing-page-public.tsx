@@ -1,13 +1,30 @@
 import { useEffect } from "react";
 import { useParams } from "wouter";
-import { useGetLandingPagePublic } from "@workspace/api-client-react";
-import type { LandingPageLink } from "@/pages/app/marketing-landing-pages";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch, type LandingPage } from "@workspace/api-client-react";
+import { LINK_SIZE_CLASSES, LINK_ICON_SIZE_CLASSES, splitLandingLinks, linkIconGlyph, type LandingPageLink } from "@/pages/app/marketing-landing-pages";
 
 export default function LandingPagePublicView() {
-  const params = useParams<{ slug: string }>();
+  // Two public URL shapes resolve to the same page:
+  //   /b/:businessUsername/a/:customName   (preferred)   and   /p/:slug   (legacy)
+  const params = useParams<{ slug?: string; businessUsername?: string; customName?: string }>();
   const slug = params.slug ?? "";
+  const byHandle = !!(params.businessUsername && params.customName);
+  const displayPath = byHandle ? `/b/${params.businessUsername}/a/${params.customName}` : `/p/${slug}`;
 
-  const { data: row, isLoading, isError } = useGetLandingPagePublic(slug);
+  const { data: row, isLoading, isError } = useQuery<LandingPage>({
+    queryKey: byHandle
+      ? ["landing-public", "b", params.businessUsername, params.customName]
+      : ["landing-public", "p", slug],
+    queryFn: () =>
+      customFetch<LandingPage>(
+        byHandle
+          ? `/api/landing-pages/public/b/${encodeURIComponent(params.businessUsername!)}/a/${encodeURIComponent(params.customName!)}`
+          : `/api/landing-pages/public/${encodeURIComponent(slug)}`,
+        { method: "GET" },
+      ),
+    enabled: byHandle || !!slug,
+  });
 
   const links: LandingPageLink[] = (() => {
     if (!row?.links) return [];
@@ -50,7 +67,7 @@ export default function LandingPagePublicView() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
         <p className="text-5xl mb-4">🔍</p>
         <h1 className="text-xl font-bold text-gray-900">Page not found</h1>
-        <p className="text-sm text-gray-500 mt-1">The landing page <code className="font-mono bg-gray-100 px-1 rounded">/p/{slug}</code> doesn't exist.</p>
+        <p className="text-sm text-gray-500 mt-1">The landing page <code className="font-mono bg-gray-100 px-1 rounded">{displayPath}</code> doesn't exist.</p>
       </div>
     );
   }
@@ -74,7 +91,7 @@ export default function LandingPagePublicView() {
       ? { background: "transparent", color: row.btnBg, border: `2px solid ${row.btnBorder || row.btnBg}` }
       : { background: "rgba(255,255,255,0.1)", color: row.btnText, border: "none", backdropFilter: "blur(4px)" };
 
-  const enabledLinks = links.filter((l) => l.enabled);
+  const { body: bodyLinks, bottom: bottomLinks } = splitLandingLinks(links);
 
   return (
     <div
@@ -118,28 +135,48 @@ export default function LandingPagePublicView() {
 
         {/* Links */}
         <div className="w-full mt-8 space-y-3">
-          {enabledLinks.map((link) => (
+          {bodyLinks.map((link) => (
             <a
               key={link.id}
               href={link.url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3.5 px-5 font-semibold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+              className={`flex items-center justify-center gap-2 w-full font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm ${LINK_SIZE_CLASSES[link.size ?? "medium"]}`}
               style={{ ...btnStyle, borderRadius: btnRadius }}
             >
-              {link.emoji && <span className="text-base">{link.emoji}</span>}
-              {link.label}
+              {link.emoji?.trim() && <span className="text-base">{link.emoji}</span>}
+              {!link.iconOnly && link.label}
             </a>
           ))}
-          {enabledLinks.length === 0 && (
+          {bodyLinks.length === 0 && bottomLinks.length === 0 && (
             <p className="text-center text-sm py-4" style={{ color: row.textColor, opacity: 0.4 }}>
               Coming soon…
             </p>
           )}
         </div>
 
+        {/* Bottom social-icon row */}
+        {bottomLinks.length > 0 && (
+          <div className="w-full mt-auto pt-10 flex flex-wrap items-center justify-center gap-3">
+            {bottomLinks.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                title={link.label}
+                aria-label={link.label}
+                className={`flex items-center justify-center leading-none font-semibold rounded-full shadow-sm transition-all hover:scale-105 active:scale-95 ${LINK_ICON_SIZE_CLASSES[link.size ?? "medium"]}`}
+                style={{ ...btnStyle, borderRadius: "9999px" }}
+              >
+                {linkIconGlyph(link)}
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* KoaPOS footer */}
-        <div className="mt-12 text-center">
+        <div className={`text-center ${bottomLinks.length > 0 ? "mt-6" : "mt-12"}`}>
           <p className="text-[11px]" style={{ color: row.textColor, opacity: 0.4 }}>
             Powered by KoaPOS
           </p>

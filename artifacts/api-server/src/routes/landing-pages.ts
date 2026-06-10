@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, landingPagesTable } from "@workspace/db";
+import { db, landingPagesTable, merchantsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -42,6 +42,29 @@ const router: IRouter = Router();
 router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   const slug = req.params.slug as string;
   const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
+// Resolve a landing page by business username + custom name (public, no auth):
+//   /b/:username/a/:customName  →  https://koapos.com.au/b/USERNAME/a/CUSTOMNAME
+router.get("/landing-pages/public/b/:username/a/:customName", async (req, res): Promise<void> => {
+  const username = String(req.params.username || "").trim().toLowerCase();
+  const customName = String(req.params.customName || "").trim();
+  if (!username || !customName) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [merchant] = await db
+    .select({ id: merchantsTable.id })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.username, username))
+    .limit(1);
+  if (!merchant) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [row] = await db
+    .select()
+    .from(landingPagesTable)
+    .where(and(eq(landingPagesTable.merchantId, merchant.id), eq(landingPagesTable.slug, customName)))
+    .limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
 });

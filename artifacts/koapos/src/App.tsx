@@ -618,6 +618,7 @@ function Router() {
       </Route>
 
       {/* Public landing pages (no auth required) */}
+      <Route path="/b/:businessUsername/a/:customName" component={LandingPagePublicView} />
       <Route path="/p/:slug" component={LandingPagePublicView} />
 
       {/* Marketing section */}
@@ -642,15 +643,20 @@ function Router() {
       <Route path="/marketing/sms/templates">
         <ProtectedRoute component={MarketingSmsTemplatesPage} />
       </Route>
-      <Route path="/marketing/landing-pages">
-        <ProtectedRoute component={MarketingLandingPagesPage} />
+      {/* Moved under Management → Marketing & Reports (owner/manager only) */}
+      <Route path="/management/marketing/landing-pages">
+        <ManagementProtectedRoute component={MarketingLandingPagesPage} />
       </Route>
-      <Route path="/marketing/generators/qr-codes">
-        <ProtectedRoute component={MarketingQRCodesPage} />
+      <Route path="/management/marketing/generators/qr-codes">
+        <ManagementProtectedRoute component={MarketingQRCodesPage} />
       </Route>
-      <Route path="/marketing/generators/shortlinks">
-        <ProtectedRoute component={MarketingShortlinksPage} />
+      <Route path="/management/marketing/generators/shortlinks">
+        <ManagementProtectedRoute component={MarketingShortlinksPage} />
       </Route>
+      {/* Legacy redirects from the old /marketing/* locations */}
+      <Route path="/marketing/landing-pages">        <Redirect to="/management/marketing/landing-pages" />        </Route>
+      <Route path="/marketing/generators/qr-codes">  <Redirect to="/management/marketing/generators/qr-codes" />  </Route>
+      <Route path="/marketing/generators/shortlinks"><Redirect to="/management/marketing/generators/shortlinks" /></Route>
       <Route path="/marketing/loyalty/promotions">
         <ProtectedRoute component={MarketingLoyaltyPromotionsPage} />
       </Route>

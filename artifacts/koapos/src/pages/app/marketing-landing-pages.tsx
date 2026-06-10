@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   Globe, Plus, Trash2, Copy, ExternalLink, Pencil, Image, AlignLeft, Palette,
   Link2, GripVertical, ChevronUp, ChevronDown, ToggleLeft, ToggleRight,
-  X, Check, ArrowLeft, Eye,
+  X, Check, ArrowLeft, Eye, Building2, Share2, Save,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -20,14 +20,57 @@ import {
   useCreateLandingPage,
   useUpdateLandingPage,
   useDeleteLandingPage,
+  useGetMerchant,
 } from "@workspace/api-client-react";
 import { FontPicker } from "@/components/ui/font-picker";
+import { useBusinessProfile } from "@/lib/business-profile";
+import { publicOrigin } from "@/lib/public-url";
 import type { LandingPageInput } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
+export type LinkSize = "small" | "medium" | "large";
+export type LinkPlacement = "body" | "bottom";
+
 export interface LandingPageLink {
   id: string; label: string; url: string; emoji: string; enabled: boolean;
+  size?: LinkSize;
+  /** Render as an icon only (no text label) — for social-media-style buttons. */
+  iconOnly?: boolean;
+  /** "bottom" renders the link in the icon row at the very bottom of the page. */
+  placement?: LinkPlacement;
+}
+
+/* Per-link button (pill) sizing → padding + text size. Falls back to medium. */
+export const LINK_SIZE_CLASSES: Record<LinkSize, string> = {
+  small:  "py-2 px-3 text-xs",
+  medium: "py-3 px-4 text-sm",
+  large:  "py-4 px-5 text-base",
+};
+/* Sizing for circular icon-only buttons (the bottom social row). */
+export const LINK_ICON_SIZE_CLASSES: Record<LinkSize, string> = {
+  small:  "w-9 h-9 text-base",
+  medium: "w-11 h-11 text-lg",
+  large:  "w-14 h-14 text-2xl",
+};
+const LINK_SIZES: { value: LinkSize; label: string }[] = [
+  { value: "small",  label: "Small"  },
+  { value: "medium", label: "Medium" },
+  { value: "large",  label: "Large"  },
+];
+
+/** Split enabled links into body buttons and the bottom social-icon row. */
+export function splitLandingLinks(links: LandingPageLink[]): { body: LandingPageLink[]; bottom: LandingPageLink[] } {
+  const enabled = links.filter((l) => l.enabled);
+  return {
+    body:   enabled.filter((l) => (l.placement ?? "body") !== "bottom"),
+    bottom: enabled.filter((l) => l.placement === "bottom"),
+  };
+}
+
+/** Icon shown for a link: its emoji, else the first letter of the label. */
+export function linkIconGlyph(link: LandingPageLink): string {
+  return link.emoji?.trim() || link.label.trim().charAt(0).toUpperCase() || "★";
 }
 
 export interface LandingPage {
@@ -125,6 +168,7 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
 /* ── Landing page renderer (shared with public view) ──────────────────── */
 
 export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; scale?: number }) {
+  const { body: bodyLinks, bottom: bottomLinks } = splitLandingLinks(page.links);
   const bgStyle: React.CSSProperties =
     page.bgType === "gradient"
       ? { background: `linear-gradient(${page.bgDir}, ${page.bgFrom}, ${page.bgTo})` }
@@ -164,18 +208,31 @@ export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; sc
         <p className="text-xs mt-2 text-center opacity-70 max-w-xs leading-relaxed" style={{ color: page.textColor }}>{page.bio}</p>
       )}
       <div className="w-full max-w-xs mt-6 space-y-3">
-        {page.links.filter((l) => l.enabled).map((link) => (
+        {bodyLinks.map((link) => (
           <a key={link.id} href={link.url} target="_blank" rel="noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 px-4 font-medium text-sm transition-opacity hover:opacity-90 active:opacity-75"
+            className={cn("flex items-center justify-center gap-2 w-full font-medium transition-opacity hover:opacity-90 active:opacity-75",
+              LINK_SIZE_CLASSES[link.size ?? "medium"])}
             style={{ ...btnStyle, borderRadius: btnRadius }}>
-            {link.emoji && <span>{link.emoji}</span>}
-            {link.label}
+            {link.emoji?.trim() && <span>{link.emoji}</span>}
+            {!link.iconOnly && link.label}
           </a>
         ))}
-        {page.links.filter((l) => l.enabled).length === 0 && (
+        {bodyLinks.length === 0 && bottomLinks.length === 0 && (
           <div className="text-center text-sm opacity-40 py-4">No links yet</div>
         )}
       </div>
+      {bottomLinks.length > 0 && (
+        <div className="w-full max-w-xs mt-auto pt-8 flex flex-wrap items-center justify-center gap-3">
+          {bottomLinks.map((link) => (
+            <a key={link.id} href={link.url} target="_blank" rel="noreferrer" title={link.label} aria-label={link.label}
+              className={cn("flex items-center justify-center font-medium leading-none transition-opacity hover:opacity-90 active:opacity-75",
+                LINK_ICON_SIZE_CLASSES[link.size ?? "medium"])}
+              style={{ ...btnStyle, borderRadius: "9999px" }}>
+              {linkIconGlyph(link)}
+            </a>
+          ))}
+        </div>
+      )}
       {page.privacyUrl && (
         <div className="mt-6 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.2)" }}>
           <a href={page.privacyUrl} target="_blank" rel="noreferrer noopener"
@@ -223,6 +280,8 @@ function LinkRow({ link, onUpdate, onDelete, onMove, isFirst, isLast }: {
         <Input value={link.emoji} onChange={(e) => onUpdate({ emoji: e.target.value })}
           className="w-10 h-7 text-sm text-center px-1 font-mono bg-background" placeholder="🔗" maxLength={2} />
         <span className="flex-1 text-sm font-medium truncate">{link.label || <span className="text-muted-foreground italic">Untitled link</span>}</span>
+        {link.placement === "bottom" && <Badge variant="secondary" className="text-[9px] px-1.5 py-0 shrink-0">Bottom</Badge>}
+        {link.iconOnly && <Badge variant="secondary" className="text-[9px] px-1.5 py-0 shrink-0">Icon</Badge>}
         <div className="flex items-center gap-0.5">
           <button onClick={() => onMove("up")} disabled={isFirst} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
             <ChevronUp className="w-3.5 h-3.5" />
@@ -249,6 +308,30 @@ function LinkRow({ link, onUpdate, onDelete, onMove, isFirst, isLast }: {
           <div className="space-y-1"><Label className="text-xs">URL</Label>
             <Input value={link.url} onChange={(e) => onUpdate({ url: e.target.value })} placeholder="https://" className="h-8 text-sm font-mono" />
           </div>
+          <div className="space-y-1"><Label className="text-xs">Button size</Label>
+            <div className="flex gap-1.5">
+              {LINK_SIZES.map((s) => (
+                <button key={s.value} type="button" onClick={() => onUpdate({ size: s.value })}
+                  className={cn("flex-1 py-1.5 text-xs font-medium border rounded transition-colors",
+                    (link.size ?? "medium") === s.value ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="button" onClick={() => onUpdate({ iconOnly: !link.iconOnly })}
+            className="flex items-center justify-between w-full text-xs">
+            <span className="font-medium">Icon only <span className="text-muted-foreground font-normal">(hide text label)</span></span>
+            {link.iconOnly ? <ToggleRight className="w-5 h-5 text-primary" /> : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
+          </button>
+          <button type="button" onClick={() => onUpdate({ placement: link.placement === "bottom" ? "body" : "bottom" })}
+            className="flex items-center justify-between w-full text-xs">
+            <span className="font-medium">Show at very bottom <span className="text-muted-foreground font-normal">(social icon row)</span></span>
+            {link.placement === "bottom" ? <ToggleRight className="w-5 h-5 text-primary" /> : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
+          </button>
+          {(link.iconOnly || link.placement === "bottom") && !link.emoji.trim() && (
+            <p className="text-[11px] text-amber-600">Add an emoji/icon above so this link shows a recognisable glyph.</p>
+          )}
         </div>
       )}
     </div>
@@ -261,6 +344,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
   const [tab, setTab] = useState<"content" | "style" | "links">("content");
   const profileRef = useRef<HTMLInputElement>(null);
   const bgImageRef = useRef<HTMLInputElement>(null);
+  const { profile } = useBusinessProfile();
 
   const set = <K extends keyof LandingPage>(k: K, v: LandingPage[K]) => onChange({ [k]: v });
 
@@ -280,7 +364,12 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
 
   const addLink = () => {
     const id = Date.now().toString(36);
-    set("links", [...page.links, { id, label: "", url: "", emoji: "🔗", enabled: true }]);
+    set("links", [...page.links, { id, label: "", url: "", emoji: "", enabled: true, size: "medium" }]);
+  };
+
+  const addSocialIcon = () => {
+    const id = Date.now().toString(36);
+    set("links", [...page.links, { id, label: "", url: "", emoji: "", enabled: true, size: "medium", iconOnly: true, placement: "bottom" }]);
   };
 
   const updateLink = (id: string, patch: Partial<LandingPageLink>) =>
@@ -331,6 +420,12 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                   <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => handleImageUpload(profileRef, "profileImage")}>
                     <Image className="w-3.5 h-3.5" /> Upload photo
                   </Button>
+                  {profile.logo && (
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5"
+                      onClick={() => { set("profileImage", profile.logo); toast.success("Business logo applied"); }}>
+                      <Building2 className="w-3.5 h-3.5" /> Use business logo
+                    </Button>
+                  )}
                   {page.profileImage && (
                     <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive" onClick={() => set("profileImage", "")}>
                       <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -443,11 +538,16 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 />
               ))}
             </div>
-            <Button type="button" variant="outline" className="w-full gap-1.5" onClick={addLink}>
-              <Plus className="w-4 h-4" /> Add link
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" className="flex-1 gap-1.5" onClick={addLink}>
+                <Plus className="w-4 h-4" /> Add link
+              </Button>
+              <Button type="button" variant="outline" className="flex-1 gap-1.5" onClick={addSocialIcon}>
+                <Share2 className="w-4 h-4" /> Add social icon
+              </Button>
+            </div>
             {page.links.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-2">No links yet. Add links that will appear as buttons on your landing page.</p>
+              <p className="text-xs text-muted-foreground text-center py-2">No links yet. Add full-width link buttons, or social icons that sit in a row at the very bottom.</p>
             )}
             <div className="pt-2 border-t space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
@@ -470,14 +570,20 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
 
 /* ── Page URL helpers ──────────────────────────────────────────────────── */
 
-function getPageUrl(slug: string): string {
-  return `${window.location.origin}/p/${slug}`;
+/** Public landing-page URL: https://koapos.com.au/b/USERNAME/a/CUSTOMNAME */
+function getPageUrl(username: string, customName: string): string {
+  return `${publicOrigin()}/b/${username || "your-username"}/a/${customName}`;
+}
+
+/** Slugify a custom name for the URL (no random suffix — the user owns it). */
+function slugifyCustomName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 }
 
 /* ── Pages list view ───────────────────────────────────────────────────── */
 
-function PagesListView({ pages, onSelect, onCreate, onDelete }: {
-  pages: LandingPage[]; onSelect: (id: string) => void; onCreate: () => void; onDelete: (id: string) => void;
+function PagesListView({ pages, onSelect, onCreate, onDelete, username }: {
+  pages: LandingPage[]; onSelect: (id: string) => void; onCreate: () => void; onDelete: (id: string) => void; username: string;
 }) {
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -522,14 +628,14 @@ function PagesListView({ pages, onSelect, onCreate, onDelete }: {
               <CardContent className="p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-mono text-muted-foreground truncate">/p/{page.slug}</p>
+                    <p className="text-xs font-mono text-muted-foreground truncate">/b/{username || "your-username"}/a/{page.slug}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       {new Date(page.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getPageUrl(page.slug)); toast.success("Link copied"); }}><Copy className="w-3 h-3" /></Button>
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); window.open(getPageUrl(page.slug), "_blank"); }}><ExternalLink className="w-3 h-3" /></Button>
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getPageUrl(username, page.slug)); toast.success("Link copied"); }}><Copy className="w-3 h-3" /></Button>
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); window.open(getPageUrl(username, page.slug), "_blank"); }}><ExternalLink className="w-3 h-3" /></Button>
                     <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onSelect(page.id)}><Pencil className="w-3 h-3" /></Button>
                     <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}><Trash2 className="w-3 h-3" /></Button>
                   </div>
@@ -550,6 +656,9 @@ export default function MarketingLandingPagesPage() {
   const createMutation = useCreateLandingPage();
   const updateMutation = useUpdateLandingPage();
   const deleteMutation = useDeleteLandingPage();
+
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const username = (merchant?.username ?? "").toLowerCase();
 
   const serverPages: LandingPage[] = ((pagesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToLocal);
 
@@ -622,10 +731,22 @@ export default function MarketingLandingPagesPage() {
     });
   }, [selectedId, selected]);
 
+  const savePage = useCallback(() => {
+    if (!selectedId || !selected) return;
+    setSaveState("saving");
+    updateMutation.mutate({
+      id: Number(selectedId),
+      data: localToApi(selected),
+    }, {
+      onSuccess: () => { refetch(); setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1500); toast.success("Landing page saved"); },
+      onError: () => { setSaveState("idle"); toast.error("Failed to save changes"); },
+    });
+  }, [selectedId, selected]);
+
   if (!selected) {
     return (
       <AppLayout>
-        <PagesListView pages={pages} onSelect={(id) => { setSelectedId(id); setLocalPage(serverPages.find((p) => p.id === id) ?? null); }} onCreate={createPage} onDelete={deletePage} />
+        <PagesListView pages={pages} username={username} onSelect={(id) => { setSelectedId(id); setLocalPage(serverPages.find((p) => p.id === id) ?? null); }} onCreate={createPage} onDelete={deletePage} />
       </AppLayout>
     );
   }
@@ -640,7 +761,7 @@ export default function MarketingLandingPagesPage() {
           <div className="flex-1 min-w-0">
             <Input
               value={selected.title}
-              onChange={(e) => handleChange({ title: e.target.value, slug: slugify(e.target.value) })}
+              onChange={(e) => handleChange({ title: e.target.value })}
               className="h-8 font-semibold border-transparent hover:border-border focus:border-ring bg-transparent text-sm"
               placeholder="Page title"
             />
@@ -649,16 +770,19 @@ export default function MarketingLandingPagesPage() {
             {saveState === "saved" && <span className="text-xs text-muted-foreground flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> Saved</span>}
             {saveState === "saving" && <span className="text-xs text-muted-foreground">Saving…</span>}
             <Button variant="outline" size="sm" className="gap-1.5 h-8"
-              onClick={() => { navigator.clipboard.writeText(getPageUrl(selected.slug)); toast.success("Link copied"); }}>
+              onClick={() => { navigator.clipboard.writeText(getPageUrl(username, selected.slug)); toast.success("Link copied"); }}>
               <Copy className="w-3.5 h-3.5" /> Copy link
             </Button>
-            <Link href={`/marketing/generators/shortlinks?url=${encodeURIComponent(getPageUrl(selected.slug))}`}>
+            <Link href={`/management/marketing/generators/shortlinks?url=${encodeURIComponent(getPageUrl(username, selected.slug))}`}>
               <Button variant="outline" size="sm" className="gap-1.5 h-8">
                 <Link2 className="w-3.5 h-3.5" /> Shortlink
               </Button>
             </Link>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => window.open(getPageUrl(selected.slug), "_blank")}>
+            <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={() => window.open(getPageUrl(username, selected.slug), "_blank")}>
               <Eye className="w-3.5 h-3.5" /> Preview
+            </Button>
+            <Button size="sm" className="gap-1.5 h-8" onClick={savePage} disabled={saveState === "saving"}>
+              <Save className="w-3.5 h-3.5" /> Save
             </Button>
           </div>
         </div>
@@ -672,21 +796,25 @@ export default function MarketingLandingPagesPage() {
               <PhonePreview page={selected} />
               <div className="text-center space-y-1">
                 <p className="text-xs text-muted-foreground">Page URL</p>
-                <p className="font-mono text-sm text-primary">{getPageUrl(selected.slug)}</p>
+                <p className="font-mono text-sm text-primary break-all">{getPageUrl(username, selected.slug)}</p>
                 <p className="text-xs text-muted-foreground">Create a shortlink to share with customers.</p>
               </div>
-              <div className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-2 text-sm">
-                <span className="text-muted-foreground">{window.location.origin}/p/</span>
-                <input
-                  className="font-mono outline-none bg-transparent text-primary min-w-0 w-28"
-                  value={selected.slug.replace(/-[a-z0-9]{4}$/, "")}
-                  onChange={(e) => {
-                    const base = e.target.value.replace(/[^a-z0-9-]/g, "").slice(0, 40);
-                    const suffix = selected.slug.match(/-([a-z0-9]{4})$/)?.[1] ?? Math.random().toString(36).slice(2, 6);
-                    handleChange({ slug: `${base}-${suffix}` });
-                  }}
-                />
-                <span className="text-muted-foreground font-mono">-{selected.slug.match(/-([a-z0-9]{4})$/)?.[1]}</span>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-center block">Custom name</Label>
+                <div className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-2 text-sm">
+                  <span className="text-muted-foreground font-mono whitespace-nowrap">{publicOrigin().replace(/^https?:\/\//, "")}/b/{username || "your-username"}/a/</span>
+                  <input
+                    className="font-mono outline-none bg-transparent text-primary min-w-0 flex-1"
+                    value={selected.slug}
+                    placeholder="custom-name"
+                    onChange={(e) => handleChange({ slug: slugifyCustomName(e.target.value) })}
+                  />
+                </div>
+                {!username && (
+                  <p className="text-[11px] text-amber-600 text-center">
+                    Set a business username in <Link href="/management/account" className="underline">Settings → Account</Link> to activate this URL.
+                  </p>
+                )}
               </div>
             </div>
           </div>

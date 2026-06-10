@@ -1686,7 +1686,7 @@ function AnalyticsTab() {
         {/* Top shortlinks by clicks */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Top Shortlinks by Clicks" action={
-            <Link href="/marketing/generators/shortlinks">
+            <Link href="/management/marketing/generators/shortlinks">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
@@ -1716,7 +1716,7 @@ function AnalyticsTab() {
         {/* QR template usage */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="QR Code Templates Used" action={
-            <Link href="/marketing/generators/qr-codes">
+            <Link href="/management/marketing/generators/qr-codes">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
@@ -1839,7 +1839,7 @@ function AnalyticsTab() {
       {pages.length > 0 && (
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Landing Pages" action={
-            <Link href="/marketing/landing-pages">
+            <Link href="/management/marketing/landing-pages">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
