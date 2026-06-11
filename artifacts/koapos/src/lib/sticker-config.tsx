@@ -277,6 +277,17 @@ export const STICKER_TYPES: StickerType[] = [
   },
 ];
 
+/* ─── Common fields on every label ───────────────────────────────────────────
+ * Business logo and a free-text section are available on every sticker type, so
+ * they're appended to each type's fields here rather than repeated in all seven
+ * definitions above. The logo toggle shows the business profile logo; the custom
+ * text field prints whatever the user types (e.g. a promo line or care note). */
+export const COMMON_STICKER_FIELDS: StickerField[] = [
+  { key: "showLogo",   label: "Business Logo", defaultValue: "false", type: "toggle" },
+  { key: "customText", label: "Custom Text",   defaultValue: "",      type: "text"   },
+];
+STICKER_TYPES.forEach((t) => t.fields.push(...COMMON_STICKER_FIELDS));
+
 /* ─── Recommended sizes per type ─────────────────────────────────────────── */
 
 export const RECOMMENDED_SIZES: Record<string, string[]> = {
@@ -342,7 +353,7 @@ export function barcodeDataUrl(value: string): string {
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
-  type, fields, size, businessName, brandColor,
+  type, fields, size, businessName, brandColor, logoUrl,
   fillWidth, fillHeight,
   orientation = "horizontal",
   barcodePosition = "bottom",
@@ -353,6 +364,7 @@ export function LabelPreview({
   size: DymoSize;
   businessName: string;
   brandColor: string;
+  logoUrl?: string;
   fillWidth?: number;
   fillHeight?: number;
   orientation?: "horizontal" | "vertical";
@@ -422,6 +434,35 @@ export function LabelPreview({
     />
   ) : null;
 
+  // Business logo header — rendered above the type-specific content when enabled
+  // and a logo is configured in the business profile.
+  const logoEl = show("showLogo") && logoUrl ? (
+    <div className="mb-[3%] flex">
+      <img
+        src={logoUrl}
+        alt="logo"
+        style={{
+          height: Math.max(12, finalScale * 6),
+          maxWidth: "60%",
+          objectFit: "contain",
+          objectPosition: "left center",
+        }}
+      />
+    </div>
+  ) : null;
+
+  // Free-text footer line — prints whatever the user typed (promo line, care
+  // note, etc). Hidden when blank.
+  const customText = f("customText").trim();
+  const customTextEl = customText ? (
+    <div
+      className="text-gray-500 mt-[3%] break-words"
+      style={{ fontSize: Math.max(6, finalScale * 2.4), lineHeight: 1.2 }}
+    >
+      {customText}
+    </div>
+  ) : null;
+
   const labelEl = (
     <div
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
@@ -431,7 +472,9 @@ export function LabelPreview({
       {barcodeImg && barcodePosition === "top" && (
         <div className="px-[6%] pt-[6%]">{barcodeImg}</div>
       )}
-      <div className="flex-1 min-h-0 overflow-hidden px-[9%] py-[4%] flex flex-col justify-between">
+      <div className="flex-1 min-h-0 overflow-hidden px-[9%] py-[4%] flex flex-col">
+        {logoEl}
+        <div className="flex-1 min-h-0 flex flex-col justify-between">
 
         {type.id === "product" && (
           <>
@@ -608,6 +651,8 @@ export function LabelPreview({
           </>
         )}
 
+        </div>
+        {customTextEl}
       </div>
       {barcodeImg && barcodePosition === "bottom" && (
         <div className="px-[6%] pb-[6%]">{barcodeImg}</div>
@@ -719,14 +764,26 @@ export interface BuildLabelHtmlArgs {
   fields: Record<string, string>;
   businessName: string;
   brandColor: string;
+  /** Business logo (URL or data URL) printed when the showLogo toggle is on. */
+  logoUrl?: string;
   orientation: "horizontal" | "vertical";
   quantity: number;
   barcodePosition?: "top" | "bottom";
   colorMode?: "bw" | "color";
 }
 
+/** Escape user-entered text before interpolating it into the print HTML string. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
+  const { typeId, size, fields, businessName, brandColor, logoUrl, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
   // B&W (default) prints every accent in black; "color" keeps brand/status hues.
   const accent = colorMode === "color" ? brandColor : "#000";
   const danger = colorMode === "color" ? "#ef4444" : "#000";
@@ -815,6 +872,19 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const barcodeBlock = (pad: string) =>
     barcodeUrl ? `<div style="padding:${pad}"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated"/></div>` : "";
 
+  // Business logo header — sized to the short edge, capped so it never crowds out
+  // the content. Only printed when the toggle is on and a logo is configured.
+  const logoH = Math.max(3.5, Math.min(8, shorter * 0.32));
+  const logoBlock = show("showLogo") && logoUrl
+    ? `<div style="margin-bottom:1mm"><img src="${logoUrl}" alt="logo" style="display:block;height:${logoH.toFixed(1)}mm;max-width:60%;object-fit:contain;object-position:left center"/></div>`
+    : "";
+
+  // Free-text footer line — prints the user's custom text. Hidden when blank.
+  const customText = f("customText").trim();
+  const customTextBlock = customText
+    ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;margin-top:1mm;line-height:1.2;word-break:break-word">${escapeHtml(customText)}</div>`
+    : "";
+
   const labelBlock = `
     <div style="
       width:${pageW}mm;height:${pageH}mm;
@@ -829,8 +899,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       page-break-inside:avoid;break-inside:avoid;
     ">
       ${barcodePosition === "top" ? barcodeBlock("1.5mm 2mm 0 2mm") : ""}
-      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:1mm 3mm">
-        ${inner}
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:1mm 3mm">
+        ${logoBlock}
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between">
+          ${inner}
+        </div>
+        ${customTextBlock}
       </div>
       ${barcodePosition === "bottom" ? barcodeBlock("0 2mm 1.5mm 2mm") : ""}
     </div>`;
@@ -942,6 +1016,7 @@ export function useStickerPrinter() {
   const { profile } = useBusinessProfile();
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
+  const logoUrl      = profile.logo || "";
 
   const defaultTemplateFor = (typeId: string): StickerTemplate | undefined =>
     templates.find((t) => t.typeId === typeId && t.isDefault) ?? templates.find((t) => t.typeId === typeId);
@@ -964,6 +1039,7 @@ export function useStickerPrinter() {
       fields,
       businessName,
       brandColor,
+      logoUrl,
       orientation: args.orientation ?? "horizontal",
       quantity: args.quantity ?? 1,
       barcodePosition: args.barcodePosition ?? "bottom",
@@ -972,5 +1048,5 @@ export function useStickerPrinter() {
     return printLabelHtmlViaIframe(html);
   };
 
-  return { printStickers, defaultTemplateFor, businessName, brandColor };
+  return { printStickers, defaultTemplateFor, businessName, brandColor, logoUrl };
 }

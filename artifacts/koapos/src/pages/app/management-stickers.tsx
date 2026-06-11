@@ -64,6 +64,32 @@ function FieldPill({
   );
 }
 
+/* ─── Free-text field input ───────────────────────────────────────────────── */
+
+function FieldTextInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="py-2.5 border-b last:border-b-0 space-y-1.5">
+      <span className="text-sm font-medium leading-none">{label}</span>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-8 text-sm"
+      />
+    </div>
+  );
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ManagementStickersPage() {
@@ -613,6 +639,7 @@ export default function ManagementStickersPage() {
                     size={selectedSize}
                     businessName={businessName}
                     brandColor={brandColor}
+                    logoUrl={profile.logo}
                     orientation={orientation}
                     barcodePosition={barcodePosition}
                     colorMode={colorMode}
@@ -711,16 +738,37 @@ export default function ManagementStickersPage() {
                   </div>
                 )}
 
-                {/* On/Off pill toggles for every field */}
+                {/* Field controls — text inputs for free-text fields, On/Off pills
+                    for toggles. The Business Logo toggle pulls from the logo set in
+                    Business settings, so it shows a hint when none is configured. */}
                 <div className="flex-1">
-                  {selectedType.fields.map((field) => (
-                    <FieldPill
-                      key={field.key}
-                      label={field.label}
-                      isOn={currentFields[field.key] !== "false"}
-                      onToggle={(v) => setField(field.key, v ? "true" : "false")}
-                    />
-                  ))}
+                  {selectedType.fields.map((field) =>
+                    field.type === "text" ? (
+                      <FieldTextInput
+                        key={field.key}
+                        label={field.label}
+                        value={currentFields[field.key] ?? ""}
+                        placeholder={field.key === "customText" ? "e.g. Handle with care" : ""}
+                        onChange={(v) => setField(field.key, v)}
+                      />
+                    ) : (
+                      <div key={field.key}>
+                        <FieldPill
+                          label={field.label}
+                          isOn={(currentFields[field.key] ?? field.defaultValue) !== "false"}
+                          onToggle={(v) => setField(field.key, v ? "true" : "false")}
+                        />
+                        {field.key === "showLogo"
+                          && (currentFields[field.key] ?? field.defaultValue) !== "false"
+                          && !profile.logo && (
+                          <p className="text-[11px] text-amber-600 -mt-1.5 pb-2 flex items-center gap-1">
+                            <Info className="w-3 h-3 shrink-0" />
+                            No business logo set — add one in Business settings.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  )}
                 </div>
 
               </CardContent>

@@ -1129,11 +1129,19 @@ export default function MarketingQRCodesPage() {
 
   /* Download helpers — export the framed SVG so the file matches the preview. */
   const downloadFile = useCallback((blob: Blob, name: string, ext: string) => {
+    // The anchor must be in the DOM for click() to trigger a download in Firefox,
+    // and the object URL must stay alive until the download starts — revoking it
+    // synchronously after click() aborts the download in Chrome/Safari, which is
+    // why downloads were silently failing. Defer cleanup to a later tick.
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${name.replace(/\s+/g, "_")}.${ext}`;
+    a.href = url;
+    a.download = `${name.replace(/\s+/g, "_") || "qrcode"}.${ext}`;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
     toast.success("Downloaded");
   }, []);
 
@@ -1226,20 +1234,22 @@ export default function MarketingQRCodesPage() {
         </div>
 
         {/* ── Content + Live Preview side by side ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        {/* items-stretch keeps both columns the same height, so the Content card
+            grows to match the Live Preview column dynamically. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
           {/* ── Content ── */}
-          <div className="space-y-4">
+          <div className="space-y-4 flex flex-col">
 
             {/* QR Type + Content */}
-            <Card>
+            <Card className="flex-1 flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   {activeTypeMeta && <activeTypeMeta.icon className="w-4 h-4" />}
                   Content
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 flex-1">
 
                 {/* Type selector */}
                 <div className="space-y-2">
