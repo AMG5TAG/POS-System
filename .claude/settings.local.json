@@ -188,7 +188,8 @@
       "Bash(curl -s -c /tmp/claude-1000/techjar -X POST -H \"Content-Type: application/json\" -d '{\"pin\":\"1234\"}' http://localhost:3000/api/tech/b/demo-retail-store/login)",
       "Bash(curl -s -b /tmp/claude-1000/techjar http://localhost:3000/api/tech/service-jobs/1)",
       "Bash(xargs basename -a)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

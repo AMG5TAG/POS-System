@@ -374,6 +374,8 @@ export default function POSPage() {
   const [modPickerOpen, setModPickerOpen] = useState(false);
   const [modPickerProduct, setModPickerProduct] = useState<Product | null>(null);
   const [modPickerGroups, setModPickerGroups] = useState<ModifierGroup[]>([]);
+  // Quick-view: inspect a product without adding it to the sale.
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [modPickerSelected, setModPickerSelected] = useState<Record<number, number[]>>({});
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
@@ -2698,6 +2700,21 @@ export default function POSPage() {
                     >
                       <Star className={cn("w-3 h-3", favouriteIds.has(product.id) && "fill-current")} />
                     </button>
+                    {/* Quick view — inspect without adding to the sale */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setQuickViewProduct(product); }}
+                      title="Quick view"
+                      className={cn(
+                        "absolute top-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                        "opacity-0 group-hover:opacity-100 bg-black/30 text-white hover:bg-primary",
+                        // Sit left of the "Low" badge when it's present so they don't overlap.
+                        (product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? ""))
+                          ? "right-9"
+                          : "right-1.5",
+                      )}
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
                   </div>
                   <div className={TILE_SIZE_CLASSES[posLayout.tileSize].body}>
                     <p className={cn("font-semibold line-clamp-2 leading-snug", TILE_SIZE_CLASSES[posLayout.tileSize].name)}>{product.name}</p>
@@ -4169,6 +4186,60 @@ export default function POSPage() {
             <Button variant="outline" onClick={tryCloseZeroPrice}>Cancel</Button>
             <Button onClick={addZeroPriceProduct}>Add to Cart</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Product quick view (inspect without adding to the sale) ─── */}
+      <Dialog open={!!quickViewProduct} onOpenChange={o => { if (!o) setQuickViewProduct(null); }}>
+        <DialogContent className="sm:max-w-md">
+          {quickViewProduct && (() => {
+            const p = quickViewProduct;
+            const typeName = (p as Product & { productTypeName?: string | null }).productTypeName ?? "";
+            const stockEligible = p.trackInventory && p.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes(typeName);
+            const isLow = stockEligible && (p.stockQuantity ?? 0) <= (p.lowStockThreshold || 5);
+            const imgSrc = productImageSrc(p.imageUrl, defaultProductImage);
+            const tags = Array.isArray(p.tags) ? p.tags : [];
+            return (
+              <>
+                <DialogHeader><DialogTitle className="pr-6">{p.name}</DialogTitle></DialogHeader>
+                <div className="flex gap-4">
+                  <div className="w-28 h-28 shrink-0 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                    {imgSrc
+                      ? <img src={imgSrc} alt={p.name} className="w-full h-full object-contain" />
+                      : <span className="text-4xl font-bold text-muted-foreground/20">{p.name.charAt(0)}</span>}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-xl font-bold text-primary">
+                      {(p.price ?? 0) === 0 ? <span className="text-sm text-muted-foreground font-normal">No price set</span> : formatCurrency(p.price)}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {typeName && <Badge variant="secondary" className="text-[10px]">{typeName}</Badge>}
+                      {stockEligible && (
+                        <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
+                          {p.stockQuantity} in stock{isLow ? " · Low" : ""}
+                        </Badge>
+                      )}
+                    </div>
+                    <dl className="text-xs text-muted-foreground space-y-0.5 pt-1">
+                      {p.sku && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">SKU</dt><dd className="truncate">{p.sku}</dd></div>}
+                      {p.barcode && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Barcode</dt><dd className="truncate">{p.barcode}</dd></div>}
+                      {p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
+                    </dl>
+                  </div>
+                </div>
+                {p.description && <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{p.description}</p>}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setQuickViewProduct(null)}>Close</Button>
+                  <Button onClick={() => { setQuickViewProduct(null); fetchModifiersAndShow(p); }}>Add to sale</Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
