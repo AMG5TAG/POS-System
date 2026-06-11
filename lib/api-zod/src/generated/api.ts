@@ -5306,6 +5306,97 @@ export const UpsertLaybySettingsResponse = zod.object({
 
 
 /**
+ * @summary Get sales settings (Sales / Invoices / Refunds / Quotes defaults)
+ */
+export const GetSalesSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "saleRequireCustomer": zod.string(),
+  "saleReceiptDelivery": zod.string(),
+  "saleRoundCashTo5c": zod.string(),
+  "saleRequireDiscountReason": zod.string(),
+  "saleAllowOutOfStock": zod.string(),
+  "saleDefaultNote": zod.string(),
+  "invoiceDueDays": zod.number(),
+  "invoiceDefaultTaxRate": zod.number(),
+  "invoiceAutoEmail": zod.string(),
+  "invoiceTerms": zod.string(),
+  "refundWindowDays": zod.number(),
+  "refundRequireReason": zod.string(),
+  "refundRequireApproval": zod.string(),
+  "refundRestockingFeePct": zod.number(),
+  "refundOriginalMethodOnly": zod.string(),
+  "refundDefaultNote": zod.string(),
+  "quoteExpiryDays": zod.number(),
+  "quoteDefaultTaxRate": zod.number(),
+  "quoteAutoEmail": zod.string(),
+  "quoteTerms": zod.string(),
+  "quotePrefix": zod.string(),
+  "quoteDigits": zod.number(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update sales settings (only provided fields are applied)
+ */
+export const UpdateSalesSettingsBody = zod.object({
+  "saleRequireCustomer": zod.string().optional(),
+  "saleReceiptDelivery": zod.string().optional(),
+  "saleRoundCashTo5c": zod.string().optional(),
+  "saleRequireDiscountReason": zod.string().optional(),
+  "saleAllowOutOfStock": zod.string().optional(),
+  "saleDefaultNote": zod.string().optional(),
+  "invoiceDueDays": zod.number().optional(),
+  "invoiceDefaultTaxRate": zod.number().optional(),
+  "invoiceAutoEmail": zod.string().optional(),
+  "invoiceTerms": zod.string().optional(),
+  "refundWindowDays": zod.number().optional(),
+  "refundRequireReason": zod.string().optional(),
+  "refundRequireApproval": zod.string().optional(),
+  "refundRestockingFeePct": zod.number().optional(),
+  "refundOriginalMethodOnly": zod.string().optional(),
+  "refundDefaultNote": zod.string().optional(),
+  "quoteExpiryDays": zod.number().optional(),
+  "quoteDefaultTaxRate": zod.number().optional(),
+  "quoteAutoEmail": zod.string().optional(),
+  "quoteTerms": zod.string().optional(),
+  "quotePrefix": zod.string().optional(),
+  "quoteDigits": zod.number().optional()
+})
+
+export const UpdateSalesSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "saleRequireCustomer": zod.string(),
+  "saleReceiptDelivery": zod.string(),
+  "saleRoundCashTo5c": zod.string(),
+  "saleRequireDiscountReason": zod.string(),
+  "saleAllowOutOfStock": zod.string(),
+  "saleDefaultNote": zod.string(),
+  "invoiceDueDays": zod.number(),
+  "invoiceDefaultTaxRate": zod.number(),
+  "invoiceAutoEmail": zod.string(),
+  "invoiceTerms": zod.string(),
+  "refundWindowDays": zod.number(),
+  "refundRequireReason": zod.string(),
+  "refundRequireApproval": zod.string(),
+  "refundRestockingFeePct": zod.number(),
+  "refundOriginalMethodOnly": zod.string(),
+  "refundDefaultNote": zod.string(),
+  "quoteExpiryDays": zod.number(),
+  "quoteDefaultTaxRate": zod.number(),
+  "quoteAutoEmail": zod.string(),
+  "quoteTerms": zod.string(),
+  "quotePrefix": zod.string(),
+  "quoteDigits": zod.number(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get KPI settings
  */
 export const GetKpiSettingsResponse = zod.object({
@@ -8922,6 +9013,383 @@ export const AddInvoiceEventResponse = zod.object({
   "recurringOccurrences": zod.number().nullish(),
   "recurringStartDate": zod.coerce.date().nullish(),
   "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List quotes for the current merchant
+ */
+export const listQuotesQueryLimitDefault = 50;
+export const listQuotesQueryOffsetDefault = 0;
+
+export const ListQuotesQueryParams = zod.object({
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']).optional(),
+  "customerId": zod.coerce.number().optional(),
+  "search": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().default(listQuotesQueryLimitDefault),
+  "offset": zod.coerce.number().default(listQuotesQueryOffsetDefault)
+})
+
+export const listQuotesResponseItemsItemItemsItemQuantityMin = 0.0001;
+
+export const listQuotesResponseItemsItemItemsItemUnitPriceMin = 0;
+
+export const listQuotesResponseItemsItemItemsItemTaxRateMin = 0;
+export const listQuotesResponseItemsItemItemsItemTaxRateMax = 100;
+
+
+
+export const ListQuotesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(listQuotesResponseItemsItemItemsItemQuantityMin),
+  "unitPrice": zod.number().min(listQuotesResponseItemsItemItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(listQuotesResponseItemsItemItemsItemTaxRateMin).max(listQuotesResponseItemsItemItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create a new quote
+ */
+export const createQuoteBodyItemsItemQuantityMin = 0.0001;
+
+export const createQuoteBodyItemsItemUnitPriceMin = 0;
+
+export const createQuoteBodyItemsItemTaxRateMin = 0;
+export const createQuoteBodyItemsItemTaxRateMax = 100;
+
+
+
+export const CreateQuoteBody = zod.object({
+  "customerId": zod.number().optional(),
+  "expiryDate": zod.coerce.date().optional(),
+  "notes": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(createQuoteBodyItemsItemQuantityMin),
+  "unitPrice": zod.number().min(createQuoteBodyItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(createQuoteBodyItemsItemTaxRateMin).max(createQuoteBodyItemsItemTaxRateMax)
+})).optional(),
+  "discount": zod.object({
+  "type": zod.enum(['fixed', 'percent']),
+  "value": zod.number()
+}).optional(),
+  "quotePrefix": zod.string().optional(),
+  "quoteDigits": zod.number().optional()
+})
+
+
+/**
+ * @summary Get a single quote
+ */
+export const GetQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getQuoteResponseItemsItemQuantityMin = 0.0001;
+
+export const getQuoteResponseItemsItemUnitPriceMin = 0;
+
+export const getQuoteResponseItemsItemTaxRateMin = 0;
+export const getQuoteResponseItemsItemTaxRateMax = 100;
+
+
+
+export const GetQuoteResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(getQuoteResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(getQuoteResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(getQuoteResponseItemsItemTaxRateMin).max(getQuoteResponseItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a quote (status, items, notes, expiry, discount). Only provided fields are applied.
+ */
+export const UpdateQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateQuoteBodyItemsItemQuantityMin = 0.0001;
+
+export const updateQuoteBodyItemsItemUnitPriceMin = 0;
+
+export const updateQuoteBodyItemsItemTaxRateMin = 0;
+export const updateQuoteBodyItemsItemTaxRateMax = 100;
+
+
+
+export const UpdateQuoteBody = zod.object({
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']).optional(),
+  "notes": zod.string().optional(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "customerId": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(updateQuoteBodyItemsItemQuantityMin),
+  "unitPrice": zod.number().min(updateQuoteBodyItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(updateQuoteBodyItemsItemTaxRateMin).max(updateQuoteBodyItemsItemTaxRateMax)
+})).optional(),
+  "discount": zod.object({
+  "type": zod.enum(['fixed', 'percent']),
+  "value": zod.number()
+}).optional()
+})
+
+export const updateQuoteResponseItemsItemQuantityMin = 0.0001;
+
+export const updateQuoteResponseItemsItemUnitPriceMin = 0;
+
+export const updateQuoteResponseItemsItemTaxRateMin = 0;
+export const updateQuoteResponseItemsItemTaxRateMax = 100;
+
+
+
+export const UpdateQuoteResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(updateQuoteResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(updateQuoteResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(updateQuoteResponseItemsItemTaxRateMin).max(updateQuoteResponseItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a quote
+ */
+export const DeleteQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * Generates a server-side PDF for the specified quote, incorporating the merchant's brand colour and logo from their Business Profile. Returns the PDF as an attachment.
+
+ * @summary Download a branded A4 PDF for a quote
+ */
+export const GetQuotePdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Send the quote by email to the customer
+ */
+export const SendQuoteEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendQuoteEmailBody = zod.object({
+  "email": zod.string().email(),
+  "template": zod.record(zod.string(), zod.unknown()).optional().describe('Optional email template overrides')
+})
+
+export const SendQuoteEmailResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Mark a quote as converted to a sale
+ */
+export const ConvertQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConvertQuoteBody = zod.object({
+  "transactionId": zod.number().optional()
+})
+
+export const convertQuoteResponseItemsItemQuantityMin = 0.0001;
+
+export const convertQuoteResponseItemsItemUnitPriceMin = 0;
+
+export const convertQuoteResponseItemsItemTaxRateMin = 0;
+export const convertQuoteResponseItemsItemTaxRateMax = 100;
+
+
+
+export const ConvertQuoteResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(convertQuoteResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(convertQuoteResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(convertQuoteResponseItemsItemTaxRateMin).max(convertQuoteResponseItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Append a custom event to a quote's event log
+ */
+export const AddQuoteEventParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddQuoteEventBody = zod.object({
+  "type": zod.string(),
+  "detail": zod.string().optional(),
+  "method": zod.string().optional()
+})
+
+export const addQuoteEventResponseItemsItemQuantityMin = 0.0001;
+
+export const addQuoteEventResponseItemsItemUnitPriceMin = 0;
+
+export const addQuoteEventResponseItemsItemTaxRateMin = 0;
+export const addQuoteEventResponseItemsItemTaxRateMax = 100;
+
+
+
+export const AddQuoteEventResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(addQuoteEventResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(addQuoteEventResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(addQuoteEventResponseItemsItemTaxRateMin).max(addQuoteEventResponseItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "customerPhone": zod.string().nullish(),

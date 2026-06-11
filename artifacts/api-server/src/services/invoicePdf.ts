@@ -6,6 +6,10 @@ type LineItem = { description: string; quantity: number; unitPrice: number; taxR
 
 export interface InvoicePdfData {
   invoiceNumber: string;
+  /** Document heading. Defaults to "Tax Invoice"; pass "Quote" for quote PDFs. */
+  title?: string | null;
+  /** Label preceding the due/validity date. Defaults to "Due"; e.g. "Valid until". */
+  dueDateLabel?: string | null;
   status: string;
   createdAt: string;
   dueDate: string | null;
@@ -155,10 +159,11 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
     : null;
 
   return {
-    title: "Tax Invoice",
+    title: data.title || "Tax Invoice",
     documentNumber: data.invoiceNumber,
     dateStr: fmtDate(data.createdAt),
     dueDateStr: data.dueDate ? fmtDate(data.dueDate) : null,
+    dueDateLabel: data.dueDateLabel ?? null,
     paidAtStr: data.paidAt ? fmtDate(data.paidAt) : null,
     status: data.status,
     business: {

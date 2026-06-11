@@ -32,6 +32,8 @@ import DashboardPage from "@/pages/app/dashboard";
 import POSPage from "@/pages/app/pos";
 import POSHistoryPage from "@/pages/app/pos-history";
 import POSInvoicesPage from "@/pages/app/pos-invoices";
+import POSQuotesPage from "@/pages/app/pos-quotes";
+import SalesSettingsPage from "@/pages/app/settings-sales";
 import POSLaybuysPage from "@/pages/app/pos-laybuys";
 import POSParkedPage from "@/pages/app/pos-parked";
 import POSRefundPage from "@/pages/app/pos-refund";
@@ -287,6 +289,9 @@ function Router() {
       <Route path="/pos/invoices">
         <ProtectedRoute component={POSInvoicesPage} />
       </Route>
+      <Route path="/pos/quotes">
+        <ProtectedRoute component={POSQuotesPage} />
+      </Route>
       <Route path="/pos/laybuys">
         <ProtectedRoute component={POSLaybuysPage} />
       </Route>
@@ -504,6 +509,9 @@ function Router() {
       </Route>
       <Route path="/management/registers">
         <ManagementProtectedRoute component={ManagementRegistersPage} />
+      </Route>
+      <Route path="/management/sales-settings">
+        <ManagementProtectedRoute component={SalesSettingsPage} />
       </Route>
       <Route path="/management/floor-plan">
         <ManagementProtectedRoute component={ManagementFloorPlanPage} />

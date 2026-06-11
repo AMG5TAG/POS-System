@@ -2577,6 +2577,60 @@ export interface LaybySettingsInput {
   termsAndConditions?: string;
 }
 
+export interface SalesSettings {
+  id: number;
+  merchantId: number;
+  saleRequireCustomer: string;
+  saleReceiptDelivery: string;
+  saleRoundCashTo5c: string;
+  saleRequireDiscountReason: string;
+  saleAllowOutOfStock: string;
+  saleDefaultNote: string;
+  invoiceDueDays: number;
+  invoiceDefaultTaxRate: number;
+  invoiceAutoEmail: string;
+  invoiceTerms: string;
+  refundWindowDays: number;
+  refundRequireReason: string;
+  refundRequireApproval: string;
+  refundRestockingFeePct: number;
+  refundOriginalMethodOnly: string;
+  refundDefaultNote: string;
+  quoteExpiryDays: number;
+  quoteDefaultTaxRate: number;
+  quoteAutoEmail: string;
+  quoteTerms: string;
+  quotePrefix: string;
+  quoteDigits: number;
+  createdAt?: string;
+  updatedAt: string;
+}
+
+export interface SalesSettingsUpdate {
+  saleRequireCustomer?: string;
+  saleReceiptDelivery?: string;
+  saleRoundCashTo5c?: string;
+  saleRequireDiscountReason?: string;
+  saleAllowOutOfStock?: string;
+  saleDefaultNote?: string;
+  invoiceDueDays?: number;
+  invoiceDefaultTaxRate?: number;
+  invoiceAutoEmail?: string;
+  invoiceTerms?: string;
+  refundWindowDays?: number;
+  refundRequireReason?: string;
+  refundRequireApproval?: string;
+  refundRestockingFeePct?: number;
+  refundOriginalMethodOnly?: string;
+  refundDefaultNote?: string;
+  quoteExpiryDays?: number;
+  quoteDefaultTaxRate?: number;
+  quoteAutoEmail?: string;
+  quoteTerms?: string;
+  quotePrefix?: string;
+  quoteDigits?: number;
+}
+
 export interface KpiSettings {
   id: number;
   merchantId: number;
@@ -4290,6 +4344,132 @@ export interface InvoiceEventInput {
   idempotencyKey?: string;
 }
 
+export interface QuoteLineItem {
+  description: string;
+  /** @minimum 0.0001 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate: number;
+}
+
+export type QuoteDiscountInputType = typeof QuoteDiscountInputType[keyof typeof QuoteDiscountInputType];
+
+
+export const QuoteDiscountInputType = {
+  fixed: 'fixed',
+  percent: 'percent',
+} as const;
+
+export interface QuoteDiscountInput {
+  type: QuoteDiscountInputType;
+  value: number;
+}
+
+export interface QuoteEvent {
+  type: string;
+  timestamp: string;
+  detail?: string | null;
+  method?: string | null;
+}
+
+export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
+
+
+export const QuoteStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  expired: 'expired',
+  converted: 'converted',
+} as const;
+
+export interface Quote {
+  id: number;
+  merchantId: number;
+  customerId?: number | null;
+  quoteNumber: string;
+  status: QuoteStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountTotal?: number | null;
+  items: QuoteLineItem[];
+  events: QuoteEvent[];
+  notes?: string | null;
+  expiryDate?: string | null;
+  convertedTransactionId?: number | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  customerCompany?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuoteList {
+  items: Quote[];
+  total: number;
+}
+
+export interface QuoteInput {
+  customerId?: number;
+  expiryDate?: string;
+  notes?: string;
+  items?: QuoteLineItem[];
+  discount?: QuoteDiscountInput;
+  quotePrefix?: string;
+  quoteDigits?: number;
+}
+
+export type QuoteUpdateStatus = typeof QuoteUpdateStatus[keyof typeof QuoteUpdateStatus];
+
+
+export const QuoteUpdateStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  expired: 'expired',
+  converted: 'converted',
+} as const;
+
+export interface QuoteUpdate {
+  status?: QuoteUpdateStatus;
+  notes?: string;
+  expiryDate?: string | null;
+  customerId?: number | null;
+  items?: QuoteLineItem[];
+  discount?: QuoteDiscountInput;
+}
+
+export interface ConvertQuoteInput {
+  transactionId?: number;
+}
+
+/**
+ * Optional email template overrides
+ */
+export type SendQuoteEmailInputTemplate = { [key: string]: unknown };
+
+export interface SendQuoteEmailInput {
+  email: string;
+  /** Optional email template overrides */
+  template?: SendQuoteEmailInputTemplate;
+}
+
+export interface QuoteEventInput {
+  type: string;
+  detail?: string;
+  method?: string;
+}
+
 export interface ProductTagItem {
   name: string;
   productCount: number;
@@ -4931,6 +5111,25 @@ export const ListInvoicesStatus = {
   paid: 'paid',
   overdue: 'overdue',
   cancelled: 'cancelled',
+} as const;
+
+export type ListQuotesParams = {
+status?: ListQuotesStatus;
+customerId?: number;
+search?: string;
+limit?: number;
+offset?: number;
+};
+
+export type ListQuotesStatus = typeof ListQuotesStatus[keyof typeof ListQuotesStatus];
+
+
+export const ListQuotesStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  expired: 'expired',
+  converted: 'converted',
 } as const;
 
 export type ListBackupsParams = {

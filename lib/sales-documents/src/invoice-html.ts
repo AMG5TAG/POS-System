@@ -78,6 +78,8 @@ export interface InvoiceDocInput {
   documentNumber: string;
   dateStr: string;
   dueDateStr?: string | null;
+  /** Label preceding the due/validity date, e.g. "Due" or "Valid until". Defaults to "Due". */
+  dueDateLabel?: string | null;
   paidAtStr?: string | null;
   status?: string | null;
   /** POS receipt path supplies a payment-method label; invoices usually omit it. */
@@ -195,7 +197,7 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   // ── Right-column meta (number / dates / status) ──
   const metaRight: string[] = [`<div class="inv-num">${esc(input.documentNumber)}</div>`,
     `<div class="inv-date">${esc(input.dateStr)}</div>`];
-  if (input.dueDateStr) metaRight.push(`<div class="inv-date">Due ${esc(input.dueDateStr)}</div>`);
+  if (input.dueDateStr) metaRight.push(`<div class="inv-date">${esc(input.dueDateLabel || "Due")} ${esc(input.dueDateStr)}</div>`);
 
   // ── Line items ──
   const itemRows = input.items.map((item, i) => {
