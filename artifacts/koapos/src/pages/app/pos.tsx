@@ -1957,6 +1957,12 @@ export default function POSPage() {
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     idempotencyKeyRef.current = null;
     setDiscountExcessAmount(0);
+    /* Sale is over — clear any payment-entry state so the navigation guard
+       doesn't keep reporting "Payment in progress" after a completed sale. */
+    setNumpadInput("");
+    setGcPayCardNumber("");
+    setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
+    paymentModalInitialMethodRef.current = null;
     /* Sale is over — any one-sale staff switch reverts to the day's staff. */
     setSaleStaff(null);
   };
@@ -4006,7 +4012,8 @@ export default function POSPage() {
                 onClick={() => { setReceiptMode("print"); }}
               >
                 {pbShowIcon && <Printer className="w-4 h-4" />}
-                {pbShowText && <span>Print Receipt</span>}
+                {/* Completion actions always show their label, even in icon-only mode. */}
+                <span>Print Receipt</span>
               </Button>
               <Button
                 variant="outline"
@@ -4014,7 +4021,7 @@ export default function POSPage() {
                 onClick={() => { setReceiptMode("email"); }}
               >
                 {pbShowIcon && <Mail className="w-4 h-4" />}
-                {pbShowText && <span>Email Receipt</span>}
+                <span>Email Receipt</span>
               </Button>
               <Button
                 variant="outline"
@@ -4022,7 +4029,7 @@ export default function POSPage() {
                 onClick={() => { setReceiptMode("sms"); }}
               >
                 {pbShowIcon && <MessageSquare className="w-4 h-4" />}
-                {pbShowText && <span>SMS Receipt</span>}
+                <span>SMS Receipt</span>
               </Button>
             </div>
           )}
@@ -4038,7 +4045,7 @@ export default function POSPage() {
                 }}
               >
                 {pbShowIcon && <Printer className="w-4 h-4" />}
-                {pbShowText && <span>Thermal Receipt (80mm)</span>}
+                <span>Thermal Receipt (80mm)</span>
               </Button>
               <Button
                 variant="outline"
@@ -4050,7 +4057,7 @@ export default function POSPage() {
                 }}
               >
                 {pbShowIcon && <FileText className="w-4 h-4" />}
-                {pbShowText && <span>A4 Receipt</span>}
+                <span>A4 Receipt</span>
               </Button>
               <div className="flex gap-2 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setReceiptMode("idle")}>Back</Button>
