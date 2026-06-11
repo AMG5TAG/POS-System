@@ -337,18 +337,38 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
   };
 }
 
+/* Render the bare QR to an SVG string. getRawData() loads the embedded logo with
+   crossOrigin="anonymous" so the result is canvas-safe; if that load fails (most
+   commonly a CORS-blocked or unreachable remote logo) it rejects, taking down both
+   the PNG and SVG export. The live preview uses append() and never hits this path,
+   so a QR can look fine on screen yet fail to download. When a logo is set and the
+   render rejects, retry once without it so the QR itself still exports, reporting
+   whether the logo had to be dropped. */
+async function renderQrSvgText(settings: QRSettings, data: string, qrSize: number): Promise<{ qrSvg: string; droppedLogo: boolean }> {
+  const render = async (opts: QROptions) => {
+    const blob = await new QRCodeStyling(opts).getRawData("svg");
+    if (!blob) throw new Error("QR render failed");
+    return (await (blob as Blob).text())
+      .replace(/<\?xml[^>]*\?>/i, "")
+      .replace(/<!DOCTYPE[^>]*>/i, "")
+      .trim();
+  };
+  const safeData = data || "https://koapos.com";
+  try {
+    return { qrSvg: await render(buildQROptions(settings, safeData, qrSize)), droppedLogo: false };
+  } catch (err) {
+    if (!settings.logoUrl) throw err;
+    const qrSvg = await render(buildQROptions({ ...settings, logoUrl: "" }, safeData, qrSize));
+    return { qrSvg, droppedLogo: true };
+  }
+}
+
 /* ── Framed SVG export ─────────────────────────────────────────────────────
    Composes the QR together with its template frame into a single vector SVG so
    downloads match the live preview (PNG export rasterises this same SVG). This
    mirrors the visual logic of <TemplateWrapper> in vector primitives. */
-async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number }> {
-  const qr = new QRCodeStyling(buildQROptions(settings, data || "https://koapos.com", qrSize));
-  const blob = await qr.getRawData("svg");
-  if (!blob) throw new Error("QR render failed");
-  let qrSvg = (await (blob as Blob).text())
-    .replace(/<\?xml[^>]*\?>/i, "")
-    .replace(/<!DOCTYPE[^>]*>/i, "")
-    .trim();
+async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number; droppedLogo: boolean }> {
+  const { qrSvg, droppedLogo } = await renderQrSvgText(settings, data, qrSize);
 
   // Embed the QR as a nested <svg> at (x, y); force width/height so it renders
   // at qrSize regardless of how qr-code-styling emitted its root attributes.
@@ -372,7 +392,7 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
 
   const wrap = (w: number, h: number, body: string) => ({
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
-    width: w, height: h,
+    width: w, height: h, droppedLogo,
   });
   const clip = (id: string, shape: string, inner: string, extra = "") =>
     `<defs><clipPath id="${id}">${shape}</clipPath></defs><g clip-path="url(#${id})"${extra}>${inner}</g>`;
@@ -1147,10 +1167,12 @@ export default function MarketingQRCodesPage() {
 
   const downloadFramed = useCallback(async (s: QRSettings, data: string, name: string, format: "png" | "svg") => {
     try {
-      const { svg, width, height } = await buildFramedQrSvg(s, data, s.size);
+      const { svg, width, height, droppedLogo } = await buildFramedQrSvg(s, data, s.size);
       const blob = await svgToImageBlob(svg, format, width, height);
       downloadFile(blob, name, format);
-    } catch {
+      if (droppedLogo) toast.warning("Logo couldn't be loaded — exported without it.");
+    } catch (err) {
+      console.error("QR download failed", err);
       toast.error("Download failed");
     }
   }, [downloadFile]);
