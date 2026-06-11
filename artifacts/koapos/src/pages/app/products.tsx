@@ -1905,11 +1905,9 @@ export default function ProductsPage() {
                           </>
                         )}
                         <td className="p-3">
-                          {isService
-                            ? <span className="text-muted-foreground">—</span>
-                            : product.trackInventory
-                              ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
-                              : <span className="text-[#16a34a] font-medium">∞</span>}
+                          {!isService && product.trackInventory
+                            ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
+                            : <span className="text-[#16a34a] font-medium">∞</span>}
                         </td>
                         <td className="p-3">
                           <Badge variant={product.isActive !== false ? "default" : "secondary"} className="text-xs">
