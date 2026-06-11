@@ -440,6 +440,8 @@ export interface Product {
   /** @nullable */
   overflowLocation?: string | null;
   /** @nullable */
+  notification?: string | null;
+  /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
 }
@@ -502,6 +504,7 @@ export interface ProductInput {
   isEpay?: boolean;
   /** @maxItems 5 */
   tags?: string[];
+  notification?: string;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -536,6 +539,8 @@ export interface ProductUpdate {
   tags?: string[];
   stockLocation?: string;
   overflowLocation?: string;
+  /** @nullable */
+  notification?: string | null;
 }
 
 export interface ProductList {

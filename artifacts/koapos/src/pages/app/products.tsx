@@ -108,6 +108,8 @@ type ProductForm = {
   tags: string[];
   /* notes */
   internalNotes: string;
+  /* pops up at POS when this item is added to a sale */
+  notification: string;
   /* group pricing */
   groupPrices: Record<string, string>;
   /* digital code */
@@ -130,6 +132,7 @@ const defaultForm: ProductForm = {
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   tags: [],
   internalNotes: "",
+  notification: "",
   groupPrices: {},
   isEpay: false,
   stockLocationDisplay: "",
@@ -1246,6 +1249,7 @@ export default function ProductsPage() {
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
+      notification: (ep as Product & { notification?: string | null }).notification ?? "",
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
@@ -1292,6 +1296,7 @@ export default function ProductsPage() {
       tags: form.tags,
       stockLocation: form.stockLocationDisplay || undefined,
       overflowLocation: form.stockLocationOverflow || undefined,
+      notification: form.notification,
       // Every customer group always gets a price so downstream features never
       // see a blank: a manually-typed value wins, otherwise the group's rule
       // price, otherwise the standard sell price.
@@ -2677,6 +2682,21 @@ export default function ProductsPage() {
                     onChange={(e) => setField("internalNotes", e.target.value)}
                     placeholder="Internal notes, specifications, special handling..."
                     rows={4}
+                    className="mt-3 resize-none"
+                  />
+                </div>
+
+                {/* Sale Notification — pops up at the POS when this item is added to a sale */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Sale Notification" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Shown as a pop-up at the register whenever this product is added to a sale (e.g. age check, warranty reminder, handling note). Leave blank for none.
+                  </p>
+                  <Textarea
+                    value={form.notification}
+                    onChange={(e) => setField("notification", e.target.value)}
+                    placeholder="e.g. Check ID — must be 18+"
+                    rows={2}
                     className="mt-3 resize-none"
                   />
                 </div>

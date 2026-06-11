@@ -45,6 +45,7 @@ export const productsTable = pgTable("products", {
   tags:               jsonb("tags_json").$type<string[]>(),
   stockLocation:      text("stock_location"),
   overflowLocation:   text("overflow_location"),
+  notification:       text("notification"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

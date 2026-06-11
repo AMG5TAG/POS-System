@@ -463,6 +463,8 @@ export default function POSPage() {
   /* $0 price product */
   const [zeroPricePending, setZeroPricePending] = useState<Product | null>(null);
   const [zeroPriceForm, setZeroPriceForm] = useState({ price: "", note: "" });
+  // Per-product sale notification (set in product Settings) — popped up on add.
+  const [notifyPending, setNotifyPending] = useState<Product | null>(null);
 
   /* service / appointment link */
   const [linkedService, setLinkedService] = useState<ServiceJob | null>(null);
@@ -1677,6 +1679,10 @@ export default function POSPage() {
       };
       return [...prev, newItem];
     });
+    // Surface the product's sale notification, if any, once it's in the cart.
+    if ((product as Product & { notification?: string | null }).notification?.trim()) {
+      setNotifyPending(product);
+    }
   };
 
   const fetchModifiersAndShow = async (product: Product) => {
@@ -1752,8 +1758,12 @@ export default function POSPage() {
       if (existing) return prev.map(i => i.product.id === zeroPricePending!.id ? { ...i, quantity: i.quantity + 1, customPrice: price, itemNote: zeroPriceForm.note || i.itemNote } : i);
       return [...prev, { product: zeroPricePending!, quantity: 1, itemDiscount: 0, customPrice: price, itemNote: zeroPriceForm.note || undefined }];
     });
+    const justAdded = zeroPricePending;
     setZeroPricePending(null);
     setFormTouched(false);
+    if ((justAdded as Product & { notification?: string | null }).notification?.trim()) {
+      setNotifyPending(justAdded);
+    }
   };
 
   const updateQuantity = (productId: number, delta: number) => {
@@ -4192,6 +4202,25 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={tryCloseZeroPrice}>Cancel</Button>
             <Button onClick={addZeroPriceProduct}>Add to Cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Product sale notification (configured in product Settings) ── */}
+      <Dialog open={!!notifyPending} onOpenChange={o => { if (!o) setNotifyPending(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> {notifyPending?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4">
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {(notifyPending as (Product & { notification?: string | null }) | null)?.notification}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setNotifyPending(null)} autoFocus>Got it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

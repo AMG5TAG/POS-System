@@ -8280,6 +8280,8 @@ components:
           type: ["string", "null"]
         overflowLocation:
           type: ["string", "null"]
+        notification:
+          type: ["string", "null"]
         digitalCodesCount:
           type: ["integer", "null"]
         createdAt:
@@ -8374,6 +8376,8 @@ components:
           items:
             type: string
           maxItems: 5
+        notification:
+          type: string
 
     ProductUpdate:
       type: object
@@ -8429,6 +8433,8 @@ components:
           type: string
         overflowLocation:
           type: string
+        notification:
+          type: ["string", "null"]
 
     ProductList:
       type: object

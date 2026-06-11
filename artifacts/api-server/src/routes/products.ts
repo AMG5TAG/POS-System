@@ -75,6 +75,7 @@ function formatProduct(
     tags: p.tags ?? [],
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,
+    notification: p.notification ?? null,
     createdAt: p.createdAt.toISOString(),
   };
 }

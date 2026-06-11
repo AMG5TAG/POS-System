@@ -464,7 +464,8 @@ export const CreateProductBody = zod.object({
   "supplier": zod.string().optional(),
   "supplierCode": zod.string().optional(),
   "isEpay": zod.boolean().optional(),
-  "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional()
+  "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional(),
+  "notification": zod.string().optional()
 })
 
 
@@ -594,7 +595,8 @@ export const UpdateProductBody = zod.object({
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
   "stockLocation": zod.string().optional(),
-  "overflowLocation": zod.string().optional()
+  "overflowLocation": zod.string().optional(),
+  "notification": zod.string().optional()
 })
 
 export const updateProductResponseTagsMax = 5;
