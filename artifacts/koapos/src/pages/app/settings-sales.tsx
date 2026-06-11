@@ -12,6 +12,7 @@ import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -126,15 +127,21 @@ export default function SalesSettingsPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2"><Receipt className="w-6 h-6 text-primary" /> Sales Settings</h1>
-            <p className="text-sm text-muted-foreground">Default policies for sales, invoices, laybys, refunds and quotes.</p>
+      <div className="p-6 md:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Receipt className="w-6 h-6 text-primary" />
+            <div>
+              <h1 className="text-2xl font-bold">Sales Settings</h1>
+              <p className="text-sm text-muted-foreground">Default policies for sales, invoices, laybys, refunds and quotes.</p>
+            </div>
           </div>
-          <Button onClick={handleSave} disabled={!dirty || saving || !ready} className="gap-2">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save changes
-          </Button>
+          <div className="flex items-center gap-2">
+            {dirty && <Badge variant="outline" className="text-amber-600 border-amber-300">Unsaved changes</Badge>}
+            <Button size="sm" onClick={handleSave} disabled={!dirty || saving || !ready}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save settings
+            </Button>
+          </div>
         </div>
 
         {!ready ? (
