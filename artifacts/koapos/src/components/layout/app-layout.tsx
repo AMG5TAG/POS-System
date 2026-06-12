@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -140,6 +140,7 @@ const INVENTORY_SUBNAV = [
   { name: "Categories",      href: "/products/categories",      icon: Tag },
   { name: "Tags",            href: "/products/tags",            icon: Hash },
   { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
+  { name: "Warranty",        href: "/products/warranty",        icon: ShieldCheck },
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
@@ -392,6 +393,7 @@ const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/products/categories":         ["Inventory", "Categories"],
   "/products/tags":               ["Inventory", "Tags"],
   "/products/recalls":            ["Inventory", "Recalls"],
+  "/products/warranty":           ["Inventory", "Warranty"],
   "/staff":                       ["Staff", "Employees"],
   "/staff/timesheet":             ["Staff", "Timesheet"],
   "/staff/rostering":             ["Staff", "Rostering"],

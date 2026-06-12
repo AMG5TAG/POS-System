@@ -29,49 +29,23 @@ import type { LandingPageInput } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
-export type LinkSize = "small" | "medium" | "large";
-export type LinkPlacement = "body" | "bottom";
+// Pure link helpers/types live in a standalone, dependency-free module so the
+// public landing page can use them without importing this whole editor (and the
+// app shell) bundle. Re-exported here for backwards compatibility.
+export {
+  LINK_SIZE_CLASSES, LINK_ICON_SIZE_CLASSES, splitLandingLinks, linkIconGlyph,
+} from "@/lib/landing-page-links";
+export type { LinkSize, LinkPlacement, LandingPageLink } from "@/lib/landing-page-links";
+import {
+  LINK_SIZE_CLASSES, LINK_ICON_SIZE_CLASSES, splitLandingLinks, linkIconGlyph,
+  type LinkSize, type LandingPageLink,
+} from "@/lib/landing-page-links";
 
-export interface LandingPageLink {
-  id: string; label: string; url: string; emoji: string; enabled: boolean;
-  size?: LinkSize;
-  /** Render as an icon only (no text label) — for social-media-style buttons. */
-  iconOnly?: boolean;
-  /** "bottom" renders the link in the icon row at the very bottom of the page. */
-  placement?: LinkPlacement;
-}
-
-/* Per-link button (pill) sizing → padding + text size. Falls back to medium. */
-export const LINK_SIZE_CLASSES: Record<LinkSize, string> = {
-  small:  "py-2 px-3 text-xs",
-  medium: "py-3 px-4 text-sm",
-  large:  "py-4 px-5 text-base",
-};
-/* Sizing for circular icon-only buttons (the bottom social row). */
-export const LINK_ICON_SIZE_CLASSES: Record<LinkSize, string> = {
-  small:  "w-9 h-9 text-base",
-  medium: "w-11 h-11 text-lg",
-  large:  "w-14 h-14 text-2xl",
-};
 const LINK_SIZES: { value: LinkSize; label: string }[] = [
   { value: "small",  label: "Small"  },
   { value: "medium", label: "Medium" },
   { value: "large",  label: "Large"  },
 ];
-
-/** Split enabled links into body buttons and the bottom social-icon row. */
-export function splitLandingLinks(links: LandingPageLink[]): { body: LandingPageLink[]; bottom: LandingPageLink[] } {
-  const enabled = links.filter((l) => l.enabled);
-  return {
-    body:   enabled.filter((l) => (l.placement ?? "body") !== "bottom"),
-    bottom: enabled.filter((l) => l.placement === "bottom"),
-  };
-}
-
-/** Icon shown for a link: its emoji, else the first letter of the label. */
-export function linkIconGlyph(link: LandingPageLink): string {
-  return link.emoji?.trim() || link.label.trim().charAt(0).toUpperCase() || "★";
-}
 
 export interface LandingPage {
   id: string; slug: string; title: string; subtitle: string; bio: string;
@@ -83,6 +57,8 @@ export interface LandingPage {
   btnBg: string; btnText: string; btnBorder: string;
   textColor: string; font: string;
   privacyUrl: string;
+  /** Show the "Powered by KoaPOS" referral footer on the public page. */
+  showPoweredBy: boolean;
   links: LandingPageLink[];
   createdAt: string; updatedAt: string;
 }
@@ -115,6 +91,7 @@ function apiToLocal(r: Record<string, unknown>): LandingPage {
     textColor: String(r.textColor ?? "#ffffff"),
     font: String(r.font ?? "Inter"),
     privacyUrl: String(r.privacyUrl ?? ""),
+    showPoweredBy: String(r.showPoweredBy ?? "true") !== "false",
     links,
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updatedAt ?? new Date().toISOString()),
@@ -143,8 +120,11 @@ function localToApi(p: LandingPage): LandingPageInput {
     textColor: p.textColor,
     font: p.font,
     links: JSON.stringify(p.links),
+    showPoweredBy: p.showPoweredBy ? "true" : "false",
     ...(p.privacyUrl !== undefined ? { privacyUrl: p.privacyUrl } : {}),
-  };
+    // showPoweredBy isn't in the generated LandingPageInput type yet; the server
+    // accepts it and it's persisted, so pass it through with a cast.
+  } as LandingPageInput;
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
@@ -161,7 +141,7 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
   bgDir: "to bottom", bgImage: "",
   btnStyle: "pill", btnVariant: "filled",
   btnBg: "#ffffff", btnText: "#111827", btnBorder: "#ffffff",
-  textColor: "#ffffff", font: "Inter", privacyUrl: "", links: [],
+  textColor: "#ffffff", font: "Inter", privacyUrl: "", showPoweredBy: true, links: [],
 };
 
 
@@ -240,6 +220,11 @@ export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; sc
             style={{ color: page.textColor }}>
             Privacy Policy
           </a>
+        </div>
+      )}
+      {page.showPoweredBy && (
+        <div className="text-center mt-6">
+          <p className="text-[11px]" style={{ color: page.textColor, opacity: 0.4 }}>Powered by KoaPOS</p>
         </div>
       )}
     </div>
@@ -560,6 +545,23 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 className="text-xs h-8"
               />
               <p className="text-[11px] text-muted-foreground">A link to your Privacy Policy is displayed in the page footer.</p>
+            </div>
+            <div className="pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => set("showPoweredBy", !page.showPoweredBy)}
+                className="flex items-start gap-2 w-full text-left"
+              >
+                {page.showPoweredBy
+                  ? <ToggleRight className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                  : <ToggleLeft className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />}
+                <span className="space-y-0.5">
+                  <span className="block text-xs font-medium">Show "Powered by KoaPOS"</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Displays a small footer credit. It links to KoaPOS with your referral code, so sign-ups are credited to you.
+                  </span>
+                </span>
+              </button>
             </div>
           </>
         )}

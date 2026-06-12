@@ -40,6 +40,12 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const registerMutation = useRegister();
 
+  // Partner referral code from a "Powered by KoaPOS" landing-page link (?ref=CODE).
+  const [referralCode] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("ref")?.trim() ?? "";
+  });
+
   const { data: plans, isLoading: plansLoading } = useListPlans({
     query: { queryKey: ["plans"] }
   });
@@ -59,7 +65,9 @@ export default function RegisterPage() {
 
   const onSubmit = (values: RegisterValues) => {
     registerMutation.mutate(
-      { data: { ...values, tosAccepted: true } },
+      // referralCode isn't part of the generated RegisterBody type, but the
+      // server reads it from the raw body to attribute partner referrals.
+      { data: { ...values, tosAccepted: true, ...(referralCode ? { referralCode } : {}) } as typeof values & { tosAccepted: true } },
       {
         onSuccess: (data) => {
           login(data);

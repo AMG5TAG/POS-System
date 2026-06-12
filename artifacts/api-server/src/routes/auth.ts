@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes, createHash, createHmac } from "crypto";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable } from "@workspace/db";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable, partnerReferralsTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
@@ -191,6 +191,27 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
       status: "active",
       currentPeriodEnd: periodEnd,
     });
+  }
+
+  // Partner referral attribution: if the signup arrived via a "Powered by KoaPOS"
+  // landing-page footer (?ref=CODE), credit the referring merchant. Read from the
+  // raw body since RegisterBody strips unknown keys.
+  const referralCode = typeof (req.body as { referralCode?: unknown })?.referralCode === "string"
+    ? (req.body as { referralCode: string }).referralCode.trim()
+    : "";
+  if (referralCode) {
+    const [referrer] = await db.select({ id: merchantsTable.id })
+      .from(merchantsTable).where(eq(merchantsTable.partnerReferralCode, referralCode)).limit(1);
+    if (referrer && referrer.id !== merchant.id) {
+      await db.insert(partnerReferralsTable).values({
+        referrerMerchantId: referrer.id,
+        referredBusinessName: businessName,
+        contactName: ownerName ?? businessName,
+        contactEmail: email,
+        plan: plan?.name ?? null,
+        status: "pending",
+      });
+    }
   }
 
   await seedProductTypes(merchant.id);

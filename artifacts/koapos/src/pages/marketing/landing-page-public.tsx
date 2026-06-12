@@ -2,7 +2,15 @@ import { useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch, type LandingPage } from "@workspace/api-client-react";
-import { LINK_SIZE_CLASSES, LINK_ICON_SIZE_CLASSES, splitLandingLinks, linkIconGlyph, type LandingPageLink } from "@/pages/app/marketing-landing-pages";
+import { LINK_SIZE_CLASSES, LINK_ICON_SIZE_CLASSES, splitLandingLinks, linkIconGlyph, type LandingPageLink } from "@/lib/landing-page-links";
+import { publicOrigin } from "@/lib/public-url";
+
+// The public endpoint augments the landing-page row with the owning merchant's
+// referral code and the show/hide flag (both absent from the generated type).
+type PublicLandingPage = LandingPage & {
+  showPoweredBy?: string;
+  partnerReferralCode?: string | null;
+};
 
 export default function LandingPagePublicView() {
   // Two public URL shapes resolve to the same page:
@@ -12,12 +20,12 @@ export default function LandingPagePublicView() {
   const byHandle = !!(params.businessUsername && params.customName);
   const displayPath = byHandle ? `/b/${params.businessUsername}/a/${params.customName}` : `/p/${slug}`;
 
-  const { data: row, isLoading, isError } = useQuery<LandingPage>({
+  const { data: row, isLoading, isError } = useQuery<PublicLandingPage>({
     queryKey: byHandle
       ? ["landing-public", "b", params.businessUsername, params.customName]
       : ["landing-public", "p", slug],
     queryFn: () =>
-      customFetch<LandingPage>(
+      customFetch<PublicLandingPage>(
         byHandle
           ? `/api/landing-pages/public/b/${encodeURIComponent(params.businessUsername!)}/a/${encodeURIComponent(params.customName!)}`
           : `/api/landing-pages/public/${encodeURIComponent(slug)}`,
@@ -175,12 +183,22 @@ export default function LandingPagePublicView() {
           </div>
         )}
 
-        {/* KoaPOS footer */}
-        <div className={`text-center ${bottomLinks.length > 0 ? "mt-6" : "mt-12"}`}>
-          <p className="text-[11px]" style={{ color: row.textColor, opacity: 0.4 }}>
-            Powered by KoaPOS
-          </p>
-        </div>
+        {/* KoaPOS referral footer (opt-out via the page's "Powered by" setting) */}
+        {row.showPoweredBy !== "false" && (
+          <div className={`text-center ${bottomLinks.length > 0 ? "mt-6" : "mt-12"}`}>
+            <a
+              href={row.partnerReferralCode
+                ? `${publicOrigin()}/register?ref=${encodeURIComponent(row.partnerReferralCode)}`
+                : `${publicOrigin()}/register`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] hover:underline"
+              style={{ color: row.textColor, opacity: 0.4 }}
+            >
+              Powered by KoaPOS
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

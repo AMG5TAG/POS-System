@@ -1,7 +1,8 @@
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useListProducts } from "@workspace/api-client-react";
 import type { Transaction } from "@workspace/api-client-react";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { warrantyLabel } from "@/lib/warranty";
 import {
   printReceipt as rawPrintReceipt,
   printA4Invoice as rawPrintA4Invoice,
@@ -106,6 +107,23 @@ export function useDocumentTemplate(): DocumentTemplateController {
   const service = useSalesTemplate("Service_Ticket");
   const { profile, isLoading: profileLoading } = useBusinessProfile();
   const { data: merchant, isLoading: merchantLoading } = useGetMerchant();
+  const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
+
+  // Warranty is computed at print time from each product's current setting.
+  // Sold line items carry productId, so we attach a warranty label per item
+  // without ever touching the POS sale path.
+  const warrantyByProductId = new Map<number, string>();
+  for (const p of (productsData?.items ?? []) as Array<{ id: number; warrantyDuration?: number | null; warrantyUnit?: string | null }>) {
+    const label = warrantyLabel(p.warrantyDuration, p.warrantyUnit);
+    if (label) warrantyByProductId.set(p.id, label);
+  }
+  const withWarranty = (tx: Transaction): Transaction => {
+    const items = ((tx.items ?? []) as Array<{ productId?: number | null; warranty?: string | null }>).map((it) => {
+      const label = it.productId != null ? warrantyByProductId.get(it.productId) : undefined;
+      return label ? { ...it, warranty: label } : it;
+    });
+    return { ...tx, items } as Transaction;
+  };
 
   const businessInfo: ReceiptBusinessInfo = {
     businessName: merchant?.businessName ?? "Your Business",
@@ -130,11 +148,11 @@ export function useDocumentTemplate(): DocumentTemplateController {
     isLoading,
     businessInfo,
     printReceipt: (tx) =>
-      rawPrintReceipt(tx, businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
+      rawPrintReceipt(withWarranty(tx), businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
       })),
     printInvoice: (tx) =>
-      rawPrintA4Invoice(tx, businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
+      rawPrintA4Invoice(withWarranty(tx), businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
       })),
     printQuote: (tx) =>
@@ -143,7 +161,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
       })),
     printA4Receipt: (tx, overallDiscountPct) =>
       rawPrintA4Receipt(
-        tx,
+        withWarranty(tx),
         businessInfo,
         toReceiptOpts(a4Receipt.opts, a4Receipt.fontCss, {
           styleVariant: normalizeReceiptStyle(a4Receipt.selectedStyle),

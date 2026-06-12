@@ -141,13 +141,17 @@ export async function printReceipt(
   const dateStr = new Date(tx.createdAt).toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timeStr = new Date(tx.createdAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[] }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[]; warranty?: string | null; serials?: string[] }>;
 
   const itemRows = items.map((item) => {
     const name = esc(item.productName ?? "Item");
     const qty = item.quantity ?? 1;
     const lineTotal = item.totalPrice ?? (item.unitPrice ?? 0) * qty;
-    return `<tr><td>${name}</td><td class="tcenter">${qty}</td><td class="right">${fmtAUD(lineTotal)}</td></tr>`;
+    const warranty = item.warranty && item.warranty.trim()
+      ? `<div class="gray" style="font-size:10px">🛡 ${esc(item.warranty.trim())}</div>` : "";
+    const serials = item.serials && item.serials.length
+      ? `<div class="gray" style="font-size:10px">S/N: ${esc(item.serials.join(", "))}</div>` : "";
+    return `<tr><td>${name}${warranty}${serials}</td><td class="tcenter">${qty}</td><td class="right">${fmtAUD(lineTotal)}</td></tr>`;
   }).join("");
 
   const subtotal = tx.subtotal ?? 0;
@@ -320,7 +324,7 @@ function printA4Document(
     ? customerDisplayName(customer, "") || customer.email || ""
     : "";
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; warranty?: string | null; serials?: string[] }>;
 
   // Merge in the historical defaults this path applied before delegating to
   // the shared renderer, so existing print output stays equivalent.
@@ -360,6 +364,8 @@ function printA4Document(
       quantity: item.quantity ?? 1,
       unitPrice: item.unitPrice ?? 0,
       amount: item.totalPrice ?? (item.unitPrice ?? 0) * (item.quantity ?? 1),
+      warranty: item.warranty ?? null,
+      serials: item.serials ?? null,
     })),
     subtotal: (tx.subtotal ?? 0) - (tx.taxTotal ?? 0),
     taxTotal: tx.taxTotal ?? 0,
@@ -442,7 +448,14 @@ export async function printA4Receipt(
   const customerEmail = customer ? esc(customer.email ?? "") : "";
   const customerPhone = customer ? esc((customer as { phone?: string }).phone ?? "") : "";
 
-  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[] }>;
+  const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[]; warranty?: string | null; serials?: string[] }>;
+  const warrantyHtml = (item: { warranty?: string | null; serials?: string[] }) => {
+    const w = item.warranty && item.warranty.trim()
+      ? `<div style="font-size:10px;color:#059669;margin-top:2px">🛡 ${esc(item.warranty.trim())}</div>` : "";
+    const s = item.serials && item.serials.length
+      ? `<div style="font-size:10px;color:#6b7280;margin-top:1px;font-family:'Courier New',monospace">S/N: ${esc(item.serials.join(", "))}</div>` : "";
+    return w + s;
+  };
 
   const subtotal = tx.subtotal ?? 0;
   const taxTotal = tx.taxTotal ?? 0;
@@ -551,7 +564,7 @@ export async function printA4Receipt(
     const qty = item.quantity ?? 1;
     const unit = item.unitPrice ?? 0;
     const line = item.totalPrice ?? unit * qty;
-    return `<tr><td>${name}</td><td class="c">${qty}</td><td class="r">${fmtAUD(unit)}</td><td class="r">${fmtAUD(line)}</td></tr>`;
+    return `<tr><td>${name}${warrantyHtml(item)}</td><td class="c">${qty}</td><td class="r">${fmtAUD(unit)}</td><td class="r">${fmtAUD(line)}</td></tr>`;
   }).join("");
   const emptyRow4 = `<tr><td colspan="4" class="empty">No items</td></tr>`;
 
@@ -560,7 +573,7 @@ export async function printA4Receipt(
     const qty = item.quantity ?? 1;
     const unit = item.unitPrice ?? 0;
     const line = item.totalPrice ?? unit * qty;
-    return `<tr><td>${name} <span class="muted">×${qty}</span></td><td class="r">${fmtAUD(line)}</td></tr>`;
+    return `<tr><td>${name} <span class="muted">×${qty}</span>${warrantyHtml(item)}</td><td class="r">${fmtAUD(line)}</td></tr>`;
   }).join("");
   const emptyRow2 = `<tr><td colspan="2" class="empty">No items</td></tr>`;
 
@@ -569,7 +582,7 @@ export async function printA4Receipt(
     const qty = item.quantity ?? 1;
     const unit = item.unitPrice ?? 0;
     const line = item.totalPrice ?? unit * qty;
-    return `<div class="min-item"><span class="min-name">${name}</span><span class="min-qty">${qty}</span><span class="min-amt">${fmtAUD(line)}</span></div>`;
+    return `<div class="min-item"><span class="min-name">${name}${warrantyHtml(item)}</span><span class="min-qty">${qty}</span><span class="min-amt">${fmtAUD(line)}</span></div>`;
   }).join("");
 
   /* ─── per-style body ───────────────────────────────────────────────── */

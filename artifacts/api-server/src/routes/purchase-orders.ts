@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable } from "@workspace/db";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -308,7 +308,7 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
     items: receiveItems,
   }: {
     processedBy?: string;
-    items?: Array<{ poItemId: number; quantityReceiving: number }>;
+    items?: Array<{ poItemId: number; quantityReceiving: number; serialNumbers?: string[] }>;
   } = req.body ?? {};
 
   const safeItems = receiveItems ?? [];
@@ -323,7 +323,7 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
 
   try {
     await db.transaction(async (tx) => {
-      for (const { poItemId, quantityReceiving } of safeItems) {
+      for (const { poItemId, quantityReceiving, serialNumbers } of safeItems) {
         if (quantityReceiving <= 0) continue;
         const poItem = poItemMap.get(poItemId);
         if (!poItem) continue;
@@ -337,9 +337,22 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           .where(eq(purchaseOrderItemsTable.id, poItemId));
 
         if (poItem.productId) {
-          const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, warrantyDuration: productsTable.warrantyDuration })
             .from(productsTable)
             .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+
+          // Warranty products: record any serial numbers captured at receiving.
+          if (product && product.warrantyDuration > 0 && serialNumbers && serialNumbers.length) {
+            const cleaned = [...new Set(serialNumbers.map((s) => s.trim()).filter(Boolean))];
+            if (cleaned.length) {
+              await tx.insert(productSerialsTable)
+                .values(cleaned.map((serial) => ({
+                  merchantId, productId: poItem.productId!, serial, poItemId, status: "available" as const,
+                })))
+                .onConflictDoNothing();
+            }
+          }
+
           if (product?.trackInventory === "true") {
             await tx.update(productsTable)
               .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })

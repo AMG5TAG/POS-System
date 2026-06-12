@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import multer from "multer";
@@ -33,6 +33,18 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+// Warranty fields aren't in the generated CreateProductBody/UpdateProductBody
+// schemas (which strip unknown keys), so read them from the raw body. Returns
+// null when neither field is present (so PATCH leaves warranty untouched).
+function readWarranty(body: unknown): { warrantyDuration: number; warrantyUnit: string } | null {
+  const b = (body ?? {}) as { warrantyDuration?: unknown; warrantyUnit?: unknown };
+  if (b.warrantyDuration === undefined && b.warrantyUnit === undefined) return null;
+  const n = Number(b.warrantyDuration);
+  const warrantyDuration = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  const warrantyUnit = b.warrantyUnit === "years" ? "years" : "months";
+  return { warrantyDuration, warrantyUnit };
+}
 
 function formatProduct(
   p: typeof productsTable.$inferSelect,
@@ -76,6 +88,8 @@ function formatProduct(
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,
     notification: p.notification ?? null,
+    warrantyDuration: p.warrantyDuration ?? 0,
+    warrantyUnit: p.warrantyUnit ?? "months",
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -104,6 +118,24 @@ function formatDigitalCode(d: typeof digitalCodesTable.$inferSelect) {
     createdAt: d.createdAt.toISOString(),
   };
 }
+
+// ── Serial numbers (warranty products) ─────────────────────────────────────────
+
+// Available serials for a product, used by the POS to pick a serial when selling
+// a warranty item.
+router.get("/products/:id/serials", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const rows = await db.select({ id: productSerialsTable.id, serial: productSerialsTable.serial })
+    .from(productSerialsTable)
+    .where(and(
+      eq(productSerialsTable.merchantId, req.session.merchantId!),
+      eq(productSerialsTable.productId, id),
+      eq(productSerialsTable.status, "available"),
+    ))
+    .orderBy(productSerialsTable.id);
+  res.json({ items: rows, total: rows.length });
+});
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
@@ -222,10 +254,12 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
     ptRecord = pt;
   }
 
+  const warranty = readWarranty(req.body) ?? { warrantyDuration: 0, warrantyUnit: "months" };
   const [product] = await db
     .insert(productsTable)
     .values({
       ...rest,
+      ...warranty,
       merchantId: req.session.merchantId!,
       productTypeId: ptRecord.id,
       price: price.toString(),
@@ -596,6 +630,8 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
+  const warranty = readWarranty(req.body);
+  if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
 
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
   if (productTypeId != null) {

@@ -110,6 +110,9 @@ type ProductForm = {
   internalNotes: string;
   /* pops up at POS when this item is added to a sale */
   notification: string;
+  /* warranty offered from sale date — duration is a number, unit is months/years */
+  warrantyDuration: string;
+  warrantyUnit: string;
   /* group pricing */
   groupPrices: Record<string, string>;
   /* digital code */
@@ -133,6 +136,8 @@ const defaultForm: ProductForm = {
   tags: [],
   internalNotes: "",
   notification: "",
+  warrantyDuration: "",
+  warrantyUnit: "months",
   groupPrices: {},
   isEpay: false,
   stockLocationDisplay: "",
@@ -1250,6 +1255,11 @@ export default function ProductsPage() {
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
       notification: (ep as Product & { notification?: string | null }).notification ?? "",
+      warrantyDuration: (() => {
+        const d = (ep as Product & { warrantyDuration?: number | null }).warrantyDuration;
+        return d ? String(d) : "";
+      })(),
+      warrantyUnit: (ep as Product & { warrantyUnit?: string | null }).warrantyUnit ?? "months",
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
@@ -1297,6 +1307,8 @@ export default function ProductsPage() {
       stockLocation: form.stockLocationDisplay || undefined,
       overflowLocation: form.stockLocationOverflow || undefined,
       notification: form.notification,
+      warrantyDuration: form.warrantyDuration ? parseInt(form.warrantyDuration) || 0 : 0,
+      warrantyUnit: form.warrantyUnit === "years" ? "years" : "months",
       // Every customer group always gets a price so downstream features never
       // see a blank: a manually-typed value wins, otherwise the group's rule
       // price, otherwise the standard sell price.
@@ -2697,6 +2709,31 @@ export default function ProductsPage() {
                     rows={2}
                     className="mt-3 resize-none"
                   />
+                </div>
+
+                {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Warranty" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How long this item is covered from the date of sale. Printed on receipts and invoices, and tracked under Products &gt; Warranty. Leave as 0 for no warranty.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.warrantyDuration}
+                      onChange={(e) => setField("warrantyDuration", e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="0"
+                      className="w-28"
+                    />
+                    <Select value={form.warrantyUnit} onValueChange={(v) => setField("warrantyUnit", v)}>
+                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="months">Months</SelectItem>
+                        <SelectItem value="years">Years</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             )}

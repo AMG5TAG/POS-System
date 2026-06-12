@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -236,8 +236,15 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     discount?: number;
     giftCardIssue?: boolean; giftCardNumber?: string;
     digitalCodes?: string[];
+    serials?: string[];
   }[] = [];
-  for (const i of clientItems) {
+  // Per-item serial numbers aren't in the generated body schema (which strips
+  // unknown keys), so read them from the raw body, matched to clientItems by index.
+  const rawItems: Array<{ serials?: unknown }> = Array.isArray((req.body as { items?: unknown }).items)
+    ? (req.body as { items: Array<{ serials?: unknown }> }).items
+    : [];
+  for (let idx = 0; idx < clientItems.length; idx++) {
+    const i = clientItems[idx];
     if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
       res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
       return;
@@ -280,6 +287,11 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
     const product = i.productId !== 0 ? productMap.get(i.productId) : undefined;
     const costPrice = product?.costPrice != null ? parseFloat(product.costPrice) : undefined;
+    // Serials only apply to warranty products.
+    const rawSerials = rawItems[idx]?.serials;
+    const serials = (product && product.warrantyDuration > 0 && Array.isArray(rawSerials))
+      ? [...new Set((rawSerials as unknown[]).map((s) => String(s).trim()).filter(Boolean))]
+      : [];
     computedItems.push({
       productId: i.productId,
       productName: itemName,
@@ -292,6 +304,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       giftCardIssue: i.giftCardIssue || undefined,
       // Preserve client-provided number; server will fill in blanks before the DB write
       giftCardNumber: (i.giftCardIssue && i.giftCardNumber) ? i.giftCardNumber.trim().toUpperCase() : undefined,
+      ...(serials.length ? { serials } : {}),
     });
   }
 
@@ -691,6 +704,42 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     // If any codes were assigned, the items JSONB needs updating so the
     // transaction row records the codes and the response is idempotent.
     if (computedItems.some((i) => i.digitalCodes && i.digitalCodes.length > 0)) {
+      await tx
+        .update(transactionsTable)
+        .set({ items: computedItems })
+        .where(eq(transactionsTable.id, row.id));
+    }
+
+    // ── Serial number consumption (warranty products) ───────────────────────────
+    // Mark each selected serial as sold. A serial pre-loaded at PO receiving is
+    // flipped to "sold"; one typed at the till that isn't in stock yet is inserted
+    // as a sold record so it's still tracked and printed.
+    let serialsTouched = false;
+    for (const item of computedItems) {
+      if (!item.serials || item.serials.length === 0) continue;
+      const product = productMap.get(item.productId);
+      if (!product || !(product.warrantyDuration > 0)) continue;
+      for (const serial of item.serials) {
+        const updated = await tx
+          .update(productSerialsTable)
+          .set({ status: "sold", soldAt: new Date(), transactionId: row.id })
+          .where(and(
+            eq(productSerialsTable.merchantId, req.session.merchantId!),
+            eq(productSerialsTable.productId, item.productId),
+            eq(productSerialsTable.serial, serial),
+            eq(productSerialsTable.status, "available"),
+          ))
+          .returning({ id: productSerialsTable.id });
+        if (updated.length === 0) {
+          await tx
+            .insert(productSerialsTable)
+            .values({ merchantId: req.session.merchantId!, productId: item.productId, serial, status: "sold", soldAt: new Date(), transactionId: row.id })
+            .onConflictDoNothing();
+        }
+        serialsTouched = true;
+      }
+    }
+    if (serialsTouched) {
       await tx
         .update(transactionsTable)
         .set({ items: computedItems })

@@ -12,8 +12,13 @@ import {
   useListShortlinks,
   useCreateShortlink,
   useDeleteShortlink,
-  useGetShortlinkSettings,
 } from "@workspace/api-client-react";
+import {
+  SHORT_DOMAIN,
+  RESERVED_ENDINGS,
+  containsForbidden,
+  validateEnding,
+} from "@workspace/shortlinks-shared";
 
 type ShortlinkFromApi = {
   id?: number;
@@ -27,25 +32,27 @@ type ShortlinkFromApi = {
   createdAt?: string;
 };
 
+const ENDING_CHARS = "abcdefghijkmnpqrstuvwxyz23456789";
+
+// Auto-generate a random ending, skipping reserved/forbidden collisions.
 function randomSlug(len = 6): string {
-  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const candidate = Array.from({ length: len }, () => ENDING_CHARS[Math.floor(Math.random() * ENDING_CHARS.length)]).join("");
+    if (!RESERVED_ENDINGS.has(candidate) && !containsForbidden(candidate)) return candidate;
+  }
+  return Array.from({ length: len }, () => ENDING_CHARS[Math.floor(Math.random() * ENDING_CHARS.length)]).join("");
 }
 
 function buildShortUrl(entry: ShortlinkFromApi): string {
-  return `https://${entry.baseDomain || "go.koapos.com"}/${entry.slug || entry.linkId}`;
+  return `https://${SHORT_DOMAIN}/${entry.slug || entry.linkId}`;
 }
 
 export default function MarketingShortlinksPage() {
   const { data: shortlinksResponse, refetch } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
-  const { data: settingsRaw } = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
   const createShortlink = useCreateShortlink();
   const deleteShortlink = useDeleteShortlink();
 
   const links = (shortlinksResponse?.items ?? []) as ShortlinkFromApi[];
-  const settings = settingsRaw as Record<string, unknown> | undefined;
-  const baseDomain = (settings?.baseDomain as string) || "go.koapos.com";
-  const prefix = (settings?.prefix as string) || "s";
 
   const [longUrl, setLongUrl]   = useState("https://");
   const [label, setLabel]       = useState("");
@@ -55,9 +62,12 @@ export default function MarketingShortlinksPage() {
   const [lastCreated, setLastCreated] = useState<ShortlinkFromApi | null>(null);
 
   const isValidUrl = longUrl.trim().startsWith("http") && longUrl.trim().length > 10;
+  const endingError = validateEnding(customSlug);
 
   const create = useCallback(() => {
     if (!isValidUrl) { toast.error("Enter a valid URL starting with http:// or https://"); return; }
+    const endingErr = validateEnding(customSlug);
+    if (endingErr) { toast.error(endingErr); return; }
     const slug = customSlug.trim().replace(/\s+/g, "-").toLowerCase() || randomSlug();
     createShortlink.mutate({
       data: {
@@ -65,7 +75,7 @@ export default function MarketingShortlinksPage() {
         label: label.trim() || longUrl.trim(),
         longUrl: longUrl.trim(),
         slug,
-        baseDomain: `${baseDomain}/${prefix}`,
+        baseDomain: SHORT_DOMAIN,
         tags: tags.trim() || undefined,
       },
     }, {
@@ -80,7 +90,7 @@ export default function MarketingShortlinksPage() {
       },
       onError: () => toast.error("Failed to create shortlink"),
     });
-  }, [longUrl, label, customSlug, tags, baseDomain, prefix, isValidUrl, createShortlink, refetch]);
+  }, [longUrl, label, customSlug, tags, isValidUrl, createShortlink, refetch]);
 
   const copyLink = (entry: ShortlinkFromApi) => {
     navigator.clipboard.writeText(buildShortUrl(entry))
@@ -146,10 +156,13 @@ export default function MarketingShortlinksPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Custom slug <span className="text-muted-foreground font-normal">(optional — leave blank to auto-generate)</span></Label>
-                  <div className="flex items-center gap-0 rounded-md border overflow-hidden focus-within:ring-2 focus-within:ring-ring">
+                  <Label>Custom ending <span className="text-muted-foreground font-normal">(optional — leave blank to auto-generate)</span></Label>
+                  <div className={cn(
+                    "flex items-center gap-0 rounded-md border overflow-hidden focus-within:ring-2 focus-within:ring-ring",
+                    endingError && "border-destructive focus-within:ring-destructive"
+                  )}>
                     <span className="bg-muted px-3 py-2 text-sm text-muted-foreground whitespace-nowrap border-r shrink-0">
-                      {baseDomain}/{prefix}/
+                      {SHORT_DOMAIN}/
                     </span>
                     <input
                       className="flex-1 px-3 py-2 text-sm font-mono bg-background outline-none min-w-0"
@@ -158,6 +171,9 @@ export default function MarketingShortlinksPage() {
                       onChange={(e) => setCustomSlug(e.target.value.replace(/[^a-z0-9-_]/gi, "").toLowerCase())}
                     />
                   </div>
+                  {endingError
+                    ? <p className="text-[11px] text-destructive">{endingError}</p>
+                    : <p className="text-[11px] text-muted-foreground">Letters, numbers, hyphens and underscores. Some prominent endings are reserved.</p>}
                 </div>
 
                 <div className="space-y-1.5">
@@ -170,7 +186,7 @@ export default function MarketingShortlinksPage() {
                   <p className="text-[11px] text-muted-foreground">Comma-separated tags to help organise your links.</p>
                 </div>
 
-                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl || createShortlink.isPending}>
+                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl || !!endingError || createShortlink.isPending}>
                   <Link2 className="w-4 h-4" /> Create Shortlink
                 </Button>
               </CardContent>

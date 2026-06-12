@@ -9,6 +9,7 @@ import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { warrantyLabel } from "@/lib/warranty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
@@ -23,7 +24,7 @@ import {
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
-  GiftCardValidateResponse,
+  GiftCardValidateResponse, customFetch,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { useButtonStyle } from "@/lib/button-style";
@@ -153,6 +154,8 @@ type CartItem = {
   pricingRuleDiscount?: number;
   pricingRuleLabel?: string;
   modifiers?: Modifier[];
+  /** Serial numbers for warranty products — one per unit sold. */
+  serials?: string[];
 };
 
 type WalkIn = { firstName: string; lastName: string };
@@ -369,6 +372,15 @@ export default function POSPage() {
   const [walkInDiscardConfirmOpen, setWalkInDiscardConfirmOpen] = useState(false);
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
+
+  /* warranty serial-number collection at checkout */
+  const [serialPrompt, setSerialPrompt] = useState<null | {
+    method: TransactionInputPaymentMethod; amountTendered: number;
+    extraNote?: string; giftCardPayment?: { cardId: number; amount: number };
+  }>(null);
+  const [serialInputs, setSerialInputs] = useState<Record<number, string[]>>({});
+  const [serialAvail, setSerialAvail] = useState<Record<number, string[]>>({});
+  const latestCheckout = useRef<((m: TransactionInputPaymentMethod, a: number, n?: string, g?: { cardId: number; amount: number }) => void) | null>(null);
 
   /* modifiers */
   const [modPickerOpen, setModPickerOpen] = useState(false);
@@ -2026,7 +2038,10 @@ export default function POSPage() {
       const lineTotal = price * i.quantity;
       const rawName   = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
       const name      = esc(rawName);
-      return { name, qty: i.quantity, lineTotal };
+      const wd        = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
+      const warranty  = wd > 0 ? esc(warrantyLabel(wd, (i.product as { warrantyUnit?: string }).warrantyUnit)) : "";
+      const serials   = (i.serials ?? []).filter(Boolean);
+      return { name, qty: i.quantity, lineTotal, warranty, serials };
     });
 
     let body = "";
@@ -2045,7 +2060,7 @@ export default function POSPage() {
         <table>
           <thead><tr><th class="left">Item</th><th class="tcenter">Qty</th><th class="right">Amt</th></tr></thead>
           <tbody>
-            ${itemRows.map((i) => `<tr><td>${i.name}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
+            ${itemRows.map((i) => `<tr><td>${i.name}${i.warranty ? `<div class="gray" style="font-size:10px">🛡 ${i.warranty}</div>` : ""}${i.serials.length ? `<div class="gray" style="font-size:10px">S/N: ${esc(i.serials.join(", "))}</div>` : ""}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
           </tbody>
         </table>
         <div class="bdr-t pt small">
@@ -2392,6 +2407,30 @@ export default function POSPage() {
       })();
       return;
     }
+
+    // Warranty products require a serial number per unit. If any warranty line is
+    // missing serials, open the serial-collection prompt and abort this attempt;
+    // the modal re-runs handleCheckout once serials are entered.
+    const needSerials = cart.filter((i) => {
+      const wd = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
+      return wd > 0 && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
+    });
+    if (needSerials.length > 0) {
+      const init: Record<number, string[]> = {};
+      for (const i of needSerials) {
+        init[i.product.id] = Array.from({ length: i.quantity }, (_, k) => i.serials?.[k] ?? "");
+      }
+      setSerialInputs(init);
+      setSerialAvail({});
+      setSerialPrompt({ method: paymentMethod, amountTendered, extraNote, giftCardPayment });
+      needSerials.forEach((i) => {
+        void customFetch<{ items: Array<{ serial: string }> }>(`/api/products/${i.product.id}/serials`, { method: "GET" })
+          .then((r) => setSerialAvail((prev) => ({ ...prev, [i.product.id]: (r.items ?? []).map((x) => x.serial) })))
+          .catch(() => {});
+      });
+      return;
+    }
+
     // Distribute cart-level (overall) and tier discounts proportionally across
     // all items so the server's recomputed total matches the client total.
     // Without this, the server ignores the overall discount and rejects with 409.
@@ -2427,6 +2466,7 @@ export default function POSPage() {
         discount: totalDiscount > 0 ? totalDiscount : undefined,
         ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
         ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
+        ...(i.serials?.length ? { serials: i.serials } : {}),
       };
     });
     const notesParts = [
@@ -2543,6 +2583,24 @@ export default function POSPage() {
         toast.error(message);
       },
     });
+  };
+  // Keep a ref to the latest handleCheckout closure so the serial modal can
+  // resume the sale after cart serials are applied (next render).
+  latestCheckout.current = handleCheckout;
+
+  const confirmSerials = () => {
+    for (const arr of Object.values(serialInputs)) {
+      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every warranty unit"); return; }
+    }
+    const all = Object.values(serialInputs).flat().map((s) => s.trim());
+    if (new Set(all).size !== all.length) { toast.error("Serial numbers must be unique"); return; }
+    setCart((prev) => prev.map((i) =>
+      serialInputs[i.product.id] ? { ...i, serials: serialInputs[i.product.id].map((s) => s.trim()) } : i,
+    ));
+    const args = serialPrompt;
+    setSerialPrompt(null);
+    // Resume on the next tick so handleCheckout sees the updated cart.
+    setTimeout(() => { if (args) latestCheckout.current?.(args.method, args.amountTendered, args.extraNote, args.giftCardPayment); }, 0);
   };
 
   const activeCustomerName = walkIn
@@ -4384,6 +4442,58 @@ export default function POSPage() {
         onCreated={(c) => { selectCustomer(c); setQuickAddOpen(false); }}
         prefillName={customerSearch}
       />
+
+      {/* ─── Warranty serial-number collection ─── */}
+      <Dialog open={!!serialPrompt} onOpenChange={(o) => { if (!o) setSerialPrompt(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial Numbers Required</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">These warranty items need a serial number per unit. Pick an in-stock serial or type one in.</p>
+          <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+            {Object.entries(serialInputs).map(([pidStr, arr]) => {
+              const pid = Number(pidStr);
+              const line = cart.find((i) => i.product.id === pid);
+              const avail = serialAvail[pid] ?? [];
+              return (
+                <div key={pid} className="border rounded-lg p-3 space-y-2">
+                  <p className="font-medium text-sm">{line?.product.name ?? `Product ${pid}`}</p>
+                  {arr.map((val, k) => {
+                    const usedElsewhere = new Set(arr.filter((_, j) => j !== k).map((s) => s.trim()).filter(Boolean));
+                    const options = avail.filter((s) => !usedElsewhere.has(s));
+                    return (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
+                        <Input
+                          list={`serials-${pid}`}
+                          value={val}
+                          onChange={(e) => setSerialInputs((prev) => {
+                            const next = { ...prev, [pid]: [...prev[pid]] };
+                            next[pid][k] = e.target.value;
+                            return next;
+                          })}
+                          placeholder="Serial number"
+                          className="h-8 font-mono text-sm"
+                        />
+                        <datalist id={`serials-${pid}`}>
+                          {options.map((s) => <option key={s} value={s} />)}
+                        </datalist>
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px] text-muted-foreground">
+                    {avail.length > 0 ? `${avail.length} in stock — start typing to pick one.` : "No serials in stock for this item; enter one to record it."}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSerialPrompt(null)}>Cancel</Button>
+            <Button onClick={confirmSerials}>Confirm &amp; Complete Sale</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── One-sale staff switch dialog ─── */}
       <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinCapsLockOn(false); setPinDialogOpen(false); } }}>

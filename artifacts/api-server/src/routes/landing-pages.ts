@@ -25,6 +25,8 @@ const PostLandingPage = z.object({
   textColor: z.string().default("#ffffff"),
   font: z.string().default("Inter"),
   privacyUrl: z.string().default(""),
+  showPoweredBy: z.string().default("true"),
+  isTemplate: z.string().default("false"),
   links: z.string().default("[]"),
 });
 
@@ -34,7 +36,7 @@ const PatchLandingPage = z.object({
   bgFrom: z.string(), bgTo: z.string(), bgDir: z.string(), bgImage: z.string(),
   btnStyle: z.string(), btnVariant: z.string(), btnBg: z.string(),
   btnText: z.string(), btnBorder: z.string(), textColor: z.string(),
-  font: z.string(), privacyUrl: z.string(), links: z.string(),
+  font: z.string(), privacyUrl: z.string(), showPoweredBy: z.string(), isTemplate: z.string(), links: z.string(),
 }).partial();
 
 const router: IRouter = Router();
@@ -43,7 +45,9 @@ router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   const slug = req.params.slug as string;
   const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(row);
+  const [merchant] = await db.select({ partnerReferralCode: merchantsTable.partnerReferralCode })
+    .from(merchantsTable).where(eq(merchantsTable.id, row.merchantId)).limit(1);
+  res.json({ ...row, partnerReferralCode: merchant?.partnerReferralCode ?? null });
 });
 
 // Resolve a landing page by business username + custom name (public, no auth):
@@ -54,7 +58,7 @@ router.get("/landing-pages/public/b/:username/a/:customName", async (req, res): 
   if (!username || !customName) { res.status(404).json({ error: "Not found" }); return; }
 
   const [merchant] = await db
-    .select({ id: merchantsTable.id })
+    .select({ id: merchantsTable.id, partnerReferralCode: merchantsTable.partnerReferralCode })
     .from(merchantsTable)
     .where(eq(merchantsTable.username, username))
     .limit(1);
@@ -66,7 +70,7 @@ router.get("/landing-pages/public/b/:username/a/:customName", async (req, res): 
     .where(and(eq(landingPagesTable.merchantId, merchant.id), eq(landingPagesTable.slug, customName)))
     .limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(row);
+  res.json({ ...row, partnerReferralCode: merchant.partnerReferralCode ?? null });
 });
 
 router.get("/landing-pages", requireAuth, async (req, res): Promise<void> => {
@@ -80,11 +84,11 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const parsed = PostLandingPage.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, links } = parsed.data;
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, links } = parsed.data;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [row] = await (db.insert(landingPagesTable) as any).values({
     merchantId, pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, links,
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, links,
   }).returning();
   res.status(201).json(row);
 });

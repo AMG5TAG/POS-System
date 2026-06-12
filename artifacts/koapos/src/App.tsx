@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
@@ -14,147 +15,148 @@ import { Spinner } from "@/components/ui/spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setOnUnauthorized } from "@workspace/api-client-react";
 
-import CustomerDisplayPage from "@/pages/app/customer-display";
-import PortalPage from "@/pages/portal";
-import TechAppPage from "@/pages/tech";
-import DashboardAppPage from "@/pages/dashboard-app";
-import LandingPage from "@/pages/marketing/landing";
-import LoginPage from "@/pages/marketing/login";
-import RegisterPage from "@/pages/marketing/register";
-import PricingPage from "@/pages/marketing/pricing";
-import ForgotPasswordPage from "@/pages/marketing/forgot-password";
-import ResetPasswordPage from "@/pages/marketing/reset-password";
-import TermsPage from "@/pages/marketing/terms";
-import PrivacyPage from "@/pages/marketing/privacy";
+const CustomerDisplayPage = lazy(() => import("@/pages/app/customer-display"));
+const PortalPage = lazy(() => import("@/pages/portal"));
+const TechAppPage = lazy(() => import("@/pages/tech"));
+const DashboardAppPage = lazy(() => import("@/pages/dashboard-app"));
+const LandingPage = lazy(() => import("@/pages/marketing/landing"));
+const LoginPage = lazy(() => import("@/pages/marketing/login"));
+const RegisterPage = lazy(() => import("@/pages/marketing/register"));
+const PricingPage = lazy(() => import("@/pages/marketing/pricing"));
+const ForgotPasswordPage = lazy(() => import("@/pages/marketing/forgot-password"));
+const ResetPasswordPage = lazy(() => import("@/pages/marketing/reset-password"));
+const TermsPage = lazy(() => import("@/pages/marketing/terms"));
+const PrivacyPage = lazy(() => import("@/pages/marketing/privacy"));
 
-import DashboardPage from "@/pages/app/dashboard";
+const DashboardPage = lazy(() => import("@/pages/app/dashboard"));
 
-import POSPage from "@/pages/app/pos";
-import POSHistoryPage from "@/pages/app/pos-history";
-import POSInvoicesPage from "@/pages/app/pos-invoices";
-import POSQuotesPage from "@/pages/app/pos-quotes";
-import SalesSettingsPage from "@/pages/app/settings-sales";
-import POSLaybuysPage from "@/pages/app/pos-laybuys";
-import POSParkedPage from "@/pages/app/pos-parked";
-import POSRefundPage from "@/pages/app/pos-refund";
-import POSCashPage from "@/pages/app/pos-cash";
+const POSPage = lazy(() => import("@/pages/app/pos"));
+const POSHistoryPage = lazy(() => import("@/pages/app/pos-history"));
+const POSInvoicesPage = lazy(() => import("@/pages/app/pos-invoices"));
+const POSQuotesPage = lazy(() => import("@/pages/app/pos-quotes"));
+const SalesSettingsPage = lazy(() => import("@/pages/app/settings-sales"));
+const POSLaybuysPage = lazy(() => import("@/pages/app/pos-laybuys"));
+const POSParkedPage = lazy(() => import("@/pages/app/pos-parked"));
+const POSRefundPage = lazy(() => import("@/pages/app/pos-refund"));
+const POSCashPage = lazy(() => import("@/pages/app/pos-cash"));
 
-import ProductsPage from "@/pages/app/products";
-import ProductsOverviewPage from "@/pages/app/products-overview";
-import ProductsBundlesPage from "@/pages/app/products-bundles";
-import ProductsStocktakePage from "@/pages/app/products-stocktake";
-import ProductsPurchaseOrdersPage from "@/pages/app/products-purchase-orders";
-import ProductsPreOrdersPage from "@/pages/app/products-pre-orders";
-import ProductsReturnAuthPage from "@/pages/app/products-return-auth";
-import ProductsSuppliersPage from "@/pages/app/products-suppliers";
-import ProductsBrandsPage from "@/pages/app/products-brands";
-import ProductsCategoriesPage from "@/pages/app/products-categories";
-import ProductsTagsPage from "@/pages/app/products-tags";
-import ProductsRecallsPage from "@/pages/app/products-recalls";
+const ProductsPage = lazy(() => import("@/pages/app/products"));
+const ProductsOverviewPage = lazy(() => import("@/pages/app/products-overview"));
+const ProductsBundlesPage = lazy(() => import("@/pages/app/products-bundles"));
+const ProductsStocktakePage = lazy(() => import("@/pages/app/products-stocktake"));
+const ProductsPurchaseOrdersPage = lazy(() => import("@/pages/app/products-purchase-orders"));
+const ProductsPreOrdersPage = lazy(() => import("@/pages/app/products-pre-orders"));
+const ProductsReturnAuthPage = lazy(() => import("@/pages/app/products-return-auth"));
+const ProductsSuppliersPage = lazy(() => import("@/pages/app/products-suppliers"));
+const ProductsBrandsPage = lazy(() => import("@/pages/app/products-brands"));
+const ProductsCategoriesPage = lazy(() => import("@/pages/app/products-categories"));
+const ProductsTagsPage = lazy(() => import("@/pages/app/products-tags"));
+const ProductsRecallsPage = lazy(() => import("@/pages/app/products-recalls"));
+const ProductsWarrantyPage = lazy(() => import("@/pages/app/products-warranty"));
 
-import CustomersPage from "@/pages/app/customers";
-import CustomersFormsPage from "@/pages/app/customers-forms";
-import TransactionsPage from "@/pages/app/transactions";
-import InventoryPage from "@/pages/app/inventory";
-import StaffPage from "@/pages/app/staff";
-import StaffOverviewPage from "@/pages/app/staff-overview";
-import StaffTimesheetPage from "@/pages/app/staff-timesheet";
-import StaffRosteringPage from "@/pages/app/staff-rostering";
-import StaffLeaveRequestsPage from "@/pages/app/staff-leave-requests";
-import StaffCostSummaryPage from "@/pages/app/staff-cost-summary";
-import StaffPayrollPage from "@/pages/app/staff-payroll";
-import StaffPayrollRunsPage from "@/pages/app/staff-payroll-runs";
-import StaffPayrollPayslipsPage from "@/pages/app/staff-payroll-payslips";
-import StaffPayrollLeavePage from "@/pages/app/staff-payroll-leave";
-import SettingsPayrollPage from "@/pages/app/settings-payroll";
-import ModulesPage from "@/pages/app/modules";
-import SettingsPage from "@/pages/app/settings";
-import SettingsBusinessPage from "@/pages/app/settings-business";
-import SettingsRegionalPage from "@/pages/app/settings-regional";
-import SettingsAccountPage from "@/pages/app/settings-account";
-import SettingsCustomersPage from "@/pages/app/settings-customers";
-import SettingsPOSPage from "@/pages/app/settings-pos";
-import AppointmentsPage from "@/pages/app/appointments";
-import ServiceJobsPage from "@/pages/app/service-jobs";
-import ServiceJobNewPage from "@/pages/app/service-jobs-new";
-import ManagementOverviewPage from "@/pages/app/management-overview";
-import ManagementSalesPage from "@/pages/app/management-sales";
-import ManagementRegistersPage from "@/pages/app/management-registers";
-import ManagementIntegrationsPage from "@/pages/app/management-integrations";
-import ManagementXeroPage from "@/pages/app/management-xero";
-import ManagementImportExportPage from "@/pages/app/management-import-export";
-import ManagementLoyaltyPage from "@/pages/app/management-loyalty";
-import ManagementLoyaltyLeaderboardPage from "@/pages/app/management-loyalty-leaderboard";
-import ManagementLaybyPage from "@/pages/app/management-layby";
-import ManagementInventoryPage from "@/pages/app/management-inventory";
-import ManagementDiscountsPage from "@/pages/app/management-discounts";
-import ManagementTemplatesPage from "@/pages/app/management-templates";
+const CustomersPage = lazy(() => import("@/pages/app/customers"));
+const CustomersFormsPage = lazy(() => import("@/pages/app/customers-forms"));
+const TransactionsPage = lazy(() => import("@/pages/app/transactions"));
+const InventoryPage = lazy(() => import("@/pages/app/inventory"));
+const StaffPage = lazy(() => import("@/pages/app/staff"));
+const StaffOverviewPage = lazy(() => import("@/pages/app/staff-overview"));
+const StaffTimesheetPage = lazy(() => import("@/pages/app/staff-timesheet"));
+const StaffRosteringPage = lazy(() => import("@/pages/app/staff-rostering"));
+const StaffLeaveRequestsPage = lazy(() => import("@/pages/app/staff-leave-requests"));
+const StaffCostSummaryPage = lazy(() => import("@/pages/app/staff-cost-summary"));
+const StaffPayrollPage = lazy(() => import("@/pages/app/staff-payroll"));
+const StaffPayrollRunsPage = lazy(() => import("@/pages/app/staff-payroll-runs"));
+const StaffPayrollPayslipsPage = lazy(() => import("@/pages/app/staff-payroll-payslips"));
+const StaffPayrollLeavePage = lazy(() => import("@/pages/app/staff-payroll-leave"));
+const SettingsPayrollPage = lazy(() => import("@/pages/app/settings-payroll"));
+const ModulesPage = lazy(() => import("@/pages/app/modules"));
+const SettingsPage = lazy(() => import("@/pages/app/settings"));
+const SettingsBusinessPage = lazy(() => import("@/pages/app/settings-business"));
+const SettingsRegionalPage = lazy(() => import("@/pages/app/settings-regional"));
+const SettingsAccountPage = lazy(() => import("@/pages/app/settings-account"));
+const SettingsCustomersPage = lazy(() => import("@/pages/app/settings-customers"));
+const SettingsPOSPage = lazy(() => import("@/pages/app/settings-pos"));
+const AppointmentsPage = lazy(() => import("@/pages/app/appointments"));
+const ServiceJobsPage = lazy(() => import("@/pages/app/service-jobs"));
+const ServiceJobNewPage = lazy(() => import("@/pages/app/service-jobs-new"));
+const ManagementOverviewPage = lazy(() => import("@/pages/app/management-overview"));
+const ManagementSalesPage = lazy(() => import("@/pages/app/management-sales"));
+const ManagementRegistersPage = lazy(() => import("@/pages/app/management-registers"));
+const ManagementIntegrationsPage = lazy(() => import("@/pages/app/management-integrations"));
+const ManagementXeroPage = lazy(() => import("@/pages/app/management-xero"));
+const ManagementImportExportPage = lazy(() => import("@/pages/app/management-import-export"));
+const ManagementLoyaltyPage = lazy(() => import("@/pages/app/management-loyalty"));
+const ManagementLoyaltyLeaderboardPage = lazy(() => import("@/pages/app/management-loyalty-leaderboard"));
+const ManagementLaybyPage = lazy(() => import("@/pages/app/management-layby"));
+const ManagementInventoryPage = lazy(() => import("@/pages/app/management-inventory"));
+const ManagementDiscountsPage = lazy(() => import("@/pages/app/management-discounts"));
+const ManagementTemplatesPage = lazy(() => import("@/pages/app/management-templates"));
 /** Misc templates = the same editor scoped to the "misc" section (Customer PDF, …). */
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
-import ManagementFormsPage from "@/pages/app/management-forms";
-import ManagementStickersPage from "@/pages/app/management-stickers";
-import InventoryWastagePage from "@/pages/app/inventory-wastage";
-import SettingsTaxPage from "@/pages/app/settings-tax";
-import SettingsEmailPage from "@/pages/app/settings-email";
-import SettingsSmsPage from "@/pages/app/settings-sms";
-import SettingsProductTypesPage from "@/pages/app/settings-product-types";
-import POS3DPrintsPage from "@/pages/app/pos-3d-prints";
-import ManagementCalculators3DPage from "@/pages/app/management-calculators-3d";
-import POSPCBuilderPage from "@/pages/app/pos-pc-builder";
-import ManagementCalculatorsPCBuilderPage from "@/pages/app/management-calculators-pc-builder";
-import ManagementKpisPage from "@/pages/app/management-kpis";
-import StaffNotesPage from "@/pages/app/staff-notes";
-import StaffKpisPage from "@/pages/app/staff-kpis";
-import StaffLinksPage from "@/pages/app/staff-links";
-import StaffSocialFeedPage from "@/pages/app/staff-social-feed";
-import ManagementMarketingSocialFeedPage from "@/pages/app/management-marketing-social-feed";
-import ManagementFloorPlanPage from "@/pages/app/management-floor-plan";
-import ManagementAIPage from "@/pages/app/management-ai";
+const ManagementFormsPage = lazy(() => import("@/pages/app/management-forms"));
+const ManagementStickersPage = lazy(() => import("@/pages/app/management-stickers"));
+const InventoryWastagePage = lazy(() => import("@/pages/app/inventory-wastage"));
+const SettingsTaxPage = lazy(() => import("@/pages/app/settings-tax"));
+const SettingsEmailPage = lazy(() => import("@/pages/app/settings-email"));
+const SettingsSmsPage = lazy(() => import("@/pages/app/settings-sms"));
+const SettingsProductTypesPage = lazy(() => import("@/pages/app/settings-product-types"));
+const POS3DPrintsPage = lazy(() => import("@/pages/app/pos-3d-prints"));
+const ManagementCalculators3DPage = lazy(() => import("@/pages/app/management-calculators-3d"));
+const POSPCBuilderPage = lazy(() => import("@/pages/app/pos-pc-builder"));
+const ManagementCalculatorsPCBuilderPage = lazy(() => import("@/pages/app/management-calculators-pc-builder"));
+const ManagementKpisPage = lazy(() => import("@/pages/app/management-kpis"));
+const StaffNotesPage = lazy(() => import("@/pages/app/staff-notes"));
+const StaffKpisPage = lazy(() => import("@/pages/app/staff-kpis"));
+const StaffLinksPage = lazy(() => import("@/pages/app/staff-links"));
+const StaffSocialFeedPage = lazy(() => import("@/pages/app/staff-social-feed"));
+const ManagementMarketingSocialFeedPage = lazy(() => import("@/pages/app/management-marketing-social-feed"));
+const ManagementFloorPlanPage = lazy(() => import("@/pages/app/management-floor-plan"));
+const ManagementAIPage = lazy(() => import("@/pages/app/management-ai"));
 
-import MarketingPage from "@/pages/app/marketing";
-import MarketingQRCodesPage from "@/pages/app/marketing-qr-codes";
-import MarketingShortlinksPage from "@/pages/app/marketing-shortlinks";
-import MarketingLandingPagesPage from "@/pages/app/marketing-landing-pages";
-import MarketingEmailCampaignsPage from "@/pages/app/marketing-email-campaigns";
-import MarketingEmailTemplatesPage from "@/pages/app/marketing-email-templates";
-import MarketingSmsCampaignsPage from "@/pages/app/marketing-sms-campaigns";
-import MarketingSmsTemplatesPage from "@/pages/app/marketing-sms-templates";
-import MarketingLoyaltyPromotionsPage from "@/pages/app/marketing-loyalty-promotions";
-import ManagementMarketingReferralsPage from "@/pages/app/management-marketing-referrals";
-import ManagementMarketingAutomationPage from "@/pages/app/management-marketing-automation";
-import ManagementOnlineStorePage from "@/pages/app/management-online-store";
-import OnlineDeliveryOrdersPage from "@/pages/app/online-delivery-orders";
-import OnlineShippingPage from "@/pages/app/online-shipping";
-import OnlineMarketplacePage from "@/pages/app/online-marketplace";
-import ManagementKoaPOSPage from "@/pages/app/management-koapos";
-import ManagementMiscPage from "@/pages/app/management-misc";
-import ManagementBackupPage from "@/pages/app/management-backup";
-import ManagementFeedbackPage from "@/pages/app/management-feedback";
-import CamerasPage from "@/pages/app/cameras";
-import ManagementCamerasPage from "@/pages/app/management-cameras";
-import ManagementTechAppPage from "@/pages/app/management-tech-app";
-import ManagementDashboardAppPage from "@/pages/app/management-dashboard-app";
-import ManagementLegalPage from "@/pages/app/management-legal";
-import ManagementGiftCardsPage from "@/pages/app/management-gift-cards";
-import MarketingReferralsPage from "@/pages/app/marketing-referrals";
-import LandingPagePublicView from "@/pages/marketing/landing-page-public";
-import PosEodPage from "@/pages/app/pos-eod";
-import ManagementReportsBasPage from "@/pages/app/management-reports-bas";
-import ManagementReportsVoidAuditPage from "@/pages/app/management-reports-void-audit";
-import ManagementReportsMarginPage from "@/pages/app/management-reports-margin";
-import ManagementDailyReportsPage from "@/pages/app/management-daily-reports";
-import ManagementReportsZReportPage from "@/pages/app/management-reports-z-report";
-import ManagementReportsStaffLeaderboardPage from "@/pages/app/management-reports-staff-leaderboard";
-import ManagementReportsProductPerformancePage from "@/pages/app/management-reports-product-performance";
-import ManagementCustomersHeardFromPage from "@/pages/app/management-customers-heard-from";
-import ManagementCustomersPortalPage from "@/pages/app/management-customers-portal";
-import SettingsPricingRulesPage from "@/pages/app/settings-pricing-rules";
-import SettingsModifierGroupsPage from "@/pages/app/settings-modifier-groups";
-import SettingsTyroEftposPage from "@/pages/app/settings-tyro-eftpos";
+const MarketingPage = lazy(() => import("@/pages/app/marketing"));
+const MarketingQRCodesPage = lazy(() => import("@/pages/app/marketing-qr-codes"));
+const MarketingShortlinksPage = lazy(() => import("@/pages/app/marketing-shortlinks"));
+const MarketingLandingPagesPage = lazy(() => import("@/pages/app/marketing-landing-pages"));
+const MarketingEmailCampaignsPage = lazy(() => import("@/pages/app/marketing-email-campaigns"));
+const MarketingEmailTemplatesPage = lazy(() => import("@/pages/app/marketing-email-templates"));
+const MarketingSmsCampaignsPage = lazy(() => import("@/pages/app/marketing-sms-campaigns"));
+const MarketingSmsTemplatesPage = lazy(() => import("@/pages/app/marketing-sms-templates"));
+const MarketingLoyaltyPromotionsPage = lazy(() => import("@/pages/app/marketing-loyalty-promotions"));
+const ManagementMarketingReferralsPage = lazy(() => import("@/pages/app/management-marketing-referrals"));
+const ManagementMarketingAutomationPage = lazy(() => import("@/pages/app/management-marketing-automation"));
+const ManagementOnlineStorePage = lazy(() => import("@/pages/app/management-online-store"));
+const OnlineDeliveryOrdersPage = lazy(() => import("@/pages/app/online-delivery-orders"));
+const OnlineShippingPage = lazy(() => import("@/pages/app/online-shipping"));
+const OnlineMarketplacePage = lazy(() => import("@/pages/app/online-marketplace"));
+const ManagementKoaPOSPage = lazy(() => import("@/pages/app/management-koapos"));
+const ManagementMiscPage = lazy(() => import("@/pages/app/management-misc"));
+const ManagementBackupPage = lazy(() => import("@/pages/app/management-backup"));
+const ManagementFeedbackPage = lazy(() => import("@/pages/app/management-feedback"));
+const CamerasPage = lazy(() => import("@/pages/app/cameras"));
+const ManagementCamerasPage = lazy(() => import("@/pages/app/management-cameras"));
+const ManagementTechAppPage = lazy(() => import("@/pages/app/management-tech-app"));
+const ManagementDashboardAppPage = lazy(() => import("@/pages/app/management-dashboard-app"));
+const ManagementLegalPage = lazy(() => import("@/pages/app/management-legal"));
+const ManagementGiftCardsPage = lazy(() => import("@/pages/app/management-gift-cards"));
+const MarketingReferralsPage = lazy(() => import("@/pages/app/marketing-referrals"));
+const LandingPagePublicView = lazy(() => import("@/pages/marketing/landing-page-public"));
+const PosEodPage = lazy(() => import("@/pages/app/pos-eod"));
+const ManagementReportsBasPage = lazy(() => import("@/pages/app/management-reports-bas"));
+const ManagementReportsVoidAuditPage = lazy(() => import("@/pages/app/management-reports-void-audit"));
+const ManagementReportsMarginPage = lazy(() => import("@/pages/app/management-reports-margin"));
+const ManagementDailyReportsPage = lazy(() => import("@/pages/app/management-daily-reports"));
+const ManagementReportsZReportPage = lazy(() => import("@/pages/app/management-reports-z-report"));
+const ManagementReportsStaffLeaderboardPage = lazy(() => import("@/pages/app/management-reports-staff-leaderboard"));
+const ManagementReportsProductPerformancePage = lazy(() => import("@/pages/app/management-reports-product-performance"));
+const ManagementCustomersHeardFromPage = lazy(() => import("@/pages/app/management-customers-heard-from"));
+const ManagementCustomersPortalPage = lazy(() => import("@/pages/app/management-customers-portal"));
+const SettingsPricingRulesPage = lazy(() => import("@/pages/app/settings-pricing-rules"));
+const SettingsModifierGroupsPage = lazy(() => import("@/pages/app/settings-modifier-groups"));
+const SettingsTyroEftposPage = lazy(() => import("@/pages/app/settings-tyro-eftpos"));
 
 
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
-import NotFound from "@/pages/not-found";
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -237,6 +239,7 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 
 function Router() {
   return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner /></div>}>
     <Switch>
       <Route path="/">
         <PublicRoute component={LandingPage} />
@@ -350,6 +353,9 @@ function Router() {
       </Route>
       <Route path="/products/recalls">
         <ProtectedRoute component={ProductsRecallsPage} />
+      </Route>
+      <Route path="/products/warranty">
+        <ProtectedRoute component={ProductsWarrantyPage} />
       </Route>
       <Route path="/products">
         <ProtectedRoute component={ProductsPage} />
@@ -712,6 +718,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
@@ -1086,7 +1086,7 @@ export default function ProductsPurchaseOrdersPage() {
 
 /* ── Receive Goods Dialog ─────────────────────────────────────────────── */
 
-type ReceiptItem = { poItemId: number; quantityReceiving: number };
+type ReceiptItem = { poItemId: number; quantityReceiving: number; serialNumbers?: string[] };
 type POWithReceipts = PurchaseOrder & { receipts?: Array<{ id: number; processedBy: string; processedAt: string; notes: string }> };
 
 function ReceiveGoodsDialog({
@@ -1099,6 +1099,17 @@ function ReceiveGoodsDialog({
 }) {
   const items = po.items ?? [];
 
+  // Warranty products require a serial number per received unit.
+  const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
+  const warrantyByProductId = useMemo(() => {
+    const m = new Map<number, boolean>();
+    for (const p of (productsData?.items ?? []) as Array<{ id: number; warrantyDuration?: number | null }>) {
+      if ((p.warrantyDuration ?? 0) > 0) m.set(p.id, true);
+    }
+    return m;
+  }, [productsData]);
+  const isWarrantyItem = (item: { productId?: number | null }) => item.productId != null && warrantyByProductId.has(item.productId);
+
   // Default each field to the remaining unreceived balance
   const [qtys, setQtys] = useState<Record<number, number>>(() => {
     const init: Record<number, number> = {};
@@ -1109,6 +1120,14 @@ function ReceiveGoodsDialog({
     }
     return init;
   });
+  // poItemId -> serial numbers (length tracks quantity received)
+  const [serials, setSerials] = useState<Record<number, string[]>>({});
+  const setSerialAt = (poItemId: number, idx: number, val: string) =>
+    setSerials((prev) => {
+      const arr = [...(prev[poItemId] ?? [])];
+      arr[idx] = val;
+      return { ...prev, [poItemId]: arr };
+    });
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const receivePO = useReceivePurchaseOrderItems();
@@ -1117,9 +1136,28 @@ function ReceiveGoodsDialog({
 
   const handleConfirm = () => {
     setSubmitError(null);
-    const receiveItems: ReceiptItem[] = items
-      .filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0)
-      .map((i) => ({ poItemId: i.id!, quantityReceiving: qtys[i.id!] }));
+    const receiving = items.filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0);
+
+    // Every warranty unit being received needs a serial number.
+    for (const i of receiving) {
+      if (!isWarrantyItem(i)) continue;
+      const qty = qtys[i.id!];
+      const entered = (serials[i.id!] ?? []).slice(0, qty).map((s) => (s ?? "").trim());
+      if (entered.length < qty || entered.some((s) => !s)) {
+        setSubmitError(`Enter a serial number for every unit of "${i.productName}".`);
+        return;
+      }
+      if (new Set(entered).size !== entered.length) {
+        setSubmitError(`Serial numbers for "${i.productName}" must be unique.`);
+        return;
+      }
+    }
+
+    const receiveItems: ReceiptItem[] = receiving.map((i) => ({
+      poItemId: i.id!,
+      quantityReceiving: qtys[i.id!],
+      ...(isWarrantyItem(i) ? { serialNumbers: (serials[i.id!] ?? []).slice(0, qtys[i.id!]).map((s) => s.trim()) } : {}),
+    }));
 
     if (!receiveItems.length) {
       setSubmitError("Enter at least one quantity to receive.");
@@ -1171,8 +1209,11 @@ function ReceiveGoodsDialog({
               {items.map((item) => {
                 const remaining = Math.max(0, (item.quantity ?? 0) - (item.received ?? 0));
                 const isFullyReceived = remaining === 0;
+                const qtyNow = item.id != null ? (qtys[item.id] ?? 0) : 0;
+                const showSerials = isWarrantyItem(item) && qtyNow > 0;
                 return (
-                  <tr key={item.id} className={cn(isFullyReceived && "opacity-50 bg-muted/20")}>
+                  <Fragment key={item.id}>
+                  <tr className={cn(isFullyReceived && "opacity-50 bg-muted/20")}>
                     <td className="p-3">
                       <p className="font-medium">{item.productName}</p>
                       {item.unitCost != null && (
@@ -1209,6 +1250,27 @@ function ReceiveGoodsDialog({
                       )}
                     </td>
                   </tr>
+                  {showSerials && (
+                    <tr className="bg-muted/20">
+                      <td colSpan={4} className="p-3">
+                        <p className="text-xs font-medium flex items-center gap-1.5 mb-2">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Serial numbers ({qtyNow} required — warranty item)
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {Array.from({ length: qtyNow }, (_, k) => (
+                            <Input
+                              key={k}
+                              value={(serials[item.id!] ?? [])[k] ?? ""}
+                              onChange={(e) => setSerialAt(item.id!, k, e.target.value)}
+                              placeholder={`Serial #${k + 1}`}
+                              className="h-8 font-mono text-xs"
+                            />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
