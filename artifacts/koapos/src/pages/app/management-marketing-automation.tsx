@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Zap, Plus, Trash2, Pencil, Play, RefreshCw, Mail, MessageSquare,
   Clock, CheckCircle2, XCircle, AlertTriangle, Info, Cake, Calendar,
-  ShoppingBag, Wrench, FileWarning, CalendarClock,
+  ShoppingBag, Wrench, FileWarning, CalendarClock, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -86,8 +86,9 @@ const DELAY_TRIGGER = "days_after_sale";
 const SCHEDULED_TRIGGER = "scheduled_time";
 
 const CHANNELS = [
-  { value: "email", label: "Email",  icon: Mail },
-  { value: "sms",   label: "SMS",    icon: MessageSquare },
+  { value: "email", label: "Email",       icon: Mail },
+  { value: "sms",   label: "SMS",         icon: MessageSquare },
+  { value: "both",  label: "Email & SMS", icon: Send },
 ];
 
 const EMPTY_FORM = {
@@ -126,6 +127,13 @@ function TriggerBadge({ value }: { value: string }) {
 }
 
 function ChannelBadge({ value }: { value: string }) {
+  if (value === "both") {
+    return (
+      <Badge variant="outline" className="gap-1">
+        <Mail className="w-3 h-3" /><MessageSquare className="w-3 h-3" /> Email &amp; SMS
+      </Badge>
+    );
+  }
   return (
     <Badge variant="outline" className="gap-1">
       {value === "email" ? <Mail className="w-3 h-3" /> : <MessageSquare className="w-3 h-3" />}
@@ -581,7 +589,7 @@ export default function ManagementMarketingAutomationPage() {
                   })}
                 </SelectContent>
               </Select>
-              {form.channel === "sms" && (
+              {(form.channel === "sms" || form.channel === "both") && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   SMS requires a third-party SMS gateway to be configured separately

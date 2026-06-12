@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
@@ -725,6 +725,35 @@ function Router() {
   );
 }
 
+/**
+ * Once a user is signed in, warm every lazily-loaded route chunk in the
+ * background during idle time. This keeps the initial bundle small (fast first
+ * paint, fixes the mobile blank-screen) while making in-app navigation instant
+ * instead of flashing the Suspense fallback on each first visit to a page.
+ *
+ * Gated on `user` so public/landing visitors never download the whole app.
+ */
+function RoutePrefetcher() {
+  const { user } = useAuth();
+  const started = useRef(false);
+  useEffect(() => {
+    if (!user || started.current) return;
+    started.current = true;
+    const modules = import.meta.glob("./pages/**/*.tsx");
+    const thunks = Object.values(modules);
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const schedule = (cb: () => void) => (ric ? ric(cb, { timeout: 2000 }) : window.setTimeout(cb, 300));
+    let i = 0;
+    const pump = () => {
+      if (i >= thunks.length) return;
+      const load = thunks[i++];
+      load().catch(() => {}).finally(() => schedule(pump));
+    };
+    schedule(pump);
+  }, [user]);
+  return null;
+}
+
 function App() {
   return (
     <ThemeProvider>
@@ -738,6 +767,7 @@ function App() {
                     <BrandColorProvider>
                       <AIProvider>
                         <a href="#main-content" className="skip-link">Skip to main content</a>
+                        <RoutePrefetcher />
                         <Router />
                         <Toaster />
                       </AIProvider>

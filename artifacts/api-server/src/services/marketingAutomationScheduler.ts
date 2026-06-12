@@ -121,30 +121,48 @@ async function dispatchMessage(
   isMarketing: boolean,
   toPhone?: string | null,
 ): Promise<{ success: boolean; error?: string }> {
-  if (rule.channel === "sms") {
-    if (!toPhone) return { success: false, error: "No phone number on file" };
-    // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
-    const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
-    const result = await sendSms({ to: toPhone, body }, merchantId);
-    return { success: result.success, error: result.error };
+  // "both" sends via email AND SMS; success if at least one channel goes out.
+  const wantEmail = rule.channel === "email" || rule.channel === "both";
+  const wantSms = rule.channel === "sms" || rule.channel === "both";
+
+  let anySuccess = false;
+  const errors: string[] = [];
+
+  if (wantSms) {
+    if (!toPhone) {
+      errors.push("No phone number on file");
+    } else {
+      // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
+      const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
+      const result = await sendSms({ to: toPhone, body }, merchantId);
+      if (result.success) anySuccess = true;
+      else if (result.error) errors.push(result.error);
+    }
   }
-  if (!toEmail) {
-    return { success: false, error: "No email address on file" };
+
+  if (wantEmail) {
+    if (!toEmail) {
+      errors.push("No email address on file");
+    } else {
+      // Spam Act 2003: marketing emails must include sender identity + unsubscribe link
+      let finalHtml = html;
+      let finalText = text;
+      if (isMarketing && customerId != null) {
+        const unsub = unsubscribeUrl(merchantId, customerId);
+        finalHtml = html + legalEmailFooter(biz.name, biz.address, unsub);
+        finalText = text + legalEmailFooterText(biz.name, biz.address, unsub);
+      } else if (isMarketing) {
+        // No customer ID — still append business identity
+        finalHtml = html + legalEmailFooter(biz.name, biz.address, "#");
+        finalText = text + legalEmailFooterText(biz.name, biz.address, "");
+      }
+      const result = await sendEmail(merchantId, { to: toEmail, subject, html: finalHtml, text: finalText });
+      if (result.success) anySuccess = true;
+      else if (result.error) errors.push(result.error);
+    }
   }
-  // Spam Act 2003: marketing emails must include sender identity + unsubscribe link
-  let finalHtml = html;
-  let finalText = text;
-  if (isMarketing && customerId != null) {
-    const unsub = unsubscribeUrl(merchantId, customerId);
-    finalHtml = html + legalEmailFooter(biz.name, biz.address, unsub);
-    finalText = text + legalEmailFooterText(biz.name, biz.address, unsub);
-  } else if (isMarketing) {
-    // No customer ID — still append business identity
-    finalHtml = html + legalEmailFooter(biz.name, biz.address, "#");
-    finalText = text + legalEmailFooterText(biz.name, biz.address, "");
-  }
-  const result = await sendEmail(merchantId, { to: toEmail, subject, html: finalHtml, text: finalText });
-  return { success: result.success, error: result.error };
+
+  return { success: anySuccess, error: anySuccess ? undefined : (errors.join("; ") || "No channel sent") };
 }
 
 // ─── Trigger: Birthday ────────────────────────────────────────────────────────
