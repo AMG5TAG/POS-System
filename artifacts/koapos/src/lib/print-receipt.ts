@@ -3,6 +3,7 @@ import { buildInvoiceHtml } from "@workspace/sales-documents";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
+import { publicOrigin } from "@/lib/public-url";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -12,6 +13,9 @@ export interface ReceiptBusinessInfo {
   brandColor?: string;
   tagline?: string;
   logo?: string;
+  phone?: string;
+  address?: string;
+  partnerReferralCode?: string;
 }
 
 /** Normalized layout family shared by the Management preview and the printers. */
@@ -88,6 +92,73 @@ function fmtAUD(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/* ─── Quick-code (merge variable) resolution ──────────────────────────────────
+   Every quick code offered in Management → Templates → Sales resolves here, so
+   the same codes work across all sales templates (thermal, A4 receipt, invoice,
+   quote, service ticket). Unknown codes resolve to "" rather than printing a
+   literal {{…}}. */
+
+function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string> {
+  const b = biz ?? {};
+  const refCode = b.partnerReferralCode ?? "";
+  const refUrl = refCode ? `${publicOrigin()}/register?ref=${encodeURIComponent(refCode)}` : "";
+  return {
+    "business.name": b.businessName ?? "",
+    "business.abn": b.abn ?? "",
+    "business.email": b.email ?? "",
+    "business.phone": b.phone ?? "",
+    "business.website": b.website ?? "",
+    "business.tagline": b.tagline ?? "",
+    "business.address": b.address ?? "",
+    "business.partner_referral_code": refCode,
+    "business.partner_referral_url": refUrl,
+  };
+}
+
+/** Full variable map for a sale (receipt / invoice / quote). */
+export function buildTemplateVars(tx: Transaction, biz?: ReceiptBusinessInfo): Record<string, string> {
+  const created = tx.createdAt ? new Date(tx.createdAt) : new Date();
+  const c = (tx.customer ?? null) as null | {
+    id?: number; firstName?: string | null; lastName?: string | null; email?: string | null;
+    phone?: string | null; loyaltyPoints?: number | null; tierName?: string | null; totalSpent?: number | null;
+  };
+  const itemCount = ((tx.items ?? []) as Array<{ quantity?: number }>).reduce((s, i) => s + (i.quantity ?? 1), 0);
+  const discountTotal = Number((tx as { discountTotal?: number | null }).discountTotal ?? 0);
+  const discountPct = (tx as { discountPct?: number | null }).discountPct;
+  return {
+    ...businessTemplateVars(biz),
+    "customer.name": c ? (customerDisplayName(c, "") || "") : "",
+    "customer.first_name": c?.firstName ?? "",
+    "customer.email": c?.email ?? "",
+    "customer.phone": c?.phone ?? "",
+    "customer.loyalty_points": c?.loyaltyPoints != null ? `${c.loyaltyPoints}` : "",
+    "customer.loyalty_tier": c?.tierName ?? "",
+    "customer.id": c?.id != null ? `CUS-${c.id}` : "",
+    "customer.total_spent": c?.totalSpent != null ? fmtAUD(Number(c.totalSpent)) : "",
+    "transaction.number": tx.receiptNumber ? `#${tx.receiptNumber}` : `#${tx.id ?? ""}`,
+    "transaction.date": created.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    "transaction.time": created.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
+    "transaction.total": fmtAUD(Number(tx.total ?? 0)),
+    "transaction.gst": fmtAUD(Number(tx.taxTotal ?? 0)),
+    "transaction.subtotal": fmtAUD(Number(tx.subtotal ?? 0)),
+    "transaction.items": `${itemCount}`,
+    "transaction.payment_method": (tx.paymentMethod ?? "").toUpperCase(),
+    "transaction.change": fmtAUD(Number((tx as { changeDue?: number | null }).changeDue ?? 0)),
+    "promo.discount": discountPct ? `${discountPct}% off` : (discountTotal > 0 ? fmtAUD(discountTotal) : ""),
+    "promo.savings": discountTotal > 0 ? fmtAUD(discountTotal) : "",
+    "promo.code": "",
+    "promo.expiry": "",
+    "promo.min_spend": "",
+    "promo.description": "",
+  };
+}
+
+/** Replace every {{code}} from the supplied map; unknown codes become "". */
+export function applyTemplateVars(text: string | undefined | null, vars: Record<string, string>): string {
+  if (!text) return "";
+  return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_, k: string) => vars[k.toLowerCase()] ?? "");
+}
+
 function openPrintWindow(html: string, title: string): void {
   const win = window.open("", "_blank", "width=900,height=700");
   if (!win) {
@@ -161,20 +232,8 @@ export async function printReceipt(
 
   const fontFamily = tpl.fontFamily === "Courier New" ? "'Courier New', monospace" : (tpl.fontFamily ?? "'Courier New', monospace");
 
-  const resolveStr = (text?: string) => {
-    if (!text) return "";
-    return esc(
-      text
-        .replace(/\{\{business\.name\}\}/g, rawBusinessName)
-        .replace(/\{\{business\.abn\}\}/g, rawAbn)
-        .replace(/\{\{business\.email\}\}/g, rawEmail)
-        .replace(/\{\{business\.website\}\}/g, rawWebsite)
-        .replace(/\{\{transaction\.total\}\}/g, fmtAUD(total))
-        .replace(/\{\{transaction\.date\}\}/g, `${dateStr} ${timeStr}`)
-        .replace(/\{\{transaction\.number\}\}/g, receiptNum)
-        .replace(/\{\{[^}]+\}\}/g, ""),
-    );
-  };
+  const templateVars = buildTemplateVars(tx, businessInfo);
+  const resolveStr = (text?: string) => esc(applyTemplateVars(text, templateVars));
 
   const thankYou = resolveStr(tpl.thankYouMsg);
   const footer = resolveStr(tpl.footerText);
@@ -328,13 +387,28 @@ function printA4Document(
 
   // Merge in the historical defaults this path applied before delegating to
   // the shared renderer, so existing print output stays equivalent.
-  const options: ReceiptTemplateOpts = {
+  const baseOptions: ReceiptTemplateOpts = {
     showAbn: true,
     showGstBreakdown: true,
     showWebsite: true,
     thankYouMsg: "Thank you for your business.",
     footerText: "",
     ...opts,
+  };
+
+  // Resolve quick codes in the free-text fields before the shared renderer
+  // escapes them. (buildInvoiceHtml escapes, so we substitute raw values here.)
+  const templateVars = buildTemplateVars(tx, businessInfo);
+  const r = (t?: string) => { const v = applyTemplateVars(t, templateVars); return v || undefined; };
+  const options: ReceiptTemplateOpts = {
+    ...baseOptions,
+    headerText: r(baseOptions.headerText),
+    thankYouMsg: r(baseOptions.thankYouMsg),
+    footerText: r(baseOptions.footerText),
+    paymentTerms: r(baseOptions.paymentTerms),
+    invoiceNotes: r(baseOptions.invoiceNotes),
+    bankDetails: r(baseOptions.bankDetails),
+    paymentSectionHeading: r(baseOptions.paymentSectionHeading),
   };
 
   const html = buildInvoiceHtml({
@@ -465,21 +539,8 @@ export async function printA4Receipt(
   const loyaltyEarned = Number((tx as { loyaltyEarned?: number }).loyaltyEarned ?? 0);
   const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
 
-  const resolveStr = (text?: string) => {
-    if (!text) return "";
-    return esc(
-      text
-        .replace(/\{\{business\.name\}\}/g, rawBusinessName)
-        .replace(/\{\{business\.abn\}\}/g, rawAbn)
-        .replace(/\{\{business\.email\}\}/g, rawEmail)
-        .replace(/\{\{business\.website\}\}/g, rawWebsite)
-        .replace(/\{\{business\.tagline\}\}/g, rawTagline)
-        .replace(/\{\{transaction\.total\}\}/g, fmtAUD(total))
-        .replace(/\{\{transaction\.number\}\}/g, receiptNum)
-        .replace(/\{\{transaction\.date\}\}/g, dateStr)
-        .replace(/\{\{[^}]+\}\}/g, ""),
-    );
-  };
+  const templateVars = buildTemplateVars(tx, businessInfo);
+  const resolveStr = (text?: string) => esc(applyTemplateVars(text, templateVars));
 
   const header = resolveStr(tpl.headerText);
   const footerTxt = resolveStr(tpl.footerText);
@@ -874,14 +935,15 @@ export function printA4ServiceJob(
   };
   const fontFamily = tpl.fontFamily || "'Helvetica Neue', Arial, sans-serif";
 
-  const resolveStr = (text?: string) =>
-    (text ?? "")
-      .replace(/\{\{business\.name\}\}/g, rawBusinessName)
-      .replace(/\{\{business\.abn\}\}/g, rawAbn)
-      .replace(/\{\{business\.email\}\}/g, rawEmail)
-      .replace(/\{\{business\.website\}\}/g, rawWebsite)
-      .replace(/\{\{[^}]+\}\}/g, "")
-      .trim();
+  // Service tickets have no sale/transaction, so resolve business + the job's
+  // customer; any transaction/promo codes resolve to "".
+  const svcVars: Record<string, string> = {
+    ...businessTemplateVars(businessInfo),
+    "customer.name": customerOverride?.name ?? job.customerName ?? "",
+    "customer.email": customerOverride?.email ?? job.customerEmail ?? "",
+    "customer.phone": customerOverride?.phone ?? job.customerPhone ?? "",
+  };
+  const resolveStr = (text?: string) => applyTemplateVars(text, svcVars).trim();
   const headerText = resolveStr(tpl.headerText);
   const footerText = resolveStr(tpl.footerText);
   const warrantyText = resolveStr(tpl.warrantyText);

@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -247,10 +247,12 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Emails",            href: "/management/email",         icon: Mail           },
       { name: "Integrations",      href: "/management/integrations",  icon: Plug,
         matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
+      { name: "Sync",              href: "/management/sync",          icon: FolderSync,
+        matchPaths: ["/management/backup"] },
       { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
-      { name: "Feedback",          href: "/management/feedback",      icon: MessageSquare  },
       { name: "Misc",              href: "/management/misc",          icon: MoreHorizontal },
       { name: "System",            href: "/management/koapos",        icon: Sparkles       },
+      { name: "Feedback",          href: "/management/feedback",      icon: MessageSquare  },
     ],
   },
 ];

@@ -125,6 +125,8 @@ export function useDocumentTemplate(): DocumentTemplateController {
     return { ...tx, items } as Transaction;
   };
 
+  const m = merchant as { phone?: string | null; address?: string | null; city?: string | null; partnerReferralCode?: string | null } | undefined;
+  const p = profile as { state?: string | null; postcode?: string | null } | undefined;
   const businessInfo: ReceiptBusinessInfo = {
     businessName: merchant?.businessName ?? "Your Business",
     abn: profile?.abn ?? "",
@@ -133,6 +135,9 @@ export function useDocumentTemplate(): DocumentTemplateController {
     brandColor: (profile?.brandColors ?? [])[0] ?? "",
     tagline: profile?.tagline ?? "",
     logo: profile?.logo ?? "",
+    phone: m?.phone ?? "",
+    address: [m?.address, m?.city, p?.state, p?.postcode].filter(Boolean).join(", "),
+    partnerReferralCode: m?.partnerReferralCode ?? "",
   };
 
   const isLoading =

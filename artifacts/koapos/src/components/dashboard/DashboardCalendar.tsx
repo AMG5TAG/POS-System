@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useGetDashboardCalendar, useComposeEmail, CalendarDay, CalendarAppointment, CalendarBirthday } from "@workspace/api-client-react";
+import { useMapUrl } from "@/lib/map-provider";
 import { useAuth } from "@/lib/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointm
   const statusColor = appt.status === "completed" ? "bg-emerald-100 text-emerald-700" :
                       appt.status === "cancelled" ? "bg-red-100 text-red-700" :
                       "bg-violet-100 text-violet-700";
+  const mapUrl = useMapUrl();
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent>
@@ -126,7 +128,7 @@ function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointm
             <div className="flex items-start gap-2 text-sm">
               <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <a
-                href={`https://maps.google.com/?q=${encodeURIComponent(appt.customerAddress)}`}
+                href={mapUrl(appt.customerAddress)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"

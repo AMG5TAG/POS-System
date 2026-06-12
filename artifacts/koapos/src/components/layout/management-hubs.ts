@@ -4,7 +4,7 @@ import {
   BarChart2, TrendingUp, Target, UserPlus, Share2, Globe, Mail, FileText, Brain,
   UserSquare2, Clock, Coins, Monitor, Map, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive,
-  UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, DatabaseBackup, MessageSquare,
+  UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, FolderSync, MessageSquare,
 } from "lucide-react";
 
 export interface HubTab {
@@ -105,15 +105,20 @@ export const SETTINGS_HUB_TABS: HubTab[] = [
     icon: Plug,
     matchPaths: ["/management/tyro-eftpos", "/management/xero"],
   },
+  {
+    label: "Sync",
+    href: "/management/sync",
+    icon: FolderSync,
+    matchPaths: ["/management/backup"],
+  },
   { label: "Import / Export",  href: "/management/import-export",  icon: ArrowLeftRight },
-  { label: "Feedback",         href: "/management/feedback",       icon: MessageSquare  },
-  { label: "Backup & Restore", href: "/management/backup",         icon: DatabaseBackup },
   {
     label: "System",
     href: "/management/koapos",
     icon: Sparkles,
     matchPaths: ["/management/misc"],
   },
+  { label: "Feedback",         href: "/management/feedback",       icon: MessageSquare  },
 ];
 
 export const MANAGEMENT_HUBS: ManagementHub[] = [

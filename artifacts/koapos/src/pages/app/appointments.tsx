@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { buildMapUrl } from "@/pages/app/management-misc";
+import { useMapUrl } from "@/lib/map-provider";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
@@ -225,6 +225,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const composeEmailMutation = useComposeEmail();
+  const mapUrl = useMapUrl();
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
@@ -295,7 +296,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                     )}
                     {appt.customerAddress && (
                       <a
-                        href={buildMapUrl(appt.customerAddress)}
+                        href={mapUrl(appt.customerAddress)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-start gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"

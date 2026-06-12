@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useDeferredValue } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
@@ -130,7 +130,7 @@ const OnlineShippingPage = lazy(() => import("@/pages/app/online-shipping"));
 const OnlineMarketplacePage = lazy(() => import("@/pages/app/online-marketplace"));
 const ManagementKoaPOSPage = lazy(() => import("@/pages/app/management-koapos"));
 const ManagementMiscPage = lazy(() => import("@/pages/app/management-misc"));
-const ManagementBackupPage = lazy(() => import("@/pages/app/management-backup"));
+const ManagementSyncPage = lazy(() => import("@/pages/app/management-sync"));
 const ManagementFeedbackPage = lazy(() => import("@/pages/app/management-feedback"));
 const CamerasPage = lazy(() => import("@/pages/app/cameras"));
 const ManagementCamerasPage = lazy(() => import("@/pages/app/management-cameras"));
@@ -238,9 +238,15 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 }
 
 function Router() {
+  // Drive route matching off a *deferred* location so that, while the next
+  // route's lazy chunk loads, React keeps the current page mounted instead of
+  // swapping to the white Suspense fallback. The fallback then only appears on
+  // the very first load (when there is no previous page to keep on screen).
+  const [location] = useLocation();
+  const deferredLocation = useDeferredValue(location);
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner /></div>}>
-    <Switch>
+    <Switch location={deferredLocation}>
       <Route path="/">
         <PublicRoute component={LandingPage} />
       </Route>
@@ -613,9 +619,11 @@ function Router() {
       <Route path="/management/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
-      <Route path="/management/backup">
-        <ManagementProtectedRoute component={ManagementBackupPage} />
+      <Route path="/management/sync">
+        <ManagementProtectedRoute component={ManagementSyncPage} />
       </Route>
+      {/* Backup now lives inside the consolidated Sync page */}
+      <Route path="/management/backup"><Redirect to="/management/sync" /></Route>
       <Route path="/management/koapos">
         <ManagementProtectedRoute component={ManagementKoaPOSPage} />
       </Route>

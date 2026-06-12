@@ -16,48 +16,10 @@ import {
   useGetInventorySettings, useUpdateInventorySettings,
 } from "@workspace/api-client-react";
 
-export const MAP_PROVIDER_KEY = "koapos_map_provider";
-
-export type MapProvider = "google" | "apple" | "openstreetmap" | "waze";
-
-export const MAP_PROVIDERS: { id: MapProvider; label: string; description: string; testUrl: string }[] = [
-  {
-    id: "google",
-    label: "Google Maps",
-    description: "Opens addresses in Google Maps (works on all devices).",
-    testUrl: "https://maps.google.com/maps?q=Sydney+Opera+House",
-  },
-  {
-    id: "apple",
-    label: "Apple Maps",
-    description: "Opens addresses in Apple Maps (best on iPhone, iPad, and Mac).",
-    testUrl: "https://maps.apple.com/?q=Sydney+Opera+House",
-  },
-  {
-    id: "openstreetmap",
-    label: "OpenStreetMap",
-    description: "Opens addresses in OpenStreetMap — free and open-source.",
-    testUrl: "https://www.openstreetmap.org/search?query=Sydney+Opera+House",
-  },
-  {
-    id: "waze",
-    label: "Waze",
-    description: "Opens addresses in Waze for navigation with live traffic.",
-    testUrl: "https://waze.com/ul?q=Sydney+Opera+House",
-  },
-];
-
-export function buildMapUrl(address: string, provider?: MapProvider): string {
-  const p = provider ?? "google";
-  const q = encodeURIComponent(address);
-  switch (p) {
-    case "apple":          return `https://maps.apple.com/?q=${q}`;
-    case "openstreetmap":  return `https://www.openstreetmap.org/search?query=${q}`;
-    case "waze":           return `https://waze.com/ul?q=${q}`;
-    case "google":
-    default:               return `https://maps.google.com/maps?q=${q}`;
-  }
-}
+// Map provider preference now lives in @/lib/map-provider so every address link
+// across the app can share it. Re-exported here for backwards-compatibility.
+import { MAP_PROVIDER_KEY, MAP_PROVIDERS, buildMapUrl, type MapProvider } from "@/lib/map-provider";
+export { MAP_PROVIDER_KEY, MAP_PROVIDERS, buildMapUrl, type MapProvider };
 
 /* ─── Code Prefixes ──────────────────────────────────────────────────────── */
 
@@ -185,6 +147,12 @@ export default function ManagementMiscPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
+        {/* Left column: Maps Provider + POS Button Style each keep their natural
+            height. The Code Prefixes card on the right stretches to match the
+            combined height of these two, rather than Maps Provider stretching to
+            match Code Prefixes. */}
+        <div className="space-y-6">
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -229,8 +197,90 @@ export default function ManagementMiscPage() {
           </CardContent>
         </Card>
 
-        {/* Code Prefixes */}
-        <Card id="code-prefixes">
+        {/* POS Button Style */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutPanelLeft className="w-5 h-5" />
+              POS Button Style
+            </CardTitle>
+            <CardDescription>
+              Choose how action buttons are displayed throughout KoaPOS — icon only, icon with text, or text only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup
+              value={buttonStyle}
+              onValueChange={(v) => saveButtonStyle(v as "icon" | "icon_text" | "text")}
+              className="grid grid-cols-3 gap-3"
+            >
+              {([
+                {
+                  value: "icon",
+                  label: "Icon",
+                  Icon: LayoutTemplate,
+                  description: "Icon only",
+                  preview: (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      {["🗑", "📝", "🔗"].map((e, i) => (
+                        <span key={i} className="w-7 h-7 rounded border flex items-center justify-center text-sm bg-muted/50">{e}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "icon_text",
+                  label: "Icon + Text",
+                  Icon: LayoutPanelLeft,
+                  description: "Icon with label",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {[["🗑", "Clear"], ["📝", "Notes"]].map(([e, t], i) => (
+                        <span key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">
+                          <span>{e}</span><span>{t}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "text",
+                  label: "Text",
+                  Icon: Type,
+                  description: "Text only",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {["Clear", "Notes", "Link"].map((t, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">{t}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+              ] as const).map(({ value, label, description, preview }) => (
+                <label
+                  key={value}
+                  htmlFor={`btn-style-${value}`}
+                  className={`cursor-pointer rounded-xl border-2 p-3 transition-colors flex flex-col ${
+                    buttonStyle === value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value={value} id={`btn-style-${value}`} />
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 ml-5">{description}</p>
+                  <div className="ml-5">{preview}</div>
+                </label>
+              ))}
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        </div>
+
+        {/* Code Prefixes — fills the right column so it dynamically matches the
+            combined height of Maps Provider + POS Button Style on the left. */}
+        <Card id="code-prefixes" className="h-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Hash className="w-5 h-5" /> Code Prefixes
@@ -311,85 +361,6 @@ export default function ManagementMiscPage() {
               </div>
               <p className="text-xs text-muted-foreground">Format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* POS Button Style */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LayoutPanelLeft className="w-5 h-5" />
-              POS Button Style
-            </CardTitle>
-            <CardDescription>
-              Choose how action buttons are displayed throughout KoaPOS — icon only, icon with text, or text only.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup
-              value={buttonStyle}
-              onValueChange={(v) => saveButtonStyle(v as "icon" | "icon_text" | "text")}
-              className="grid grid-cols-3 gap-3"
-            >
-              {([
-                {
-                  value: "icon",
-                  label: "Icon",
-                  Icon: LayoutTemplate,
-                  description: "Icon only",
-                  preview: (
-                    <div className="flex items-center gap-1.5 mt-2">
-                      {["🗑", "📝", "🔗"].map((e, i) => (
-                        <span key={i} className="w-7 h-7 rounded border flex items-center justify-center text-sm bg-muted/50">{e}</span>
-                      ))}
-                    </div>
-                  ),
-                },
-                {
-                  value: "icon_text",
-                  label: "Icon + Text",
-                  Icon: LayoutPanelLeft,
-                  description: "Icon with label",
-                  preview: (
-                    <div className="flex flex-col gap-1 mt-2">
-                      {[["🗑", "Clear"], ["📝", "Notes"]].map(([e, t], i) => (
-                        <span key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">
-                          <span>{e}</span><span>{t}</span>
-                        </span>
-                      ))}
-                    </div>
-                  ),
-                },
-                {
-                  value: "text",
-                  label: "Text",
-                  Icon: Type,
-                  description: "Text only",
-                  preview: (
-                    <div className="flex flex-col gap-1 mt-2">
-                      {["Clear", "Notes", "Link"].map((t, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">{t}</span>
-                      ))}
-                    </div>
-                  ),
-                },
-              ] as const).map(({ value, label, description, preview }) => (
-                <label
-                  key={value}
-                  htmlFor={`btn-style-${value}`}
-                  className={`cursor-pointer rounded-xl border-2 p-3 transition-colors flex flex-col ${
-                    buttonStyle === value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value={value} id={`btn-style-${value}`} />
-                    <span className="text-sm font-medium">{label}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 ml-5">{description}</p>
-                  <div className="ml-5">{preview}</div>
-                </label>
-              ))}
-            </RadioGroup>
           </CardContent>
         </Card>
 

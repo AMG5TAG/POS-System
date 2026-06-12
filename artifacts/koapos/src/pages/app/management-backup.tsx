@@ -217,7 +217,12 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function ManagementBackupPage() {
+/**
+ * The full Backup & Restore settings UI, without an AppLayout wrapper, so it can
+ * be embedded inside the consolidated Sync page (Management → Settings &
+ * Integrations → Sync) as well as rendered as its own page.
+ */
+export function BackupSettingsPanel() {
   const qc = useQueryClient();
   const configQuery = useGetBackupConfig();
   const backupsQuery = useListBackups(
@@ -350,17 +355,15 @@ export default function ManagementBackupPage() {
 
   if (configQuery.isLoading) {
     return (
-      <AppLayout>
-        <div className="space-y-4 p-2">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </AppLayout>
+      <div className="space-y-4 p-2">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -808,6 +811,14 @@ export default function ManagementBackupPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export default function ManagementBackupPage() {
+  return (
+    <AppLayout>
+      <BackupSettingsPanel />
     </AppLayout>
   );
 }

@@ -31,6 +31,7 @@ import {
   Appointment,
   ServiceJob,
 } from "@workspace/api-client-react";
+import { useMapUrl } from "@/lib/map-provider";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -977,13 +978,6 @@ function InfoRow({ icon: Icon, label, value, href, onClick, className }: {
   );
 }
 
-function mapsUrl(addr: string) {
-  const q = encodeURIComponent(addr);
-  const ua = navigator.userAgent;
-  if (/iPhone|iPad|Mac/.test(ua)) return `maps://maps.apple.com/?q=${q}`;
-  return `https://maps.google.com/?q=${q}`;
-}
-
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
 function SortTh({ label, sortKey, active, dir, onSort, className }: {
@@ -1022,6 +1016,7 @@ function CustomerDetailInner({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   const queryClient = useQueryClient();
+  const mapUrl = useMapUrl();
   const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
   const [tab, setTab] = useState<DetailTab>("overview");
@@ -1402,13 +1397,13 @@ function CustomerDetailInner({
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
             {billingAddr
-              ? <InfoRow icon={MapPin} label="" value={billingAddr} href={mapsUrl(billingAddr)} />
+              ? <InfoRow icon={MapPin} label="" value={billingAddr} href={mapUrl(billingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">No billing address on file.</p>}
           </div>
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shipping Address</p>
             {shippingAddr
-              ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapsUrl(shippingAddr)} />
+              ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapUrl(shippingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
           </div>
         </div>

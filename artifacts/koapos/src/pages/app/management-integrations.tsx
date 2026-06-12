@@ -496,6 +496,13 @@ const ALL_SECTIONS = [
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+// Cloud-storage and account/contacts integrations now live on the consolidated
+// Sync page (Management → Settings & Integrations → Sync), so they are hidden here.
+export const SYNC_INTEGRATION_KEYS = new Set([
+  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_contacts", "microsoft_contacts", "apple_account",
+]);
+
 interface VaultStatus {
   total: number;
   current: number;
@@ -516,7 +523,7 @@ export default function ManagementIntegrationsPage() {
   const [syncingContacts,    setSyncingContacts]     = useState(false);
 
   const { data: integrationsRaw, isLoading: loading, refetch: refetchIntegrations } = useListIntegrations({ query: { queryKey: ["integrations"] } });
-  const integrations = (integrationsRaw ?? []) as unknown as Integration[];
+  const integrations = ((integrationsRaw ?? []) as unknown as Integration[]).filter((i) => !SYNC_INTEGRATION_KEYS.has(i.key));
   const { data: vaultStatus } = useGetVaultStatus({ query: { queryKey: ["vault-status"] } });
 
   const disconnectMutation = useDisconnectIntegration();
