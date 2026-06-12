@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useListTransactions, useListKpiTargets, useListInvoices, useGetKpiSettings } from "@workspace/api-client-react";
+import { useListStaff, useListTransactions, useListKpiTargets, useListInvoices, useListProducts, useGetKpiSettings } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import {
   Target, Trophy, BarChart3, Store, Users, Medal,
   UserSquare2, Clock, CalendarClock, ClipboardList, Coins, StickyNote, Link2,
   DollarSign, ShoppingCart, TrendingUp, UserPlus, Star, Tag, Zap, Wrench, AlertCircle, Layers,
-  CheckCircle2,
+  CheckCircle2, Banknote,
 } from "lucide-react";
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
@@ -19,7 +19,8 @@ import {
 type KpiMetric =
   | "revenue" | "transactions" | "avg_transaction" | "items_per_transaction"
   | "new_customers" | "loyalty_signups" | "category_revenue"
-  | "appointments" | "services" | "refund_rate" | "gross_margin" | "upsell_rate";
+  | "appointments" | "services" | "refund_rate" | "gross_margin" | "upsell_rate"
+  | "net_profit";
 
 type KpiPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
 type RewardType = "cash" | "percent" | "voucher" | "time_off" | "badge" | "custom";
@@ -106,6 +107,7 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; i
   refund_rate:          { label: "Refund Rate",           icon: AlertCircle,   isCurrency: false, isInverse: true },
   gross_margin:         { label: "Gross Margin",          icon: BarChart3,     isCurrency: false },
   upsell_rate:          { label: "Upsell Rate",           icon: Zap,           isCurrency: false },
+  net_profit:           { label: "Net Profit",            icon: Banknote,      isCurrency: true  },
 };
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {
@@ -205,7 +207,23 @@ export default function StaffKpisPage() {
     { from: txFromISO, limit: 5000 },
     { query: { queryKey: ["transactions", txFromISO] } },
   );
-  const txList = (txData?.items ?? []) as { total?: number; status?: string; createdAt?: string }[];
+  const txList = (txData?.items ?? []) as {
+    total?: number; taxTotal?: number; status?: string; createdAt?: string;
+    items?: { quantity?: number; costPrice?: number; productId?: number }[];
+  }[];
+
+  /* Product cost prices, used to value COGS for the net_profit metric when a
+     line item doesn't carry a costPrice snapshot (mirrors Management → KPIs). */
+  const { data: productsData } = useListProducts(
+    { limit: 1000 },
+    { query: { queryKey: ["staff-kpi-products"] } },
+  );
+  const productCostById = useMemo(() => {
+    const m = new Map<number, number>();
+    const list = (productsData?.items ?? []) as { id: number; costPrice?: number | null }[];
+    for (const p of list) if (p.costPrice != null) m.set(p.id, p.costPrice);
+    return m;
+  }, [productsData]);
 
   /* Paid invoices count toward the revenue / transactions / avg_transaction
      metrics, matching the dashboard KPI tile and Management → KPIs — without
@@ -219,6 +237,17 @@ export default function StaffKpisPage() {
   /* Per-KPI actual values, each filtered to its own period window. */
   const actualByKpiId = useMemo(() => {
     const result: Record<string, number> = {};
+    // COGS for a set of transactions: prefer the line-item costPrice snapshot,
+    // fall back to the product's current cost price, then 0. Mirrors the
+    // server-side Net Profit calculation and Management → KPIs.
+    const cogsOf = (txns: typeof txList) =>
+      txns.reduce((s, t) => {
+        const items = t.items ?? [];
+        return s + items.reduce((si, i) => {
+          const unitCost = i.costPrice ?? (i.productId != null ? productCostById.get(i.productId) ?? 0 : 0);
+          return si + unitCost * (i.quantity ?? 1);
+        }, 0);
+      }, 0);
     for (const kpi of targets) {
       const periodStart = getPeriodStart(kpi.period, weekStartDay, kpi.startDate);
       const txInPeriod = txList.filter(
@@ -235,11 +264,37 @@ export default function StaffKpisPage() {
         case "revenue":         result[kpi.id] = Math.round(revenue * 100) / 100; break;
         case "transactions":    result[kpi.id] = count; break;
         case "avg_transaction": result[kpi.id] = count > 0 ? Math.round((revenue / count) * 100) / 100 : 0; break;
+        case "items_per_transaction": {
+          // Average line-item quantity per transaction. Divides by transaction
+          // count only (invoices excluded), matching Management → KPIs.
+          const totalItems = txInPeriod.reduce(
+            (s, t) => s + (t.items ?? []).reduce((si, i) => si + (i.quantity ?? 1), 0), 0,
+          );
+          result[kpi.id] = txInPeriod.length > 0 ? Math.round((totalItems / txInPeriod.length) * 100) / 100 : 0;
+          break;
+        }
+        case "net_profit": {
+          // Ex-GST transaction revenue (total minus the GST component) less COGS,
+          // matching the Profit & Loss report. Invoices are excluded here, as in
+          // Management → KPIs, since they carry no line-item cost basis.
+          const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
+          result[kpi.id] = Math.round((exGstRevenue - cogsOf(txInPeriod)) * 100) / 100;
+          break;
+        }
+        case "gross_margin": {
+          // (Ex-GST revenue − COGS) / ex-GST revenue, as a percentage. Same
+          // basis as net_profit and Management → KPIs.
+          const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
+          result[kpi.id] = exGstRevenue > 0
+            ? Math.round(((exGstRevenue - cogsOf(txInPeriod)) / exGstRevenue) * 10000) / 100
+            : 0;
+          break;
+        }
         default:                result[kpi.id] = 0;
       }
     }
     return result;
-  }, [targets, txList, paidInvoices, weekStartDay]);
+  }, [targets, txList, paidInvoices, weekStartDay, productCostById]);
 
   const storeKpis = targets.filter((t) => t.staffIds.length === 0);
   const staffKpis = targets.filter((t) => t.staffIds.length > 0);
