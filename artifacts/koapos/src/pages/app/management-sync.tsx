@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -15,10 +16,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   RefreshCw, Cloud, Users, Loader2, Plug, CheckCircle2, DatabaseBackup, FolderSync,
+  Clock, FolderUp, ShieldCheck, Lightbulb, Save,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
 import { MicrosoftIcon, OneDriveIcon } from "@/components/provider-icons";
 import { BackupSettingsPanel } from "./management-backup";
+import {
+  loadCustomerFilesCloudSettings, fetchCustomerFilesCloudSettings, putCustomerFilesCloudSettings,
+  getLastCustomerSync, recordCustomerSync, formatRelativeTime,
+  type CustomerFilesCloudSettings,
+} from "@/lib/cloud-files-settings";
 
 /* Minimal shape of an integration returned by GET /integrations. */
 interface SyncIntegration {
@@ -115,6 +122,162 @@ function SectionHeader({ icon: Icon, title, desc }: { icon: React.ComponentType<
   );
 }
 
+/**
+ * Platform-user control for mirroring every customer file upload to a folder on
+ * a connected cloud storage provider. When off, we encourage turning it on for
+ * backup, security and storage optimisation. When on, the customer file-upload
+ * flow reads these settings and routes each upload to the chosen folder.
+ */
+function CustomerFilesCloudPanel({ storages }: { storages: SyncIntegration[] }) {
+  const connected = storages.filter((s) => s.status === "connected");
+  // Seed from the localStorage cache for an instant first paint, then refresh
+  // from the server (the source of truth) on mount.
+  const [settings, setSettings] = useState<CustomerFilesCloudSettings>(() => loadCustomerFilesCloudSettings());
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchCustomerFilesCloudSettings()
+      .then((s) => { setSettings(s); setDirty(false); })
+      .catch(() => { /* keep cached values */ });
+  }, []);
+
+  const update = (patch: Partial<CustomerFilesCloudSettings>) => {
+    setSettings((s) => ({ ...s, ...patch }));
+    setDirty(true);
+  };
+
+  const selectedConnected = connected.find((s) => s.key === settings.storageKey);
+  const canSave =
+    !settings.enabled || (!!selectedConnected && settings.folder.trim().length > 0);
+
+  const handleSave = async () => {
+    if (!canSave) {
+      toast.error(
+        !selectedConnected
+          ? "Choose a connected cloud storage first"
+          : "Enter a destination folder",
+      );
+      return;
+    }
+    const next = { ...settings, folder: settings.folder.trim() };
+    setSaving(true);
+    try {
+      await putCustomerFilesCloudSettings(next);
+      setSettings(next);
+      setDirty(false);
+      toast.success(
+        next.enabled
+          ? `Customer files will sync to ${selectedConnected?.label} › ${next.folder}`
+          : "Customer file cloud sync turned off",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border rounded-xl bg-card overflow-hidden">
+      {/* Toggle header */}
+      <div className="flex items-start gap-3 p-4">
+        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <FolderUp className="w-5 h-5 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Save all customer files to the cloud</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Automatically copy every file uploaded to a customer into a folder on your
+            chosen cloud storage.
+          </p>
+        </div>
+        <Switch
+          className="mt-1"
+          checked={settings.enabled}
+          onCheckedChange={(v) => update({ enabled: v })}
+        />
+      </div>
+
+      {settings.enabled ? (
+        <div className="border-t px-4 py-4 space-y-4 bg-muted/20">
+          {connected.length === 0 ? (
+            <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+              <Cloud className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Connect a cloud storage provider below first — then pick it here as the
+                destination for customer files.
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Cloud storage</Label>
+                  <Select value={settings.storageKey} onValueChange={(v) => update({ storageKey: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a connected storage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {connected.map((s) => (
+                        <SelectItem key={s.key} value={s.key}>
+                          {s.label}{s.accountHandle ? ` — ${s.accountHandle}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Destination folder</Label>
+                  <Input
+                    placeholder="e.g. KoaPOS/Customer Files"
+                    value={settings.folder}
+                    onChange={(e) => update({ folder: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Files uploaded to any customer will be copied to{" "}
+                <span className="font-medium">
+                  {selectedConnected?.label ?? "your storage"}
+                  {settings.folder.trim() ? ` › ${settings.folder.trim()}` : ""}
+                </span>
+                . Existing files aren&apos;t moved.
+              </p>
+            </>
+          )}
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleSave} disabled={!dirty || saving}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="border-t px-4 py-3 bg-muted/20">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+            <p>
+              <span className="font-medium text-foreground">Recommended.</span> Turning this on
+              keeps an off-site copy of every customer file for{" "}
+              <span className="font-medium">backup &amp; disaster recovery</span>, adds a layer of{" "}
+              <span className="font-medium">security</span>, and{" "}
+              <span className="font-medium">optimises</span> local storage. Your current upload
+              flow is unchanged until you enable it.
+            </p>
+          </div>
+          {dirty && (
+            <div className="flex justify-end mt-3">
+              <Button size="sm" variant="outline" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Save
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ManagementSyncPage() {
   const [location] = useLocation();
   const { data: raw, refetch } = useListIntegrations({ query: { queryKey: ["integrations"] } });
@@ -127,6 +290,7 @@ export default function ManagementSyncPage() {
   const [includeNotes, setIncludeNotes] = useState(false);
   const [notesConflict, setNotesConflict] = useState<"append" | "overwrite">("append");
   const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState(() => getLastCustomerSync());
 
   /* OAuth callback lands back here (?success=/?error=) for sync integrations. */
   useEffect(() => {
@@ -182,6 +346,8 @@ export default function ManagementSyncPage() {
       if (r.ok && data.ok) {
         const failMsg = (data.failed ?? 0) > 0 ? `, ${data.failed} failed` : "";
         toast.success(data.message ?? `Synced ${data.synced} contacts${failMsg}`);
+        recordCustomerSync(syncTarget.label);
+        setLastSync(getLastCustomerSync());
         setSyncTarget(null);
       } else {
         toast.error(data.error ?? "Contact sync failed");
@@ -210,6 +376,15 @@ export default function ManagementSyncPage() {
         <section>
           <SectionHeader icon={Users} title="Customer Sync"
             desc="Connect an account to sync your customer list to its contacts and push appointments to its calendar." />
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              Customers last synced:{" "}
+              <span className="font-medium text-foreground">{formatRelativeTime(lastSync?.at)}</span>
+              {lastSync?.provider ? ` to ${lastSync.provider}` : ""}
+              {lastSync?.at ? ` · ${new Date(lastSync.at).toLocaleString()}` : ""}
+            </span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {accounts.map((i) => (
               <SyncCard key={i.key} intg={i} busy={busyKey === i.key}
@@ -230,7 +405,8 @@ export default function ManagementSyncPage() {
         <section>
           <SectionHeader icon={Cloud} title="Cloud Files & Folders"
             desc="Connect cloud storage to send files, reports and backups to OneDrive, Google Drive or Dropbox." />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <CustomerFilesCloudPanel storages={storage} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {storage.map((i) => (
               <SyncCard key={i.key} intg={i} busy={busyKey === i.key}
                 onConnect={connect} onDisconnect={disconnect} />

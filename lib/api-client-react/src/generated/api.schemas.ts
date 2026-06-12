@@ -5,6 +5,137 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface SmsTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsTemplateInput {
+  templateId: string;
+  name: string;
+  category?: string;
+  body?: string;
+}
+
+export interface SmsTemplateListResponse {
+  items: SmsTemplate[];
+  total: number;
+}
+
+export interface SmsCampaign {
+  id: number;
+  merchantId: number;
+  campaignId: string;
+  name: string;
+  audience: string;
+  audienceLabel: string;
+  body: string;
+  linkUrl: string;
+  scheduled: string;
+  scheduledAt: string;
+  status: string;
+  sentAt: string;
+  delivered: number;
+  failed: number;
+  recipientCount: number;
+  customerId?: number | null;
+  createdAt: string;
+}
+
+export interface SmsCampaignInput {
+  campaignId: string;
+  name: string;
+  audience?: string;
+  audienceLabel?: string;
+  body?: string;
+  linkUrl?: string;
+  scheduled?: string;
+  scheduledAt?: string;
+  status?: string;
+  sentAt?: string;
+  delivered?: number;
+  failed?: number;
+  recipientCount?: number;
+  customerId?: number;
+}
+
+export interface SmsCampaignListResponse {
+  items: SmsCampaign[];
+  total: number;
+}
+
+export interface StaffTimesheetEntry {
+  id: number;
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface StaffTimesheetList {
+  items: StaffTimesheetEntry[];
+}
+
+export interface CreateStaffTimesheetInput {
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut?: string | null;
+}
+
+export interface StaffClockStatus {
+  staffId: number;
+  staffName: string;
+  clockedIn: boolean;
+  openEntryId: number | null;
+  clockInTime: string | null;
+}
+
+export interface ClockInInput {
+  pin: string;
+}
+
+export interface ClockOutInput {
+  pin: string;
+}
+
+export interface PaymentTotalsResult {[key: string]: {
+  total: number;
+  txCount: number;
+}}
+
+export interface KpiTarget {
+  id: number;
+  merchantId: number;
+  targetId: string;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  staffIds: string;
+  reward?: string;
+  notes: string;
+  isActive: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardKpiResult {
+  kpi: KpiTarget;
+  actual: number | null;
+}
+
 export type BackupLocationsItem = {
   type: string;
   ref: string;
@@ -205,7 +336,6 @@ export interface RegisterInput {
   ownerName?: string;
   phone?: string;
   planId?: number;
-  tosAccepted: true;
 }
 
 export interface LoginInput {
@@ -1811,6 +1941,7 @@ export interface PurchaseOrder {
   totalCost: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
   createdAt: string;
@@ -1830,6 +1961,7 @@ export interface PurchaseOrderInput {
   totalCost?: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
 }
 
@@ -1984,12 +2116,6 @@ export interface ComposeEmailRequest {
   to: string;
   subject: string;
   body: string;
-}
-
-export interface ComposeEmail200 {
-  success?: boolean;
-  provider?: string;
-  error?: string | null;
 }
 
 export interface SmsSettings {
@@ -2661,26 +2787,6 @@ export interface KpiSettingsInput {
   weekStartDay?: string;
 }
 
-export interface KpiTarget {
-  id: number;
-  merchantId: number;
-  targetId: string;
-  name: string;
-  metric: string;
-  categoryId?: string;
-  period: string;
-  target: number;
-  staffIds: string;
-  reward?: string;
-  notes: string;
-  startDate?: string | null;
-  endDate?: string | null;
-  isActive: string;
-  showOnDashboard: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface KpiTargetInput {
   targetId: string;
   name: string;
@@ -2695,11 +2801,6 @@ export interface KpiTargetInput {
   endDate?: string | null;
   isActive?: string;
   showOnDashboard?: string;
-}
-
-export interface DashboardKpiResult {
-  kpi: KpiTarget;
-  actual: number | null;
 }
 
 export interface KpiTargetListResponse {
@@ -3190,7 +3291,6 @@ export interface PosRegisterSession {
   cashCounted?: string | null;
   eftposDeclared?: string | null;
   closingNotes?: string | null;
-  deviceId?: string | null;
 }
 
 export interface PosRegisterSessionInput {
@@ -3360,7 +3460,6 @@ export interface InventorySettings {
   skuPrefix: string;
   showCosts: string;
   groupPricing: string;
-  /** @nullable */
   defaultImageUrl?: string | null;
 }
 
@@ -3368,7 +3467,6 @@ export interface InventorySettingsInput {
   skuPrefix?: string;
   showCosts?: string;
   groupPricing?: string;
-  /** @nullable */
   defaultImageUrl?: string | null;
 }
 
@@ -3820,15 +3918,6 @@ export type CustomerSettingsGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsRequiredFields = { [key: string]: unknown };
 
-export interface ReferralSettings {
-  enabled?: boolean;
-  minSpend?: number;
-  minVisits?: number;
-  qualifyDays?: number;
-  refereeRewardValue?: number;
-  referrerRewardValue?: number;
-}
-
 export interface CustomerSettings {
   groups?: CustomerSettingsGroupsItem[];
   requiredFields?: CustomerSettingsRequiredFields;
@@ -3842,7 +3931,6 @@ export interface CustomerSettings {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
-  referralSettings?: ReferralSettings;
   updatedAt?: string;
 }
 
@@ -3863,7 +3951,6 @@ export interface CustomerSettingsInput {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
-  referralSettings?: ReferralSettings;
 }
 
 export type StickerTemplateFields = { [key: string]: unknown };
@@ -4195,8 +4282,6 @@ export interface Invoice {
   id: number;
   merchantId: number;
   customerId?: number | null;
-  serviceJobId?: number | null;
-  appointmentId?: number | null;
   invoiceNumber: string;
   status: InvoiceStatus;
   subtotal: number;
@@ -4257,6 +4342,8 @@ export interface InvoiceInput {
   invoicePrefix?: string;
   invoiceDigits?: number;
   recurring?: InvoiceRecurringInput;
+  serviceJobId?: number | null;
+  appointmentId?: number | null;
 }
 
 export interface InvoiceRecurringUpdate {
@@ -4286,6 +4373,8 @@ export interface InvoiceUpdate {
   items?: InvoiceLineItem[];
   discount?: InvoiceDiscountInput;
   recurring?: InvoiceRecurringUpdate | null;
+  serviceJobId?: number | null;
+  appointmentId?: number | null;
 }
 
 export interface GiftCardPaymentRef {
@@ -4675,6 +4764,32 @@ export interface SyncContactsResult {
   message: string;
 }
 
+/**
+ * Connected cloud storage provider to mirror files to
+ */
+export type CustomerFilesCloudSettingsInputStorageKey = typeof CustomerFilesCloudSettingsInputStorageKey[keyof typeof CustomerFilesCloudSettingsInputStorageKey];
+
+
+export const CustomerFilesCloudSettingsInputStorageKey = {
+  onedrive: 'onedrive',
+  google_drive: 'google_drive',
+  dropbox: 'dropbox',
+} as const;
+
+export interface CustomerFilesCloudSettingsInput {
+  /** When true, customer file uploads are mirrored to the cloud */
+  enabled: boolean;
+  /** Connected cloud storage provider to mirror files to */
+  storageKey: CustomerFilesCloudSettingsInputStorageKey;
+  /** Destination folder path on that provider (set by the platform user) */
+  folder: string;
+}
+
+export type CustomerFilesCloudSettings = CustomerFilesCloudSettingsInput & {
+  /** Storage providers that can receive mirrored customer files */
+  supportedStorageKeys: string[];
+};
+
 export interface XeroSyncResult {
   ok: boolean;
   synced: number;
@@ -4894,6 +5009,12 @@ month?: number;
 };
 
 export type SendServiceJobEmail200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string | null;
+};
+
+export type ComposeEmail200 = {
   success?: boolean;
   provider?: string;
   error?: string | null;
@@ -5150,114 +5271,16 @@ export type RestoreBackup200 = {
   ok: boolean;
 };
 
-export interface StaffTimesheetEntry {
-  id: number;
-  staffId: number;
-  staffName: string;
-  date: string;
-  clockIn: string;
-  clockOut: string | null;
-  note: string | null;
-  createdAt: string;
-}
-
-export interface StaffTimesheetList {
-  items: StaffTimesheetEntry[];
-}
-
-export interface StaffClockStatus {
-  staffId: number;
-  staffName: string;
-  clockedIn: boolean;
-  openEntryId: number | null;
-  clockInTime: string | null;
-}
-
-export interface ClockInInput {
-  pin: string;
-}
-
-export interface ClockOutInput {
-  pin: string;
-}
-
-export type PaymentTotalsResult = Record<string, { total: number; txCount: number }>;
-
 export type ListStaffTimesheetsParams = {
-  startDate?: string;
-  endDate?: string;
+startDate?: string;
+endDate?: string;
 };
 
-export interface CreateStaffTimesheetInput {
-  staffId: number;
-  staffName: string;
-  date: string;
-  clockIn: string;
-  clockOut?: string | null;
-}
+export type GetStaffClockStatusParams = {
+pin: string;
+};
 
-export interface SmsCampaign {
-  id: number;
-  merchantId: number;
-  campaignId: string;
-  name: string;
-  audience: string;
-  audienceLabel: string;
-  body: string;
-  linkUrl: string;
-  scheduled: string;
-  scheduledAt: string;
-  status: string;
-  sentAt: string;
-  delivered: number;
-  failed: number;
-  recipientCount: number;
-  customerId?: number | null;
-  createdAt: string;
-}
-
-export interface SmsCampaignInput {
-  campaignId: string;
-  name: string;
-  audience?: string;
-  audienceLabel?: string;
-  body?: string;
-  linkUrl?: string;
-  scheduled?: string;
-  scheduledAt?: string;
-  status?: string;
-  sentAt?: string;
-  delivered?: number;
-  failed?: number;
-  recipientCount?: number;
-  customerId?: number;
-}
-
-export interface SmsCampaignListResponse {
-  items: SmsCampaign[];
-  total: number;
-}
-
-export interface SmsTemplate {
-  id: number;
-  merchantId: number;
-  templateId: string;
-  name: string;
-  category: string;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SmsTemplateInput {
-  templateId: string;
-  name: string;
-  category?: string;
-  body?: string;
-}
-
-export interface SmsTemplateListResponse {
-  items: SmsTemplate[];
-  total: number;
-}
+export type GetPaymentTotalsParams = {
+date?: string;
+};
 

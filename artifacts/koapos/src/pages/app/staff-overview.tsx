@@ -1,6 +1,11 @@
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, type Staff } from "@workspace/api-client-react";
+import {
+  useListStaff,
+  useListStaffTimesheets,
+  useListLeaveRequests,
+  type Staff,
+} from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,9 +106,23 @@ function TableSkeleton() {
 
 export default function StaffOverviewPage() {
   const { data: staffList, isLoading } = useListStaff();
+  const { data: timesheets, isLoading: timesheetsLoading } = useListStaffTimesheets();
+  const { data: leaveRequests, isLoading: leaveLoading } = useListLeaveRequests();
 
   const activeStaff = staffList?.filter((s: Staff) => s.isActive) ?? [];
   const totalActive = activeStaff.length;
+
+  // "Currently clocked in" = staff with an open timesheet entry (no clock-out).
+  const clockedInStaffIds = new Set(
+    (timesheets?.items ?? [])
+      .filter((e) => e.clockOut == null)
+      .map((e) => e.staffId),
+  );
+  const clockedInCount = clockedInStaffIds.size;
+
+  const pendingLeaveCount = (leaveRequests?.items ?? []).filter(
+    (r) => r.status === "pending",
+  ).length;
 
   return (
     <AppLayout>
@@ -128,15 +147,27 @@ export default function StaffOverviewPage() {
           />
           <SummaryCard
             title="Currently Clocked In"
-            value="—"
-            sub="Shift tracking module not yet enabled"
+            value={clockedInCount}
+            sub={
+              clockedInCount === 1
+                ? "1 staff member on shift now"
+                : `${clockedInCount} staff members on shift now`
+            }
             icon={Clock}
+            loading={timesheetsLoading}
           />
           <SummaryCard
             title="Pending Leave Requests"
-            value="—"
-            sub="Leave management module not yet enabled"
+            value={pendingLeaveCount}
+            sub={
+              pendingLeaveCount === 0
+                ? "No requests awaiting review"
+                : pendingLeaveCount === 1
+                  ? "1 request awaiting review"
+                  : `${pendingLeaveCount} requests awaiting review`
+            }
             icon={CalendarOff}
+            loading={leaveLoading}
           />
         </div>
 
@@ -187,13 +218,17 @@ export default function StaffOverviewPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Clock3 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {member.isActive ? (
+                          {!member.isActive ? (
+                            <span className="text-sm text-muted-foreground">
+                              Inactive
+                            </span>
+                          ) : clockedInStaffIds.has(member.id) ? (
                             <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                              Active
+                              On shift
                             </span>
                           ) : (
                             <span className="text-sm text-muted-foreground">
-                              Inactive
+                              Off shift
                             </span>
                           )}
                         </div>

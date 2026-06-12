@@ -158,7 +158,7 @@ export default function PosEodPage() {
   const cashVariance    = !isNaN(cashDeclaredVal) ? cashDeclaredVal - expectedCash : null;
 
   /* system totals from today's transactions */
-  const { data: paymentSystemTotals = {} } = useGetPaymentTotals(TODAY, {
+  const { data: paymentSystemTotals = {} } = useGetPaymentTotals({ date: TODAY }, {
     query: { queryKey: ["payment-totals", TODAY], staleTime: 30_000, enabled: closeDlg },
   });
 

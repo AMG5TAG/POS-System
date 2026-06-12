@@ -512,7 +512,7 @@ function StaffClockDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
   const reset = () => { setPin(""); setSubmitted(false); };
 
-  const { data: status, isFetching, error } = useGetStaffClockStatus(pin, {
+  const { data: status, isFetching, error } = useGetStaffClockStatus({ pin }, {
     query: {
       queryKey: ["/api/staff-timesheets/status", pin],
       enabled: submitted && pin.length >= 4,

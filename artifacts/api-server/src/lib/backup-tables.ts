@@ -2,9 +2,14 @@
  * backup-tables — discovers every merchant-scoped Drizzle table at runtime and
  * computes an FK-safe ordering for delete/insert during restore.
  *
- * A table is "merchant-scoped" if it has a `merchantId` column. The two backup
- * bookkeeping tables are explicitly excluded so a restore never wipes the backup
- * history it is restoring from (or the stored credentials/password config).
+ * A table is "merchant-scoped" if it is owned by a single merchant. Almost all
+ * such tables expose a `merchantId` column; a few own their rows through a
+ * differently-named single foreign key to `merchants` (e.g. partner_referrals
+ * uses `referrerMerchantId`). Both are detected here, and the owning column key
+ * is recorded as `merchantColKey` so callers filter/scope on the right column.
+ *
+ * The two backup bookkeeping tables are explicitly excluded so a restore never
+ * wipes the backup history it is restoring from (or the stored credentials).
  */
 import * as schema from "@workspace/db";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
@@ -14,12 +19,39 @@ export interface ScopedTable {
   name: string;
   table: PgTable;
   hasId: boolean;
+  /** Drizzle column property key that owns each row's merchant (e.g. "merchantId"). */
+  merchantColKey: string;
 }
 
 const EXCLUDED_TABLE_NAMES = new Set([
   "merchant_backups",
   "merchant_backup_configs",
 ]);
+
+/**
+ * Return the Drizzle column property key that ties this table's rows to a single
+ * merchant, or null if the table is not merchant-scoped. Prefers a literal
+ * `merchantId` column; otherwise accepts a table whose ONLY foreign key into
+ * `merchants` is a single column (the ownership column).
+ */
+function merchantColumnKey(table: PgTable): string | null {
+  const columns = getTableColumns(table) as Record<string, { name?: string }>;
+  if ("merchantId" in columns) return "merchantId";
+
+  for (const fk of getTableConfig(table).foreignKeys) {
+    try {
+      const ref = fk.reference();
+      if (getTableName(ref.foreignTable) !== "merchants") continue;
+      if (ref.columns.length !== 1) continue; // composite FK — not a simple owner
+      const localName = (ref.columns[0] as { name?: string }).name;
+      const key = Object.keys(columns).find((k) => columns[k]?.name === localName);
+      if (key) return key;
+    } catch {
+      /* ignore malformed FK metadata */
+    }
+  }
+  return null;
+}
 
 function discoverScopedTables(): ScopedTable[] {
   const out: ScopedTable[] = [];
@@ -29,8 +61,9 @@ function discoverScopedTables(): ScopedTable[] {
     const name = getTableName(table);
     if (EXCLUDED_TABLE_NAMES.has(name)) continue;
     const columns = getTableColumns(table);
-    if (!("merchantId" in columns)) continue;
-    out.push({ name, table, hasId: "id" in columns });
+    const merchantColKey = merchantColumnKey(table);
+    if (!merchantColKey) continue;
+    out.push({ name, table, hasId: "id" in columns, merchantColKey });
   }
   return out;
 }

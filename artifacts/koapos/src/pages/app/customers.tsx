@@ -32,6 +32,7 @@ import {
   ServiceJob,
 } from "@workspace/api-client-react";
 import { useMapUrl } from "@/lib/map-provider";
+import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1276,7 +1277,14 @@ function CustomerDetailInner({
           { onSuccess: () => resolve(), onError: reject }
         );
       });
-      toast.success("File uploaded");
+      // If the platform user has opted in (Sync → Cloud Files & Folders), every
+      // customer file is also routed to their chosen cloud storage folder.
+      const cloud = loadCustomerFilesCloudSettings();
+      if (cloud.enabled && cloud.storageKey && cloud.folder.trim()) {
+        toast.success(`File uploaded · syncing to cloud (${cloud.folder.trim()})`);
+      } else {
+        toast.success("File uploaded");
+      }
       invalidateFiles();
     } catch {
       toast.error("Upload failed");

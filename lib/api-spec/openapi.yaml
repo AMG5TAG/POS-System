@@ -7547,6 +7547,45 @@ paths:
         "401":
           description: Provider not connected
 
+  /integrations/customer-files-cloud:
+    get:
+      operationId: getCustomerFilesCloudSettings
+      tags: [integrations]
+      summary: Get the "save all customer files to the cloud" preference
+      description: |
+        Returns whether customer file uploads are mirrored to a folder on a
+        connected cloud storage provider, along with the supported providers.
+      responses:
+        "200":
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFilesCloudSettings"
+    put:
+      operationId: updateCustomerFilesCloudSettings
+      tags: [integrations]
+      summary: Update the "save all customer files to the cloud" preference
+      description: |
+        When `enabled` is true, a supported `storageKey` and a non-empty `folder`
+        are required. Once enabled, every file uploaded to a customer is also
+        pushed to that folder on the chosen cloud storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+        "400":
+          description: Invalid storageKey or missing folder when enabled
+
   /xero/sync/contacts:
     post:
       operationId: syncXeroContacts
@@ -7753,8 +7792,397 @@ paths:
         "401":
           description: Unauthorized
 
+  /sms-templates:
+    get:
+      operationId: listSmsTemplates
+      tags: [sms-templates]
+      summary: List SMS templates
+      responses:
+        "200":
+          description: SMS templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplateListResponse"
+    post:
+      operationId: createSmsTemplate
+      tags: [sms-templates]
+      summary: Create an SMS template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsTemplateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplate"
+        "400":
+          description: Validation error
+
+  /sms-templates/{id}:
+    patch:
+      operationId: updateSmsTemplate
+      tags: [sms-templates]
+      summary: Update an SMS template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsTemplateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplate"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSmsTemplate
+      tags: [sms-templates]
+      summary: Delete an SMS template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /sms-campaigns:
+    get:
+      operationId: listSmsCampaigns
+      tags: [sms-campaigns]
+      summary: List SMS campaigns
+      responses:
+        "200":
+          description: SMS campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaignListResponse"
+    post:
+      operationId: createSmsCampaign
+      tags: [sms-campaigns]
+      summary: Create an SMS campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsCampaignInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaign"
+        "400":
+          description: Validation error
+
+  /sms-campaigns/{id}:
+    delete:
+      operationId: deleteSmsCampaign
+      tags: [sms-campaigns]
+      summary: Delete an SMS campaign
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /staff-timesheets:
+    get:
+      operationId: listStaffTimesheets
+      tags: [staff-timesheets]
+      summary: List staff timesheet entries
+      parameters:
+        - { name: startDate, in: query, required: false, schema: { type: string } }
+        - { name: endDate, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Timesheet entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetList"
+    post:
+      operationId: createStaffTimesheet
+      tags: [staff-timesheets]
+      summary: Create a staff timesheet entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffTimesheetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+        "400":
+          description: Validation error
+
+  /staff-timesheets/status:
+    get:
+      operationId: getStaffClockStatus
+      tags: [staff-timesheets]
+      summary: Get a staff member's clock-in status by PIN
+      parameters:
+        - { name: pin, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Clock status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffClockStatus"
+
+  /staff-timesheets/clock-in:
+    post:
+      operationId: clockIn
+      tags: [staff-timesheets]
+      summary: Clock a staff member in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockInInput"
+      responses:
+        "201":
+          description: Clocked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+
+  /staff-timesheets/clock-out:
+    post:
+      operationId: clockOut
+      tags: [staff-timesheets]
+      summary: Clock a staff member out
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockOutInput"
+      responses:
+        "200":
+          description: Clocked out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+
+  /staff-timesheets/{id}:
+    delete:
+      operationId: deleteStaffTimesheet
+      tags: [staff-timesheets]
+      summary: Delete a staff timesheet entry
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/payment-totals:
+    get:
+      operationId: getPaymentTotals
+      tags: [dashboard]
+      summary: Payment method totals for a given day
+      parameters:
+        - { name: date, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Totals keyed by payment method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentTotalsResult"
+
+  /kpi-targets/dashboard-kpi:
+    get:
+      operationId: getDashboardKpi
+      tags: [kpi-targets]
+      summary: The single KPI target pinned to the dashboard, with its current actual
+      responses:
+        "200":
+          description: Dashboard KPI, or null when none is pinned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/DashboardKpiResult"
+                  - type: "null"
+
 components:
   schemas:
+    # ── SMS templates & campaigns ─────────────────────────────────────────────
+    SmsTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, category, body, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SmsTemplateInput:
+      type: object
+      required: [templateId, name]
+      properties:
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+
+    SmsTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SmsTemplate" }
+        total: { type: integer }
+
+    SmsCampaign:
+      type: object
+      required: [id, merchantId, campaignId, name, audience, audienceLabel, body, linkUrl, scheduled, scheduledAt, status, sentAt, delivered, failed, recipientCount, createdAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        campaignId: { type: string }
+        name: { type: string }
+        audience: { type: string }
+        audienceLabel: { type: string }
+        body: { type: string }
+        linkUrl: { type: string }
+        scheduled: { type: string }
+        scheduledAt: { type: string }
+        status: { type: string }
+        sentAt: { type: string }
+        delivered: { type: integer }
+        failed: { type: integer }
+        recipientCount: { type: integer }
+        customerId: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    SmsCampaignInput:
+      type: object
+      required: [campaignId, name]
+      properties:
+        campaignId: { type: string }
+        name: { type: string }
+        audience: { type: string }
+        audienceLabel: { type: string }
+        body: { type: string }
+        linkUrl: { type: string }
+        scheduled: { type: string }
+        scheduledAt: { type: string }
+        status: { type: string }
+        sentAt: { type: string }
+        delivered: { type: integer }
+        failed: { type: integer }
+        recipientCount: { type: integer }
+        customerId: { type: integer }
+
+    SmsCampaignListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SmsCampaign" }
+        total: { type: integer }
+
+    # ── Staff timesheets ──────────────────────────────────────────────────────
+    StaffTimesheetEntry:
+      type: object
+      required: [id, staffId, staffName, date, clockIn, clockOut, note, createdAt]
+      properties:
+        id: { type: integer }
+        staffId: { type: integer }
+        staffName: { type: string }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    StaffTimesheetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffTimesheetEntry" }
+
+    CreateStaffTimesheetInput:
+      type: object
+      required: [staffId, staffName, date, clockIn]
+      properties:
+        staffId: { type: integer }
+        staffName: { type: string }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string, nullable: true }
+
+    StaffClockStatus:
+      type: object
+      required: [staffId, staffName, clockedIn, openEntryId, clockInTime]
+      properties:
+        staffId: { type: integer }
+        staffName: { type: string }
+        clockedIn: { type: boolean }
+        openEntryId: { type: integer, nullable: true }
+        clockInTime: { type: string, nullable: true }
+
+    ClockInInput:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string }
+
+    ClockOutInput:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string }
+
+    # ── Dashboard KPI & payment totals ────────────────────────────────────────
+    PaymentTotalsResult:
+      type: object
+      additionalProperties:
+        type: object
+        required: [total, txCount]
+        properties:
+          total: { type: number }
+          txCount: { type: integer }
+
+    DashboardKpiResult:
+      type: object
+      required: [kpi, actual]
+      properties:
+        kpi: { $ref: "#/components/schemas/KpiTarget" }
+        actual: { type: number, nullable: true }
+
     # ── Backups ───────────────────────────────────────────────────────────────
     Backup:
       type: object
@@ -7795,7 +8223,7 @@ components:
       required: [id, type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
         directory: { type: string, nullable: true }
         bucket: { type: string, nullable: true }
         region: { type: string, nullable: true }
@@ -7809,6 +8237,7 @@ components:
         username: { type: string, nullable: true }
         remotePath: { type: string, nullable: true }
         passwordSet: { type: boolean }
+        folder: { type: string, nullable: true }
 
     BackupConfig:
       type: object
@@ -7827,7 +8256,7 @@ components:
       required: [type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
         directory: { type: string }
         bucket: { type: string }
         region: { type: string }
@@ -7841,6 +8270,7 @@ components:
         username: { type: string }
         remotePath: { type: string }
         password: { type: string }
+        folder: { type: string }
 
     BackupConfigInput:
       type: object
@@ -8001,6 +8431,12 @@ components:
         staffRole:
           type: string
           enum: [owner, manager, cashier]
+        emailVerified:
+          type: boolean
+        onboardingCompleted:
+          type: boolean
+        isDemoAccount:
+          type: boolean
 
     MerchantUpdate:
       type: object
@@ -9301,6 +9737,10 @@ components:
           type: string
         customerName:
           type: ["string", "null"]
+        customerPhone:
+          type: ["string", "null"]
+        customerAddress:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
 
@@ -9540,6 +9980,10 @@ components:
           enum: [scheduled, completed, cancelled, no-show]
         notes:
           type: ["string", "null"]
+        sendSms:
+          type: boolean
+        sendEmail:
+          type: boolean
 
     DashboardConfigResponse:
       type: object
@@ -10173,6 +10617,9 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        invoiceUrls:
+          type: array
+          items: { type: string }
         items:
           type: array
           items:
@@ -10199,6 +10646,9 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        invoiceUrls:
+          type: array
+          items: { type: string }
         items:
           type: array
           items:
@@ -11062,7 +11512,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -11081,6 +11531,7 @@ components:
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
         roleDiscountLimits:          { type: string }
+        buttonStyle:                 { type: string }
         updatedAt:                   { type: string, format: date-time }
 
     PosSettingsInput:
@@ -11101,6 +11552,7 @@ components:
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
         roleDiscountLimits:          { type: string }
+        buttonStyle:                 { type: string }
 
     LaybySettings:
       type: object
@@ -11191,7 +11643,7 @@ components:
 
     KpiSettings:
       type: object
-      required: [id, merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage, updatedAt]
+      required: [id, merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage, weekStartDay, updatedAt]
       properties:
         id:                 { type: integer }
         merchantId:         { type: integer }
@@ -11200,6 +11652,7 @@ components:
         trackServices:      { type: string }
         trackSuppliers:     { type: string }
         trackWastage:       { type: string }
+        weekStartDay:       { type: string }
         updatedAt:          { type: string, format: date-time }
 
     KpiSettingsInput:
@@ -11210,6 +11663,7 @@ components:
         trackServices:      { type: string }
         trackSuppliers:     { type: string }
         trackWastage:       { type: string }
+        weekStartDay:       { type: string }
 
     KpiTarget:
       type: object
@@ -11243,7 +11697,10 @@ components:
         staffIds:    { type: string }
         reward:      { type: string }
         notes:       { type: string }
+        startDate:   { type: string, nullable: true }
+        endDate:     { type: string, nullable: true }
         isActive:    { type: string }
+        showOnDashboard: { type: string }
 
     KpiTargetListResponse:
       type: object
@@ -11851,7 +12308,9 @@ components:
         closedAt: { type: string, nullable: true }
         cashCounted: { type: string, nullable: true }
         eftposDeclared: { type: string, nullable: true }
+        paymentTotals: { type: string, nullable: true }
         closingNotes: { type: string, nullable: true }
+        deviceId: { type: string, nullable: true }
 
     PosRegisterSessionListResponse:
       type: object
@@ -12042,6 +12501,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        defaultImageUrl: { type: string, nullable: true }
 
     InventorySettingsInput:
       type: object
@@ -12049,6 +12509,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        defaultImageUrl: { type: string, nullable: true }
 
     RegionalExtSettings:
       type: object
@@ -13013,6 +13474,8 @@ components:
         invoicePrefix: { type: string }
         invoiceDigits: { type: integer }
         recurring:     { $ref: "#/components/schemas/InvoiceRecurringInput" }
+        serviceJobId:  { type: integer, nullable: true }
+        appointmentId: { type: integer, nullable: true }
 
     InvoiceRecurringUpdate:
       type: object
@@ -13043,6 +13506,8 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/InvoiceRecurringUpdate"
+        serviceJobId:  { type: integer, nullable: true }
+        appointmentId: { type: integer, nullable: true }
 
     GiftCardPaymentRef:
       type: object
@@ -13432,6 +13897,32 @@ components:
         failed:      { type: integer, description: Number of contacts that failed (logged, not fatal) }
         notesSynced: { type: integer, description: Number of contacts whose notes were included }
         message:     { type: string }
+
+    CustomerFilesCloudSettingsInput:
+      type: object
+      required: [enabled, storageKey, folder]
+      properties:
+        enabled:
+          type: boolean
+          description: When true, customer file uploads are mirrored to the cloud
+        storageKey:
+          type: string
+          enum: [onedrive, google_drive, dropbox]
+          description: Connected cloud storage provider to mirror files to
+        folder:
+          type: string
+          description: Destination folder path on that provider (set by the platform user)
+
+    CustomerFilesCloudSettings:
+      allOf:
+        - $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+        - type: object
+          required: [supportedStorageKeys]
+          properties:
+            supportedStorageKeys:
+              type: array
+              items: { type: string }
+              description: Storage providers that can receive mirrored customer files
 
     XeroSyncResult:
       type: object

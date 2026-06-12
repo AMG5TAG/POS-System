@@ -6,6 +6,7 @@ import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
+import { getDeleteOrderedTables } from "../lib/backup-tables";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail, sendSystemEmail } from "../services/email";
 import { validateABN } from "../lib/abn";
@@ -1222,11 +1223,6 @@ router.patch("/auth/onboarding/complete", requireAuth, async (req, res): Promise
 
 /* ── Account deletion ────────────────────────────────────────────────────── */
 
-import * as schema from "@workspace/db";
-import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { getTableColumns, getTableName } from "drizzle-orm";
-
 router.delete("/auth/account", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { currentPassword } = req.body as { currentPassword?: string };
@@ -1243,60 +1239,30 @@ router.delete("/auth/account", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Discover all merchant-scoped tables (same logic as backup-tables.ts) and
-  // delete in reverse dependency order (children before parents).
-  const EXCLUDED = new Set(["merchant_backups", "merchant_backup_configs", "merchants"]);
-  const scopedTables: PgTable[] = [];
-  for (const value of Object.values(schema)) {
-    if (!is(value, PgTable)) continue;
-    const tbl = value as PgTable;
-    const name = getTableName(tbl);
-    if (EXCLUDED.has(name)) continue;
-    const cols = getTableColumns(tbl);
-    if (!("merchantId" in cols)) continue;
-    scopedTables.push(tbl);
-  }
-
-  // Topological sort: parents first for insert order, reverse for delete order
-  const byName = new Map(scopedTables.map((t) => [getTableName(t), t]));
-  const deps = new Map<string, Set<string>>();
-  for (const t of scopedTables) deps.set(getTableName(t), new Set());
-  for (const t of scopedTables) {
-    const cfg = getTableConfig(t);
-    for (const fk of cfg.foreignKeys) {
-      try {
-        const parentName = getTableName(fk.reference().foreignTable);
-        if (byName.has(parentName)) deps.get(getTableName(t))!.add(parentName);
-      } catch { /* ignore */ }
-    }
-  }
-  const ordered: PgTable[] = [];
-  const visited = new Set<string>();
-  function visit(name: string) {
-    if (visited.has(name)) return;
-    visited.add(name);
-    for (const dep of deps.get(name) ?? []) visit(dep);
-    const t = byName.get(name);
-    if (t) ordered.push(t);
-  }
-  for (const t of scopedTables) visit(getTableName(t));
-  // Delete in reverse order (children first)
-  const deleteOrder = [...ordered].reverse();
+  // Closing an account purges all of the merchant's business data, then
+  // SUSPENDS the merchant row rather than hard-deleting it: a database trigger
+  // (prevent_merchant_delete) intentionally forbids DELETEs on `merchants`, and
+  // requireAuth/login already reject any account whose status is not "active",
+  // so suspension fully and irreversibly locks out access.
+  //
+  // Reuse the shared merchant-scoped-table discovery (the same set backup/restore
+  // operate on) so every owned table — including ones keyed by a non-`merchantId`
+  // column such as partner_referrals (referrerMerchantId) — is purged child-first.
+  const deleteOrder = getDeleteOrderedTables();
 
   await db.transaction(async (tx) => {
-    const { eq: teq } = await import("drizzle-orm");
-    for (const tbl of deleteOrder) {
-      const cols = getTableColumns(tbl);
-      const col = (cols as Record<string, unknown>)["merchantId"] as { name: string };
-      // Use raw SQL to avoid TypeScript generic complexity
-      const tableName = getTableName(tbl);
-      await tx.execute(
-        sql`DELETE FROM ${sql.identifier(tableName)} WHERE merchant_id = ${merchantId}`
-      );
-      void col; // suppress unused warning
+    for (const { table, merchantColKey } of deleteOrder) {
+      const col = (table as unknown as Record<string, unknown>)[merchantColKey] as Parameters<typeof eq>[0];
+      await tx.delete(table).where(eq(col, merchantId));
     }
-    await tx.delete(merchantsTable).where(eq(merchantsTable.id, merchantId));
+    // Suspend (not DELETE) the merchant: hard deletes are blocked by the
+    // prevent_merchant_delete trigger; suspension locks out all access.
+    await tx.update(merchantsTable).set({ status: "suspended" }).where(eq(merchantsTable.id, merchantId));
   });
+
+  // Evict the cached "active" status immediately so any other open sessions for
+  // this account lose API access on their very next request (not up to 60s later).
+  invalidateMerchantStatusCache(merchantId);
 
   req.session.destroy(() => {});
   res.json({ ok: true });

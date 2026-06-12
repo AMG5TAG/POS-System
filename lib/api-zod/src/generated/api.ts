@@ -59,8 +59,7 @@ export const RegisterBody = zod.object({
   "businessName": zod.string().min(1),
   "ownerName": zod.string().optional(),
   "phone": zod.string().optional(),
-  "planId": zod.number().optional(),
-  "tosAccepted": zod.literal(true, { message: "You must accept the Terms of Service to continue." })
+  "planId": zod.number().optional()
 })
 
 
@@ -177,7 +176,6 @@ export const GetMerchantResponse = zod.object({
   "timezone": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "portalDomain": zod.string().nullish(),
   "loginNotifyEmail": zod.boolean().optional(),
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
@@ -426,6 +424,7 @@ export const ListProductsResponse = zod.object({
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "notification": zod.string().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -556,6 +555,7 @@ export const GetProductResponse = zod.object({
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "notification": zod.string().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -596,7 +596,7 @@ export const UpdateProductBody = zod.object({
   "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
   "stockLocation": zod.string().optional(),
   "overflowLocation": zod.string().optional(),
-  "notification": zod.string().optional()
+  "notification": zod.string().nullish()
 })
 
 export const updateProductResponseTagsMax = 5;
@@ -641,6 +641,7 @@ export const UpdateProductResponse = zod.object({
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
+  "notification": zod.string().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -1969,9 +1970,10 @@ export const ListStaffResponseItem = zod.object({
   "billingAddress": zod.string().nullish(),
   "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
-  "pin": zod.string().nullish(),
+  "pin": zod.string().nullish().describe('Masked in responses (\"\*\*\*\*\" when a PIN is set, null otherwise) — raw PINs are never returned.'),
   "isActive": zod.boolean(),
   "defaultRegisterType": zod.string().nullish(),
+  "posPrefs": zod.string().nullish().describe('JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).'),
   "payRate": zod.string().nullish(),
   "loadingRate": zod.string().nullish(),
   "superRate": zod.string().nullish(),
@@ -2010,9 +2012,40 @@ export const CreateStaffBody = zod.object({
 /**
  * @summary Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
  */
+
+
+
 export const VerifyStaffPinBody = zod.object({
   "pin": zod.string().min(1),
   "requireManager": zod.boolean().optional().describe('When true, only manager\/owner staff PINs are accepted (e.g. discount approvals).')
+})
+
+export const VerifyStaffPinResponse = zod.object({
+  "ok": zod.boolean(),
+  "reason": zod.enum(['invalid', 'role', 'rate_limited']).optional().describe('Present when ok is false.'),
+  "staff": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "billingAddress": zod.string().nullish(),
+  "postalAddress": zod.string().nullish(),
+  "role": zod.enum(['owner', 'manager', 'cashier']),
+  "pin": zod.string().nullish().describe('Masked in responses (\"\*\*\*\*\" when a PIN is set, null otherwise) — raw PINs are never returned.'),
+  "isActive": zod.boolean(),
+  "defaultRegisterType": zod.string().nullish(),
+  "posPrefs": zod.string().nullish().describe('JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).'),
+  "payRate": zod.string().nullish(),
+  "loadingRate": zod.string().nullish(),
+  "superRate": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}).optional()
 })
 
 
@@ -2063,9 +2096,10 @@ export const GetStaffMemberResponse = zod.object({
   "billingAddress": zod.string().nullish(),
   "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
-  "pin": zod.string().nullish(),
+  "pin": zod.string().nullish().describe('Masked in responses (\"\*\*\*\*\" when a PIN is set, null otherwise) — raw PINs are never returned.'),
   "isActive": zod.boolean(),
   "defaultRegisterType": zod.string().nullish(),
+  "posPrefs": zod.string().nullish().describe('JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).'),
   "payRate": zod.string().nullish(),
   "loadingRate": zod.string().nullish(),
   "superRate": zod.string().nullish(),
@@ -2115,9 +2149,10 @@ export const UpdateStaffResponse = zod.object({
   "billingAddress": zod.string().nullish(),
   "postalAddress": zod.string().nullish(),
   "role": zod.enum(['owner', 'manager', 'cashier']),
-  "pin": zod.string().nullish(),
+  "pin": zod.string().nullish().describe('Masked in responses (\"\*\*\*\*\" when a PIN is set, null otherwise) — raw PINs are never returned.'),
   "isActive": zod.boolean(),
   "defaultRegisterType": zod.string().nullish(),
+  "posPrefs": zod.string().nullish().describe('JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).'),
   "payRate": zod.string().nullish(),
   "loadingRate": zod.string().nullish(),
   "superRate": zod.string().nullish(),
@@ -2763,7 +2798,9 @@ export const UpdateAppointmentBody = zod.object({
   "scheduledAt": zod.coerce.date(),
   "endAt": zod.coerce.date(),
   "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "sendSms": zod.boolean().optional(),
+  "sendEmail": zod.boolean().optional()
 })
 
 export const UpdateAppointmentResponse = zod.object({
@@ -2938,6 +2975,22 @@ export const SendServiceJobEmailBody = zod.object({
 })
 
 export const SendServiceJobEmailResponse = zod.object({
+  "success": zod.boolean().optional(),
+  "provider": zod.string().optional(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Send a composed email to any address using the merchant's configured email provider
+ */
+export const ComposeEmailBody = zod.object({
+  "to": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string()
+})
+
+export const ComposeEmailResponse = zod.object({
   "success": zod.boolean().optional(),
   "provider": zod.string().optional(),
   "error": zod.string().nullish()
@@ -3223,6 +3276,7 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3257,10 +3311,10 @@ export const CreatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3294,6 +3348,7 @@ export const GetPurchaseOrderResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3331,10 +3386,10 @@ export const UpdatePurchaseOrderBody = zod.object({
   "expectedDate": zod.string().optional(),
   "receivedDate": zod.string().optional(),
   "notes": zod.string().optional(),
-  "invoiceUrls": zod.array(zod.string()).optional(),
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3360,6 +3415,7 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3420,6 +3476,7 @@ export const ReceivePurchaseOrderItemsResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -3965,18 +4022,6 @@ export const TestEmailSettingsBody = zod.object({
 export const TestEmailSettingsResponse = zod.object({
   "success": zod.boolean().optional(),
   "provider": zod.string().optional()
-})
-
-export const ComposeEmailBody = zod.object({
-  "to": zod.string().email(),
-  "subject": zod.string().min(1),
-  "body": zod.string()
-})
-
-export const ComposeEmailResponse = zod.object({
-  "success": zod.boolean().optional(),
-  "provider": zod.string().optional(),
-  "error": zod.string().nullish()
 })
 
 
@@ -5210,6 +5255,7 @@ export const GetPosSettingsResponse = zod.object({
   "defaultSkuPrefix": zod.string(),
   "mapProvider": zod.string(),
   "roleDiscountLimits": zod.string(),
+  "buttonStyle": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -5232,7 +5278,8 @@ export const UpsertPosSettingsBody = zod.object({
   "enabledShortcuts": zod.string().optional(),
   "defaultSkuPrefix": zod.string().optional(),
   "mapProvider": zod.string().optional(),
-  "roleDiscountLimits": zod.string().optional()
+  "roleDiscountLimits": zod.string().optional(),
+  "buttonStyle": zod.string().optional()
 })
 
 export const UpsertPosSettingsResponse = zod.object({
@@ -5253,6 +5300,7 @@ export const UpsertPosSettingsResponse = zod.object({
   "defaultSkuPrefix": zod.string(),
   "mapProvider": zod.string(),
   "roleDiscountLimits": zod.string(),
+  "buttonStyle": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -5409,6 +5457,7 @@ export const GetKpiSettingsResponse = zod.object({
   "trackServices": zod.string(),
   "trackSuppliers": zod.string(),
   "trackWastage": zod.string(),
+  "weekStartDay": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -5421,7 +5470,8 @@ export const UpsertKpiSettingsBody = zod.object({
   "trackAppointments": zod.string().optional(),
   "trackServices": zod.string().optional(),
   "trackSuppliers": zod.string().optional(),
-  "trackWastage": zod.string().optional()
+  "trackWastage": zod.string().optional(),
+  "weekStartDay": zod.string().optional()
 })
 
 export const UpsertKpiSettingsResponse = zod.object({
@@ -5432,6 +5482,7 @@ export const UpsertKpiSettingsResponse = zod.object({
   "trackServices": zod.string(),
   "trackSuppliers": zod.string(),
   "trackWastage": zod.string(),
+  "weekStartDay": zod.string(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -5473,7 +5524,10 @@ export const CreateKpiTargetBody = zod.object({
   "staffIds": zod.string().optional(),
   "reward": zod.string().optional(),
   "notes": zod.string().optional(),
-  "isActive": zod.string().optional()
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.string().optional(),
+  "showOnDashboard": zod.string().optional()
 })
 
 
@@ -5494,7 +5548,10 @@ export const UpdateKpiTargetBody = zod.object({
   "staffIds": zod.string().optional(),
   "reward": zod.string().optional(),
   "notes": zod.string().optional(),
-  "isActive": zod.string().optional()
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.string().optional(),
+  "showOnDashboard": zod.string().optional()
 })
 
 export const UpdateKpiTargetResponse = zod.object({
@@ -6814,7 +6871,9 @@ export const CreatePosRegisterSessionBody = zod.object({
   "closedAt": zod.string().nullish(),
   "cashCounted": zod.string().nullish(),
   "eftposDeclared": zod.string().nullish(),
-  "closingNotes": zod.string().nullish()
+  "paymentTotals": zod.string().nullish(),
+  "closingNotes": zod.string().nullish(),
+  "deviceId": zod.string().nullish()
 })
 
 
@@ -6835,7 +6894,9 @@ export const UpdatePosRegisterSessionBody = zod.object({
   "closedAt": zod.string().nullish(),
   "cashCounted": zod.string().nullish(),
   "eftposDeclared": zod.string().nullish(),
-  "closingNotes": zod.string().nullish()
+  "paymentTotals": zod.string().nullish(),
+  "closingNotes": zod.string().nullish(),
+  "deviceId": zod.string().nullish()
 })
 
 export const UpdatePosRegisterSessionResponse = zod.object({
@@ -8541,8 +8602,6 @@ export const ListInvoicesResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
-  "serviceJobId": zod.number().nullish(),
-  "appointmentId": zod.number().nullish(),
   "invoiceNumber": zod.string(),
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
   "subtotal": zod.number(),
@@ -8602,8 +8661,6 @@ export const CreateInvoiceBody = zod.object({
   "customerId": zod.number().optional(),
   "dueDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
-  "serviceJobId": zod.number().nullish(),
-  "appointmentId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
@@ -8620,7 +8677,9 @@ export const CreateInvoiceBody = zod.object({
   "frequency": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually']),
   "startDate": zod.coerce.date().nullish(),
   "occurrences": zod.number().optional()
-}).optional()
+}).optional(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish()
 })
 
 
@@ -8644,8 +8703,6 @@ export const GetInvoiceResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
-  "serviceJobId": zod.number().nullish(),
-  "appointmentId": zod.number().nullish(),
   "invoiceNumber": zod.string(),
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
   "subtotal": zod.number(),
@@ -8708,8 +8765,6 @@ export const UpdateInvoiceBody = zod.object({
   "notes": zod.string().optional(),
   "dueDate": zod.coerce.date().nullish(),
   "customerId": zod.number().nullish(),
-  "serviceJobId": zod.number().nullish(),
-  "appointmentId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateInvoiceBodyItemsItemQuantityMin),
@@ -8725,7 +8780,9 @@ export const UpdateInvoiceBody = zod.object({
   "frequency": zod.string().optional(),
   "startDate": zod.string().nullish(),
   "occurrences": zod.number().optional()
-}).nullish()
+}).nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "appointmentId": zod.number().nullish()
 })
 
 export const updateInvoiceResponseItemsItemQuantityMin = 0.0001;
@@ -9687,6 +9744,41 @@ export const SyncIntegrationContactsResponse = zod.object({
 
 
 /**
+ * Returns whether customer file uploads are mirrored to a folder on a
+connected cloud storage provider, along with the supported providers.
+
+ * @summary Get the "save all customer files to the cloud" preference
+ */
+export const GetCustomerFilesCloudSettingsResponse = zod.object({
+  "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
+}).and(zod.object({
+  "supportedStorageKeys": zod.array(zod.string()).describe('Storage providers that can receive mirrored customer files')
+}))
+
+
+/**
+ * When `enabled` is true, a supported `storageKey` and a non-empty `folder`
+are required. Once enabled, every file uploaded to a customer is also
+pushed to that folder on the chosen cloud storage.
+
+ * @summary Update the "save all customer files to the cloud" preference
+ */
+export const UpdateCustomerFilesCloudSettingsBody = zod.object({
+  "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
+})
+
+export const UpdateCustomerFilesCloudSettingsResponse = zod.object({
+  "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
+})
+
+
+/**
  * @summary Push customer records to Xero as contacts
  */
 export const SyncXeroContactsResponse = zod.object({
@@ -9890,5 +9982,246 @@ export const CreatePartnerReferralBody = zod.object({
   "contactName": zod.string().min(1),
   "contactEmail": zod.string().email()
 })
+
+
+/**
+ * @summary List SMS templates
+ */
+export const ListSmsTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create an SMS template
+ */
+export const CreateSmsTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional()
+})
+
+
+/**
+ * @summary Update an SMS template
+ */
+export const UpdateSmsTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateSmsTemplateBody = zod.object({
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string().optional(),
+  "body": zod.string().optional()
+})
+
+export const UpdateSmsTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "templateId": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an SMS template
+ */
+export const DeleteSmsTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List SMS campaigns
+ */
+export const ListSmsCampaignsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string(),
+  "audienceLabel": zod.string(),
+  "body": zod.string(),
+  "linkUrl": zod.string(),
+  "scheduled": zod.string(),
+  "scheduledAt": zod.string(),
+  "status": zod.string(),
+  "sentAt": zod.string(),
+  "delivered": zod.number(),
+  "failed": zod.number(),
+  "recipientCount": zod.number(),
+  "customerId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create an SMS campaign
+ */
+export const CreateSmsCampaignBody = zod.object({
+  "campaignId": zod.string(),
+  "name": zod.string(),
+  "audience": zod.string().optional(),
+  "audienceLabel": zod.string().optional(),
+  "body": zod.string().optional(),
+  "linkUrl": zod.string().optional(),
+  "scheduled": zod.string().optional(),
+  "scheduledAt": zod.string().optional(),
+  "status": zod.string().optional(),
+  "sentAt": zod.string().optional(),
+  "delivered": zod.number().optional(),
+  "failed": zod.number().optional(),
+  "recipientCount": zod.number().optional(),
+  "customerId": zod.number().optional()
+})
+
+
+/**
+ * @summary Delete an SMS campaign
+ */
+export const DeleteSmsCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List staff timesheet entries
+ */
+export const ListStaffTimesheetsQueryParams = zod.object({
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
+})
+
+export const ListStaffTimesheetsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "staffId": zod.number(),
+  "staffName": zod.string(),
+  "date": zod.string(),
+  "clockIn": zod.string(),
+  "clockOut": zod.string().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a staff timesheet entry
+ */
+export const CreateStaffTimesheetBody = zod.object({
+  "staffId": zod.number(),
+  "staffName": zod.string(),
+  "date": zod.string(),
+  "clockIn": zod.string(),
+  "clockOut": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get a staff member's clock-in status by PIN
+ */
+export const GetStaffClockStatusQueryParams = zod.object({
+  "pin": zod.coerce.string()
+})
+
+export const GetStaffClockStatusResponse = zod.object({
+  "staffId": zod.number(),
+  "staffName": zod.string(),
+  "clockedIn": zod.boolean(),
+  "openEntryId": zod.number().nullable(),
+  "clockInTime": zod.string().nullable()
+})
+
+
+/**
+ * @summary Clock a staff member in
+ */
+export const ClockInBody = zod.object({
+  "pin": zod.string()
+})
+
+
+/**
+ * @summary Clock a staff member out
+ */
+export const ClockOutBody = zod.object({
+  "pin": zod.string()
+})
+
+export const ClockOutResponse = zod.object({
+  "id": zod.number(),
+  "staffId": zod.number(),
+  "staffName": zod.string(),
+  "date": zod.string(),
+  "clockIn": zod.string(),
+  "clockOut": zod.string().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a staff timesheet entry
+ */
+export const DeleteStaffTimesheetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Payment method totals for a given day
+ */
+export const GetPaymentTotalsQueryParams = zod.object({
+  "date": zod.coerce.string().optional()
+})
+
+export const GetPaymentTotalsResponse = zod.record(zod.string(), zod.object({
+  "total": zod.number(),
+  "txCount": zod.number()
+}))
+
+
+/**
+ * @summary The single KPI target pinned to the dashboard, with its current actual
+ */
+export const GetDashboardKpiResponse = zod.union([zod.object({
+  "kpi": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "targetId": zod.string(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "staffIds": zod.string(),
+  "reward": zod.string().optional(),
+  "notes": zod.string(),
+  "isActive": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "actual": zod.number().nullable()
+}),zod.null()])
 
 

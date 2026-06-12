@@ -6,7 +6,8 @@ import { db } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getInsertOrderedTables } from "./backup-tables";
 
-export const BACKUP_SCHEMA_VERSION = 1;
+// v2 adds tables owned via a non-`merchantId` foreign key (e.g. partner_referrals).
+export const BACKUP_SCHEMA_VERSION = 2;
 
 export interface BackupSnapshot {
   schemaVersion: number;
@@ -20,10 +21,9 @@ export async function collectMerchantData(merchantId: number): Promise<BackupSna
 
   const result = await db.transaction(async (tx) => {
     const out: Record<string, unknown[]> = {};
-    for (const { name, table } of tables) {
-      // `merchantId` exists on every table in this set (that is the filter).
+    for (const { name, table, merchantColKey } of tables) {
       const col = (table as unknown as Record<string, unknown>)[
-        "merchantId"
+        merchantColKey
       ] as Parameters<typeof eq>[0];
       const rows = await tx.select().from(table).where(eq(col, merchantId));
       out[name] = rows;

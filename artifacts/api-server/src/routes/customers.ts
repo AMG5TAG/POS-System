@@ -33,6 +33,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
+import { mirrorCustomerFileToCloud, getCustomerFilesCloudConfig } from "../services/cloudFileMirror";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -675,11 +676,25 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
   const [record] = await db.insert(customerFilesTable)
     .values({ merchantId, customerId, filename, fileKey, contentType, sizeBytes: sizeBytes ?? 0 })
     .returning();
+
+  // If the merchant opted into "Save all customer files to the cloud" (Sync →
+  // Cloud Files & Folders), mirror the file to their chosen storage folder.
+  // Fire-and-forget: never block or fail the upload on the external provider.
+  const cloud = await getCustomerFilesCloudConfig(merchantId);
+  if (cloud.enabled) {
+    void mirrorCustomerFileToCloud(merchantId, {
+      fileKey: record.fileKey,
+      filename: record.filename,
+      contentType: record.contentType,
+    });
+  }
+
   res.status(201).json({
     id: record.id, merchantId: record.merchantId, customerId: record.customerId,
     filename: record.filename, fileKey: record.fileKey, contentType: record.contentType,
     sizeBytes: record.sizeBytes, url: fileUrl(record.fileKey),
     createdAt: record.createdAt.toISOString(),
+    cloudSync: cloud.enabled ? { provider: cloud.storageKey, folder: cloud.folder } : null,
   });
 });
 
