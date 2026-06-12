@@ -208,7 +208,13 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
       { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
-      { name: "Landing Pages",  href: "/management/marketing/landing-pages", icon: LayoutTemplate },
+      {
+        name: "Landing Pages", icon: LayoutTemplate,
+        children: [
+          { name: "Landing Pages", href: "/management/marketing/landing-pages",          icon: Globe },
+          { name: "Templates",     href: "/management/marketing/landing-page-templates", icon: LayoutTemplate },
+        ],
+      },
       {
         name: "Generators", icon: QrCode,
         children: [
@@ -331,6 +337,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · QR Codes",             href: "/management/marketing/generators/qr-codes",   icon: QrCode,     group: "Management" },
   { label: "Marketing · Shortlinks",           href: "/management/marketing/generators/shortlinks", icon: Link2,      group: "Management" },
   { label: "Marketing · Landing Pages",        href: "/management/marketing/landing-pages",         icon: LayoutTemplate, group: "Management" },
+  { label: "Marketing · Landing Page Templates", href: "/management/marketing/landing-page-templates", icon: LayoutTemplate, group: "Management" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
   { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
   { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
@@ -446,6 +453,7 @@ const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/sms/campaigns":             ["Marketing", "SMS", "Campaigns"],
   "/marketing/sms/templates":             ["Marketing", "SMS", "Templates"],
   "/management/marketing/landing-pages":           ["Management", "Marketing & Reports", "Landing Pages"],
+  "/management/marketing/landing-page-templates":  ["Management", "Marketing & Reports", "Landing Pages", "Templates"],
   "/management/marketing/generators/qr-codes":     ["Management", "Marketing & Reports", "Generators", "QR Codes"],
   "/management/marketing/generators/shortlinks":   ["Management", "Marketing & Reports", "Generators", "Shortlinks"],
   "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],

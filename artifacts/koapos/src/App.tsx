@@ -681,6 +681,9 @@ function Router() {
       <Route path="/management/marketing/landing-pages">
         <ManagementProtectedRoute component={MarketingLandingPagesPage} />
       </Route>
+      <Route path="/management/marketing/landing-page-templates">
+        <ManagementProtectedRoute component={MarketingLandingPagesPage} />
+      </Route>
       <Route path="/management/marketing/generators/qr-codes">
         <ManagementProtectedRoute component={MarketingQRCodesPage} />
       </Route>

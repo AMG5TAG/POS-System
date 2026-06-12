@@ -13,6 +13,10 @@ export const marketingAutomationRulesTable = pgTable("marketing_automation_rules
   templateName:    text("template_name"),
   templateSubject: text("template_subject"),
   templateBody:    text("template_body"),
+  // Time-window triggers: days after a sale (days_after_sale) and a one-off
+  // scheduled send at an absolute time (scheduled_time).
+  delayDays:       integer("delay_days"),
+  scheduledAt:     timestamp("scheduled_at", { withTimezone: true }),
   lastRunAt:       timestamp("last_run_at", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

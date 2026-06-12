@@ -13,8 +13,9 @@ import {
   Globe, Plus, Trash2, Copy, ExternalLink, Pencil, Image, AlignLeft, Palette,
   Link2, GripVertical, ChevronUp, ChevronDown, ToggleLeft, ToggleRight,
   X, Check, ArrowLeft, Eye, Building2, Share2, Save,
+  CopyPlus, Wand2, Rocket, LayoutTemplate,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useListLandingPages,
   useCreateLandingPage,
@@ -59,6 +60,8 @@ export interface LandingPage {
   privacyUrl: string;
   /** Show the "Powered by KoaPOS" referral footer on the public page. */
   showPoweredBy: boolean;
+  /** True when this row is a reusable style template rather than a published page. */
+  isTemplate: boolean;
   links: LandingPageLink[];
   createdAt: string; updatedAt: string;
 }
@@ -92,6 +95,7 @@ function apiToLocal(r: Record<string, unknown>): LandingPage {
     font: String(r.font ?? "Inter"),
     privacyUrl: String(r.privacyUrl ?? ""),
     showPoweredBy: String(r.showPoweredBy ?? "true") !== "false",
+    isTemplate: String(r.isTemplate ?? "false") === "true",
     links,
     createdAt: String(r.createdAt ?? new Date().toISOString()),
     updatedAt: String(r.updatedAt ?? new Date().toISOString()),
@@ -121,6 +125,7 @@ function localToApi(p: LandingPage): LandingPageInput {
     font: p.font,
     links: JSON.stringify(p.links),
     showPoweredBy: p.showPoweredBy ? "true" : "false",
+    isTemplate: p.isTemplate ? "true" : "false",
     ...(p.privacyUrl !== undefined ? { privacyUrl: p.privacyUrl } : {}),
     // showPoweredBy isn't in the generated LandingPageInput type yet; the server
     // accepts it and it's persisted, so pass it through with a cast.
@@ -141,8 +146,48 @@ const DEFAULT: Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt"> = {
   bgDir: "to bottom", bgImage: "",
   btnStyle: "pill", btnVariant: "filled",
   btnBg: "#ffffff", btnText: "#111827", btnBorder: "#ffffff",
-  textColor: "#ffffff", font: "Inter", privacyUrl: "", showPoweredBy: true, links: [],
+  textColor: "#ffffff", font: "Inter", privacyUrl: "", showPoweredBy: true, isTemplate: false, links: [],
 };
+
+/* ── Template helpers ──────────────────────────────────────────────────── */
+
+type StyleFields = Omit<LandingPage, "id" | "slug" | "createdAt" | "updatedAt">;
+
+// Curated palettes so "random" templates always look intentional, not garish.
+const TEMPLATE_PALETTES: { from: string; to: string; text: string; btnBg: string; btnText: string }[] = [
+  { from: "#0f172a", to: "#334155", text: "#ffffff", btnBg: "#38bdf8", btnText: "#0f172a" },
+  { from: "#7c3aed", to: "#db2777", text: "#ffffff", btnBg: "#ffffff", btnText: "#7c3aed" },
+  { from: "#059669", to: "#065f46", text: "#ffffff", btnBg: "#fde047", btnText: "#064e3b" },
+  { from: "#f59e0b", to: "#ea580c", text: "#ffffff", btnBg: "#ffffff", btnText: "#c2410c" },
+  { from: "#1e3a8a", to: "#3b82f6", text: "#ffffff", btnBg: "#ffffff", btnText: "#1e3a8a" },
+  { from: "#be123c", to: "#4c0519", text: "#ffffff", btnBg: "#fecdd3", btnText: "#881337" },
+  { from: "#0d9488", to: "#134e4a", text: "#ffffff", btnBg: "#ffffff", btnText: "#0f766e" },
+  { from: "#111827", to: "#1f2937", text: "#f9fafb", btnBg: "#a78bfa", btnText: "#111827" },
+];
+const TEMPLATE_FONTS = ["Inter", "Poppins", "Montserrat", "Outfit", "Raleway", "DM Sans", "Work Sans", "Quicksand"];
+const TEMPLATE_BTN_STYLES: LandingPage["btnStyle"][] = ["pill", "rounded", "square"];
+const TEMPLATE_DIRS = ["to bottom", "to bottom right", "135deg", "to right"];
+const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+/** A randomised style block for a generated template. */
+function randomTemplateStyle(): Partial<StyleFields> {
+  const pal = pick(TEMPLATE_PALETTES);
+  return {
+    bgType: "gradient", bgColor: pal.from, bgFrom: pal.from, bgTo: pal.to, bgDir: pick(TEMPLATE_DIRS),
+    textColor: pal.text, btnBg: pal.btnBg, btnText: pal.btnText, btnBorder: pal.btnBg,
+    btnStyle: pick(TEMPLATE_BTN_STYLES), btnVariant: "filled", font: pick(TEMPLATE_FONTS),
+  };
+}
+
+/** Build a create payload (LandingPageInput) from a style block + slug. */
+function buildCreateData(src: StyleFields, slug: string) {
+  const full = { ...src, id: "", slug, createdAt: "", updatedAt: "" } as LandingPage;
+  return {
+    ...localToApi(full),
+    pageId: `page-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    slug,
+  };
+}
 
 
 /* ── Landing page renderer (shared with public view) ──────────────────── */
@@ -584,32 +629,55 @@ function slugifyCustomName(s: string): string {
 
 /* ── Pages list view ───────────────────────────────────────────────────── */
 
-function PagesListView({ pages, onSelect, onCreate, onDelete, username }: {
-  pages: LandingPage[]; onSelect: (id: string) => void; onCreate: () => void; onDelete: (id: string) => void; username: string;
+function PagesListView({ pages, onSelect, onCreate, onDelete, onClone, onUse, onGenerate, onImport, username, mode }: {
+  pages: LandingPage[]; onSelect: (id: string) => void; onCreate: () => void; onDelete: (id: string) => void;
+  onClone: (id: string) => void; onUse: (id: string) => void; onGenerate: () => void; onImport: () => void;
+  username: string; mode: "pages" | "templates";
 }) {
+  const isTemplates = mode === "templates";
+  const Icon = isTemplates ? LayoutTemplate : Globe;
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Globe className="w-7 h-7 text-primary" />
+          <Icon className="w-7 h-7 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">Landing Pages</h1>
-            <p className="text-sm text-muted-foreground">Build Linktree-style landing pages for your business. Share via a shortlink.</p>
+            <h1 className="text-2xl font-bold">{isTemplates ? "Landing Page Templates" : "Landing Pages"}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isTemplates
+                ? "Build reusable styles — colours, backgrounds, fonts and images. Apply one to spin up a new page."
+                : "Build Linktree-style landing pages for your business. Share via a shortlink."}
+            </p>
           </div>
         </div>
-        <Button onClick={onCreate} className="gap-1.5">
-          <Plus className="w-4 h-4" /> New Landing Page
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isTemplates && (
+            <>
+              <Button variant="outline" onClick={onImport} className="gap-1.5"><Building2 className="w-4 h-4" /> Import business info</Button>
+              <Button variant="outline" onClick={onGenerate} className="gap-1.5"><Wand2 className="w-4 h-4" /> Generate random</Button>
+            </>
+          )}
+          <Button onClick={onCreate} className="gap-1.5">
+            <Plus className="w-4 h-4" /> {isTemplates ? "New Template" : "New Landing Page"}
+          </Button>
+        </div>
       </div>
 
       {pages.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground gap-4">
-          <Globe className="w-16 h-16 opacity-10" />
+          <Icon className="w-16 h-16 opacity-10" />
           <div>
-            <p className="font-semibold text-foreground">No landing pages yet</p>
-            <p className="text-sm">Create your first mobile-ready landing page to share with customers.</p>
+            <p className="font-semibold text-foreground">{isTemplates ? "No templates yet" : "No landing pages yet"}</p>
+            <p className="text-sm">
+              {isTemplates
+                ? "Create a template, import your business info, or generate a few to get started."
+                : "Create your first mobile-ready landing page to share with customers."}
+            </p>
           </div>
-          <Button onClick={onCreate} className="gap-1.5 mt-2"><Plus className="w-4 h-4" /> Create Landing Page</Button>
+          <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+            {isTemplates && <Button variant="outline" onClick={onGenerate} className="gap-1.5"><Wand2 className="w-4 h-4" /> Generate random</Button>}
+            <Button onClick={onCreate} className="gap-1.5"><Plus className="w-4 h-4" /> {isTemplates ? "Create Template" : "Create Landing Page"}</Button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -622,26 +690,47 @@ function PagesListView({ pages, onSelect, onCreate, onDelete, username }: {
                   {page.profileImage ? <img src={page.profileImage} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-white/40" /> : <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-xl">🏪</div>}
                   <p className="text-sm font-bold truncate max-w-full" style={{ color: page.textColor, fontFamily: page.font ? `"${page.font}", sans-serif` : "inherit" }}>{page.title}</p>
                   <p className="text-xs opacity-70 truncate max-w-full text-center" style={{ color: page.textColor }}>{page.subtitle}</p>
-                  <Badge variant="secondary" className="text-[10px] mt-1">
-                    {page.links.filter((l) => l.enabled).length} link{page.links.filter((l) => l.enabled).length !== 1 ? "s" : ""}
-                  </Badge>
+                  {!isTemplates && (
+                    <Badge variant="secondary" className="text-[10px] mt-1">
+                      {page.links.filter((l) => l.enabled).length} link{page.links.filter((l) => l.enabled).length !== 1 ? "s" : ""}
+                    </Badge>
+                  )}
                 </div>
               </div>
               <CardContent className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-mono text-muted-foreground truncate">/b/{username || "your-username"}/a/{page.slug}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {new Date(page.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
-                    </p>
+                {isTemplates ? (
+                  <div className="space-y-2">
+                    <Button size="sm" className="w-full gap-1.5 h-7" onClick={(e) => { e.stopPropagation(); onUse(page.id); }}>
+                      <Rocket className="w-3 h-3" /> Use template
+                    </Button>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(page.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                      </p>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="outline" size="icon" className="h-7 w-7" title="Edit" onClick={() => onSelect(page.id)}><Pencil className="w-3 h-3" /></Button>
+                        <Button variant="outline" size="icon" className="h-7 w-7" title="Duplicate" onClick={(e) => { e.stopPropagation(); onClone(page.id); }}><CopyPlus className="w-3 h-3" /></Button>
+                        <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}><Trash2 className="w-3 h-3" /></Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getPageUrl(username, page.slug)); toast.success("Link copied"); }}><Copy className="w-3 h-3" /></Button>
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); window.open(getPageUrl(username, page.slug), "_blank"); }}><ExternalLink className="w-3 h-3" /></Button>
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onSelect(page.id)}><Pencil className="w-3 h-3" /></Button>
-                    <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}><Trash2 className="w-3 h-3" /></Button>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-mono text-muted-foreground truncate">/b/{username || "your-username"}/a/{page.slug}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {new Date(page.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button variant="outline" size="icon" className="h-7 w-7" title="Copy link" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getPageUrl(username, page.slug)); toast.success("Link copied"); }}><Copy className="w-3 h-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7" title="Open" onClick={(e) => { e.stopPropagation(); window.open(getPageUrl(username, page.slug), "_blank"); }}><ExternalLink className="w-3 h-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7" title="Edit" onClick={() => onSelect(page.id)}><Pencil className="w-3 h-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7" title="Duplicate" onClick={(e) => { e.stopPropagation(); onClone(page.id); }}><CopyPlus className="w-3 h-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}><Trash2 className="w-3 h-3" /></Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -661,6 +750,11 @@ export default function MarketingLandingPagesPage() {
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const username = (merchant?.username ?? "").toLowerCase();
+  const { profile } = useBusinessProfile();
+
+  // One component serves both routes; the URL decides which it is.
+  const [location, setLocation] = useLocation();
+  const isTemplateMode = location.endsWith("templates");
 
   const serverPages: LandingPage[] = ((pagesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToLocal);
 
@@ -670,40 +764,85 @@ export default function MarketingLandingPagesPage() {
 
   const pages = serverPages.map((p) => (p.id === selectedId && localPage) ? localPage : p);
   const selected = localPage && selectedId ? localPage : serverPages.find((p) => p.id === selectedId) ?? null;
+  // The list view shows only the current mode's items (templates vs published pages).
+  const visiblePages = pages.filter((p) => p.isTemplate === isTemplateMode);
+
+  const noun = isTemplateMode ? "template" : "landing page";
 
   const createPage = () => {
-    const slug = slugify("my-business");
-    createMutation.mutate({
-      data: {
-        pageId: `page-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        slug,
-        title: DEFAULT.title,
-        subtitle: DEFAULT.subtitle,
-        bio: DEFAULT.bio,
-        profileImage: DEFAULT.profileImage,
-        bgType: DEFAULT.bgType,
-        bgColor: DEFAULT.bgColor,
-        bgFrom: DEFAULT.bgFrom,
-        bgTo: DEFAULT.bgTo,
-        bgDir: DEFAULT.bgDir,
-        bgImage: DEFAULT.bgImage,
-        btnStyle: DEFAULT.btnStyle,
-        btnVariant: DEFAULT.btnVariant,
-        btnBg: DEFAULT.btnBg,
-        btnText: DEFAULT.btnText,
-        btnBorder: DEFAULT.btnBorder,
-        textColor: DEFAULT.textColor,
-        font: DEFAULT.font,
-        links: "[]",
-      },
-    }, {
+    const data = buildCreateData({ ...DEFAULT, isTemplate: isTemplateMode }, slugify(isTemplateMode ? "template" : "my-business"));
+    createMutation.mutate({ data }, {
       onSuccess: (res) => {
         refetch();
         const newPage = apiToLocal(res as unknown as Record<string, unknown>);
         setSelectedId(newPage.id);
         setLocalPage(newPage);
       },
-      onError: () => toast.error("Failed to create landing page"),
+      onError: () => toast.error(`Failed to create ${noun}`),
+    });
+  };
+
+  // Duplicate a page or template, keeping its kind (isTemplate).
+  const clonePage = (id: string) => {
+    const src = serverPages.find((p) => p.id === id);
+    if (!src) return;
+    const data = { ...buildCreateData(src, slugify(src.title || "copy")), title: `${src.title} (copy)` };
+    createMutation.mutate({ data }, {
+      onSuccess: () => { refetch(); toast.success(`${src.isTemplate ? "Template" : "Landing page"} cloned`); },
+      onError: () => toast.error("Failed to clone"),
+    });
+  };
+
+  // Spin a template into a brand-new published landing page and open it.
+  const useTemplate = (id: string) => {
+    const src = serverPages.find((p) => p.id === id);
+    if (!src) return;
+    const data = buildCreateData({ ...src, isTemplate: false, title: src.title.replace(/\s*template\s*\d*$/i, "").trim() || DEFAULT.title }, slugify("my-business"));
+    createMutation.mutate({ data }, {
+      // Switching routes remounts this component, so just create + navigate; the
+      // new page shows up in the Landing Pages list.
+      onSuccess: () => { toast.success("Landing page created from template"); setLocation("/management/marketing/landing-pages"); },
+      onError: () => toast.error("Failed to use template"),
+    });
+  };
+
+  // Generate a handful of randomised, good-looking templates.
+  const generateRandomTemplates = () => {
+    const styles = Array.from({ length: 4 }, () => randomTemplateStyle());
+    let done = 0;
+    styles.forEach((style, i) => {
+      const data = buildCreateData(
+        { ...DEFAULT, ...style, isTemplate: true, title: `Template ${i + 1}`, subtitle: "Tap to customise" },
+        slugify("template"),
+      );
+      createMutation.mutate({ data }, {
+        onSuccess: () => { done++; if (done === styles.length) { refetch(); toast.success("Generated 4 templates"); } },
+        onError: () => toast.error("Failed to generate templates"),
+      });
+    });
+  };
+
+  // Seed a new page/template from the merchant's business profile for a head start.
+  const importBusinessInfo = () => {
+    const p = profile as { logo?: string; brandColors?: string[]; tagline?: string } | undefined;
+    const brand = (p?.brandColors ?? [])[0];
+    const overrides: StyleFields = {
+      ...DEFAULT,
+      isTemplate: isTemplateMode,
+      title: merchant?.businessName || DEFAULT.title,
+      subtitle: p?.tagline || DEFAULT.subtitle,
+      profileImage: p?.logo || "",
+      ...(brand ? { bgType: "color" as const, bgColor: brand, btnBg: "#ffffff", btnText: brand, btnBorder: "#ffffff", textColor: "#ffffff" } : {}),
+    };
+    const data = buildCreateData(overrides, slugify(merchant?.businessName || "template"));
+    createMutation.mutate({ data }, {
+      onSuccess: (res) => {
+        refetch();
+        const np = apiToLocal(res as unknown as Record<string, unknown>);
+        setSelectedId(np.id); setLocalPage(np);
+        toast.success("Business info imported");
+      },
+      onError: () => toast.error("Failed to import business info"),
     });
   };
 
@@ -712,9 +851,9 @@ export default function MarketingLandingPagesPage() {
       onSuccess: () => {
         refetch();
         if (selectedId === id) { setSelectedId(null); setLocalPage(null); }
-        toast.success("Landing page deleted");
+        toast.success(`${noun.charAt(0).toUpperCase()}${noun.slice(1)} deleted`);
       },
-      onError: () => toast.error("Failed to delete landing page"),
+      onError: () => toast.error(`Failed to delete ${noun}`),
     });
   };
 
@@ -748,7 +887,18 @@ export default function MarketingLandingPagesPage() {
   if (!selected) {
     return (
       <AppLayout>
-        <PagesListView pages={pages} username={username} onSelect={(id) => { setSelectedId(id); setLocalPage(serverPages.find((p) => p.id === id) ?? null); }} onCreate={createPage} onDelete={deletePage} />
+        <PagesListView
+          mode={isTemplateMode ? "templates" : "pages"}
+          pages={visiblePages}
+          username={username}
+          onSelect={(id) => { setSelectedId(id); setLocalPage(serverPages.find((p) => p.id === id) ?? null); }}
+          onCreate={createPage}
+          onDelete={deletePage}
+          onClone={clonePage}
+          onUse={useTemplate}
+          onGenerate={generateRandomTemplates}
+          onImport={importBusinessInfo}
+        />
       </AppLayout>
     );
   }

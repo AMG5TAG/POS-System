@@ -7,12 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ShieldCheck, Package, User, Receipt, Search } from "lucide-react";
+import { toast } from "sonner";
 import { customerDisplayName } from "@/lib/customer-name";
 import { warrantyExpiry, warrantyLabel, isUnderWarranty } from "@/lib/warranty";
+import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   useListTransactions,
   useListProducts,
   useListCustomers,
+  customFetch,
+  type Transaction,
 } from "@workspace/api-client-react";
 
 type TxItem = { productId?: number | null; productName?: string | null; name?: string | null; quantity?: number | null; serials?: string[] | null };
@@ -42,6 +46,17 @@ function daysUntil(d: Date): number {
 export default function ProductsWarrantyPage() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
+  const { printInvoice } = useDocumentTemplate();
+
+  // Open the sale's invoice in a print popup without leaving the Warranty page.
+  const openReceipt = async (txId: number) => {
+    try {
+      const full = await customFetch<Transaction>(`/api/transactions/${txId}`, { method: "GET" });
+      printInvoice(full);
+    } catch {
+      toast.error("Couldn't open the invoice for this sale");
+    }
+  };
 
   const { data: txData, isLoading } = useListTransactions(
     { limit: 200 },
@@ -213,21 +228,14 @@ export default function ProductsWarrantyPage() {
                               )}
                             </PopoverContent>
                           </Popover>
-                          {/* Receipt */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button title="Receipt details" className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-                                <Receipt className="w-4 h-4" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 text-sm space-y-1">
-                              <p className="font-semibold">{r.tx.receiptNumber || `Sale #${r.tx.id}`}</p>
-                              <p className="text-xs text-muted-foreground">Date: {fmtDate(r.tx.createdAt)}</p>
-                              {r.tx.total != null && <p className="text-xs text-muted-foreground">Total: ${Number(r.tx.total).toFixed(2)}</p>}
-                              {r.tx.paymentMethod && <p className="text-xs text-muted-foreground capitalize">Paid by {r.tx.paymentMethod}</p>}
-                              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/pos/history")}>Open in Sales History</Button>
-                            </PopoverContent>
-                          </Popover>
+                          {/* Receipt — opens the invoice in a print popup */}
+                          <button
+                            title="View invoice"
+                            onClick={() => openReceipt(r.tx.id)}
+                            className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                          >
+                            <Receipt className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>

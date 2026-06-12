@@ -2334,6 +2334,31 @@ export default function ProductsPage() {
                   </div>
                 )}
 
+                {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
+                <div className="border-t pt-4">
+                  <SectionHeader label="Warranty" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How long this item is covered from the date of sale. Printed on receipts and invoices, and tracked under Products &gt; Warranty. Leave as 0 for no warranty.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.warrantyDuration}
+                      onChange={(e) => setField("warrantyDuration", e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="0"
+                      className="w-28"
+                    />
+                    <Select value={form.warrantyUnit} onValueChange={(v) => setField("warrantyUnit", v)}>
+                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="months">Months</SelectItem>
+                        <SelectItem value="years">Years</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {/* Physical details — only for standard products */}
                 {form.productType === "standard" && (
                 <div className="border-t pt-4 space-y-3">
@@ -2652,35 +2677,36 @@ export default function ProductsPage() {
             {formTab === "settings" && (
               <div className="py-5 space-y-5">
 
-                {/* Availability — only shown when editing an existing product */}
-                {editingProduct && (
-                  <div className="border-t pt-5">
-                    <SectionHeader label="Availability" />
+                {/* Availability + Loyalty — same line (Availability only when editing) */}
+                <div className={cn("border-t pt-5 grid gap-4", editingProduct ? "md:grid-cols-2" : "grid-cols-1")}>
+                  {editingProduct && (
+                    <div>
+                      <SectionHeader label="Availability" />
+                      <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium">Active</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                        </div>
+                        <Switch
+                          checked={form.isActive}
+                          onCheckedChange={(v) => setField("isActive", v)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <SectionHeader label="Loyalty" />
                     <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
                       <div>
-                        <p className="text-sm font-medium">Active</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                        <p className="text-sm font-medium">No Loyalty Points</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
                       </div>
                       <Switch
-                        checked={form.isActive}
-                        onCheckedChange={(v) => setField("isActive", v)}
+                        checked={form.excludeFromLoyalty}
+                        onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
                       />
                     </div>
-                  </div>
-                )}
-
-                {/* No Loyalty Points */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="Loyalty" />
-                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">No Loyalty Points</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
-                    </div>
-                    <Switch
-                      checked={form.excludeFromLoyalty}
-                      onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
-                    />
                   </div>
                 </div>
 
@@ -2691,7 +2717,7 @@ export default function ProductsPage() {
                     value={form.internalNotes}
                     onChange={(e) => setField("internalNotes", e.target.value)}
                     placeholder="Internal notes, specifications, special handling..."
-                    rows={4}
+                    rows={2}
                     className="mt-3 resize-none"
                   />
                 </div>
@@ -2709,31 +2735,6 @@ export default function ProductsPage() {
                     rows={2}
                     className="mt-3 resize-none"
                   />
-                </div>
-
-                {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="Warranty" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    How long this item is covered from the date of sale. Printed on receipts and invoices, and tracked under Products &gt; Warranty. Leave as 0 for no warranty.
-                  </p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      value={form.warrantyDuration}
-                      onChange={(e) => setField("warrantyDuration", e.target.value.replace(/[^0-9]/g, ""))}
-                      placeholder="0"
-                      className="w-28"
-                    />
-                    <Select value={form.warrantyUnit} onValueChange={(v) => setField("warrantyUnit", v)}>
-                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="months">Months</SelectItem>
-                        <SelectItem value="years">Years</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
             )}

@@ -175,6 +175,24 @@ async function appendInvoiceEvent(id: number, merchantId: number, event: Invoice
   await db.update(invoicesTable).set({ events }).where(eq(invoicesTable.id, id));
 }
 
+/**
+ * When an invoice is linked to a service job or appointment, that work has been
+ * billed, so flip the linked record to "completed" (mirrors how a POS sale
+ * completes its linked service/appointment). Safe to call with nulls.
+ */
+async function completeLinkedRecords(merchantId: number, serviceJobId?: number | null, appointmentId?: number | null): Promise<void> {
+  if (serviceJobId != null) {
+    await db.update(serviceJobsTable)
+      .set({ status: "completed" })
+      .where(and(eq(serviceJobsTable.id, serviceJobId), eq(serviceJobsTable.merchantId, merchantId)));
+  }
+  if (appointmentId != null) {
+    await db.update(appointmentsTable)
+      .set({ status: "completed" })
+      .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
+  }
+}
+
 /** Credit loyalty points/value to a customer when an invoice is fully settled. */
 async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number) {
   if (invoiceTotal <= 0) return;
@@ -511,6 +529,11 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   });
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
 
+  // When this update marks the invoice Paid, complete any linked service job / appointment.
+  if (status === "paid") {
+    await completeLinkedRecords(req.session.merchantId!, inv.serviceJobId, inv.appointmentId);
+  }
+
   const [row] = await db
     .select({
       invoice: invoicesTable,
@@ -557,6 +580,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   let notFound = false;
   let payErrorStatus = 0;
   let payErrorMessage = "";
+  // Captured for after-commit completion of any linked service job / appointment.
+  let settledServiceJobId: number | null = null;
+  let settledAppointmentId: number | null = null;
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -565,6 +591,8 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
         status: invoicesTable.status,
         customerId: invoicesTable.customerId,
         events: invoicesTable.events,
+        serviceJobId: invoicesTable.serviceJobId,
+        appointmentId: invoicesTable.appointmentId,
       })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
@@ -653,10 +681,19 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     if (fullyPaid && cur.status !== "paid" && cur.customerId) {
       await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total);
     }
+    // When this payment settles the invoice in full for the first time, complete
+    // any linked service job / appointment (done after commit, below).
+    if (fullyPaid && cur.status !== "paid") {
+      settledServiceJobId = cur.serviceJobId;
+      settledAppointmentId = cur.appointmentId;
+    }
   });
 
   if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
   if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
+  if (settledServiceJobId != null || settledAppointmentId != null) {
+    await completeLinkedRecords(merchantId, settledServiceJobId, settledAppointmentId);
+  }
   // An already-applied idempotent payment falls through and returns the
   // current (unchanged) invoice below.
 

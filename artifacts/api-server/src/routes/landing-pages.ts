@@ -44,7 +44,7 @@ const router: IRouter = Router();
 router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   const slug = req.params.slug as string;
   const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
-  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
   const [merchant] = await db.select({ partnerReferralCode: merchantsTable.partnerReferralCode })
     .from(merchantsTable).where(eq(merchantsTable.id, row.merchantId)).limit(1);
   res.json({ ...row, partnerReferralCode: merchant?.partnerReferralCode ?? null });
@@ -69,7 +69,7 @@ router.get("/landing-pages/public/b/:username/a/:customName", async (req, res): 
     .from(landingPagesTable)
     .where(and(eq(landingPagesTable.merchantId, merchant.id), eq(landingPagesTable.slug, customName)))
     .limit(1);
-  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
   res.json({ ...row, partnerReferralCode: merchant.partnerReferralCode ?? null });
 });
 
