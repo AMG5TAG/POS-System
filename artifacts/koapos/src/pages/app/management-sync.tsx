@@ -17,6 +17,7 @@ import {
   RefreshCw, Cloud, Users, Loader2, Plug, CheckCircle2, DatabaseBackup, FolderSync,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
+import { MicrosoftIcon, OneDriveIcon } from "@/components/provider-icons";
 import { BackupSettingsPanel } from "./management-backup";
 
 /* Minimal shape of an integration returned by GET /integrations. */
@@ -31,13 +32,14 @@ interface SyncIntegration {
 
 /* ── Brand logos (simple-icons CDN) ──────────────────────────────────────── */
 const SI = (slug: string, hex: string) => `https://cdn.simpleicons.org/${slug}/${hex}`;
-const LOGOS: Record<string, { bg: string; src: string }> = {
+// `src` => simple-icons CDN <img>; `node` => inline SVG (used where the CDN slug 404s, e.g. Microsoft).
+const LOGOS: Record<string, { bg: string; src?: string; node?: React.ReactNode }> = {
   google_drive:       { bg: "bg-white border", src: SI("googledrive", "4285F4") },
-  onedrive:           { bg: "bg-[#0078D4]",     src: SI("onedrive",    "ffffff") },
+  onedrive:           { bg: "bg-white border", node: <OneDriveIcon className="w-5 h-5" /> },
   dropbox:            { bg: "bg-[#0061FF]",     src: SI("dropbox",     "ffffff") },
   proton_drive:       { bg: "bg-[#6D4AFF]",     src: SI("proton",      "ffffff") },
   google_contacts:    { bg: "bg-white border", src: SI("google",      "4285F4") },
-  microsoft_contacts: { bg: "bg-[#0078D4]",     src: SI("microsoft",   "ffffff") },
+  microsoft_contacts: { bg: "bg-white border", node: <MicrosoftIcon className="w-5 h-5" /> },
   apple_account:      { bg: "bg-black",         src: SI("apple",       "ffffff") },
 };
 
@@ -59,7 +61,7 @@ function SyncCard({ intg, onConnect, onDisconnect, onSync, busy }: {
     <div className="border rounded-xl p-4 flex flex-col gap-3 bg-card hover:shadow-sm transition-shadow">
       <div className="flex items-center gap-3">
         <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", logo?.bg)}>
-          {logo && <img src={logo.src} alt="" className="w-5 h-5" />}
+          {logo?.node ?? (logo?.src && <img src={logo.src} alt="" className="w-5 h-5" />)}
         </div>
         <div className="min-w-0">
           <p className="font-medium truncate">{intg.label}</p>

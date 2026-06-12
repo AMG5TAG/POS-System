@@ -9773,7 +9773,7 @@ export const GetBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
   "directory": zod.string().nullish(),
   "bucket": zod.string().nullish(),
   "region": zod.string().nullish(),
@@ -9786,7 +9786,8 @@ export const GetBackupConfigResponse = zod.object({
   "port": zod.number().nullish(),
   "username": zod.string().nullish(),
   "remotePath": zod.string().nullish(),
-  "passwordSet": zod.boolean().optional()
+  "passwordSet": zod.boolean().optional(),
+  "folder": zod.string().nullish()
 }))
 })
 
@@ -9799,7 +9800,7 @@ export const UpdateBackupConfigBody = zod.object({
   "password": zod.string().optional(),
   "destinations": zod.array(zod.object({
   "id": zod.string().optional(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
   "directory": zod.string().optional(),
   "bucket": zod.string().optional(),
   "region": zod.string().optional(),
@@ -9812,7 +9813,8 @@ export const UpdateBackupConfigBody = zod.object({
   "port": zod.number().optional(),
   "username": zod.string().optional(),
   "remotePath": zod.string().optional(),
-  "password": zod.string().optional()
+  "password": zod.string().optional(),
+  "folder": zod.string().optional()
 })).optional()
 })
 
@@ -9822,7 +9824,7 @@ export const UpdateBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
   "directory": zod.string().nullish(),
   "bucket": zod.string().nullish(),
   "region": zod.string().nullish(),
@@ -9835,7 +9837,8 @@ export const UpdateBackupConfigResponse = zod.object({
   "port": zod.number().nullish(),
   "username": zod.string().nullish(),
   "remotePath": zod.string().nullish(),
-  "passwordSet": zod.boolean().optional()
+  "passwordSet": zod.boolean().optional(),
+  "folder": zod.string().nullish()
 }))
 })
 

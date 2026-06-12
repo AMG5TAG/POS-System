@@ -25,7 +25,7 @@ import {
 } from "@workspace/api-client-react";
 import { FontPicker } from "@/components/ui/font-picker";
 import { useBusinessProfile } from "@/lib/business-profile";
-import { publicOrigin } from "@/lib/public-url";
+import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 import type { LandingPageInput } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -617,9 +617,9 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
 
 /* ── Page URL helpers ──────────────────────────────────────────────────── */
 
-/** Public landing-page URL: https://koapos.com.au/b/USERNAME/a/CUSTOMNAME */
+/** Public landing-page URL on the shortlink domain: https://koast.al/b/USERNAME/a/CUSTOMNAME */
 function getPageUrl(username: string, customName: string): string {
-  return `${publicOrigin()}/b/${username || "your-username"}/a/${customName}`;
+  return `https://${SHORT_DOMAIN}/b/${username || "your-username"}/a/${customName}`;
 }
 
 /** Slugify a custom name for the URL (no random suffix — the user owns it). */
@@ -954,7 +954,7 @@ export default function MarketingLandingPagesPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs text-center block">Custom name</Label>
                 <div className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-2 text-sm">
-                  <span className="text-muted-foreground font-mono whitespace-nowrap">{publicOrigin().replace(/^https?:\/\//, "")}/b/{username || "your-username"}/a/</span>
+                  <span className="text-muted-foreground font-mono whitespace-nowrap">{SHORT_DOMAIN}/b/{username || "your-username"}/a/</span>
                   <input
                     className="font-mono outline-none bg-transparent text-primary min-w-0 flex-1"
                     value={selected.slug}

@@ -211,7 +211,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       {
         name: "Landing Pages", icon: LayoutTemplate,
         children: [
-          { name: "Landing Pages", href: "/management/marketing/landing-pages",          icon: Globe },
+          { name: "Pages",         href: "/management/marketing/landing-pages",          icon: Globe },
           { name: "Templates",     href: "/management/marketing/landing-page-templates", icon: LayoutTemplate },
         ],
       },
@@ -454,7 +454,7 @@ const STATIC_ROUTE_LABEL: Record<string, string[]> = {
   "/marketing/email/templates":            ["Marketing", "Email", "Templates"],
   "/marketing/sms/campaigns":             ["Marketing", "SMS", "Campaigns"],
   "/marketing/sms/templates":             ["Marketing", "SMS", "Templates"],
-  "/management/marketing/landing-pages":           ["Management", "Marketing & Reports", "Landing Pages"],
+  "/management/marketing/landing-pages":           ["Management", "Marketing & Reports", "Landing Pages", "Pages"],
   "/management/marketing/landing-page-templates":  ["Management", "Marketing & Reports", "Landing Pages", "Templates"],
   "/management/marketing/generators/qr-codes":     ["Management", "Marketing & Reports", "Generators", "QR Codes"],
   "/management/marketing/generators/shortlinks":   ["Management", "Marketing & Reports", "Generators", "Shortlinks"],

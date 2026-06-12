@@ -10,7 +10,7 @@
  */
 import { encryptToken, decryptToken } from "../../services/tokenVault";
 
-export type StorageType = "local" | "s3" | "gcs" | "sftp";
+export type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
 
 /** Sanitised destination returned to the client (no secrets, only `*Set` flags). */
 export interface PublicDestination {
@@ -29,6 +29,7 @@ export interface PublicDestination {
   username: string | null;
   remotePath: string | null;
   passwordSet: boolean;
+  folder: string | null;
 }
 
 export interface StoredDestination {
@@ -51,6 +52,8 @@ export interface StoredDestination {
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
+  // onedrive (token comes from the connected integration, not stored here)
+  folder?: string;
 }
 
 export interface ResolvedDestination {
@@ -69,6 +72,7 @@ export interface ResolvedDestination {
   username?: string;
   remotePath?: string;
   password?: string;
+  folder?: string;
 }
 
 // `@workspace/db` re-exports nothing about these API types; the generated client
@@ -120,6 +124,8 @@ export function mergeDestination(
     base.remotePath = str(input.remotePath) ?? existing?.remotePath;
     const pw = str(input.password);
     base.passwordEnc = pw ? encryptToken(pw) : existing?.passwordEnc;
+  } else if (type === "onedrive") {
+    base.folder = str(input.folder) ?? existing?.folder;
   }
   return base;
 }
@@ -146,6 +152,7 @@ export function resolveDestination(d: StoredDestination): ResolvedDestination {
     username: d.username,
     remotePath: d.remotePath,
     password: d.passwordEnc ? decryptToken(d.passwordEnc) : undefined,
+    folder: d.folder,
   };
 }
 
@@ -167,5 +174,6 @@ export function publicDestination(d: StoredDestination): PublicDestination {
     username: d.username ?? null,
     remotePath: d.remotePath ?? null,
     passwordSet: Boolean(d.passwordEnc),
+    folder: d.folder ?? null,
   };
 }

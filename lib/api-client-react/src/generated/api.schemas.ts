@@ -37,6 +37,7 @@ export const BackupStorageDestinationType = {
   s3: 's3',
   gcs: 'gcs',
   sftp: 'sftp',
+  onedrive: 'onedrive',
 } as const;
 
 export interface BackupStorageDestination {
@@ -55,6 +56,7 @@ export interface BackupStorageDestination {
   username?: string | null;
   remotePath?: string | null;
   passwordSet?: boolean;
+  folder?: string | null;
 }
 
 export type BackupConfigFrequency = typeof BackupConfigFrequency[keyof typeof BackupConfigFrequency];
@@ -82,6 +84,7 @@ export const BackupStorageDestinationInputType = {
   s3: 's3',
   gcs: 'gcs',
   sftp: 'sftp',
+  onedrive: 'onedrive',
 } as const;
 
 export interface BackupStorageDestinationInput {
@@ -100,6 +103,7 @@ export interface BackupStorageDestinationInput {
   username?: string;
   remotePath?: string;
   password?: string;
+  folder?: string;
 }
 
 export type BackupConfigInputFrequency = typeof BackupConfigInputFrequency[keyof typeof BackupConfigInputFrequency];

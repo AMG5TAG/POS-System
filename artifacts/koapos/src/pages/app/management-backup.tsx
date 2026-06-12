@@ -6,6 +6,7 @@ import {
   useListBackups,
   useTriggerBackup,
   useRestoreBackup,
+  useListIntegrations,
   getGetBackupConfigQueryKey,
   getListBackupsQueryKey,
   type BackupConfig,
@@ -66,9 +67,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { OneDriveIcon } from "@/components/provider-icons";
 
-type StorageType = "local" | "s3" | "gcs" | "sftp";
+type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
 
 const STORAGE_META: Record<
   StorageType,
@@ -78,6 +81,7 @@ const STORAGE_META: Record<
   s3: { label: "Amazon S3", icon: Cloud },
   gcs: { label: "Google Cloud Storage", icon: Cloud },
   sftp: { label: "SFTP server", icon: Server },
+  onedrive: { label: "OneDrive", icon: OneDriveIcon },
 };
 
 const FREQUENCY_OPTIONS = [
@@ -108,6 +112,7 @@ interface DestDraft {
   remotePath: string;
   password: string;
   passwordSet: boolean;
+  folder: string;
 }
 
 function emptyDraft(type: StorageType): DestDraft {
@@ -130,6 +135,7 @@ function emptyDraft(type: StorageType): DestDraft {
     remotePath: "",
     password: "",
     passwordSet: false,
+    folder: "",
   };
 }
 
@@ -153,6 +159,7 @@ function toDraft(d: BackupStorageDestination): DestDraft {
     remotePath: d.remotePath ?? "",
     password: "",
     passwordSet: d.passwordSet ?? false,
+    folder: d.folder ?? "",
   };
 }
 
@@ -175,6 +182,8 @@ function draftToInput(d: DestDraft): BackupStorageDestinationInput {
     if (d.username) base.username = d.username;
     if (d.remotePath) base.remotePath = d.remotePath;
     if (d.password) base.password = d.password;
+  } else if (d.type === "onedrive") {
+    if (d.folder) base.folder = d.folder;
   }
   return base;
 }
@@ -242,6 +251,17 @@ export function BackupSettingsPanel() {
   const updateConfig = useUpdateBackupConfig();
   const triggerBackup = useTriggerBackup();
   const restoreBackup = useRestoreBackup();
+
+  // OneDrive backups reuse the OneDrive integration connected on the Sync page.
+  const { data: integrationsRaw } = useListIntegrations({
+    query: { queryKey: ["integrations"] },
+  });
+  const oneDrive = ((integrationsRaw ?? []) as unknown as Array<{
+    key: string;
+    status: string;
+    accountHandle: string | null;
+  }>).find((i) => i.key === "onedrive");
+  const oneDriveConnected = oneDrive?.status === "connected";
 
   const [frequency, setFrequency] = useState<string>("disabled");
   const [password, setPassword] = useState("");
@@ -657,6 +677,50 @@ export function BackupSettingsPanel() {
                               updateDraft(d.id, { remotePath: e.target.value })
                             }
                           />
+                        </div>
+                      </div>
+                    )}
+
+                    {d.type === "onedrive" && (
+                      <div className="space-y-3">
+                        {oneDriveConnected ? (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>
+                              Using your connected OneDrive
+                              {oneDrive?.accountHandle
+                                ? ` (${oneDrive.accountHandle})`
+                                : ""}
+                              . Archives upload to its app folder.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            <span>
+                              OneDrive isn't connected. Connect it to back up
+                              here.
+                            </span>
+                            <Link
+                              href="/management/sync"
+                              className="font-medium underline shrink-0"
+                            >
+                              Connect
+                            </Link>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Sub-folder (optional)</Label>
+                          <Input
+                            placeholder="koapos-backups"
+                            value={d.folder}
+                            onChange={(e) =>
+                              updateDraft(d.id, { folder: e.target.value })
+                            }
+                          />
+                          <p className="text-muted-foreground text-[11px]">
+                            A folder inside the KoaPOS app folder in your
+                            OneDrive. Leave blank to use the app folder root.
+                          </p>
                         </div>
                       </div>
                     )}

@@ -6,6 +6,8 @@ import { uploadLocal } from "./local";
 import { uploadS3 } from "./s3";
 import { uploadGcs } from "./gcs";
 import { uploadSftp } from "./sftp";
+import { uploadOneDrive } from "./onedrive";
+import { getValidOneDriveToken } from "../../services/microsoftToken";
 import {
   resolveDestination,
   type StoredDestination,
@@ -31,6 +33,7 @@ export async function uploadToDestinations(
   destinations: StoredDestination[],
   sourcePath: string,
   fileName: string,
+  merchantId: number,
 ): Promise<UploadOutcome> {
   const locations: UploadLocation[] = [];
   const errors: { type: string; message: string }[] = [];
@@ -52,6 +55,12 @@ export async function uploadToDestinations(
         case "sftp":
           ref = await uploadSftp(dest, sourcePath, fileName);
           break;
+        case "onedrive": {
+          // Reuse the merchant's connected OneDrive integration (refreshed).
+          const token = await getValidOneDriveToken(merchantId);
+          ref = await uploadOneDrive(dest, token, sourcePath, fileName);
+          break;
+        }
         default:
           throw new Error(`Unknown destination type: ${String(dest.type)}`);
       }
