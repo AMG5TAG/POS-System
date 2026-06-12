@@ -8013,6 +8013,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaymentTotalsResult"
 
+  /kpi-targets/progress:
+    get:
+      operationId: getKpiProgress
+      tags: [kpi-targets]
+      summary: Current actual value for every active KPI target, period- and staff-scoped
+      responses:
+        "200":
+          description: Per-target actuals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiProgressResponse" }
+
   /kpi-targets/dashboard-kpi:
     get:
       operationId: getDashboardKpi
@@ -8182,6 +8194,23 @@ components:
       properties:
         kpi: { $ref: "#/components/schemas/KpiTarget" }
         actual: { type: number, nullable: true }
+
+    KpiProgress:
+      type: object
+      required: [id, targetId, actual]
+      properties:
+        id:       { type: integer }
+        targetId: { type: string }
+        actual:   { type: number, nullable: true }
+
+    KpiProgressResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/KpiProgress" }
+        total: { type: integer }
 
     # ── Backups ───────────────────────────────────────────────────────────────
     Backup:
@@ -11680,7 +11709,10 @@ components:
         staffIds:    { type: string }
         reward:      { type: string }
         notes:       { type: string }
+        startDate:   { type: string, nullable: true }
+        endDate:     { type: string, nullable: true }
         isActive:    { type: string }
+        showOnDashboard: { type: string }
         createdAt:   { type: string, format: date-time }
         updatedAt:   { type: string, format: date-time }
 

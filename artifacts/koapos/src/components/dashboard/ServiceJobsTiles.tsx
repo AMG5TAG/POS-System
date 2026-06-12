@@ -195,7 +195,7 @@ function KpiDashboardTile({ href }: { href?: string }) {
     ? { bg: "bg-card", border: "border", value: "text-foreground", badge: "", bar: "bg-muted-foreground/40" }
     : effectivePct >= 100
     ? { bg: "bg-green-50 dark:bg-green-950/30", border: "border-green-200 dark:border-green-800", value: "text-green-700 dark:text-green-400", badge: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300", bar: "bg-green-500" }
-    : effectivePct >= 80
+    : effectivePct >= 70
     ? { bg: "bg-yellow-50 dark:bg-yellow-950/30", border: "border-yellow-200 dark:border-yellow-800", value: "text-yellow-700 dark:text-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300", bar: "bg-yellow-500" }
     : { bg: "bg-red-50 dark:bg-red-950/30", border: "border-red-200 dark:border-red-800", value: "text-red-700 dark:text-red-400", badge: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300", bar: "bg-red-500" };
 

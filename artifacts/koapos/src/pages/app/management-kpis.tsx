@@ -3,9 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { KpiImportDialog, type KpiImportRow } from "@/components/kpi-import-dialog";
 import {
-  useListStaff, useListTransactions, useListProducts, useListInvoices,
+  useListStaff,
   useListKpiTargets, useCreateKpiTarget, useUpdateKpiTarget, useDeleteKpiTarget,
-  useGetKpiSettings, useUpsertKpiSettings,
+  useGetKpiSettings, useUpsertKpiSettings, useGetKpiProgress,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,44 +122,6 @@ function progressColor(pct: number, isInverse?: boolean) {
   if (effective >= 100) return "text-green-600";
   if (effective >= 70)  return "text-amber-500";
   return "text-rose-500";
-}
-
-const WEEK_START_DAYS: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-};
-
-function getPeriodStart(period: KpiPeriod, weekStartDay = "monday", startDate?: string | null): Date {
-  if (startDate) {
-    const d = new Date(startDate + "T00:00:00");
-    if (!isNaN(d.getTime())) return d;
-  }
-  const now = new Date();
-  switch (period) {
-    case "daily": {
-      const d = new Date(now); d.setHours(0, 0, 0, 0); return d;
-    }
-    case "weekly": {
-      const d = new Date(now);
-      const startDow = WEEK_START_DAYS[weekStartDay] ?? 1;
-      const daysBack = (d.getDay() - startDow + 7) % 7;
-      d.setDate(d.getDate() - daysBack);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-    case "monthly": {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-    case "quarterly": {
-      const q = Math.floor(now.getMonth() / 3);
-      return new Date(now.getFullYear(), q * 3, 1, 0, 0, 0, 0);
-    }
-    case "annual": {
-      return new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-    }
-    default: {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-  }
 }
 
 /* ─── Blank form ─────────────────────────────────────────────────────────── */
@@ -493,12 +455,15 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
 
 /* ─── Progress bar row ───────────────────────────────────────────────────── */
 
-function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
+function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number | null }) {
   const meta = METRIC_META[kpi.metric];
-  const pct = kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
-  const color = progressColor(pct, meta.isInverse);
+  const unavailable = current === null;
+  const pct = !unavailable && kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
+  // A null actual means the metric can't be computed for this target yet — show
+  // it as neutral/"—" rather than letting an inverse metric read as 100% "good".
+  const color = unavailable ? "text-muted-foreground" : progressColor(pct, meta.isInverse);
   const Icon = meta.icon;
-  const hit = pct >= 100;
+  const hit = !unavailable && pct >= 100;
 
   return (
     <div className="space-y-1.5 py-3 border-b last:border-0">
@@ -509,12 +474,12 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
           {hit && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
         </div>
         <span className={cn("text-sm font-semibold shrink-0 tabular-nums", color)}>
-          {formatMetricValue(kpi.metric, current)} / {formatMetricValue(kpi.metric, kpi.target)}
+          {unavailable ? "—" : formatMetricValue(kpi.metric, current)} / {formatMetricValue(kpi.metric, kpi.target)}
         </span>
       </div>
       <Progress value={pct} className="h-2" />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{pct}% of target</span>
+        <span>{unavailable ? "Not available yet" : `${pct}% of target`}</span>
         <span>{PERIOD_LABELS[kpi.period]}</span>
       </div>
       {kpi.reward && (
@@ -557,49 +522,19 @@ export default function ManagementKpisPage() {
 
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
 
-  // Compute the earliest period start across all active KPI targets so we fetch
-  // enough transactions to cover every period (daily, weekly, monthly, etc.)
-  const txFromDate = useMemo(() => {
-    const activeTargets = (rawItems as unknown as Record<string, unknown>[])
-      .map(apiToTarget)
-      .filter((t) => t.isActive);
-    if (activeTargets.length === 0) return getPeriodStart("monthly", weekStartDay);
-    const starts = activeTargets.map((t) => getPeriodStart(t.period, weekStartDay, t.startDate || null));
-    return new Date(Math.min(...starts.map((d) => d.getTime())));
-  }, [rawItems, weekStartDay]);
-
-  const txFromISO = txFromDate.toISOString().slice(0, 10);
-
-  const { data: txData } = useListTransactions(
-    { from: txFromISO, limit: 5000 },
-    { query: { queryKey: ["transactions", txFromISO] } },
-  );
-
-  // Product cost prices, used to value COGS for net_profit / gross_margin when a
-  // line item doesn't carry a costPrice snapshot (historical or imported sales).
-  const { data: productsData } = useListProducts(
-    { limit: 1000 },
-    { query: { queryKey: ["kpi-products"] } },
-  );
-
-  // Paid invoices count toward the revenue / transactions / avg_transaction
-  // metrics (matching the server-side dashboard KPI), so the Progress Tracker
-  // reflects the same totals the dashboard tile shows.
-  const { data: invoicesData } = useListInvoices(
-    { status: "paid", limit: 1000 },
-    { query: { queryKey: ["kpi-invoices-paid"] } },
-  );
+  // Actuals are computed server-side (period- and staff-scoped, with the
+  // budget end date and every metric handled consistently) so the Progress
+  // Tracker, the Staff KPI page and the dashboard tile always agree.
+  const { data: progressData } = useGetKpiProgress({ query: { queryKey: ["kpi-progress"] } });
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
-  const txList = (txData?.items ?? []) as { total?: number; taxTotal?: number; status?: string; staffId?: number; createdAt?: string; items?: unknown[] }[];
-  const productList = (productsData?.items ?? []) as { id: number; costPrice?: number | null }[];
-  const paidInvoices = (invoicesData?.items ?? []) as { total?: number; paidAt?: string | null }[];
 
-  const productCostById = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const p of productList) if (p.costPrice != null) m.set(p.id, p.costPrice);
-    return m;
-  }, [productList]);
+  // Per-target actual keyed by target id (null = not computable for this target).
+  const actualByTargetId = useMemo(() => {
+    const map: Record<string, number | null> = {};
+    for (const p of (progressData?.items ?? [])) map[String(p.id)] = p.actual ?? null;
+    return map;
+  }, [progressData]);
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
     upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
@@ -626,13 +561,20 @@ export default function ManagementKpisPage() {
       period: t.period,
       target: t.target,
       staffIds: JSON.stringify(t.staffIds),
-      reward: t.reward ? JSON.stringify(t.reward) : undefined,
+      // Send an explicit "null" (not undefined) so clearing a reward actually
+      // persists — the PATCH route ignores undefined fields, which previously
+      // made it impossible to remove a reward once set.
+      reward: t.reward ? JSON.stringify(t.reward) : "null",
       notes: t.notes,
       isActive: t.isActive ? "true" : "false",
       startDate: t.startDate || null,
       endDate: t.endDate || null,
     };
-    const invalidateTargets = () => queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+    const invalidateTargets = () => {
+      queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+      queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
+    };
     if (editing) {
       updateTarget.mutate({ id: Number(editing.id), data: { ...payload, targetId: editing.id } }, {
         onSuccess: () => { invalidateTargets(); toast.success("KPI updated"); },
@@ -648,7 +590,12 @@ export default function ManagementKpisPage() {
 
   const handleDelete = (id: string) => {
     deleteTarget.mutate({ id: Number(id) }, {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["kpi-targets"] }); toast.success("KPI deleted"); },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+        queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
+        toast.success("KPI deleted");
+      },
       onError: () => toast.error("Failed to delete KPI"),
     });
   };
@@ -660,6 +607,7 @@ export default function ManagementKpisPage() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
           toast.success(currentlyOn ? "Removed from dashboard" : `"${kpi.name}" will now show on the dashboard`);
         },
         onError: () => toast.error("Failed to update KPI"),
@@ -685,6 +633,7 @@ export default function ManagementKpisPage() {
       })
     ));
     queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+    queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
     toast.success(`${rows.length} KPI${rows.length !== 1 ? "s" : ""} imported`);
   };
 
@@ -696,80 +645,11 @@ export default function ManagementKpisPage() {
         target: t.target, staffIds: JSON.stringify(t.staffIds),
         reward: t.reward ? JSON.stringify(t.reward) : undefined, notes: t.notes, isActive: "true",
       }})
-    )).then(() => { refetchTargets(); }).catch(() => toast.error("Failed to spread targets"));
+    )).then(() => {
+      refetchTargets();
+      queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+    }).catch(() => toast.error("Failed to spread targets"));
   };
-
-  // Per-KPI actual values, each filtered to its own period window.
-  const actualValuesByKpiId = useMemo(() => {
-    const result: Record<string, number> = {};
-    // COGS for a set of transactions: prefer the line-item costPrice snapshot,
-    // fall back to the product's current cost price, then 0. Mirrors the
-    // server-side Net Profit / Gross Margin calculation in the KPI route.
-    const cogsOf = (txns: typeof txList) =>
-      txns.reduce((s, t) => {
-        const items = (t.items ?? []) as { quantity?: number; costPrice?: number; productId?: number }[];
-        return s + items.reduce((si, i) => {
-          const unitCost = i.costPrice ?? (i.productId != null ? productCostById.get(i.productId) ?? 0 : 0);
-          return si + unitCost * (i.quantity ?? 1);
-        }, 0);
-      }, 0);
-    const allActive = targets.filter((t) => t.isActive);
-    for (const kpi of allActive) {
-      const periodStart = getPeriodStart(kpi.period, weekStartDay, kpi.startDate || null);
-      const txInPeriod = txList.filter(
-        (t) => t.status === "completed" && t.createdAt != null && new Date(t.createdAt) >= periodStart,
-      );
-      const revenue = txInPeriod.reduce((s, t) => s + (t.total ?? 0), 0);
-      // Ex-GST revenue (total minus the GST component) is the basis for the
-      // COGS-derived profit metrics, matching the Profit & Loss report.
-      const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
-      const count   = txInPeriod.length;
-
-      // Paid invoices in the same window contribute to the revenue family only.
-      const invInPeriod = paidInvoices.filter(
-        (inv) => inv.paidAt != null && new Date(inv.paidAt) >= periodStart,
-      );
-      const invRevenue = invInPeriod.reduce((s, inv) => s + (inv.total ?? 0), 0);
-      const invCount   = invInPeriod.length;
-      const salesRevenue = revenue + invRevenue;
-      const salesCount   = count + invCount;
-
-      let actual = 0;
-      switch (kpi.metric) {
-        case "revenue":
-          actual = Math.round(salesRevenue * 100) / 100;
-          break;
-        case "transactions":
-          actual = salesCount;
-          break;
-        case "avg_transaction":
-          actual = salesCount > 0 ? Math.round((salesRevenue / salesCount) * 100) / 100 : 0;
-          break;
-        case "items_per_transaction": {
-          const totalItems = txInPeriod.reduce((s, t) => {
-            const items = (t.items ?? []) as { quantity?: number }[];
-            return s + items.reduce((si, i) => si + (i.quantity ?? 1), 0);
-          }, 0);
-          actual = count > 0 ? Math.round((totalItems / count) * 100) / 100 : 0;
-          break;
-        }
-        case "net_profit": {
-          const cogs = cogsOf(txInPeriod);
-          actual = Math.round((exGstRevenue - cogs) * 100) / 100;
-          break;
-        }
-        case "gross_margin": {
-          const cogs = cogsOf(txInPeriod);
-          actual = exGstRevenue > 0 ? Math.round(((exGstRevenue - cogs) / exGstRevenue) * 10000) / 100 : 0;
-          break;
-        }
-        default:
-          actual = 0;
-      }
-      result[kpi.id] = actual;
-    }
-    return result;
-  }, [txList, paidInvoices, targets, weekStartDay, productCostById]);
 
   const { storeWide, staffTargets, allWithRewards, inactiveTargets } = useMemo(() => ({
     storeWide:       targets.filter((t) => t.staffIds.length === 0 && t.isActive),
@@ -845,7 +725,7 @@ export default function ManagementKpisPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     {targets.filter((t) => t.isActive).map((kpi) => (
-                      <ProgressRow key={kpi.id} kpi={kpi} current={actualValuesByKpiId[kpi.id] ?? 0} />
+                      <ProgressRow key={kpi.id} kpi={kpi} current={actualByTargetId[kpi.id] ?? null} />
                     ))}
                   </CardContent>
                 </Card>

@@ -5503,7 +5503,10 @@ export const ListKpiTargetsResponse = zod.object({
   "staffIds": zod.string(),
   "reward": zod.string().optional(),
   "notes": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
   "isActive": zod.string(),
+  "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -5566,7 +5569,10 @@ export const UpdateKpiTargetResponse = zod.object({
   "staffIds": zod.string(),
   "reward": zod.string().optional(),
   "notes": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
   "isActive": zod.string(),
+  "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -10202,6 +10208,19 @@ export const GetPaymentTotalsResponse = zod.record(zod.string(), zod.object({
 
 
 /**
+ * @summary Current actual value for every active KPI target, period- and staff-scoped
+ */
+export const GetKpiProgressResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "targetId": zod.string(),
+  "actual": zod.number().nullable()
+})),
+  "total": zod.number()
+})
+
+
+/**
  * @summary The single KPI target pinned to the dashboard, with its current actual
  */
 export const GetDashboardKpiResponse = zod.union([zod.object({
@@ -10217,7 +10236,10 @@ export const GetDashboardKpiResponse = zod.union([zod.object({
   "staffIds": zod.string(),
   "reward": zod.string().optional(),
   "notes": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
   "isActive": zod.string(),
+  "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }),

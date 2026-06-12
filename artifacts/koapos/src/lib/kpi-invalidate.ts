@@ -10,8 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
  */
 export function invalidateSalesKpiQueries(queryClient: QueryClient): void {
   const keys: string[][] = [
-    ["kpi-invoices-paid"],       // Management → KPIs progress tracker (paid invoices)
-    ["staff-kpi-invoices"],      // Staff → KPIs page (paid invoices)
+    ["kpi-progress"],            // Management → KPIs & Staff → KPIs progress (server-computed actuals)
     ["dashboard-kpi"],           // Dashboard KPI tile
     ["dashboard-summary-today"], // Dashboard summary tiles
     ["transactions"],            // transaction-derived KPI metrics

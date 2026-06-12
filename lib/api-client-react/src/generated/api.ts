@@ -162,6 +162,7 @@ import type {
   InvoiceList,
   InvoicePaymentInput,
   InvoiceUpdate,
+  KpiProgressResponse,
   KpiSettings,
   KpiSettingsInput,
   KpiTarget,
@@ -32518,6 +32519,83 @@ export function useGetPaymentTotals<TData = Awaited<ReturnType<typeof getPayment
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPaymentTotalsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetKpiProgressUrl = () => {
+
+
+
+
+  return `/api/kpi-targets/progress`
+}
+
+/**
+ * @summary Current actual value for every active KPI target, period- and staff-scoped
+ */
+export const getKpiProgress = async ( options?: RequestInit): Promise<KpiProgressResponse> => {
+
+  return customFetch<KpiProgressResponse>(getGetKpiProgressUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetKpiProgressQueryKey = () => {
+    return [
+    `/api/kpi-targets/progress`
+    ] as const;
+    }
+
+
+export const getGetKpiProgressQueryOptions = <TData = Awaited<ReturnType<typeof getKpiProgress>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKpiProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetKpiProgressQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getKpiProgress>>> = ({ signal }) => getKpiProgress({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getKpiProgress>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetKpiProgressQueryResult = NonNullable<Awaited<ReturnType<typeof getKpiProgress>>>
+export type GetKpiProgressQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Current actual value for every active KPI target, period- and staff-scoped
+ */
+
+export function useGetKpiProgress<TData = Awaited<ReturnType<typeof getKpiProgress>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getKpiProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetKpiProgressQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

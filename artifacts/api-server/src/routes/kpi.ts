@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, kpiSettingsTable, kpiTargetsTable, transactionsTable, invoicesTable, customersTable, appointmentsTable, serviceJobsTable } from "@workspace/db";
-import { eq, and, gte, sql, ne } from "drizzle-orm";
+import { db, kpiSettingsTable, kpiTargetsTable, merchantsTable } from "@workspace/db";
+import { eq, and, ne } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+import { computeActual } from "./kpi-calc";
 
 const PatchKpiSettings = z.object({
   trackCategories: z.string(), trackAppointments: z.string(),
@@ -98,49 +99,29 @@ router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =
   res.status(204).end();
 });
 
+/* ── Progress (all active targets) ─────────────────────────────────────────── */
+
+router.get("/kpi-targets/progress", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+
+  const [settingsRow] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
+  const weekStartDay = settingsRow?.weekStartDay ?? "monday";
+  const [merchantRow] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, merchantId)).limit(1);
+  const timeZone = merchantRow?.timezone ?? null;
+
+  const rows = await db.select().from(kpiTargetsTable)
+    .where(and(eq(kpiTargetsTable.merchantId, merchantId), eq(kpiTargetsTable.isActive, "true")));
+
+  const items = await Promise.all(rows.map(async (row) => ({
+    id: row.id,
+    targetId: row.targetId,
+    actual: await computeActual(merchantId, row, weekStartDay, timeZone),
+  })));
+
+  res.json({ items, total: items.length });
+});
+
 /* ── Dashboard KPI ─────────────────────────────────────────────────────────── */
-
-const WEEK_START_DAY: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-  thursday: 4, friday: 5, saturday: 6,
-};
-
-function getPeriodStartForKpi(period: string, weekStartDay = "monday", startDate?: string | null): Date {
-  // Fixed-start budget: use the provided start date
-  if (startDate) {
-    const d = new Date(startDate + "T00:00:00");
-    if (!isNaN(d.getTime())) return d;
-  }
-
-  const now = new Date();
-  switch (period) {
-    case "daily": {
-      const d = new Date(now); d.setHours(0, 0, 0, 0); return d;
-    }
-    case "weekly": {
-      const d = new Date(now);
-      const startDow = WEEK_START_DAY[weekStartDay] ?? 1;
-      const dow = d.getDay();
-      const daysBack = (dow - startDow + 7) % 7;
-      d.setDate(d.getDate() - daysBack);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-    case "monthly": {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-    case "quarterly": {
-      const q = Math.floor(now.getMonth() / 3);
-      return new Date(now.getFullYear(), q * 3, 1, 0, 0, 0, 0);
-    }
-    case "annual": {
-      return new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-    }
-    default: {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-  }
-}
 
 router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
@@ -162,122 +143,10 @@ router.get("/kpi-targets/dashboard-kpi", requireAuth, async (req, res): Promise<
 
   const [settingsRow] = await db.select().from(kpiSettingsTable).where(eq(kpiSettingsTable.merchantId, merchantId)).limit(1);
   const weekStartDay = settingsRow?.weekStartDay ?? "monday";
+  const [merchantRow] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, merchantId)).limit(1);
 
   const kpi = { ...kpiRow, target: parseFloat(kpiRow.target as unknown as string) };
-  const periodStart = getPeriodStartForKpi(kpi.period, weekStartDay, kpi.startDate);
-  const metric = kpi.metric as string;
-
-  let actual: number | null = null;
-
-  try {
-    if (metric === "revenue" || metric === "transactions" || metric === "avg_transaction") {
-      const [txnAgg] = await db.select({
-        totalSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
-        txnCount:   sql<string>`COUNT(CASE WHEN ${transactionsTable.status} = 'completed' THEN 1 END)`,
-      }).from(transactionsTable)
-        .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart)));
-
-      const [invAgg] = await db.select({
-        invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
-        invCount:     sql<string>`COUNT(*)`,
-      }).from(invoicesTable)
-        .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)));
-
-      const totalSales = parseFloat(txnAgg?.totalSales ?? "0") + parseFloat(invAgg?.invoiceSales ?? "0");
-      const txnCount   = Number(txnAgg?.txnCount ?? 0) + Number(invAgg?.invCount ?? 0);
-
-      if (metric === "revenue")          actual = Math.round(totalSales * 100) / 100;
-      else if (metric === "transactions") actual = txnCount;
-      else                                actual = txnCount > 0 ? Math.round((totalSales / txnCount) * 100) / 100 : 0;
-
-    } else if (metric === "new_customers") {
-      const [r] = await db.select({ count: sql<string>`COUNT(*)` })
-        .from(customersTable)
-        .where(and(eq(customersTable.merchantId, merchantId), gte(customersTable.createdAt, periodStart)));
-      actual = Number(r?.count ?? 0);
-
-    } else if (metric === "appointments") {
-      // Metric is "Appointments Completed" — only count completed ones, not
-      // those still scheduled/cancelled.
-      const [r] = await db.select({ count: sql<string>`COUNT(*)` })
-        .from(appointmentsTable)
-        .where(and(eq(appointmentsTable.merchantId, merchantId), eq(appointmentsTable.status, "completed"), gte(appointmentsTable.scheduledAt, periodStart)));
-      actual = Number(r?.count ?? 0);
-
-    } else if (metric === "services") {
-      // Metric is "Services Completed" — only count completed service jobs, not
-      // pending/in-progress ones.
-      const [r] = await db.select({ count: sql<string>`COUNT(*)` })
-        .from(serviceJobsTable)
-        .where(and(eq(serviceJobsTable.merchantId, merchantId), eq(serviceJobsTable.status, "completed"), gte(serviceJobsTable.createdAt, periodStart)));
-      actual = Number(r?.count ?? 0);
-
-    } else if (metric === "items_per_transaction") {
-      const rows = await db.execute(sql`
-        SELECT COALESCE(AVG(item_count), 0)::float AS avg_items
-        FROM (
-          SELECT jsonb_array_length(items) AS item_count
-          FROM transactions
-          WHERE merchant_id = ${merchantId}
-            AND status = 'completed'
-            AND created_at >= ${periodStart}
-            AND jsonb_typeof(items) = 'array'
-        ) sub
-      `);
-      actual = Math.round(Number((rows.rows[0] as { avg_items: number })?.avg_items ?? 0) * 100) / 100;
-
-    } else if (metric === "net_profit" || metric === "gross_margin") {
-      // Net Profit and Gross Margin are COGS-derived, so they are based on POS
-      // transactions only. Invoices are excluded: their line items are free-text
-      // services with no product link or cost price, so no COGS can be matched —
-      // including invoice revenue here would silently treat it as 100% margin and
-      // inflate both figures. (The revenue/transactions/avg_transaction metrics
-      // above still include paid invoices, since those are pure revenue figures.)
-      // Revenue is taken ex-GST (total minus the GST component) because GST is
-      // collected on behalf of the ATO, not income. This matches the Profit &
-      // Loss / Margin report convention so Net Profit reconciles across the app.
-      const [txnAgg] = await db.select({
-        totalSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN (${transactionsTable.total} - ${transactionsTable.taxTotal})::numeric ELSE 0 END), 0)`,
-      }).from(transactionsTable)
-        .where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, periodStart)));
-
-      const totalRevenue = parseFloat(txnAgg?.totalSales ?? "0");
-
-      // COGS: cost of goods sold for the period. Prefer the cost snapshotted on
-      // the line item at sale time; fall back to the product's current cost_price
-      // when the snapshot is missing (historical or imported sales). Matches the
-      // COGS calculation used by the dashboard summary and Margin report so Net
-      // Profit / Gross Margin stay consistent across the app. Filtering on
-      // costPrice IS NOT NULL (the previous behaviour) silently dropped every
-      // line that lacked a snapshot, forcing COGS to 0 and Net Profit to equal
-      // revenue.
-      const cogsRows = await db.execute(sql`
-        SELECT COALESCE(SUM(
-          (item->>'quantity')::numeric
-          * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
-        ), 0)::float AS total_cogs
-        FROM transactions t
-        CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
-        LEFT JOIN products p
-          ON p.id = (item->>'productId')::int
-         AND p.merchant_id = t.merchant_id
-        WHERE t.merchant_id = ${merchantId}
-          AND t.status = 'completed'
-          AND t.created_at >= ${periodStart}
-          AND jsonb_typeof(t.items) = 'array'
-      `);
-      const totalCogs = Number((cogsRows.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
-
-      if (metric === "net_profit") {
-        actual = Math.round((totalRevenue - totalCogs) * 100) / 100;
-      } else {
-        // gross_margin as a percentage: (revenue - cogs) / revenue * 100
-        actual = totalRevenue > 0 ? Math.round(((totalRevenue - totalCogs) / totalRevenue) * 10000) / 100 : 0;
-      }
-    }
-  } catch {
-    actual = null;
-  }
+  const actual = await computeActual(merchantId, kpiRow, weekStartDay, merchantRow?.timezone ?? null);
 
   res.json({ kpi, actual });
 });

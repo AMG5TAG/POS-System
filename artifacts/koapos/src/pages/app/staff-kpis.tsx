@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useListTransactions, useListKpiTargets, useListInvoices, useListProducts, useGetKpiSettings } from "@workspace/api-client-react";
+import { useListStaff, useListKpiTargets, useGetKpiProgress } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -50,46 +50,6 @@ function mapKpiTarget(r: {
     isActive: String(r.isActive) !== "false",
     startDate: r.startDate ?? null,
   };
-}
-
-/* ─── Period windows (mirrors Management → KPIs) ─────────────────────────── */
-
-const WEEK_START_DAYS: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-};
-
-function getPeriodStart(period: KpiPeriod, weekStartDay = "monday", startDate?: string | null): Date {
-  if (startDate) {
-    const d = new Date(startDate + "T00:00:00");
-    if (!isNaN(d.getTime())) return d;
-  }
-  const now = new Date();
-  switch (period) {
-    case "daily": {
-      const d = new Date(now); d.setHours(0, 0, 0, 0); return d;
-    }
-    case "weekly": {
-      const d = new Date(now);
-      const startDow = WEEK_START_DAYS[weekStartDay] ?? 1;
-      const daysBack = (d.getDay() - startDow + 7) % 7;
-      d.setDate(d.getDate() - daysBack);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-    case "monthly": {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-    case "quarterly": {
-      const q = Math.floor(now.getMonth() / 3);
-      return new Date(now.getFullYear(), q * 3, 1, 0, 0, 0, 0);
-    }
-    case "annual": {
-      return new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-    }
-    default: {
-      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    }
-  }
 }
 
 /* ─── Metric metadata ────────────────────────────────────────────────────── */
@@ -143,12 +103,13 @@ function RankMedal({ rank }: { rank: number }) {
 
 /* ─── KPI progress row ───────────────────────────────────────────────────── */
 
-function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
+function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number | null }) {
   const meta = METRIC_META[kpi.metric];
   const Icon = meta.icon;
-  const pct = kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
-  const color = pctColor(pct, meta.isInverse);
-  const hit = pct >= 100;
+  const unavailable = current === null;
+  const pct = !unavailable && kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
+  const color = unavailable ? "text-muted-foreground" : pctColor(pct, meta.isInverse);
+  const hit = !unavailable && pct >= 100;
 
   return (
     <div className="py-3 border-b last:border-0 space-y-1.5">
@@ -159,12 +120,12 @@ function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
           {hit && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />}
         </div>
         <span className={cn("text-sm font-semibold shrink-0 tabular-nums", color)}>
-          {fmtVal(kpi.metric, current)} / {fmtVal(kpi.metric, kpi.target)}
+          {unavailable ? "—" : fmtVal(kpi.metric, current)} / {fmtVal(kpi.metric, kpi.target)}
         </span>
       </div>
       <Progress value={pct} className="h-1.5" />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{pct}% of target</span>
+        <span>{unavailable ? "Not available yet" : `${pct}% of target`}</span>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs py-0 h-5">{PERIOD_LABELS[kpi.period]}</Badge>
           {kpi.reward && (
@@ -182,8 +143,6 @@ function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
 
 export default function StaffKpisPage() {
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
-  const { data: settingsRaw } = useGetKpiSettings({ query: { queryKey: ["kpi-settings"] } });
-  const weekStartDay = String(settingsRaw?.weekStartDay ?? "monday");
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; role?: string }[];
 
@@ -194,121 +153,32 @@ export default function StaffKpisPage() {
     [rawTargets],
   );
 
-  /* Fetch transactions back to the earliest active KPI window so every
-     target's actual covers its full period (mirrors Management → KPIs). */
-  const txFromDate = useMemo(() => {
-    if (targets.length === 0) return getPeriodStart("monthly", weekStartDay);
-    const starts = targets.map((t) => getPeriodStart(t.period, weekStartDay, t.startDate));
-    return new Date(Math.min(...starts.map((d) => d.getTime())));
-  }, [targets, weekStartDay]);
-  const txFromISO = txFromDate.toISOString().slice(0, 10);
-
-  const { data: txData } = useListTransactions(
-    { from: txFromISO, limit: 5000 },
-    { query: { queryKey: ["transactions", txFromISO] } },
-  );
-  const txList = (txData?.items ?? []) as {
-    total?: number; taxTotal?: number; status?: string; createdAt?: string;
-    items?: { quantity?: number; costPrice?: number; productId?: number }[];
-  }[];
-
-  /* Product cost prices, used to value COGS for the net_profit metric when a
-     line item doesn't carry a costPrice snapshot (mirrors Management → KPIs). */
-  const { data: productsData } = useListProducts(
-    { limit: 1000 },
-    { query: { queryKey: ["staff-kpi-products"] } },
-  );
-  const productCostById = useMemo(() => {
-    const m = new Map<number, number>();
-    const list = (productsData?.items ?? []) as { id: number; costPrice?: number | null }[];
-    for (const p of list) if (p.costPrice != null) m.set(p.id, p.costPrice);
-    return m;
-  }, [productsData]);
-
-  /* Paid invoices count toward the revenue / transactions / avg_transaction
-     metrics, matching the dashboard KPI tile and Management → KPIs — without
-     them, paying an invoice never moves these targets. */
-  const { data: invoicesData } = useListInvoices(
-    { status: "paid", limit: 1000 },
-    { query: { queryKey: ["staff-kpi-invoices"] } },
-  );
-  const paidInvoices = (invoicesData?.items ?? []) as { total?: number; paidAt?: string | null }[];
-
-  /* Per-KPI actual values, each filtered to its own period window. */
+  /* Actuals are computed server-side, scoped to each target's period and (where
+     supported) its assigned staff, so per-staff figures and the leaderboard are
+     real rather than the whole store's totals. */
+  const { data: progressData } = useGetKpiProgress({ query: { queryKey: ["kpi-progress"] } });
   const actualByKpiId = useMemo(() => {
-    const result: Record<string, number> = {};
-    // COGS for a set of transactions: prefer the line-item costPrice snapshot,
-    // fall back to the product's current cost price, then 0. Mirrors the
-    // server-side Net Profit calculation and Management → KPIs.
-    const cogsOf = (txns: typeof txList) =>
-      txns.reduce((s, t) => {
-        const items = t.items ?? [];
-        return s + items.reduce((si, i) => {
-          const unitCost = i.costPrice ?? (i.productId != null ? productCostById.get(i.productId) ?? 0 : 0);
-          return si + unitCost * (i.quantity ?? 1);
-        }, 0);
-      }, 0);
-    for (const kpi of targets) {
-      const periodStart = getPeriodStart(kpi.period, weekStartDay, kpi.startDate);
-      const txInPeriod = txList.filter(
-        (t) => t.status === "completed" && t.createdAt != null && new Date(t.createdAt) >= periodStart,
-      );
-      const invInPeriod = paidInvoices.filter(
-        (inv) => inv.paidAt != null && new Date(inv.paidAt) >= periodStart,
-      );
-      const revenue =
-        txInPeriod.reduce((s, t) => s + (t.total ?? 0), 0) +
-        invInPeriod.reduce((s, inv) => s + (inv.total ?? 0), 0);
-      const count = txInPeriod.length + invInPeriod.length;
-      switch (kpi.metric) {
-        case "revenue":         result[kpi.id] = Math.round(revenue * 100) / 100; break;
-        case "transactions":    result[kpi.id] = count; break;
-        case "avg_transaction": result[kpi.id] = count > 0 ? Math.round((revenue / count) * 100) / 100 : 0; break;
-        case "items_per_transaction": {
-          // Average line-item quantity per transaction. Divides by transaction
-          // count only (invoices excluded), matching Management → KPIs.
-          const totalItems = txInPeriod.reduce(
-            (s, t) => s + (t.items ?? []).reduce((si, i) => si + (i.quantity ?? 1), 0), 0,
-          );
-          result[kpi.id] = txInPeriod.length > 0 ? Math.round((totalItems / txInPeriod.length) * 100) / 100 : 0;
-          break;
-        }
-        case "net_profit": {
-          // Ex-GST transaction revenue (total minus the GST component) less COGS,
-          // matching the Profit & Loss report. Invoices are excluded here, as in
-          // Management → KPIs, since they carry no line-item cost basis.
-          const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
-          result[kpi.id] = Math.round((exGstRevenue - cogsOf(txInPeriod)) * 100) / 100;
-          break;
-        }
-        case "gross_margin": {
-          // (Ex-GST revenue − COGS) / ex-GST revenue, as a percentage. Same
-          // basis as net_profit and Management → KPIs.
-          const exGstRevenue = txInPeriod.reduce((s, t) => s + ((t.total ?? 0) - (t.taxTotal ?? 0)), 0);
-          result[kpi.id] = exGstRevenue > 0
-            ? Math.round(((exGstRevenue - cogsOf(txInPeriod)) / exGstRevenue) * 10000) / 100
-            : 0;
-          break;
-        }
-        default:                result[kpi.id] = 0;
-      }
-    }
-    return result;
-  }, [targets, txList, paidInvoices, weekStartDay, productCostById]);
+    const map: Record<string, number | null> = {};
+    for (const p of (progressData?.items ?? [])) map[String(p.id)] = p.actual ?? null;
+    return map;
+  }, [progressData]);
 
   const storeKpis = targets.filter((t) => t.staffIds.length === 0);
   const staffKpis = targets.filter((t) => t.staffIds.length > 0);
 
-  /* Build per-staff summary for leaderboard */
+  /* Build per-staff summary for leaderboard. A target only counts toward the
+     ranking once its actual is known; a null actual (not computable) is neither
+     a hit nor a miss. */
   const leaderboard = useMemo(() => {
     return staffList.map((member) => {
       const myKpis = staffKpis.filter((k) => k.staffIds.includes(String(member.id)));
-      const hitCount = myKpis.filter((k) => {
-        const actual = actualByKpiId[k.id] ?? 0;
+      const scorable = myKpis.filter((k) => actualByKpiId[k.id] != null);
+      const hitCount = scorable.filter((k) => {
+        const actual = actualByKpiId[k.id] as number;
         const pct = k.target > 0 ? (actual / k.target) * 100 : 0;
         return METRIC_META[k.metric].isInverse ? pct <= 100 : pct >= 100;
       }).length;
-      const totalTargets = myKpis.length;
+      const totalTargets = scorable.length;
       const score = totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
       return { ...member, myKpis, hitCount, totalTargets, score };
     })
@@ -366,7 +236,7 @@ export default function StaffKpisPage() {
                 <Card>
                   <CardContent className="pt-4">
                     {storeKpis.map((kpi) => (
-                      <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? 0} />
+                      <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? null} />
                     ))}
                   </CardContent>
                 </Card>
@@ -398,7 +268,7 @@ export default function StaffKpisPage() {
                       </div>
                       <div className="px-4">
                         {group.kpis.map((kpi) => (
-                          <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? 0} />
+                          <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? null} />
                         ))}
                       </div>
                     </div>

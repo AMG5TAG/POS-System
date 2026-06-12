@@ -71,6 +71,28 @@ function resolveField(header: string): keyof KpiImportRow | null {
   return COLUMN_MAP[normalise(header)] ?? null;
 }
 
+/* ─── Date handling ──────────────────────────────────────────────────────────
+   Excel cells parsed with cellDates arrive as Date objects; stringifying them
+   would produce "Wed Jan 01 2026 …", which the KPI period math can't read. We
+   normalise both Date objects and free-text dates to ISO yyyy-mm-dd. */
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Normalise a date cell to yyyy-mm-dd, or "" when it isn't a usable date. */
+function normaliseDate(raw: unknown): string {
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? "" : toISODate(raw);
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;            // already ISO
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? "" : toISODate(d);
+}
+
 /* ─── Row parser / validator ─────────────────────────────────────────────── */
 
 function parseRows(raw: Record<string, string>[]): ParsedRow[] {
@@ -101,8 +123,11 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const isActiveRaw = (mapped.isActive ?? "true").toLowerCase();
     const isActive = !["false", "no", "0", "inactive", "disabled"].includes(isActiveRaw);
 
-    const startDate = mapped.startDate ?? "";
-    const endDate = mapped.endDate ?? "";
+    const startDate = normaliseDate(mapped.startDate);
+    const endDate = normaliseDate(mapped.endDate);
+    if ((mapped.startDate ?? "").trim() && !startDate) errors.push("Invalid start date (use YYYY-MM-DD)");
+    if ((mapped.endDate ?? "").trim() && !endDate) errors.push("Invalid end date (use YYYY-MM-DD)");
+    if (startDate && endDate && endDate < startDate) errors.push("End date is before start date");
 
     return {
       _rowIndex: i + 2,

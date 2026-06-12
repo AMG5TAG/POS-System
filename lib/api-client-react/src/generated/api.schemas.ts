@@ -126,7 +126,10 @@ export interface KpiTarget {
   staffIds: string;
   reward?: string;
   notes: string;
+  startDate?: string | null;
+  endDate?: string | null;
   isActive: string;
+  showOnDashboard?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +137,17 @@ export interface KpiTarget {
 export interface DashboardKpiResult {
   kpi: KpiTarget;
   actual: number | null;
+}
+
+export interface KpiProgress {
+  id: number;
+  targetId: string;
+  actual: number | null;
+}
+
+export interface KpiProgressResponse {
+  items: KpiProgress[];
+  total: number;
 }
 
 export type BackupLocationsItem = {
