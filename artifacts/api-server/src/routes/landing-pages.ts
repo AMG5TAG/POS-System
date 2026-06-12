@@ -84,11 +84,11 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   const parsed = PostLandingPage.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, links } = parsed.data;
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, isTemplate, links } = parsed.data;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [row] = await (db.insert(landingPagesTable) as any).values({
     merchantId, pageId, slug, title, subtitle, bio, profileImage, bgType, bgColor, bgFrom, bgTo,
-    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, links,
+    bgDir, bgImage, btnStyle, btnVariant, btnBg, btnText, btnBorder, textColor, font, privacyUrl, showPoweredBy, isTemplate, links,
   }).returning();
   res.status(201).json(row);
 });
