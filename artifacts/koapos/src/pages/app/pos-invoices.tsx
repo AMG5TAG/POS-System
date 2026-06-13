@@ -288,16 +288,23 @@ export default function POSInvoicesPage() {
   const invoices = (invoicesData?.items ?? []) as unknown as Invoice[];
 
   const historyParams = { status: "paid" as ListInvoicesStatus, limit: 500 };
-  const { data: historyData, isLoading: historyLoading, refetch: refetchHistory } = useListInvoices(
+  const { data: historyData, isPending: historyPending, refetch: refetchHistory } = useListInvoices(
     historyParams,
     { query: { enabled: activeTab === "history", queryKey: getListInvoicesQueryKey(historyParams) } },
   );
   const cancelledHistoryParams = { status: "cancelled" as ListInvoicesStatus, limit: 500 };
-  const { data: cancelledHistoryData, isLoading: cancelledHistoryLoading, refetch: refetchCancelledHistory } = useListInvoices(
+  const { data: cancelledHistoryData, isPending: cancelledHistoryPending, refetch: refetchCancelledHistory } = useListInvoices(
     cancelledHistoryParams,
     { query: { enabled: activeTab === "history", queryKey: getListInvoicesQueryKey(cancelledHistoryParams) } },
   );
-  const historyActuallyLoading = historyLoading || cancelledHistoryLoading;
+  // Gate on isPending (not isLoading): a lazily-`enabled` query has a render
+  // window where enabled just flipped true but the fetch hasn't started, so
+  // isLoading (= isPending && isFetching) is briefly false with data still
+  // undefined — which would fall through to the empty state and stick there
+  // until a re-render (e.g. switching tabs). isPending stays true until the
+  // data (or an error) actually arrives. Scope to the history tab so the flag
+  // reflects the live fetch (the queries are disabled off-tab).
+  const historyActuallyLoading = activeTab === "history" && (historyPending || cancelledHistoryPending);
   const refetchAllHistory = () => { void refetchHistory(); void refetchCancelledHistory(); };
 
   const historyInvoices = useMemo(() => {
