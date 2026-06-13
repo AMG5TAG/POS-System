@@ -16,12 +16,13 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
-  Mail, MessageSquare, Loader2, Printer, Trash2, Eye,
+  Trash2, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
+import { SendButton } from "@/components/send/send-dialog";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
@@ -120,9 +121,36 @@ export function ServiceJobDetailDialog({
   const [newNoteText, setNewNoteText] = useState("");
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [smsLoading, setSmsLoading] = useState(false);
   const [uploading,   setUploading]   = useState(false);
+
+  /* Send job details to the customer on file. Both endpoints send server-side
+   * to the stored contact; they throw on failure so the Send dialog surfaces
+   * the error instead of falsely reporting success. */
+  const sendJobEmail = async () => {
+    if (!job?.customerEmail) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/email`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — email not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send email");
+    toast.success(`Email sent to ${job.customerEmail}`);
+  };
+
+  const sendJobSms = async () => {
+    if (!job?.customerPhone) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/sms`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — SMS not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send SMS");
+    toast.success(`SMS sent to ${job.customerPhone}`);
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
 
@@ -525,77 +553,35 @@ export function ServiceJobDetailDialog({
               </Button>
             )}
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={emailLoading || !job?.customerEmail}
-                title={job?.customerEmail ? "Email job details to customer" : "No customer email on file"}
-                onClick={async () => {
-                  if (!job?.customerEmail || emailLoading) return;
-                  setEmailLoading(true);
-                  try {
-                    const res = await fetch(`/api/service-jobs/${job.id}/email`, {
-                      method: "POST",
-                      credentials: "include",
-                    });
-                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
-                    if (res.ok && data.success) {
-                      toast.success(`Email sent to ${job.customerEmail}`);
-                    } else {
-                      toast.error(data.error ?? "Failed to send email");
-                    }
-                  } catch {
-                    toast.error("Network error — email not sent");
-                  } finally {
-                    setEmailLoading(false);
-                  }
-                }}
-              >
-                {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                Email
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={smsLoading || !job?.customerPhone}
-                title={job?.customerPhone ? "Send SMS status update to customer" : "No customer phone on file"}
-                onClick={async () => {
-                  if (!job?.customerPhone || smsLoading) return;
-                  setSmsLoading(true);
-                  try {
-                    const res = await fetch(`/api/service-jobs/${job.id}/sms`, {
-                      method: "POST",
-                      credentials: "include",
-                    });
-                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
-                    if (res.ok && data.success) {
-                      toast.success(`SMS sent to ${job.customerPhone}`);
-                    } else {
-                      toast.error(data.error ?? "Failed to send SMS");
-                    }
-                  } catch {
-                    toast.error("Network error — SMS not sent");
-                  } finally {
-                    setSmsLoading(false);
-                  }
-                }}
-              >
-                {smsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-                SMS
-              </Button>
-              {onPrint && (
-                <>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sheet")}>
-                    <Printer className="w-3.5 h-3.5" />
-                    Print
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sticker")}>
-                    <Printer className="w-3.5 h-3.5" />
-                    Sticker
-                  </Button>
-                </>
+              {(job.customerEmail || job.customerPhone || onPrint) && (
+                <SendButton
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  buttonTitle="Send or print job"
+                  title="Send Job"
+                  documentLabel={job.jobNumber}
+                  {...(onPrint && {
+                    reprintLabel: "Print",
+                    reprintSub: "Sheet or sticker",
+                    reprintButtonLabel: "Print Job Sheet",
+                    reprintHint: <>Print the full job sheet for <strong>{job.jobNumber}</strong>.</>,
+                    onReprint: () => onPrint(job, "sheet"),
+                    reprintExtraActions: [{ label: "Print Sticker", onClick: () => onPrint(job, "sticker") }],
+                  })}
+                  {...(job.customerEmail && {
+                    defaultEmail: job.customerEmail,
+                    emailReadonly: true,
+                    emailHint: "Emails the job details to the customer's email on file.",
+                    onEmail: () => sendJobEmail(),
+                  })}
+                  {...(job.customerPhone && {
+                    defaultPhone: job.customerPhone,
+                    smsReadonly: true,
+                    smsHint: "Texts a status update to the customer's number on file.",
+                    onSms: () => sendJobSms(),
+                  })}
+                />
               )}
               <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
             </div>

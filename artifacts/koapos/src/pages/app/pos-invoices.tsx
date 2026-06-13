@@ -36,11 +36,12 @@ import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
   Eye, EyeOff, Mail, MessageSquare, Printer, X, ExternalLink, Clock, Download, Pencil,
-  Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList, Paperclip,
+  Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList,
   Copy, GripVertical, Loader2, Link2, CalendarDays, Wrench,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { SendDialog, type SendMethodKey } from "@/components/send/send-dialog";
 
 /* ── PDF image compression helper ───────────────────────────────────────── */
 
@@ -155,10 +156,9 @@ export default function POSInvoicesPage() {
   const [form, setForm] = useState({ customerId: "", dueDate: "", notes: "" });
   const [lines, setLines] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0, taxRate: 10 }]);
   const [saving, setSaving] = useState(false);
-  const [emailDialog, setEmailDialog] = useState<{ open: boolean; invoiceId: number | null }>({ open: false, invoiceId: null });
-  const [emailAddr, setEmailAddr] = useState("");
+  const [sendTarget, setSendTarget] = useState<Invoice | null>(null);
+  const [sendInitialMethod, setSendInitialMethod] = useState<SendMethodKey | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
-  const [sendingEmail, setSendingEmail] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -759,26 +759,29 @@ export default function POSInvoicesPage() {
     };
   };
 
-  const handleSendEmail = async () => {
-    if (!emailDialog.invoiceId || !emailAddr.trim()) return;
-    setSendingEmail(true);
-    const invId = emailDialog.invoiceId;
+  /* Open the unified Send dialog for an invoice, optionally pre-selecting a
+   * delivery method. Seeds the email subject from the invoice + business name. */
+  const openSend = (inv: Invoice, method: SendMethodKey | null = null) => {
+    const bizName = merchant?.businessName ?? "Your Business";
+    setEmailSubject(`Invoice ${inv.invoiceNumber} from ${bizName}`);
+    setSendInitialMethod(method);
+    setSendTarget(inv);
+  };
+
+  const sendInvoiceEmail = async (email: string) => {
+    if (!sendTarget) return;
+    const invId = sendTarget.id;
     try {
       await sendEmailMutation.mutateAsync({
         id: invId,
-        data: { email: emailAddr, template: getEmailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
+        data: { email, template: getEmailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
       });
-      toast.success("Invoice emailed");
-      setEmailDialog({ open: false, invoiceId: null });
-      setEmailAddr("");
-      setEmailSubject("");
-      invalidateInvoices();
-      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invId) });
     } catch {
-      toast.error("Failed to send email");
-    } finally {
-      setSendingEmail(false);
+      throw new Error("Failed to send email");
     }
+    toast.success("Invoice emailed");
+    invalidateInvoices();
+    queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invId) });
   };
 
   /* ── Print / PDF ───────────────────────────────────────────────────────
@@ -887,14 +890,8 @@ export default function POSInvoicesPage() {
         onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}>
         {pdfGeneratingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
       </Button>
-      <Button variant="ghost" size="icon" className="h-7 w-7" title="Email invoice"
-        onClick={(e) => {
-          e.stopPropagation();
-          const bizName = merchant?.businessName ?? "Your Business";
-          setEmailDialog({ open: true, invoiceId: inv.id });
-          setEmailAddr(inv.customerEmail ?? "");
-          setEmailSubject(`Invoice ${inv.invoiceNumber} from ${bizName}`);
-        }}>
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Send invoice"
+        onClick={(e) => { e.stopPropagation(); openSend(inv, "email"); }}>
         <Mail className="w-3.5 h-3.5" />
       </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
@@ -1358,15 +1355,11 @@ export default function POSInvoicesPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => {
-                        const bizName = merchant?.businessName ?? "Your Business";
-                        setEmailDialog({ open: true, invoiceId: detailInvoice.id });
-                        setEmailAddr(detailInvoice.customerEmail ?? "");
-                        setEmailSubject(`Invoice ${detailInvoice.invoiceNumber} from ${bizName}`);
-                      }}>
-                      <Mail className="w-3.5 h-3.5" /> Email
+                      onClick={() => openSend(detailInvoice)}>
+                      <Send className="w-3.5 h-3.5" /> Send
                     </Button>
                     <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                      title="SMS delivery requires an SMS integration"
                       onClick={() => toast.info("SMS receipts require an SMS integration — configure it in Management → Marketing and Reports → SMS")}>
                       <MessageSquare className="w-3.5 h-3.5" /> SMS
                     </Button>
@@ -1374,14 +1367,6 @@ export default function POSInvoicesPage() {
                       disabled={pdfGeneratingId !== null}
                       onClick={() => { void downloadInvoicePDF(detailInvoice); void recordEvent(detailInvoice.id, "download"); }}>
                       {pdfGeneratingId === detailInvoice.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { void printInvoice(detailInvoice); void recordEvent(detailInvoice.id, "print"); }}>
-                      <Printer className="w-3.5 h-3.5" /> Print
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                      onClick={() => { printAsQuote(detailInvoice); void recordEvent(detailInvoice.id, "print", "quote"); }}>
-                      <FileText className="w-3.5 h-3.5" /> Quote
                     </Button>
                   </div>
                 </div>
@@ -1581,45 +1566,37 @@ export default function POSInvoicesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Email Dialog ─── */}
-      <Dialog open={emailDialog.open} onOpenChange={(o) => setEmailDialog({ open: o, invoiceId: emailDialog.invoiceId })}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Email Invoice</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input
-                type="email"
-                placeholder="customer@example.com"
-                value={emailAddr}
-                onChange={(e) => setEmailAddr(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                type="text"
-                placeholder="Invoice subject…"
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
-              />
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
-              <Paperclip className="w-3 h-3 shrink-0" />
-              <span>A PDF copy of the invoice will be attached</span>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setEmailDialog({ open: false, invoiceId: null })}>Cancel</Button>
-              <Button onClick={handleSendEmail} disabled={sendingEmail || !emailAddr.trim()}>
-                {sendingEmail ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Sending…</> : <><Mail className="w-3.5 h-3.5 mr-1.5" /> Send Invoice</>}
-              </Button>
-            </div>
+      {/* ─── Send dialog (email / print / print-as-quote) ─── */}
+      <SendDialog
+        open={!!sendTarget}
+        onOpenChange={(o) => { if (!o) setSendTarget(null); }}
+        title="Send Invoice"
+        documentLabel={sendTarget?.invoiceNumber}
+        initialMethod={sendInitialMethod}
+        reprintLabel="Print"
+        reprintSub="Print or print as quote"
+        reprintButtonLabel="Print Invoice"
+        reprintHint={sendTarget ? <>This will open a print preview for invoice <strong>{sendTarget.invoiceNumber}</strong>.</> : null}
+        onReprint={() => { if (sendTarget) { void printInvoice(sendTarget); void recordEvent(sendTarget.id, "print"); } }}
+        reprintExtraActions={[{
+          label: "Print as Quote",
+          onClick: () => { if (sendTarget) { printAsQuote(sendTarget); void recordEvent(sendTarget.id, "print", "quote"); } },
+        }]}
+        defaultEmail={sendTarget?.customerEmail ?? ""}
+        emailHint="A PDF copy of the invoice will be attached."
+        emailExtra={
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subject</Label>
+            <Input
+              type="text"
+              placeholder="Invoice subject…"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+            />
           </div>
-        </DialogContent>
-      </Dialog>
+        }
+        onEmail={sendInvoiceEmail}
+      />
 
       {/* ─── Delete Confirm ─── */}
       <AlertDialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
@@ -2199,10 +2176,7 @@ export default function POSInvoicesPage() {
                 const inv = sendNowInvoice!;
                 setSendNowInvoice(null);
                 toast.success("Recurring invoice created");
-                const bizName = merchant?.businessName ?? "Your Business";
-                setEmailDialog({ open: true, invoiceId: inv.id });
-                setEmailAddr(inv.customerEmail ?? "");
-                setEmailSubject(`Invoice ${inv.invoiceNumber} from ${bizName}`);
+                openSend(inv, "email");
               }}
             >
               <Mail className="w-3.5 h-3.5 mr-1.5" /> Send Now

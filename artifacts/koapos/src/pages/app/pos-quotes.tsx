@@ -29,10 +29,11 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, FileText, Search, Trash2, Send, Printer, Download, Pencil, X,
+  Plus, FileText, Search, Trash2, Download, Pencil, X,
   ShoppingCart, CheckCircle2, Loader2, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SendButton } from "@/components/send/send-dialog";
 
 type LineItem = QuoteLineItem;
 type DiscountType = "fixed" | "percent";
@@ -94,9 +95,6 @@ export default function POSQuotesPage() {
   const [productPick, setProductPick] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [emailFor, setEmailFor] = useState<Quote | null>(null);
-  const [emailAddr, setEmailAddr] = useState("");
-  const [sendingEmail, setSendingEmail] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<number | null>(null);
   const [convertingId, setConvertingId] = useState<number | null>(null);
@@ -277,23 +275,14 @@ export default function POSQuotesPage() {
     eventMutation.mutate({ id: q.id, data: { type: "print" } });
   };
 
-  const openEmail = (q: Quote) => {
-    setEmailFor(q);
-    setEmailAddr(q.customerEmail ?? "");
-  };
-  const handleSendEmail = async () => {
-    if (!emailFor || !emailAddr.trim()) return;
-    setSendingEmail(true);
+  const sendQuoteEmail = async (q: Quote, email: string) => {
     try {
-      await emailMutation.mutateAsync({ id: emailFor.id, data: { email: emailAddr.trim() } });
-      toast.success(`Quote sent to ${emailAddr.trim()}`);
-      setEmailFor(null);
-      refresh();
+      await emailMutation.mutateAsync({ id: q.id, data: { email } });
     } catch {
-      toast.error("Failed to send quote");
-    } finally {
-      setSendingEmail(false);
+      throw new Error("Failed to send quote");
     }
+    toast.success(`Quote sent to ${email}`);
+    refresh();
   };
 
   /* Convert → load the quote's lines into the POS cart (parked-sale handoff),
@@ -405,11 +394,26 @@ export default function POSQuotesPage() {
                           <CheckCircle2 className="w-3.5 h-3.5" /> Accept
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="Print" onClick={() => doPrint(q)}><Printer className="w-3.5 h-3.5" /></Button>
                       <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="Download PDF" disabled={pdfBusyId === q.id} onClick={() => downloadPdf(q)}>
                         {pdfBusyId === q.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="Email" onClick={() => openEmail(q)}><Send className="w-3.5 h-3.5" /></Button>
+                      <SendButton
+                        iconOnly
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                        buttonTitle="Send quote"
+                        title="Send Quote"
+                        documentLabel={q.quoteNumber}
+                        defaultEmail={q.customerEmail ?? ""}
+                        reprintLabel="Print"
+                        reprintSub="Print to printer"
+                        reprintButtonLabel="Print Quote"
+                        reprintHint={<>This will open a print preview for quote <strong>{q.quoteNumber}</strong>.</>}
+                        onReprint={() => doPrint(q)}
+                        emailHint={`Quote ${q.quoteNumber} will be emailed as a PDF.`}
+                        onEmail={(email) => sendQuoteEmail(q, email)}
+                      />
                       {q.status !== "converted" && (
                         <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="Edit" onClick={() => openEdit(q)}><Pencil className="w-3.5 h-3.5" /></Button>
                       )}
@@ -535,24 +539,6 @@ export default function POSQuotesPage() {
             <Button onClick={handleSave} disabled={!canSave || saving} className="gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingId ? "Save changes" : "Create quote"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Email dialog ── */}
-      <Dialog open={!!emailFor} onOpenChange={(o) => { if (!o) setEmailFor(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Email quote {emailFor?.quoteNumber}</DialogTitle></DialogHeader>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Recipient email</Label>
-            <Input type="email" value={emailAddr} onChange={(e) => setEmailAddr(e.target.value)} placeholder="customer@example.com"
-              onKeyDown={(e) => { if (e.key === "Enter" && emailAddr.trim() && !sendingEmail) handleSendEmail(); }} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailFor(null)}>Cancel</Button>
-            <Button onClick={handleSendEmail} disabled={!emailAddr.trim() || sendingEmail} className="gap-2">
-              {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send
             </Button>
           </DialogFooter>
         </DialogContent>
