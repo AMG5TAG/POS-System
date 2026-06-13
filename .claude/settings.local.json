@@ -189,7 +189,11 @@
       "Bash(curl -s -b /tmp/claude-1000/techjar http://localhost:3000/api/tech/service-jobs/1)",
       "Bash(xargs basename -a)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(find / -iname \"send.png\")",
+      "Bash(find / -path \"*.private/uploads*\")",
+      "Bash(find / -iname \"send.png\" -path \"*uploads*\")",
+      "Bash(find / -path \"*.private/uploads*\" -type f)"
     ]
   }
 }

@@ -482,6 +482,7 @@ export default function POSPage() {
   const [linkedService, setLinkedService] = useState<ServiceJob | null>(null);
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
@@ -809,6 +810,25 @@ export default function POSPage() {
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
+
+  /* Filter the full service-job / appointment lists by the link-dialog search. */
+  const linkQuery = linkSearch.trim().toLowerCase();
+  const filteredServiceJobs = useMemo(() => {
+    const all = (serviceJobs as ServiceJob[] | undefined) ?? [];
+    if (!linkQuery) return all;
+    return all.filter((sj) =>
+      [sj.jobNumber, sj.deviceType, sj.deviceDescription, sj.status, sj.customerName]
+        .some((f) => f?.toString().toLowerCase().includes(linkQuery))
+    );
+  }, [serviceJobs, linkQuery]);
+  const filteredAppointments = useMemo(() => {
+    const all = (appointments as Appointment[] | undefined) ?? [];
+    if (!linkQuery) return all;
+    return all.filter((apt) =>
+      [apt.id, apt.title, apt.customerName, apt.scheduledAt && new Date(apt.scheduledAt).toLocaleString()]
+        .some((f) => f?.toString().toLowerCase().includes(linkQuery))
+    );
+  }, [appointments, linkQuery]);
   const createTransactionMutation      = useCreateTransaction();
   const validateGiftCardMutation       = useValidateGiftCard();
   const recordInvoicePaymentMutation   = useRecordInvoicePayment();
@@ -4338,16 +4358,26 @@ export default function POSPage() {
       </Dialog>
 
       {/* ─── Service / Appointment link ─── */}
-      <Dialog open={serviceLinkOpen} onOpenChange={setServiceLinkOpen}>
+      <Dialog open={serviceLinkOpen} onOpenChange={(open) => { setServiceLinkOpen(open); if (!open) setLinkSearch(""); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Link to Service or Appointment</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder="Search services and appointments..."
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
               <ScrollArea className="max-h-44 border rounded-lg">
-                {(serviceJobs as ServiceJob[] ?? []).length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
-                  : <div className="divide-y">{(serviceJobs as ServiceJob[] ?? []).slice(0, 15).map(sj => (
+                {filteredServiceJobs.length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
+                  : <div className="divide-y">{filteredServiceJobs.map(sj => (
                       <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
                         <LinkIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -4363,9 +4393,9 @@ export default function POSPage() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
               <ScrollArea className="max-h-44 border rounded-lg">
-                {(appointments as Appointment[] ?? []).length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
-                  : <div className="divide-y">{(appointments as Appointment[] ?? []).slice(0, 15).map(apt => (
+                {filteredAppointments.length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
+                  : <div className="divide-y">{filteredAppointments.map(apt => (
                       <button key={apt.id} onClick={() => { setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false); }}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
                         <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
