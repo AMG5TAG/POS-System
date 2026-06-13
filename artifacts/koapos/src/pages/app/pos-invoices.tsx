@@ -356,7 +356,7 @@ export default function POSInvoicesPage() {
   // downloaded invoice + quote now render through the centralized document
   // template controller (shared buildInvoiceHtml layout + backend PDF).
   const { opts: invoiceOpts } = useSalesTemplate("Invoice");
-  const { printInvoice: printInvoiceTpl, printQuote: printQuoteTpl } = useDocumentTemplate();
+  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
 
   /* ── Sync initial line state when default tax rate loads ── */
   useEffect(() => {
@@ -829,7 +829,6 @@ export default function POSInvoicesPage() {
   } as Transaction);
 
   const printInvoice = (inv: Invoice) => printInvoiceTpl(invoiceToTransaction(inv));
-  const printAsQuote = (inv: Invoice) => printQuoteTpl(invoiceToTransaction(inv));
 
   /* PDF download streams the branded, templated A4 PDF from the server (same
    * buildInvoiceHtml layout used by Print Preview and the emailed PDF). */
@@ -892,7 +891,7 @@ export default function POSInvoicesPage() {
       </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7" title="Send invoice"
         onClick={(e) => { e.stopPropagation(); openSend(inv, "email"); }}>
-        <Mail className="w-3.5 h-3.5" />
+        <Send className="w-3.5 h-3.5" />
       </Button>
       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
         onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(inv.id); }}>
@@ -1574,14 +1573,10 @@ export default function POSInvoicesPage() {
         documentLabel={sendTarget?.invoiceNumber}
         initialMethod={sendInitialMethod}
         reprintLabel="Print"
-        reprintSub="Print or print as quote"
+        reprintSub="Print to printer"
         reprintButtonLabel="Print Invoice"
         reprintHint={sendTarget ? <>This will open a print preview for invoice <strong>{sendTarget.invoiceNumber}</strong>.</> : null}
         onReprint={() => { if (sendTarget) { void printInvoice(sendTarget); void recordEvent(sendTarget.id, "print"); } }}
-        reprintExtraActions={[{
-          label: "Print as Quote",
-          onClick: () => { if (sendTarget) { printAsQuote(sendTarget); void recordEvent(sendTarget.id, "print", "quote"); } },
-        }]}
         defaultEmail={sendTarget?.customerEmail ?? ""}
         emailHint="A PDF copy of the invoice will be attached."
         emailExtra={

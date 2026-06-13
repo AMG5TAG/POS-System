@@ -1575,6 +1575,40 @@ function CustomerDetailInner({
                 )}
               </div>
 
+              {/* Invoices */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" /> Invoices ({history?.invoices?.length ?? 0})
+                </p>
+                {!history?.invoices?.length ? (
+                  <p className="text-sm text-muted-foreground pl-1">No invoices recorded.</p>
+                ) : (
+                  <div className="rounded-xl border divide-y bg-muted/20">
+                    {history.invoices.map((inv) => {
+                      const outstanding = inv.total - (inv.amountPaid ?? 0);
+                      return (
+                        <div key={inv.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                          <div className="min-w-0">
+                            <p className="font-medium">{inv.invoiceNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(inv.createdAt).toLocaleDateString("en-AU")}
+                              {inv.dueDate ? ` · Due ${new Date(inv.dueDate).toLocaleDateString("en-AU")}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right space-y-0.5 ml-2 shrink-0">
+                            <p className="font-bold">{formatCurrency(inv.total)}</p>
+                            <Badge variant="outline" className="text-xs capitalize">{inv.status}</Badge>
+                            {outstanding > 0.005 && inv.status !== "cancelled" && (
+                              <p className="text-[11px] text-amber-600">{formatCurrency(outstanding)} outstanding</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Appointments */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">

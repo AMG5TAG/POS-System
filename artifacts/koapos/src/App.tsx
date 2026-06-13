@@ -121,6 +121,7 @@ const MarketingEmailCampaignsPage = lazy(() => import("@/pages/app/marketing-ema
 const MarketingEmailTemplatesPage = lazy(() => import("@/pages/app/marketing-email-templates"));
 const MarketingSmsCampaignsPage = lazy(() => import("@/pages/app/marketing-sms-campaigns"));
 const MarketingSmsTemplatesPage = lazy(() => import("@/pages/app/marketing-sms-templates"));
+const MarketingSocialMediaPage = lazy(() => import("@/pages/app/marketing-social-media"));
 const MarketingLoyaltyPromotionsPage = lazy(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazy(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazy(() => import("@/pages/app/management-marketing-automation"));
@@ -684,6 +685,9 @@ function Router() {
       </Route>
       <Route path="/marketing/sms/templates">
         <ProtectedRoute component={MarketingSmsTemplatesPage} />
+      </Route>
+      <Route path="/marketing/social">
+        <ProtectedRoute component={MarketingSocialMediaPage} />
       </Route>
       {/* Moved under Management → Marketing & Reports (owner/manager only) */}
       <Route path="/management/marketing/landing-pages">

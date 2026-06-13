@@ -27,7 +27,7 @@ import {
   ChevronsUpDown,
   SlidersHorizontal,
   Printer,
-  Eye,
+  Send,
   Package,
   Wrench,
   History,
@@ -37,6 +37,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
+import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
 
@@ -415,6 +416,35 @@ export default function ServiceJobsPage() {
     );
   };
 
+  /* Send job details to the customer on file. Both endpoints send server-side
+   * to the stored contact; they throw on failure so the Send dialog surfaces
+   * the error instead of falsely reporting success. */
+  const sendJobEmail = async (job: ServiceJob) => {
+    if (!job.customerEmail) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/email`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — email not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send email");
+    toast.success(`Email sent to ${job.customerEmail}`);
+  };
+
+  const sendJobSms = async (job: ServiceJob) => {
+    if (!job.customerPhone) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/sms`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — SMS not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send SMS");
+    toast.success(`SMS sent to ${job.customerPhone}`);
+  };
+
   /* Shared header props shorthand */
   const sh = (label: string, key: SortKey, className?: string) => ({
     label, sortKey: key, activeSortKey, dir: sortDir, onSort: handleSort, className,
@@ -621,13 +651,30 @@ export default function ServiceJobsPage() {
 
                             <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setViewing(job)}
-                                  className="flex items-center gap-1 text-xs text-primary font-medium hover:underline"
+                                <SendButton
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-auto px-0 py-0 gap-1 text-xs text-primary font-medium hover:bg-transparent hover:underline"
+                                  buttonTitle={(job.customerEmail || job.customerPhone) ? "Send to customer" : "No customer contact on file"}
+                                  disabled={!job.customerEmail && !job.customerPhone}
+                                  title="Send Job"
+                                  documentLabel={job.jobNumber}
+                                  {...(job.customerEmail && {
+                                    defaultEmail: job.customerEmail,
+                                    emailReadonly: true,
+                                    emailHint: "Emails the job details to the customer's email on file.",
+                                    onEmail: () => sendJobEmail(job),
+                                  })}
+                                  {...(job.customerPhone && {
+                                    defaultPhone: job.customerPhone,
+                                    smsReadonly: true,
+                                    smsHint: "Texts a status update to the customer's number on file.",
+                                    onSms: () => sendJobSms(job),
+                                  })}
                                 >
-                                  <Eye className="w-3 h-3" />
-                                  View
-                                </button>
+                                  <Send className="w-3 h-3" />
+                                  Send
+                                </SendButton>
                                 <button
                                   onClick={() => setPrintChoiceJob(job)}
                                   className="flex items-center gap-1 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors"

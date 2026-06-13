@@ -97,7 +97,6 @@ export default function SalesSettingsPage() {
 
   const patchSales = (p: Partial<SalesSettings>) => { setSales((s) => (s ? { ...s, ...p } : s)); setDirty(true); };
   const patchLayby = (p: Partial<LaybySettings>) => { setLayby((s) => (s ? { ...s, ...p } : s)); setDirty(true); };
-  const patchPrefixes = (p: Partial<PosCodePrefixes>) => { setPrefixes((s) => (s ? { ...s, ...p } : s)); setDirty(true); };
 
   const ready = sales && layby && prefixes;
 
@@ -183,15 +182,7 @@ export default function SalesSettingsPage() {
             <TabsContent value="invoices">
               <Card><CardContent className="p-4">
                 <NumberRow label="Default due date" hint="Days from issue date." value={sales!.invoiceDueDays} onChange={(v) => patchSales({ invoiceDueDays: v })} suffix="days" />
-                <NumberRow label="Default tax rate" hint="Applied to new invoice line items." value={sales!.invoiceDefaultTaxRate} onChange={(v) => patchSales({ invoiceDefaultTaxRate: v })} suffix="%" step={0.5} />
                 <ToggleRow label="Auto-email on creation" hint="Email the invoice to the customer as soon as it's created." checked={isOn(sales!.invoiceAutoEmail)} onChange={(v) => patchSales({ invoiceAutoEmail: asStr(v) })} />
-                <div className="flex items-center justify-between gap-4 py-2.5 border-b">
-                  <div><div className="text-sm font-medium">Invoice numbering</div><div className="text-xs text-muted-foreground">Prefix and number of digits.</div></div>
-                  <div className="flex items-center gap-1.5">
-                    <Input value={prefixes!.invoicePrefix} onChange={(e) => patchPrefixes({ invoicePrefix: e.target.value })} className="h-8 w-24 text-sm" placeholder="INV" />
-                    <Input type="number" min={1} max={10} value={prefixes!.invoiceDigits} onChange={(e) => patchPrefixes({ invoiceDigits: parseInt(e.target.value) || 1 })} className="h-8 w-16 text-sm text-center" />
-                  </div>
-                </div>
                 <TextAreaRow label="Default terms / notes" hint="Printed on every invoice." value={sales!.invoiceTerms} onChange={(v) => patchSales({ invoiceTerms: v })} placeholder="e.g. Payment due within 14 days…" />
               </CardContent></Card>
             </TabsContent>
@@ -253,7 +244,6 @@ export default function SalesSettingsPage() {
             <TabsContent value="quotes">
               <Card><CardContent className="p-4">
                 <NumberRow label="Default validity" hint="Pre-fills a new quote's expiry date." value={sales!.quoteExpiryDays} onChange={(v) => patchSales({ quoteExpiryDays: v })} suffix="days" />
-                <NumberRow label="Default tax rate" hint="Applied to new quote line items." value={sales!.quoteDefaultTaxRate} onChange={(v) => patchSales({ quoteDefaultTaxRate: v })} suffix="%" step={0.5} />
                 <ToggleRow label="Auto-email on creation" hint="Email the quote to the customer as soon as it's created." checked={isOn(sales!.quoteAutoEmail)} onChange={(v) => patchSales({ quoteAutoEmail: asStr(v) })} />
                 <div className="flex items-center justify-between gap-4 py-2.5 border-b">
                   <div><div className="text-sm font-medium">Quote numbering</div><div className="text-xs text-muted-foreground">Prefix and number of digits.</div></div>

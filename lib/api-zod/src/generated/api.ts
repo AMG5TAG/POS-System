@@ -1196,6 +1196,13 @@ export const GetCustomerHistoryParams = zod.object({
 
 export const getCustomerHistoryResponseTransactionsItemItemsItemUnitPriceMin = 0;
 
+export const getCustomerHistoryResponseInvoicesItemItemsItemQuantityMin = 0.0001;
+
+export const getCustomerHistoryResponseInvoicesItemItemsItemUnitPriceMin = 0;
+
+export const getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMin = 0;
+export const getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax = 100;
+
 
 
 export const GetCustomerHistoryResponse = zod.object({
@@ -1320,6 +1327,49 @@ export const GetCustomerHistoryResponse = zod.object({
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "invoices": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemQuantityMin),
+  "unitPrice": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMin).max(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))

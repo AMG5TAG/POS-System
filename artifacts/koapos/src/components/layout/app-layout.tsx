@@ -115,6 +115,7 @@ const MARKETING_SUBNAV: NavItem[] = [
       { name: "Templates", href: "/marketing/sms/templates",  icon: FileText },
     ],
   },
+  { name: "Social Media",  href: "/marketing/social",               icon: Share2 },
   {
     name: "Loyalty",
     icon: Gift,
@@ -336,6 +337,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
   { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
+  { label: "Marketing · Social Media",         href: "/marketing/social",                   icon: Share2,     group: "Marketing" },
   { label: "Marketing · QR Codes",             href: "/management/marketing/generators/qr-codes",   icon: QrCode,     group: "Management" },
   { label: "Marketing · Shortlinks",           href: "/management/marketing/generators/shortlinks", icon: Link2,      group: "Management" },
   { label: "Marketing · Landing Pages",        href: "/management/marketing/landing-pages",         icon: LayoutTemplate, group: "Management" },

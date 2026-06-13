@@ -1628,10 +1628,77 @@ export interface TopProduct {
   revenue: number;
 }
 
+export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
+
+
+export const InvoiceStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  partial: 'partial',
+  paid: 'paid',
+  overdue: 'overdue',
+  cancelled: 'cancelled',
+} as const;
+
+export interface InvoiceLineItem {
+  description: string;
+  /** @minimum 0.0001 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate: number;
+}
+
+export interface InvoiceEvent {
+  type: string;
+  timestamp: string;
+  detail?: string | null;
+  method?: string | null;
+  idempotencyKey?: string | null;
+}
+
+export interface Invoice {
+  id: number;
+  merchantId: number;
+  customerId?: number | null;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  amountPaid: number;
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountTotal?: number | null;
+  items: InvoiceLineItem[];
+  events: InvoiceEvent[];
+  notes?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  viewedAt?: string | null;
+  isRecurring: boolean;
+  recurringFrequency?: string | null;
+  recurringOccurrences?: number | null;
+  recurringStartDate?: string | null;
+  nextSendDate?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  customerCompany?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CustomerHistory {
   transactions: Transaction[];
   appointments: Appointment[];
   serviceJobs: ServiceJob[];
+  invoices: Invoice[];
 }
 
 export interface CustomerNote {
@@ -4246,19 +4313,6 @@ export interface IntegrationConnectInput {
   credentials?: IntegrationConnectInputCredentials;
 }
 
-export interface InvoiceLineItem {
-  description: string;
-  /** @minimum 0.0001 */
-  quantity: number;
-  /** @minimum 0 */
-  unitPrice: number;
-  /**
-     * @minimum 0
-     * @maximum 100
-     */
-  taxRate: number;
-}
-
 export type InvoiceDiscountInputType = typeof InvoiceDiscountInputType[keyof typeof InvoiceDiscountInputType];
 
 
@@ -4270,59 +4324,6 @@ export const InvoiceDiscountInputType = {
 export interface InvoiceDiscountInput {
   type: InvoiceDiscountInputType;
   value: number;
-}
-
-export interface InvoiceEvent {
-  type: string;
-  timestamp: string;
-  detail?: string | null;
-  method?: string | null;
-  idempotencyKey?: string | null;
-}
-
-export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
-
-
-export const InvoiceStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  partial: 'partial',
-  paid: 'paid',
-  overdue: 'overdue',
-  cancelled: 'cancelled',
-} as const;
-
-export interface Invoice {
-  id: number;
-  merchantId: number;
-  customerId?: number | null;
-  invoiceNumber: string;
-  status: InvoiceStatus;
-  subtotal: number;
-  taxTotal: number;
-  total: number;
-  amountPaid: number;
-  discountType?: string | null;
-  discountValue?: number | null;
-  discountTotal?: number | null;
-  items: InvoiceLineItem[];
-  events: InvoiceEvent[];
-  notes?: string | null;
-  dueDate?: string | null;
-  paidAt?: string | null;
-  viewedAt?: string | null;
-  isRecurring: boolean;
-  recurringFrequency?: string | null;
-  recurringOccurrences?: number | null;
-  recurringStartDate?: string | null;
-  nextSendDate?: string | null;
-  customerName?: string | null;
-  customerEmail?: string | null;
-  customerPhone?: string | null;
-  customerAddress?: string | null;
-  customerCompany?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface InvoiceList {

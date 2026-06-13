@@ -9,6 +9,7 @@ import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
 import { ensureReportViews } from "./services/reportViewsSetup";
 import { schedulePasswordResetTokensCleanup } from "./services/passwordResetTokensCleanupScheduler";
 import { scheduleBackups } from "./services/backupScheduler";
+import { scheduleSocialPosts } from "./services/socialPostScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 
 assertVaultKeyConfigured();
@@ -40,6 +41,7 @@ app.listen(port, (err) => {
   scheduleLowStockAlerts(logger);
   schedulePasswordResetTokensCleanup(logger);
   scheduleBackups(logger);
+  scheduleSocialPosts(logger);
   ensureLoginCleanupFunction(logger).then(() => {
     scheduleLoginAttemptsCleanup(logger);
   }).catch((err) => {

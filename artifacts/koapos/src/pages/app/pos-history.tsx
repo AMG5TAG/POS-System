@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListTransactions, useGetTransaction,
@@ -210,6 +211,7 @@ function SortHeaderButton({
 
 export default function POSHistoryPage() {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
@@ -365,7 +367,21 @@ export default function POSHistoryPage() {
                     <td className="p-3 hidden sm:table-cell text-muted-foreground text-xs">{formatDate(tx.createdAt)}</td>
                     <td className="p-3 hidden lg:table-cell max-w-[160px]">
                       {customerName(tx) ? (
-                        <span className="truncate block">{customerName(tx)}</span>
+                        tx.customerId ? (
+                          <button
+                            type="button"
+                            title="View customer details"
+                            onClick={() => {
+                              sessionStorage.setItem("koapos_open_customer", String(tx.customerId));
+                              navigate("/customers");
+                            }}
+                            className="truncate block max-w-full text-left text-primary font-medium hover:underline"
+                          >
+                            {customerName(tx)}
+                          </button>
+                        ) : (
+                          <span className="truncate block">{customerName(tx)}</span>
+                        )
                       ) : (
                         <span className="text-muted-foreground/50 text-xs italic">Walk-in</span>
                       )}

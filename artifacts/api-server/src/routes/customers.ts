@@ -554,7 +554,7 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
   const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
 
-  const [txRows, apptRows, jobRows] = await Promise.all([
+  const [txRows, apptRows, jobRows, invRows] = await Promise.all([
     db.select().from(transactionsTable)
       .where(and(eq(transactionsTable.merchantId, merchantId), eq(transactionsTable.customerId, customerId)))
       .orderBy(desc(transactionsTable.createdAt))
@@ -566,6 +566,10 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     db.select().from(serviceJobsTable)
       .where(and(eq(serviceJobsTable.merchantId, merchantId), eq(serviceJobsTable.customerId, customerId)))
       .orderBy(desc(serviceJobsTable.createdAt))
+      .limit(50),
+    db.select().from(invoicesTable)
+      .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.customerId, customerId)))
+      .orderBy(desc(invoicesTable.createdAt))
       .limit(50),
   ]);
 
@@ -598,7 +602,17 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     createdAt: j.createdAt.toISOString(),
   }));
 
-  res.json({ transactions, appointments, serviceJobs });
+  const invoices = invRows.map((inv) => ({
+    id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status,
+    subtotal: parseFloat(inv.subtotal),
+    taxTotal: parseFloat(inv.taxTotal),
+    total: parseFloat(inv.total),
+    amountPaid: parseFloat(inv.amountPaid ?? "0"),
+    dueDate: inv.dueDate?.toISOString() ?? null,
+    createdAt: inv.createdAt.toISOString(),
+  }));
+
+  res.json({ transactions, appointments, serviceJobs, invoices });
 });
 
 /* ── Notes ─────────────────────────────────────────────────────────────────── */

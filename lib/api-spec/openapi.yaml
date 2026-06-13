@@ -10223,7 +10223,7 @@ components:
 
     CustomerHistory:
       type: object
-      required: [transactions, appointments, serviceJobs]
+      required: [transactions, appointments, serviceJobs, invoices]
       properties:
         transactions:
           type: array
@@ -10237,6 +10237,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceJob"
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
 
     CustomerNote:
       type: object
