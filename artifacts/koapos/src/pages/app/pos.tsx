@@ -48,6 +48,7 @@ import {
   type RegisterSession,
 } from "@/lib/pos-local-settings";
 import { useStaffSession } from "@/lib/staff-day-session";
+import { loyaltyUnitName, loyaltyProgramName } from "@/lib/loyalty-naming";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1032,9 +1033,10 @@ export default function POSPage() {
       }
       case "points": {
         const pts = Math.floor(eligible * (loyaltySettings.pointsPerDollar ?? 1));
+        const unitName = loyaltyUnitName(loyaltySettings);
         baseAmount = pts;
-        label = `${pts} pts earned`;
-        unit = "pts";
+        label = `${pts} ${unitName} earned`;
+        unit = unitName;
         break;
       }
       case "tiered": {
@@ -1047,7 +1049,11 @@ export default function POSPage() {
         unit = "$";
         break;
       }
-      case "stamp": baseAmount = 1; label = "1 stamp earned"; unit = "stamp"; break;
+      case "stamp": {
+        const unitName = loyaltyUnitName(loyaltySettings);
+        baseAmount = 1; label = `1 ${unitName} earned`; unit = unitName;
+        break;
+      }
       case "custom": {
         const r = loyaltySettings.customValue ?? 0.01;
         baseAmount = eligible * r;
@@ -2142,13 +2148,14 @@ export default function POSPage() {
     const customerForReceipt = completedCustomer;
     const earnedAmt   = completedLoyaltyAmount;
     const earnedUnit  = completedLoyaltyUnit;
+    /* earnedUnit is "$" for dollar-value programs, otherwise the merchant's
+       configured unit name (e.g. "Points", "Stamps"). */
     const earnedDisplay =
-      earnedUnit === "$"     ? `+${formatCurrency(earnedAmt)}` :
-      earnedUnit === "pts"   ? `+${Math.round(earnedAmt)} pts` :
-      earnedUnit === "stamp" ? `+${Math.round(earnedAmt)} stamp${earnedAmt === 1 ? "" : "s"}` :
+      earnedUnit === "$" ? `+${formatCurrency(earnedAmt)}` :
+      earnedUnit        ? `+${Math.round(earnedAmt)} ${earnedUnit}` :
       `+${earnedAmt}`;
     const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt && earnedAmt > 0)
-      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>${earnedDisplay}</span></div>`
+      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ ${esc(loyaltyProgramName(loyaltySettings))} Earned</span><span>${earnedDisplay}</span></div>`
       : "";
 
     /* Generate actual scannable QR code image (same as invoice template) */

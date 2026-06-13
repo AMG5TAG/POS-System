@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetLoyaltyLeaderboard, useGetLoyaltySettings } from "@workspace/api-client-react";
+import { loyaltyUnitName } from "@/lib/loyalty-naming";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ const RANK_ICONS = [
 export default function ManagementLoyaltyLeaderboardPage() {
   const { data: leaderboard, isLoading } = useGetLoyaltyLeaderboard();
   const { data: settings } = useGetLoyaltySettings();
+  const unitName = loyaltyUnitName(settings);
   const items = leaderboard?.items ?? [];
 
   const tiers = settings?.tiers ?? [];
@@ -142,7 +144,7 @@ export default function ManagementLoyaltyLeaderboardPage() {
                           <span className="text-lg font-bold text-emerald-600">
                             {(customer.loyaltyPoints ?? 0).toLocaleString()}
                           </span>
-                          <span className="text-xs text-muted-foreground">pts</span>
+                          <span className="text-xs text-muted-foreground">{unitName}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           ${(customer.totalSpent ?? 0).toFixed(2)} lifetime spend
@@ -158,7 +160,7 @@ export default function ManagementLoyaltyLeaderboardPage() {
                               className="h-1.5"
                             />
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {pointsUntilNextTier.toLocaleString()} pts to next tier
+                              {pointsUntilNextTier.toLocaleString()} {unitName} to next tier
                             </p>
                           </div>
                         )}

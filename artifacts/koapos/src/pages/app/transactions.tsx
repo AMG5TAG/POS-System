@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, useListStaff, Transaction, Staff } from "@workspace/api-client-react";
+import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, useListStaff, Transaction, Staff, LoyaltySettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatLoyaltyAmount } from "@/lib/loyalty-naming";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
   ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle,
@@ -32,18 +33,6 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   cash: <Banknote   className="w-3.5 h-3.5" />,
 };
 
-/** Format a loyalty earned amount with the unit that matches the program type. */
-function formatLoyaltyEarned(amount: number, programType?: string | null): string {
-  switch (programType) {
-    case "points": return `${amount.toLocaleString()} pts`;
-    case "stamp":  return `${amount} ${amount === 1 ? "stamp" : "stamps"}`;
-    case "cashback":
-    case "tiered":
-    case "custom":
-    default:       return formatCurrency(amount);
-  }
-}
-
 /* ─── Sort header ────────────────────────────────────────────────────────── */
 
 function SortTh({ label, sortKey, active, dir, onSort, className, align = "left" }: {
@@ -67,8 +56,8 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 /* ─── Receipt detail dialog ──────────────────────────────────────────────── */
 
 function ReceiptDialog({
-  tx, onClose, onRefund, loyaltyProgramType, staffList,
-}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyaltyProgramType?: string | null; staffList?: Staff[] }) {
+  tx, onClose, onRefund, loyalty, staffList,
+}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyalty?: LoyaltySettings | null; staffList?: Staff[] }) {
   if (!tx) return null;
 
   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
@@ -149,7 +138,7 @@ function ReceiptDialog({
                 <Gift className="w-3.5 h-3.5" /> Loyalty Earned
               </span>
               <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                +{formatLoyaltyEarned(tx.loyaltyEarned, loyaltyProgramType)}
+                +{formatLoyaltyAmount(loyalty, tx.loyaltyEarned)}
               </span>
             </div>
           )}
@@ -334,7 +323,7 @@ export default function TransactionsPage() {
         tx={selectedTx}
         onClose={() => setSelectedTx(null)}
         onRefund={(tx) => { setRefundingTx(tx); setRefundDialogOpen(true); }}
-        loyaltyProgramType={loyaltySettings?.programType}
+        loyalty={loyaltySettings}
         staffList={staffData}
       />
 
