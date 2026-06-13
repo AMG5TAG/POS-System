@@ -1203,6 +1203,8 @@ export const getCustomerHistoryResponseInvoicesItemItemsItemUnitPriceMin = 0;
 export const getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMin = 0;
 export const getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax = 100;
 
+export const getCustomerHistoryResponseInvoicesItemItemsItemCostPriceMin = 0;
+
 
 
 export const GetCustomerHistoryResponse = zod.object({
@@ -1347,13 +1349,16 @@ export const GetCustomerHistoryResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemQuantityMin),
   "unitPrice": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMin).max(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax)
+  "taxRate": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMin).max(getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -4134,6 +4139,7 @@ export const ListLaybysResponse = zod.object({
  */
 export const CreateLaybyBody = zod.object({
   "customerId": zod.number().optional(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4241,9 +4247,17 @@ export const AddLaybyPaymentParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const addLaybyPaymentBodyPaymentsItemAmountMin = 0;
+
+
+
 export const AddLaybyPaymentBody = zod.object({
   "amount": zod.number(),
   "paymentMethod": zod.string().optional(),
+  "payments": zod.array(zod.object({
+  "method": zod.string(),
+  "amount": zod.number().min(addLaybyPaymentBodyPaymentsItemAmountMin)
+})).optional(),
   "note": zod.string().optional()
 })
 
@@ -8651,6 +8665,8 @@ export const listInvoicesResponseItemsItemItemsItemUnitPriceMin = 0;
 export const listInvoicesResponseItemsItemItemsItemTaxRateMin = 0;
 export const listInvoicesResponseItemsItemItemsItemTaxRateMax = 100;
 
+export const listInvoicesResponseItemsItemItemsItemCostPriceMin = 0;
+
 
 
 export const ListInvoicesResponse = zod.object({
@@ -8671,13 +8687,16 @@ export const ListInvoicesResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(listInvoicesResponseItemsItemItemsItemQuantityMin),
   "unitPrice": zod.number().min(listInvoicesResponseItemsItemItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(listInvoicesResponseItemsItemItemsItemTaxRateMin).max(listInvoicesResponseItemsItemItemsItemTaxRateMax)
+  "taxRate": zod.number().min(listInvoicesResponseItemsItemItemsItemTaxRateMin).max(listInvoicesResponseItemsItemItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(listInvoicesResponseItemsItemItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -8711,17 +8730,22 @@ export const createInvoiceBodyItemsItemUnitPriceMin = 0;
 export const createInvoiceBodyItemsItemTaxRateMin = 0;
 export const createInvoiceBodyItemsItemTaxRateMax = 100;
 
+export const createInvoiceBodyItemsItemCostPriceMin = 0;
+
 
 
 export const CreateInvoiceBody = zod.object({
   "customerId": zod.number().optional(),
+  "staffId": zod.number().nullish(),
   "dueDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createInvoiceBodyItemsItemQuantityMin),
   "unitPrice": zod.number().min(createInvoiceBodyItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(createInvoiceBodyItemsItemTaxRateMin).max(createInvoiceBodyItemsItemTaxRateMax)
+  "taxRate": zod.number().min(createInvoiceBodyItemsItemTaxRateMin).max(createInvoiceBodyItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(createInvoiceBodyItemsItemCostPriceMin).nullish()
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -8753,6 +8777,8 @@ export const getInvoiceResponseItemsItemUnitPriceMin = 0;
 export const getInvoiceResponseItemsItemTaxRateMin = 0;
 export const getInvoiceResponseItemsItemTaxRateMax = 100;
 
+export const getInvoiceResponseItemsItemCostPriceMin = 0;
+
 
 
 export const GetInvoiceResponse = zod.object({
@@ -8772,13 +8798,16 @@ export const GetInvoiceResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(getInvoiceResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(getInvoiceResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(getInvoiceResponseItemsItemTaxRateMin).max(getInvoiceResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(getInvoiceResponseItemsItemTaxRateMin).max(getInvoiceResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(getInvoiceResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -8814,6 +8843,8 @@ export const updateInvoiceBodyItemsItemUnitPriceMin = 0;
 export const updateInvoiceBodyItemsItemTaxRateMin = 0;
 export const updateInvoiceBodyItemsItemTaxRateMax = 100;
 
+export const updateInvoiceBodyItemsItemCostPriceMin = 0;
+
 
 
 export const UpdateInvoiceBody = zod.object({
@@ -8825,7 +8856,9 @@ export const UpdateInvoiceBody = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateInvoiceBodyItemsItemQuantityMin),
   "unitPrice": zod.number().min(updateInvoiceBodyItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(updateInvoiceBodyItemsItemTaxRateMin).max(updateInvoiceBodyItemsItemTaxRateMax)
+  "taxRate": zod.number().min(updateInvoiceBodyItemsItemTaxRateMin).max(updateInvoiceBodyItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(updateInvoiceBodyItemsItemCostPriceMin).nullish()
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -8848,6 +8881,8 @@ export const updateInvoiceResponseItemsItemUnitPriceMin = 0;
 export const updateInvoiceResponseItemsItemTaxRateMin = 0;
 export const updateInvoiceResponseItemsItemTaxRateMax = 100;
 
+export const updateInvoiceResponseItemsItemCostPriceMin = 0;
+
 
 
 export const UpdateInvoiceResponse = zod.object({
@@ -8867,13 +8902,16 @@ export const UpdateInvoiceResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateInvoiceResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(updateInvoiceResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(updateInvoiceResponseItemsItemTaxRateMin).max(updateInvoiceResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(updateInvoiceResponseItemsItemTaxRateMin).max(updateInvoiceResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(updateInvoiceResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -8917,6 +8955,8 @@ export const markInvoiceViewedResponseItemsItemUnitPriceMin = 0;
 export const markInvoiceViewedResponseItemsItemTaxRateMin = 0;
 export const markInvoiceViewedResponseItemsItemTaxRateMax = 100;
 
+export const markInvoiceViewedResponseItemsItemCostPriceMin = 0;
+
 
 
 export const MarkInvoiceViewedResponse = zod.object({
@@ -8936,13 +8976,16 @@ export const MarkInvoiceViewedResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(markInvoiceViewedResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(markInvoiceViewedResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(markInvoiceViewedResponseItemsItemTaxRateMin).max(markInvoiceViewedResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(markInvoiceViewedResponseItemsItemTaxRateMin).max(markInvoiceViewedResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(markInvoiceViewedResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -8971,9 +9014,17 @@ export const RecordInvoicePaymentParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const recordInvoicePaymentBodyPaymentsItemAmountMin = 0;
+
+
+
 export const RecordInvoicePaymentBody = zod.object({
   "amount": zod.number(),
   "method": zod.string().optional(),
+  "payments": zod.array(zod.object({
+  "method": zod.string(),
+  "amount": zod.number().min(recordInvoicePaymentBodyPaymentsItemAmountMin)
+})).optional(),
   "giftCardPayment": zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
@@ -8987,6 +9038,8 @@ export const recordInvoicePaymentResponseItemsItemUnitPriceMin = 0;
 
 export const recordInvoicePaymentResponseItemsItemTaxRateMin = 0;
 export const recordInvoicePaymentResponseItemsItemTaxRateMax = 100;
+
+export const recordInvoicePaymentResponseItemsItemCostPriceMin = 0;
 
 
 
@@ -9007,13 +9060,16 @@ export const RecordInvoicePaymentResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(recordInvoicePaymentResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(recordInvoicePaymentResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(recordInvoicePaymentResponseItemsItemTaxRateMin).max(recordInvoicePaymentResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(recordInvoicePaymentResponseItemsItemTaxRateMin).max(recordInvoicePaymentResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(recordInvoicePaymentResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),
@@ -9091,6 +9147,8 @@ export const addInvoiceEventResponseItemsItemUnitPriceMin = 0;
 export const addInvoiceEventResponseItemsItemTaxRateMin = 0;
 export const addInvoiceEventResponseItemsItemTaxRateMax = 100;
 
+export const addInvoiceEventResponseItemsItemCostPriceMin = 0;
+
 
 
 export const AddInvoiceEventResponse = zod.object({
@@ -9110,13 +9168,16 @@ export const AddInvoiceEventResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(addInvoiceEventResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(addInvoiceEventResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(addInvoiceEventResponseItemsItemTaxRateMin).max(addInvoiceEventResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(addInvoiceEventResponseItemsItemTaxRateMin).max(addInvoiceEventResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(addInvoiceEventResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
   "notes": zod.string().nullish(),

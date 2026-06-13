@@ -2363,12 +2363,21 @@ export default function POSPage() {
       if (invoicePayPending) return;
       const inv = invoicePay;
       const amount = inv.balance;
+      // When settling via split, send structured legs so each method is recorded
+      // and reported separately (gift cards use the single-payment path).
+      const invoiceSplitLegs = paymentMethod === "split"
+        ? splitLegs
+            .map(l => ({ method: l.method as string, amount: parseFloat(l.amount) || 0 }))
+            .filter(l => l.amount > 0)
+        : [];
       setInvoicePayPending(true);
       void (async () => {
         try {
           await recordInvoicePaymentMutation.mutateAsync({
             id: inv.invoiceId,
-            data: { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
+            data: invoiceSplitLegs.length > 0 && !giftCardPayment
+              ? { amount, payments: invoiceSplitLegs, idempotencyKey }
+              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
           });
           idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;

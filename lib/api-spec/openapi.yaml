@@ -10980,6 +10980,9 @@ components:
       required: [items, totalAmount, depositAmount]
       properties:
         customerId:    { type: integer }
+        # Staff member credited with the layby (the POS day-staff), so a
+        # completed layby attributes revenue in staff leaderboards + KPIs.
+        staffId:       { type: integer, nullable: true }
         items:
           type: array
           items:
@@ -11008,6 +11011,11 @@ components:
       properties:
         amount:        { type: number }
         paymentMethod: { type: string }
+        # Optional split payment: each leg carries its own method + amount and the
+        # legs sum to `amount`. When omitted the payment uses a single `paymentMethod`.
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentLeg" }
         note:          { type: string }
 
     Camera:
@@ -13423,6 +13431,10 @@ components:
         quantity:    { type: number, minimum: 0.0001 }
         unitPrice:   { type: number, minimum: 0 }
         taxRate:     { type: number, minimum: 0, maximum: 100 }
+        # Optional product linkage + cost snapshot so invoice profit (COGS) can
+        # be derived the same way POS line items are.
+        productId:   { type: integer, nullable: true }
+        costPrice:   { type: number, minimum: 0, nullable: true }
 
     InvoiceDiscountInput:
       type: object
@@ -13439,7 +13451,20 @@ components:
         timestamp:      { type: string, format: date-time }
         detail:         { type: string, nullable: true }
         method:         { type: string, nullable: true }
+        # Per-leg payment amount. One payment event is recorded per method, so a
+        # split payment produces several events whose amounts sum to the payment.
+        amount:         { type: number, nullable: true }
         idempotencyKey: { type: string, nullable: true }
+
+    # A single payment leg — one method and the amount tendered on it. Used to
+    # express split payments (multiple methods settling one payment) on both
+    # invoices and laybys.
+    PaymentLeg:
+      type: object
+      required: [method, amount]
+      properties:
+        method: { type: string }
+        amount: { type: number, minimum: 0 }
 
     Invoice:
       type: object
@@ -13501,6 +13526,9 @@ components:
       type: object
       properties:
         customerId:    { type: integer }
+        # Staff member credited with the sale (the POS day-staff), so invoice
+        # revenue/profit attributes in staff leaderboards + KPIs like POS sales.
+        staffId:       { type: integer, nullable: true }
         dueDate:       { type: string, format: date-time }
         notes:         { type: string }
         items:
@@ -13558,6 +13586,11 @@ components:
       properties:
         amount:          { type: number }
         method:          { type: string }
+        # Optional split payment: each leg carries its own method + amount and the
+        # legs sum to `amount`. When omitted the payment is a single `method`.
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentLeg" }
         giftCardPayment: { $ref: "#/components/schemas/GiftCardPaymentRef" }
         idempotencyKey:  { type: string }
 

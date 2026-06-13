@@ -1651,6 +1651,9 @@ export interface InvoiceLineItem {
      * @maximum 100
      */
   taxRate: number;
+  productId?: number | null;
+  /** @minimum 0 */
+  costPrice?: number | null;
 }
 
 export interface InvoiceEvent {
@@ -1658,6 +1661,7 @@ export interface InvoiceEvent {
   timestamp: string;
   detail?: string | null;
   method?: string | null;
+  amount?: number | null;
   idempotencyKey?: string | null;
 }
 
@@ -2291,6 +2295,7 @@ export type CreateLaybyBodyItemsItem = {
 
 export interface CreateLaybyBody {
   customerId?: number;
+  staffId?: number | null;
   items: CreateLaybyBodyItemsItem[];
   totalAmount: number;
   depositAmount: number;
@@ -2305,9 +2310,16 @@ export interface UpdateLaybyBody {
   status?: string;
 }
 
+export interface PaymentLeg {
+  method: string;
+  /** @minimum 0 */
+  amount: number;
+}
+
 export interface AddLaybyPaymentBody {
   amount: number;
   paymentMethod?: string;
+  payments?: PaymentLeg[];
   note?: string;
 }
 
@@ -4350,6 +4362,7 @@ export interface InvoiceRecurringInput {
 
 export interface InvoiceInput {
   customerId?: number;
+  staffId?: number | null;
   dueDate?: string;
   notes?: string;
   items?: InvoiceLineItem[];
@@ -4400,6 +4413,7 @@ export interface GiftCardPaymentRef {
 export interface InvoicePaymentInput {
   amount: number;
   method?: string;
+  payments?: PaymentLeg[];
   giftCardPayment?: GiftCardPaymentRef;
   idempotencyKey?: string;
 }

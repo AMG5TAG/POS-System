@@ -1,8 +1,9 @@
 import {
   db, transactionsTable, invoicesTable, customersTable,
-  appointmentsTable, serviceJobsTable,
+  appointmentsTable, serviceJobsTable, laybysTable,
 } from "@workspace/db";
 import { and, eq, gte, lte, ne, inArray, sql, type SQL } from "drizzle-orm";
+import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Shared KPI actual-value calculation.
@@ -152,6 +153,16 @@ export async function computeActual(
   // metrics below). staffIds are parsed integers, so interpolating them is safe.
   const endFragT = periodEnd ? sql`AND t.created_at <= ${periodEnd}` : sql``;
   const staffFragT = isStaff ? sql`AND t.staff_id IN (${sql.raw(staffIds.join(","))})` : sql``;
+  // Invoice-side fragments. Invoices now carry staff attribution, so a
+  // staff-scoped target counts that staff's paid invoices too (parity with POS).
+  const invEndFrag = periodEnd ? sql`AND inv.paid_at <= ${periodEnd}` : sql``;
+  const staffFragInv = isStaff ? sql`AND inv.staff_id IN (${sql.raw(staffIds.join(","))})` : sql``;
+  // Layby-side fragments. A completed layby is a sale on its completion date
+  // (COALESCE'd to updated_at for laybys completed before completed_at existed),
+  // attributed to its staff member — full parity with POS + paid invoices.
+  const laybyDate = sql`COALESCE(l.completed_at, l.updated_at)`;
+  const laybyEndFrag = periodEnd ? sql`AND COALESCE(l.completed_at, l.updated_at) <= ${periodEnd}` : sql``;
+  const staffFragLayby = isStaff ? sql`AND l.staff_id IN (${sql.raw(staffIds.join(","))})` : sql``;
 
   // Builder conditions for a sales-transaction query (optionally a status).
   const txnWhere = (status?: string): SQL | undefined => {
@@ -164,9 +175,9 @@ export async function computeActual(
 
   try {
     switch (metric) {
-      /* ── Revenue family (POS + paid invoices) ────────────────────────────
-         Invoices have no staff attribution, so a staff-scoped target counts
-         POS transactions only. */
+      /* ── Revenue family (POS + paid invoices + completed laybys) ──────────
+         All three sale types count equally; staff-scoped targets use each
+         sale's staff attribution. */
       case "revenue":
       case "transactions":
       case "avg_transaction": {
@@ -178,29 +189,36 @@ export async function computeActual(
         let totalSales = parseFloat(txnAgg?.totalSales ?? "0");
         let txnCount   = Number(txnAgg?.txnCount ?? 0);
 
-        if (!isStaff) {
-          const invC: SQL[] = [eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)];
-          if (periodEnd) invC.push(lte(invoicesTable.paidAt, periodEnd));
-          const [invAgg] = await db.select({
-            invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
-            invCount:     sql<string>`COUNT(*)`,
-          }).from(invoicesTable).where(and(...invC));
-          totalSales += parseFloat(invAgg?.invoiceSales ?? "0");
-          txnCount   += Number(invAgg?.invCount ?? 0);
-        }
+        const invC: SQL[] = [eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)];
+        if (periodEnd) invC.push(lte(invoicesTable.paidAt, periodEnd));
+        if (isStaff)   invC.push(inArray(invoicesTable.staffId, staffIds));
+        const [invAgg] = await db.select({
+          invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+          invCount:     sql<string>`COUNT(*)`,
+        }).from(invoicesTable).where(and(...invC));
+        totalSales += parseFloat(invAgg?.invoiceSales ?? "0");
+        txnCount   += Number(invAgg?.invCount ?? 0);
+
+        const laybyAgg = await db.execute<{ sales: number; cnt: number }>(sql`
+          SELECT COALESCE(SUM(l.total_amount::numeric), 0)::float AS sales, COUNT(*)::int AS cnt
+          FROM laybys l
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+        `);
+        totalSales += Number(laybyAgg.rows[0]?.sales ?? 0);
+        txnCount   += Number(laybyAgg.rows[0]?.cnt ?? 0);
 
         if (metric === "revenue")      return round2(totalSales);
         if (metric === "transactions") return txnCount;
         return txnCount > 0 ? round2(totalSales / txnCount) : 0;
       }
 
-      /* ── Items per transaction (total units ÷ transactions) ────────────── */
+      /* ── Items per transaction (total units ÷ sales) — POS + invoices + laybys ── */
       case "items_per_transaction": {
         const [txnAgg] = await db.select({ txnCount: sql<string>`COUNT(*)` })
           .from(transactionsTable).where(txnWhere("completed"));
-        const txnCount = Number(txnAgg?.txnCount ?? 0);
-        if (txnCount === 0) return 0;
-        const rows = await db.execute(sql`
+        let saleCount = Number(txnAgg?.txnCount ?? 0);
+        const posRows = await db.execute(sql`
           SELECT COALESCE(SUM((item->>'quantity')::numeric), 0)::float AS units
           FROM transactions t
           CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
@@ -208,8 +226,42 @@ export async function computeActual(
             AND t.created_at >= ${periodStart} ${endFragT} ${staffFragT}
             AND jsonb_typeof(t.items) = 'array'
         `);
-        const units = Number((rows.rows[0] as { units: number })?.units ?? 0);
-        return round2(units / txnCount);
+        let units = Number((posRows.rows[0] as { units: number })?.units ?? 0);
+
+        const invC: SQL[] = [eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, periodStart)];
+        if (periodEnd) invC.push(lte(invoicesTable.paidAt, periodEnd));
+        if (isStaff)   invC.push(inArray(invoicesTable.staffId, staffIds));
+        const [invCntRow] = await db.select({ c: sql<string>`COUNT(*)` }).from(invoicesTable).where(and(...invC));
+        saleCount += Number(invCntRow?.c ?? 0);
+        const invUnits = await db.execute(sql`
+          SELECT COALESCE(SUM((item->>'quantity')::numeric), 0)::float AS units
+          FROM invoices inv
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(inv.items::jsonb) = 'array' THEN inv.items::jsonb ELSE '[]'::jsonb END
+          ) AS item
+          WHERE inv.merchant_id = ${merchantId} AND inv.status = 'paid'
+            AND inv.paid_at >= ${periodStart} ${invEndFrag} ${staffFragInv}
+        `);
+        units += Number((invUnits.rows[0] as { units: number })?.units ?? 0);
+
+        const laybyCnt = await db.execute<{ c: number }>(sql`
+          SELECT COUNT(*)::int AS c FROM laybys l
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+        `);
+        saleCount += Number(laybyCnt.rows[0]?.c ?? 0);
+        const laybyUnits = await db.execute<{ units: number }>(sql`
+          SELECT COALESCE(SUM((item->>'quantity')::numeric), 0)::float AS units
+          FROM laybys l
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END
+          ) AS item
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+        `);
+        units += Number(laybyUnits.rows[0]?.units ?? 0);
+
+        return saleCount > 0 ? round2(units / saleCount) : 0;
       }
 
       /* ── New customers (no staff attribution) ──────────────────────────── */
@@ -283,26 +335,62 @@ export async function computeActual(
           SELECT COALESCE(SUM((item->>'totalPrice')::numeric), 0)::float AS revenue
           FROM transactions t
           CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
-          JOIN products p ON p.id = (item->>'productId')::int AND p.merchant_id = t.merchant_id
+          JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
           JOIN categories c ON c.id = p.category_id AND c.merchant_id = t.merchant_id
           WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
             AND t.created_at >= ${periodStart} ${endFragT} ${staffFragT}
             AND jsonb_typeof(t.items) = 'array'
             AND lower(c.name) = lower(${name})
         `);
-        return round2(Number((rows.rows[0] as { revenue: number })?.revenue ?? 0));
+        let revenue = Number((rows.rows[0] as { revenue: number })?.revenue ?? 0);
+
+        // Paid invoices with product-linked lines in this category (invoice
+        // lines store quantity × unitPrice rather than a totalPrice).
+        const invRows = await db.execute(sql`
+          SELECT COALESCE(SUM((item->>'quantity')::numeric * (item->>'unitPrice')::numeric), 0)::float AS revenue
+          FROM invoices inv
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(inv.items::jsonb) = 'array' THEN inv.items::jsonb ELSE '[]'::jsonb END
+          ) AS item
+          JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = inv.merchant_id
+          JOIN categories c ON c.id = p.category_id AND c.merchant_id = inv.merchant_id
+          WHERE inv.merchant_id = ${merchantId} AND inv.status = 'paid'
+            AND inv.paid_at >= ${periodStart} ${invEndFrag} ${staffFragInv}
+            AND lower(c.name) = lower(${name})
+        `);
+        revenue += Number((invRows.rows[0] as { revenue: number })?.revenue ?? 0);
+
+        // Completed laybys with product-linked lines in this category (layby
+        // lines store quantity × price).
+        const laybyRows = await db.execute(sql`
+          SELECT COALESCE(SUM((item->>'quantity')::numeric * (item->>'price')::numeric), 0)::float AS revenue
+          FROM laybys l
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END
+          ) AS item
+          JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
+          JOIN categories c ON c.id = p.category_id AND c.merchant_id = l.merchant_id
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+            AND lower(c.name) = lower(${name})
+        `);
+        revenue += Number((laybyRows.rows[0] as { revenue: number })?.revenue ?? 0);
+        return round2(revenue);
       }
 
-      /* ── Net profit / gross margin (POS only; COGS-derived) ──────────────
-         Revenue is ex-GST to match the Profit & Loss / Margin reports. COGS
-         prefers the line-item cost snapshot, falling back to the product's
-         current cost price. */
+      /* ── Net profit / gross margin (POS + paid invoices + completed laybys) ─
+         Revenue is ex-GST. COGS prefers the line-item cost snapshot, falling
+         back to the product's current cost price. All three sale types are
+         included and staff-scoped via their staff_id. Laybys carry no GST
+         split, so their ex-GST revenue is derived from the merchant's default
+         tax rate; layby lines carry no cost snapshot, so COGS uses the
+         product's current cost price. */
       case "net_profit":
       case "gross_margin": {
         const [revAgg] = await db.select({
           exGst: sql<string>`COALESCE(SUM((${transactionsTable.total} - ${transactionsTable.taxTotal})::numeric), 0)`,
         }).from(transactionsTable).where(txnWhere("completed"));
-        const totalRevenue = parseFloat(revAgg?.exGst ?? "0");
+        let totalRevenue = parseFloat(revAgg?.exGst ?? "0");
 
         const cogsRows = await db.execute(sql`
           SELECT COALESCE(SUM(
@@ -311,12 +399,65 @@ export async function computeActual(
           ), 0)::float AS total_cogs
           FROM transactions t
           CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
-          LEFT JOIN products p ON p.id = (item->>'productId')::int AND p.merchant_id = t.merchant_id
+          LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
           WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
             AND t.created_at >= ${periodStart} ${endFragT} ${staffFragT}
             AND jsonb_typeof(t.items) = 'array'
         `);
-        const totalCogs = Number((cogsRows.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
+        let totalCogs = Number((cogsRows.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
+
+        // Paid invoices contribute revenue and (now that lines carry a cost
+        // snapshot) COGS, scoped to staff via the invoice's staff_id.
+        const invRev = await db.execute(sql`
+          SELECT COALESCE(SUM((inv.total - inv.tax_total)::numeric), 0)::float AS ex_gst
+          FROM invoices inv
+          WHERE inv.merchant_id = ${merchantId} AND inv.status = 'paid'
+            AND inv.paid_at >= ${periodStart} ${invEndFrag} ${staffFragInv}
+        `);
+        totalRevenue += Number((invRev.rows[0] as { ex_gst: number })?.ex_gst ?? 0);
+
+        const invCogs = await db.execute(sql`
+          SELECT COALESCE(SUM(
+            (item->>'quantity')::numeric
+            * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
+          ), 0)::float AS total_cogs
+          FROM invoices inv
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(inv.items::jsonb) = 'array' THEN inv.items::jsonb ELSE '[]'::jsonb END
+          ) AS item
+          LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = inv.merchant_id
+          WHERE inv.merchant_id = ${merchantId} AND inv.status = 'paid'
+            AND inv.paid_at >= ${periodStart} ${invEndFrag} ${staffFragInv}
+        `);
+        totalCogs += Number((invCogs.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
+
+        // Completed laybys: ex-GST revenue derived from the merchant default
+        // tax rate (layby totals are GST-inclusive), COGS from product cost.
+        const laybyGross = await db.execute<{ gross: number }>(sql`
+          SELECT COALESCE(SUM(l.total_amount::numeric), 0)::float AS gross
+          FROM laybys l
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+        `);
+        const laybyGrossTotal = Number(laybyGross.rows[0]?.gross ?? 0);
+        if (laybyGrossTotal > 0) {
+          const rate = await getDefaultTaxRate(merchantId);
+          totalRevenue += splitGstInclusive(laybyGrossTotal, rate).exGst;
+        }
+
+        const laybyCogs = await db.execute<{ total_cogs: number }>(sql`
+          SELECT COALESCE(SUM(
+            (item->>'quantity')::numeric * COALESCE(p.cost_price::numeric, 0)
+          ), 0)::float AS total_cogs
+          FROM laybys l
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END
+          ) AS item
+          LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
+          WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+            AND ${laybyDate} >= ${periodStart} ${laybyEndFrag} ${staffFragLayby}
+        `);
+        totalCogs += Number(laybyCogs.rows[0]?.total_cogs ?? 0);
 
         if (metric === "net_profit") return round2(totalRevenue - totalCogs);
         return totalRevenue > 0 ? round2(((totalRevenue - totalCogs) / totalRevenue) * 100) : 0;

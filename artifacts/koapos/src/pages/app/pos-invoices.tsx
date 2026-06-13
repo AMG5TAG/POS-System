@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { useStaffSession } from "@/lib/staff-day-session";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { setPendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
@@ -80,7 +81,7 @@ async function compressForPdf(
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
 type InvStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
-type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
+type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number; productId?: number | null; costPrice?: number | null };
 type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
 type DiscountType = "fixed" | "percent";
 type Invoice = {
@@ -317,6 +318,10 @@ export default function POSInvoicesPage() {
       (inv.customerName ?? "").toLowerCase().includes(search.toLowerCase()))
   ), [historyInvoices, statusFilter, search]);
 
+  /* Staff member signed in for the day — credited with invoices they create so
+     invoice revenue attributes in staff leaderboards + KPIs (mirrors the POS). */
+  const { dayStaff } = useStaffSession();
+
   /* ── Invoice mutation hooks ── */
   const createInvoiceMutation = useCreateInvoice();
   const updateInvoiceMutation = useUpdateInvoice();
@@ -413,8 +418,8 @@ export default function POSInvoicesPage() {
     setLineSearch((p) => { const n = [...p]; n.splice(i + 1, 0, ""); return n; });
     setLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
   };
-  const selectProduct = (i: number, product: { name: string; price?: number | null }) => {
-    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate } : l));
+  const selectProduct = (i: number, product: { id?: number; name: string; price?: number | null; costPrice?: number | null }) => {
+    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
@@ -482,8 +487,8 @@ export default function POSInvoicesPage() {
     setEditLineSearch((p) => { const n = [...p]; n.splice(i + 1, 0, ""); return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n.splice(i + 1, 0, false); return n; });
   };
-  const selectEditProduct = (i: number, product: { name: string; price?: number | null }) => {
-    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate } : l));
+  const selectEditProduct = (i: number, product: { id?: number; name: string; price?: number | null; costPrice?: number | null }) => {
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
   };
@@ -631,6 +636,7 @@ export default function POSInvoicesPage() {
       const prefixSettings = getInvoicePrefix();
       const body = {
         customerId: form.customerId ? parseInt(form.customerId) : undefined,
+        staffId: dayStaff?.staffId ?? null,
         dueDate: form.dueDate || undefined,
         notes: form.notes || undefined,
         items: validLines,

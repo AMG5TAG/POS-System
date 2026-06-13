@@ -3,6 +3,7 @@ import { db, productsTable } from "@workspace/db";
 import { sql, eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -298,7 +299,7 @@ router.get("/reports/z-report", requireAuth, requireManagerOrOwner, async (req, 
   const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
   const merchantId = req.session.merchantId!;
 
-  const [summary, byMethod] = await Promise.all([
+  const [summary, byMethod, invSummary, invByMethod, laySummary, layByMethod, taxRate] = await Promise.all([
     db.execute<{
       completed_count: string; gross_sales: string; discount_total: string;
       tax_collected: string; refund_count: string; refund_amount: string; refund_tax: string;
@@ -325,15 +326,60 @@ router.get("/reports/z-report", requireAuth, requireManagerOrOwner, async (req, 
       GROUP BY payment_method
       ORDER BY total DESC
     `),
+    // Paid invoices count as takings on their settlement date (parity with POS).
+    db.execute<{ cnt: string; gross: string; tax: string; disc: string }>(sql`
+      SELECT COUNT(*)::int AS cnt, COALESCE(SUM(total),0) AS gross,
+             COALESCE(SUM(tax_total),0) AS tax, COALESCE(SUM(discount_total),0) AS disc
+      FROM invoices
+      WHERE merchant_id = ${merchantId} AND status = 'paid' AND paid_at::date = ${date}::date
+    `),
+    // Invoice payment legs settled on this date, summed per method (split-aware).
+    db.execute<{ payment_method: string; count: string; total: string }>(sql`
+      SELECT method AS payment_method, COUNT(*)::int AS count, COALESCE(SUM(amount),0) AS total
+      FROM view_invoice_payment_legs
+      WHERE merchant_id = ${merchantId} AND paid_at::date = ${date}::date
+      GROUP BY method
+    `),
+    // Completed laybys count as takings on their completion date (parity with
+    // POS + invoices). Laybys carry no GST split, so tax is derived below.
+    db.execute<{ cnt: string; gross: string }>(sql`
+      SELECT COUNT(*)::int AS cnt, COALESCE(SUM(total_amount),0) AS gross
+      FROM laybys l
+      WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+        AND COALESCE(l.completed_at, l.updated_at)::date = ${date}::date
+    `),
+    // Layby payment legs completed on this date, summed per method (split-aware).
+    db.execute<{ payment_method: string; count: string; total: string }>(sql`
+      SELECT method AS payment_method, COUNT(*)::int AS count, COALESCE(SUM(amount),0) AS total
+      FROM view_layby_payment_legs
+      WHERE merchant_id = ${merchantId} AND completed_at::date = ${date}::date
+      GROUP BY method
+    `),
+    getDefaultTaxRate(merchantId),
   ]);
 
   const s = summary.rows[0] ?? { completed_count: "0", gross_sales: "0", discount_total: "0", tax_collected: "0", refund_count: "0", refund_amount: "0", refund_tax: "0" };
-  const grossSales    = r2(s.gross_sales);
-  const discountTotal = r2(s.discount_total);
+  const inv = invSummary.rows[0] ?? { cnt: "0", gross: "0", tax: "0", disc: "0" };
+  const lay = laySummary.rows[0] ?? { cnt: "0", gross: "0" };
+  // Layby totals are GST-inclusive with no stored split — derive the GST.
+  const layGross = Number(lay.gross);
+  const layTax   = splitGstInclusive(layGross, taxRate).gst;
+  const grossSales    = r2(Number(s.gross_sales) + Number(inv.gross) + layGross);
+  const discountTotal = r2(Number(s.discount_total) + Number(inv.disc));
   const refundAmount  = r2(s.refund_amount);
-  const taxCollected  = r2(s.tax_collected); // already net of refund GST from the query
+  const taxCollected  = r2(Number(s.tax_collected) + Number(inv.tax) + layTax); // refund GST + invoice GST + layby GST
   // Net Sales = gross less discounts, less refunds, less GST (ex-GST net sales)
   const netSalesExGst = r2(grossSales - discountTotal - refundAmount - taxCollected);
+
+  // Merge invoice + layby payments into the by-method breakdown.
+  const methodMap = new Map<string, { method: string; count: number; total: number }>();
+  for (const r of byMethod.rows) methodMap.set(r.payment_method, { method: r.payment_method, count: Number(r.count), total: r2(r.total) });
+  for (const r of [...invByMethod.rows, ...layByMethod.rows]) {
+    const k = r.payment_method;
+    const prev = methodMap.get(k) ?? { method: k, count: 0, total: 0 };
+    methodMap.set(k, { method: k, count: prev.count + Number(r.count), total: r2(prev.total + Number(r.total)) });
+  }
+  const mergedByMethod = [...methodMap.values()].sort((a, b) => b.total - a.total);
   res.json({
     date,
     grossSales,
@@ -341,11 +387,11 @@ router.get("/reports/z-report", requireAuth, requireManagerOrOwner, async (req, 
     taxCollected,
     netSales:         r2(grossSales - discountTotal - refundAmount),
     netSalesExGst,
-    transactionCount: Number(s.completed_count),
+    transactionCount: Number(s.completed_count) + Number(inv.cnt) + Number(lay.cnt),
     refundCount:      Number(s.refund_count),
     refundAmount,
     refundTax:        r2(s.refund_tax),
-    byPaymentMethod:  byMethod.rows.map(r => ({ method: r.payment_method, count: Number(r.count), total: r2(r.total) })),
+    byPaymentMethod:  mergedByMethod,
   });
 });
 
@@ -356,25 +402,41 @@ router.get("/reports/staff-leaderboard", requireAuth, requireManagerOrOwner, asy
   const { startDate, endDate } = parsed.data;
   const merchantId = req.session.merchantId!;
 
+  // POS sales, paid invoices and completed laybys all credit the attributed staff member.
   const rows = await db.execute<{
     staff_id: string; staff_name: string; staff_role: string;
     transaction_count: string; total_revenue: string; avg_basket: string; total_discounts: string;
   }>(sql`
+    WITH sales AS (
+      SELECT t.staff_id, t.total::numeric AS total, COALESCE(t.discount_total, 0)::numeric AS discount_total
+      FROM transactions t
+      WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
+        AND t.created_at::date BETWEEN ${startDate}::date AND ${endDate}::date
+        AND t.staff_id IS NOT NULL
+      UNION ALL
+      SELECT i.staff_id, i.total::numeric AS total, COALESCE(i.discount_total, 0)::numeric AS discount_total
+      FROM invoices i
+      WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
+        AND i.paid_at::date BETWEEN ${startDate}::date AND ${endDate}::date
+        AND i.staff_id IS NOT NULL
+      UNION ALL
+      SELECT l.staff_id, l.total_amount::numeric AS total, 0::numeric AS discount_total
+      FROM laybys l
+      WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+        AND COALESCE(l.completed_at, l.updated_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
+        AND l.staff_id IS NOT NULL
+    )
     SELECT
-      t.staff_id::text,
+      sales.staff_id::text,
       COALESCE(s.name, 'Unknown') AS staff_name,
       COALESCE(s.role, 'cashier') AS staff_role,
-      COUNT(t.id)::int            AS transaction_count,
-      COALESCE(SUM(t.total),0)    AS total_revenue,
-      COALESCE(AVG(t.total),0)    AS avg_basket,
-      COALESCE(SUM(t.discount_total),0) AS total_discounts
-    FROM transactions t
-    LEFT JOIN staff s ON s.id = t.staff_id AND s.merchant_id = ${merchantId}
-    WHERE t.merchant_id = ${merchantId}
-      AND t.status = 'completed'
-      AND t.created_at::date BETWEEN ${startDate}::date AND ${endDate}::date
-      AND t.staff_id IS NOT NULL
-    GROUP BY t.staff_id, s.name, s.role
+      COUNT(*)::int               AS transaction_count,
+      COALESCE(SUM(sales.total),0)    AS total_revenue,
+      COALESCE(AVG(sales.total),0)    AS avg_basket,
+      COALESCE(SUM(sales.discount_total),0) AS total_discounts
+    FROM sales
+    LEFT JOIN staff s ON s.id = sales.staff_id AND s.merchant_id = ${merchantId}
+    GROUP BY sales.staff_id, s.name, s.role
     ORDER BY total_revenue DESC
   `);
 
