@@ -1137,6 +1137,8 @@ export interface VerifyStaffPinBody {
   pin: string;
   /** When true, only manager/owner staff PINs are accepted (e.g. discount approvals). */
   requireManager?: boolean;
+  /** When true, a successful verification records the matched staff as the day-staff on the server session (req.session.staffId), so server-side attribution (daily closes, stock takes, customer merges) credits the verified staff member. Only the day-login PIN flow sets this; per-sale switches and approval prompts leave it unset. */
+  establishDaySession?: boolean;
 }
 
 /**
@@ -2264,6 +2266,7 @@ export interface Layby {
   reference: string;
   customerId?: number | null;
   customerName?: string | null;
+  staffId?: number | null;
   items: LaybyItemsItem[];
   totalAmount: number;
   depositAmount: number;
@@ -2273,6 +2276,7 @@ export interface Layby {
   dueDate?: string | null;
   notes?: string | null;
   cancelReason?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

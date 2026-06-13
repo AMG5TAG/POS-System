@@ -1415,7 +1415,9 @@ function StaffLoginButton({ location }: { location: string }) {
 
   const handleSubmit = () => {
     if (!pin || verifyPin.isPending) return;
-    verifyPin.mutate({ data: { pin } }, {
+    // establishDaySession: record this staff as the server session's day-staff so
+    // server-side attribution (daily closes, stock takes, customer merges) credits them.
+    verifyPin.mutate({ data: { pin, establishDaySession: true } }, {
       onSuccess: (res) => {
         if (!res.ok || !res.staff) {
           setError(res.reason === "rate_limited"

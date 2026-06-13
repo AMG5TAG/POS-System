@@ -90,6 +90,7 @@ function fmtLayby(l: LaybyRow, customer?: CustomerRow | null) {
     customerName: customer
       ? customerDisplayName(customer.firstName, customer.lastName, customer.company)
       : null,
+    staffId: l.staffId ?? null,
     items: Array.isArray(l.items) ? l.items : [],
     totalAmount: total,
     depositAmount: parseFloat(l.depositAmount as string),
@@ -99,6 +100,7 @@ function fmtLayby(l: LaybyRow, customer?: CustomerRow | null) {
     dueDate: l.dueDate ?? null,
     notes: l.notes ?? null,
     cancelReason: l.cancelReason ?? null,
+    completedAt: l.completedAt ? l.completedAt.toISOString() : null,
     createdAt: l.createdAt.toISOString(),
     updatedAt: l.updatedAt.toISOString(),
   };

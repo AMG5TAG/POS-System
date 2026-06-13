@@ -2072,7 +2072,8 @@ export const CreateStaffBody = zod.object({
 
 export const VerifyStaffPinBody = zod.object({
   "pin": zod.string().min(1),
-  "requireManager": zod.boolean().optional().describe('When true, only manager\/owner staff PINs are accepted (e.g. discount approvals).')
+  "requireManager": zod.boolean().optional().describe('When true, only manager\/owner staff PINs are accepted (e.g. discount approvals).'),
+  "establishDaySession": zod.boolean().optional().describe('When true, a successful verification records the matched staff as the day-staff on the server session (req.session.staffId), so server-side attribution (daily closes, stock takes, customer merges) credits the verified staff member. Only the day-login PIN flow sets this; per-sale switches and approval prompts leave it unset.')
 })
 
 export const VerifyStaffPinResponse = zod.object({
@@ -4113,6 +4114,7 @@ export const ListLaybysResponse = zod.object({
   "reference": zod.string(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4127,6 +4129,7 @@ export const ListLaybysResponse = zod.object({
   "dueDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "cancelReason": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })),
@@ -4166,6 +4169,7 @@ export const GetLaybyResponse = zod.object({
   "reference": zod.string(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4180,6 +4184,7 @@ export const GetLaybyResponse = zod.object({
   "dueDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "cancelReason": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -4203,6 +4208,7 @@ export const UpdateLaybyResponse = zod.object({
   "reference": zod.string(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4217,6 +4223,7 @@ export const UpdateLaybyResponse = zod.object({
   "dueDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "cancelReason": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -4278,6 +4285,7 @@ export const CancelLaybyResponse = zod.object({
   "reference": zod.string(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4292,6 +4300,7 @@ export const CancelLaybyResponse = zod.object({
   "dueDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "cancelReason": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -4309,6 +4318,7 @@ export const CompleteLaybyResponse = zod.object({
   "reference": zod.string(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
+  "staffId": zod.number().nullish(),
   "items": zod.array(zod.object({
   "productId": zod.number().optional(),
   "productName": zod.string().optional(),
@@ -4323,6 +4333,7 @@ export const CompleteLaybyResponse = zod.object({
   "dueDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "cancelReason": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

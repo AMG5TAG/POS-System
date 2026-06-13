@@ -9557,6 +9557,14 @@ components:
         requireManager:
           type: boolean
           description: When true, only manager/owner staff PINs are accepted (e.g. discount approvals).
+        establishDaySession:
+          type: boolean
+          description: >-
+            When true, a successful verification records the matched staff as the
+            day-staff on the server session (req.session.staffId), so server-side
+            attribution (daily closes, stock takes, customer merges) credits the
+            verified staff member. Only the day-login PIN flow sets this; per-sale
+            switches and approval prompts leave it unset.
 
     VerifyStaffPinResponse:
       type: object
@@ -10944,6 +10952,7 @@ components:
         reference:     { type: string }
         customerId:    { type: integer, nullable: true }
         customerName:  { type: string, nullable: true }
+        staffId:       { type: integer, nullable: true }
         items:
           type: array
           items:
@@ -10961,6 +10970,7 @@ components:
         dueDate:       { type: string, nullable: true }
         notes:         { type: string, nullable: true }
         cancelReason:  { type: string, nullable: true }
+        completedAt:   { type: string, nullable: true }
         createdAt:     { type: string }
         updatedAt:     { type: string }
 

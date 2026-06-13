@@ -134,7 +134,7 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
     res.json({ ok: false, reason: "rate_limited" });
     return;
   }
-  const { pin, requireManager } = parsed.data;
+  const { pin, requireManager, establishDaySession } = parsed.data as typeof parsed.data & { establishDaySession?: boolean };
   const staff = await db
     .select()
     .from(staffTable)
@@ -148,6 +148,13 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
   if (requireManager && match.role !== "manager" && match.role !== "owner") {
     res.json({ ok: false, reason: "role" });
     return;
+  }
+  // Day-login: record the server-verified staff as the session's day-staff so
+  // server-side attribution (daily closes, stock takes, customer merges) credits
+  // them. Only the day-login flow sets establishDaySession; per-sale staff
+  // switches and approval prompts verify a PIN without claiming the day session.
+  if (establishDaySession) {
+    req.session.staffId = match.id;
   }
   res.json({ ok: true, staff: formatStaff(match) });
 });
