@@ -5626,6 +5626,76 @@ export const useVerifyStaffPin = <TError = ErrorType<unknown>,
       return useMutation(getVerifyStaffPinMutationOptions(options));
     }
 
+export const getEndStaffDaySessionUrl = () => {
+
+
+
+
+  return `/api/staff/end-day-session`
+}
+
+/**
+ * @summary Clear the server session's day-staff (called on day sign-out / close till)
+ */
+export const endStaffDaySession = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getEndStaffDaySessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getEndStaffDaySessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endStaffDaySession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof endStaffDaySession>>, TError,void, TContext> => {
+
+const mutationKey = ['endStaffDaySession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof endStaffDaySession>>, void> = () => {
+
+
+          return  endStaffDaySession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EndStaffDaySessionMutationResult = NonNullable<Awaited<ReturnType<typeof endStaffDaySession>>>
+
+    export type EndStaffDaySessionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Clear the server session's day-staff (called on day sign-out / close till)
+ */
+export const useEndStaffDaySession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endStaffDaySession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof endStaffDaySession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getEndStaffDaySessionMutationOptions(options));
+    }
+
 export const getGetStaffSalesReportUrl = (params: GetStaffSalesReportParams,) => {
   const normalizedParams = new URLSearchParams();
 

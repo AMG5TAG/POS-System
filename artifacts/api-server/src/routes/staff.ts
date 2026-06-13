@@ -159,6 +159,15 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
   res.json({ ok: true, staff: formatStaff(match) });
 });
 
+// POST /staff/end-day-session — clear the session's day-staff (day sign-out /
+// close till), the counterpart to verify-pin's establishDaySession. After this,
+// server-side attribution (daily closes, stock takes, customer merges) falls
+// back to the merchant owner until another staff signs in for the day.
+router.post("/staff/end-day-session", requireAuth, async (req, res): Promise<void> => {
+  delete req.session.staffId;
+  res.json({ ok: true });
+});
+
 // GET /staff/sales-report — must be defined BEFORE /staff/:id to avoid param conflict
 router.get("/staff/sales-report", requireAuth, async (req, res): Promise<void> => {
   const { from, to } = req.query as Record<string, string>;

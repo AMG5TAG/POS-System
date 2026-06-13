@@ -97,6 +97,14 @@ export function StaffSessionProvider({ children }: { children: React.ReactNode }
   const signOutForDay = useCallback(() => {
     clearDayStaff();
     setDayStaff(null);
+
+    /* Clear the server session's day-staff too, so server-side attribution
+       (daily closes, stock takes, customer merges) stops crediting this staff
+       member once they sign out — non-critical, fire & forget. */
+    fetch("/api/staff/end-day-session", {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {});
   }, []);
 
   return (

@@ -1553,6 +1553,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/VerifyStaffPinResponse"
 
+  /staff/end-day-session:
+    post:
+      operationId: endStaffDaySession
+      tags: [staff]
+      summary: Clear the server session's day-staff (called on day sign-out / close till)
+      responses:
+        "200":
+          description: Day-staff cleared from the session
+
   /staff/sales-report:
     get:
       operationId: getStaffSalesReport
