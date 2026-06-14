@@ -421,6 +421,7 @@ export const ListProductsResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "isRefurbished": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -552,6 +553,7 @@ export const GetProductResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "isRefurbished": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -638,6 +640,7 @@ export const UpdateProductResponse = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "isRefurbished": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -1288,6 +1291,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "serviceJobNumber": zod.string().nullish(),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "scheduledAt": zod.coerce.date(),
@@ -1328,6 +1333,18 @@ export const GetCustomerHistoryResponse = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "completedAt": zod.coerce.date().nullish(),
+  "reworkOfJobId": zod.number().nullish(),
+  "estimateApprovedAt": zod.coerce.date().nullish(),
+  "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
+  "depositRequired": zod.number().nullish(),
+  "depositPaid": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1993,6 +2010,99 @@ export const RefundTransactionResponse = zod.object({
   "productName": zod.string(),
   "quantity": zod.number().min(1),
   "unitPrice": zod.number().min(refundTransactionResponseItemsItemUnitPriceMin),
+  "totalPrice": zod.number(),
+  "taxAmount": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+})),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Void a transaction (cancel a mistaken sale)
+ */
+export const VoidTransactionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const VoidTransactionBody = zod.object({
+  "reason": zod.string().nullish()
+})
+
+
+export const voidTransactionResponseItemsItemUnitPriceMin = 0;
+
+
+
+export const VoidTransactionResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customer": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish(),
+  "tierName": zod.string().nullish(),
+  "tierUpdatedAt": zod.coerce.date().nullish()
+}).optional(),
+  "staffId": zod.number().nullish(),
+  "receiptNumber": zod.string().optional(),
+  "status": zod.enum(['completed', 'refunded', 'partial_refund', 'voided']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "discountTotal": zod.number().optional(),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty']),
+  "amountTendered": zod.number().nullish(),
+  "changeDue": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(voidTransactionResponseItemsItemUnitPriceMin),
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
@@ -2801,6 +2911,8 @@ export const ListAppointmentsResponseItem = zod.object({
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "serviceJobNumber": zod.string().nullish(),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "scheduledAt": zod.coerce.date(),
@@ -2824,6 +2936,7 @@ export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem)
 export const CreateAppointmentBody = zod.object({
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "title": zod.string().optional(),
   "scheduledAt": zod.coerce.date(),
   "endAt": zod.coerce.date(),
@@ -2852,6 +2965,7 @@ export const UpdateAppointmentParams = zod.object({
 export const UpdateAppointmentBody = zod.object({
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "title": zod.string().optional(),
   "scheduledAt": zod.coerce.date(),
   "endAt": zod.coerce.date(),
@@ -2866,6 +2980,8 @@ export const UpdateAppointmentResponse = zod.object({
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
   "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "serviceJobNumber": zod.string().nullish(),
   "title": zod.string(),
   "description": zod.string().nullish(),
   "scheduledAt": zod.coerce.date(),
@@ -2911,6 +3027,18 @@ export const ListServiceJobsResponseItem = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "completedAt": zod.coerce.date().nullish(),
+  "reworkOfJobId": zod.number().nullish(),
+  "estimateApprovedAt": zod.coerce.date().nullish(),
+  "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
+  "depositRequired": zod.number().nullish(),
+  "depositPaid": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -2941,6 +3069,12 @@ export const CreateServiceJobBody = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "heardFrom": zod.string().nullish(),
   "heardFromDetails": zod.string().nullish(),
@@ -2975,6 +3109,12 @@ export const UpdateServiceJobBody = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "heardFrom": zod.string().nullish(),
   "heardFromDetails": zod.string().nullish(),
@@ -3007,6 +3147,18 @@ export const UpdateServiceJobResponse = zod.object({
   "signature": zod.string().nullish(),
   "photos": zod.array(zod.string()).optional(),
   "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "completedAt": zod.coerce.date().nullish(),
+  "reworkOfJobId": zod.number().nullish(),
+  "estimateApprovedAt": zod.coerce.date().nullish(),
+  "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
+  "depositRequired": zod.number().nullish(),
+  "depositPaid": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3036,6 +3188,1156 @@ export const SendServiceJobEmailResponse = zod.object({
   "success": zod.boolean().optional(),
   "provider": zod.string().optional(),
   "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Open a no-charge rework job linked to the original
+ */
+export const CreateServiceJobReworkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Record a deposit collected against a job (soft/advisory tracking)
+ */
+export const RecordServiceJobDepositParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RecordServiceJobDepositBody = zod.object({
+  "amount": zod.number(),
+  "method": zod.string().nullish()
+})
+
+export const RecordServiceJobDepositResponse = zod.object({
+  "depositRequired": zod.number().nullish(),
+  "depositPaid": zod.number()
+})
+
+
+/**
+ * @summary List parts/labour line items and derived totals for a service job
+ */
+export const ListServiceJobLinesParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const ListServiceJobLinesResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "kind": zod.enum(['part', 'labour', 'misc']),
+  "productId": zod.number().nullish(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "unitCost": zod.number(),
+  "taxRate": zod.number(),
+  "lineTotal": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "totals": zod.object({
+  "partsTotal": zod.number(),
+  "labourTotal": zod.number(),
+  "miscTotal": zod.number(),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "costTotal": zod.number(),
+  "profit": zod.number()
+})
+})
+
+
+/**
+ * @summary Add a part/labour/misc line to a service job
+ */
+export const AddServiceJobLineParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const AddServiceJobLineBody = zod.object({
+  "kind": zod.enum(['part', 'labour', 'misc']).optional(),
+  "productId": zod.number().nullish(),
+  "description": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "unitPrice": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "taxRate": zod.number().optional()
+})
+
+export const AddServiceJobLineResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "kind": zod.enum(['part', 'labour', 'misc']),
+  "productId": zod.number().nullish(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "unitCost": zod.number(),
+  "taxRate": zod.number(),
+  "lineTotal": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "totals": zod.object({
+  "partsTotal": zod.number(),
+  "labourTotal": zod.number(),
+  "miscTotal": zod.number(),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "costTotal": zod.number(),
+  "profit": zod.number()
+})
+})
+
+
+/**
+ * @summary Update a service job line item
+ */
+export const UpdateServiceJobLineParams = zod.object({
+  "jobId": zod.coerce.number(),
+  "lineId": zod.coerce.number()
+})
+
+export const UpdateServiceJobLineBody = zod.object({
+  "kind": zod.enum(['part', 'labour', 'misc']).optional(),
+  "productId": zod.number().nullish(),
+  "description": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "unitPrice": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "taxRate": zod.number().optional()
+})
+
+export const UpdateServiceJobLineResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "kind": zod.enum(['part', 'labour', 'misc']),
+  "productId": zod.number().nullish(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "unitCost": zod.number(),
+  "taxRate": zod.number(),
+  "lineTotal": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "totals": zod.object({
+  "partsTotal": zod.number(),
+  "labourTotal": zod.number(),
+  "miscTotal": zod.number(),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "costTotal": zod.number(),
+  "profit": zod.number()
+})
+})
+
+
+/**
+ * @summary Delete a service job line item
+ */
+export const DeleteServiceJobLineParams = zod.object({
+  "jobId": zod.coerce.number(),
+  "lineId": zod.coerce.number()
+})
+
+export const DeleteServiceJobLineResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "kind": zod.enum(['part', 'labour', 'misc']),
+  "productId": zod.number().nullish(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "unitCost": zod.number(),
+  "taxRate": zod.number(),
+  "lineTotal": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "totals": zod.object({
+  "partsTotal": zod.number(),
+  "labourTotal": zod.number(),
+  "miscTotal": zod.number(),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "costTotal": zod.number(),
+  "profit": zod.number()
+})
+})
+
+
+/**
+ * @summary Get a customer's store-credit balance and ledger
+ */
+export const GetCustomerStoreCreditParams = zod.object({
+  "customerId": zod.coerce.number()
+})
+
+export const GetCustomerStoreCreditResponse = zod.object({
+  "balance": zod.number(),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "type": zod.enum(['issue', 'redeem', 'adjust', 'refund', 'expire']),
+  "amount": zod.number(),
+  "balanceAfter": zod.number(),
+  "note": zod.string().nullish(),
+  "transactionId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Record a store-credit movement (issue/redeem/adjust/refund/expire)
+ */
+export const AddCustomerStoreCreditParams = zod.object({
+  "customerId": zod.coerce.number()
+})
+
+export const AddCustomerStoreCreditBody = zod.object({
+  "type": zod.enum(['issue', 'redeem', 'adjust', 'refund', 'expire']),
+  "amount": zod.number(),
+  "note": zod.string().nullish(),
+  "transactionId": zod.number().nullish()
+})
+
+export const AddCustomerStoreCreditResponse = zod.object({
+  "balance": zod.number(),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "type": zod.enum(['issue', 'redeem', 'adjust', 'refund', 'expire']),
+  "amount": zod.number(),
+  "balanceAfter": zod.number(),
+  "note": zod.string().nullish(),
+  "transactionId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary All repairs and sales tied to a serial / IMEI
+ */
+export const GetDeviceHistoryQueryParams = zod.object({
+  "serial": zod.coerce.string()
+})
+
+export const GetDeviceHistoryResponse = zod.object({
+  "serial": zod.string(),
+  "serviceJobs": zod.array(zod.object({
+  "id": zod.number(),
+  "jobNumber": zod.string(),
+  "status": zod.string(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "bookInDate": zod.string(),
+  "customerName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "sales": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string().nullish(),
+  "status": zod.string(),
+  "transactionId": zod.number().nullish(),
+  "soldAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List diagnostic/QC checklist items for a service job
+ */
+export const ListServiceJobChecklistParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const ListServiceJobChecklistResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "label": zod.string(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']),
+  "phase": zod.enum(['intake', 'outgoing']),
+  "note": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Add one item or apply a template (items[]) to a service job checklist
+ */
+export const AddServiceJobChecklistItemsParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const AddServiceJobChecklistItemsBody = zod.object({
+  "label": zod.string().optional(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']).optional(),
+  "phase": zod.enum(['intake', 'outgoing']).optional(),
+  "note": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "label": zod.string().optional(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']).optional(),
+  "phase": zod.enum(['intake', 'outgoing']).optional(),
+  "note": zod.string().nullish()
+})).optional()
+})
+
+export const AddServiceJobChecklistItemsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "label": zod.string(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']),
+  "phase": zod.enum(['intake', 'outgoing']),
+  "note": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Update a checklist item result/note
+ */
+export const UpdateServiceJobChecklistItemParams = zod.object({
+  "jobId": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const UpdateServiceJobChecklistItemBody = zod.object({
+  "label": zod.string().optional(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']).optional(),
+  "phase": zod.enum(['intake', 'outgoing']).optional(),
+  "note": zod.string().nullish()
+})
+
+export const UpdateServiceJobChecklistItemResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "label": zod.string(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']),
+  "phase": zod.enum(['intake', 'outgoing']),
+  "note": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a checklist item
+ */
+export const DeleteServiceJobChecklistItemParams = zod.object({
+  "jobId": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const DeleteServiceJobChecklistItemResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "serviceJobId": zod.number(),
+  "label": zod.string(),
+  "result": zod.enum(['pending', 'pass', 'fail', 'na']),
+  "phase": zod.enum(['intake', 'outgoing']),
+  "note": zod.string().nullish(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List loaner / courtesy devices
+ */
+export const ListLoanerDevicesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "identifier": zod.string().nullish(),
+  "status": zod.enum(['available', 'on_loan', 'retired']),
+  "assignedCustomerId": zod.number().nullish(),
+  "assignedCustomerName": zod.string().nullish(),
+  "assignedServiceJobId": zod.number().nullish(),
+  "assignedAt": zod.coerce.date().nullish(),
+  "dueBackAt": zod.coerce.date().nullish(),
+  "conditionOut": zod.string().nullish(),
+  "conditionIn": zod.string().nullish(),
+  "returnedAt": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Register a loaner device
+ */
+export const CreateLoanerDeviceBody = zod.object({
+  "action": zod.enum(['issue', 'return']).optional(),
+  "name": zod.string().optional(),
+  "identifier": zod.string().nullish(),
+  "status": zod.enum(['available', 'on_loan', 'retired']).optional(),
+  "assignedCustomerId": zod.number().nullish(),
+  "assignedServiceJobId": zod.number().nullish(),
+  "dueBackAt": zod.coerce.date().nullish(),
+  "conditionOut": zod.string().nullish(),
+  "conditionIn": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Edit, issue or return a loaner device
+ */
+export const UpdateLoanerDeviceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLoanerDeviceBody = zod.object({
+  "action": zod.enum(['issue', 'return']).optional(),
+  "name": zod.string().optional(),
+  "identifier": zod.string().nullish(),
+  "status": zod.enum(['available', 'on_loan', 'retired']).optional(),
+  "assignedCustomerId": zod.number().nullish(),
+  "assignedServiceJobId": zod.number().nullish(),
+  "dueBackAt": zod.coerce.date().nullish(),
+  "conditionOut": zod.string().nullish(),
+  "conditionIn": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateLoanerDeviceResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "identifier": zod.string().nullish(),
+  "status": zod.enum(['available', 'on_loan', 'retired']),
+  "assignedCustomerId": zod.number().nullish(),
+  "assignedCustomerName": zod.string().nullish(),
+  "assignedServiceJobId": zod.number().nullish(),
+  "assignedAt": zod.coerce.date().nullish(),
+  "dueBackAt": zod.coerce.date().nullish(),
+  "conditionOut": zod.string().nullish(),
+  "conditionIn": zod.string().nullish(),
+  "returnedAt": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a loaner device
+ */
+export const DeleteLoanerDeviceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLoanerDeviceResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "identifier": zod.string().nullish(),
+  "status": zod.enum(['available', 'on_loan', 'retired']),
+  "assignedCustomerId": zod.number().nullish(),
+  "assignedCustomerName": zod.string().nullish(),
+  "assignedServiceJobId": zod.number().nullish(),
+  "assignedAt": zod.coerce.date().nullish(),
+  "dueBackAt": zod.coerce.date().nullish(),
+  "conditionOut": zod.string().nullish(),
+  "conditionIn": zod.string().nullish(),
+  "returnedAt": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List technician time entries + totals for a job
+ */
+export const ListServiceJobTimeParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const ListServiceJobTimeResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+})),
+  "totalMinutes": zod.number(),
+  "running": zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+}).nullish()
+})
+
+
+/**
+ * @summary Start / stop a timer or add a manual time entry
+ */
+export const ServiceJobTimeActionParams = zod.object({
+  "jobId": zod.coerce.number()
+})
+
+export const ServiceJobTimeActionBody = zod.object({
+  "action": zod.enum(['start', 'stop', 'manual']),
+  "staffId": zod.number().nullish(),
+  "entryId": zod.number().nullish(),
+  "minutes": zod.number().nullish(),
+  "note": zod.string().nullish()
+})
+
+export const ServiceJobTimeActionResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+})),
+  "totalMinutes": zod.number(),
+  "running": zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+}).nullish()
+})
+
+
+/**
+ * @summary Delete a time entry
+ */
+export const DeleteServiceJobTimeParams = zod.object({
+  "jobId": zod.coerce.number(),
+  "entryId": zod.coerce.number()
+})
+
+export const DeleteServiceJobTimeResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+})),
+  "totalMinutes": zod.number(),
+  "running": zod.object({
+  "id": zod.number(),
+  "staffId": zod.number().nullish(),
+  "staffName": zod.string().nullish(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationMinutes": zod.number(),
+  "running": zod.boolean(),
+  "note": zod.string().nullish()
+}).nullish()
+})
+
+
+/**
+ * @summary Find parts that fit a device model
+ */
+export const PartsLookupQueryParams = zod.object({
+  "model": zod.coerce.string()
+})
+
+export const PartsLookupResponse = zod.object({
+  "model": zod.string(),
+  "parts": zod.array(zod.object({
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "price": zod.number(),
+  "stockQuantity": zod.number().nullish(),
+  "matchedModel": zod.string()
+}))
+})
+
+
+/**
+ * @summary List device models a part fits
+ */
+export const GetProductCompatibilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductCompatibilityResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "model": zod.string()
+}))
+})
+
+
+/**
+ * @summary Add device model(s) a part fits
+ */
+export const AddProductCompatibilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddProductCompatibilityBody = zod.object({
+  "model": zod.string().optional(),
+  "models": zod.array(zod.string()).optional()
+})
+
+export const AddProductCompatibilityResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "model": zod.string()
+}))
+})
+
+
+/**
+ * @summary Remove a compatibility model from a part
+ */
+export const DeleteProductCompatibilityParams = zod.object({
+  "id": zod.coerce.number(),
+  "rowId": zod.coerce.number()
+})
+
+export const DeleteProductCompatibilityResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "model": zod.string()
+}))
+})
+
+
+/**
+ * @summary List trade-ins / buy-backs
+ */
+export const ListTradeInsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "deviceName": zod.string(),
+  "identifier": zod.string().nullish(),
+  "conditionGrade": zod.enum(['A', 'B', 'C', 'D']),
+  "notes": zod.string().nullish(),
+  "valuationAmount": zod.number(),
+  "status": zod.enum(['quoted', 'accepted', 'listed']),
+  "payoutMethod": zod.string().nullish(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "createdProductId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Record a trade-in quote
+ */
+export const CreateTradeInBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "deviceName": zod.string(),
+  "identifier": zod.string().nullish(),
+  "conditionGrade": zod.enum(['A', 'B', 'C', 'D']).optional(),
+  "notes": zod.string().nullish(),
+  "valuationAmount": zod.number().optional()
+})
+
+
+/**
+ * @summary Accept a trade-in and pay the customer (cash or store credit)
+ */
+export const AcceptTradeInParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AcceptTradeInBody = zod.object({
+  "payoutMethod": zod.enum(['cash', 'store_credit'])
+})
+
+export const AcceptTradeInResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "deviceName": zod.string(),
+  "identifier": zod.string().nullish(),
+  "conditionGrade": zod.enum(['A', 'B', 'C', 'D']),
+  "notes": zod.string().nullish(),
+  "valuationAmount": zod.number(),
+  "status": zod.enum(['quoted', 'accepted', 'listed']),
+  "payoutMethod": zod.string().nullish(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "createdProductId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a refurbished product from a trade-in
+ */
+export const ListTradeInAsStockParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListTradeInAsStockBody = zod.object({
+  "price": zod.number(),
+  "sku": zod.string().nullish()
+})
+
+export const ListTradeInAsStockResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "deviceName": zod.string(),
+  "identifier": zod.string().nullish(),
+  "conditionGrade": zod.enum(['A', 'B', 'C', 'D']),
+  "notes": zod.string().nullish(),
+  "valuationAmount": zod.number(),
+  "status": zod.enum(['quoted', 'accepted', 'listed']),
+  "payoutMethod": zod.string().nullish(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "createdProductId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "productId": zod.number().optional()
+})
+
+
+/**
+ * @summary Delete a trade-in
+ */
+export const DeleteTradeInParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTradeInResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "deviceName": zod.string(),
+  "identifier": zod.string().nullish(),
+  "conditionGrade": zod.enum(['A', 'B', 'C', 'D']),
+  "notes": zod.string().nullish(),
+  "valuationAmount": zod.number(),
+  "status": zod.enum(['quoted', 'accepted', 'listed']),
+  "payoutMethod": zod.string().nullish(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "createdProductId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List managed-service plans / retainers
+ */
+export const ListServicePlansResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "name": zod.string(),
+  "feeAmount": zod.number(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']),
+  "status": zod.enum(['active', 'paused', 'cancelled']),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a managed-service plan
+ */
+export const CreateServicePlanBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "name": zod.string().optional(),
+  "feeAmount": zod.number().optional(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']).optional(),
+  "status": zod.enum(['active', 'paused', 'cancelled']).optional(),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update a service plan (incl. pause / cancel)
+ */
+export const UpdateServicePlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateServicePlanBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "name": zod.string().optional(),
+  "feeAmount": zod.number().optional(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']).optional(),
+  "status": zod.enum(['active', 'paused', 'cancelled']).optional(),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateServicePlanResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "name": zod.string(),
+  "feeAmount": zod.number(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']),
+  "status": zod.enum(['active', 'paused', 'cancelled']),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a service plan
+ */
+export const DeleteServicePlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteServicePlanResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "name": zod.string(),
+  "feeAmount": zod.number(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']),
+  "status": zod.enum(['active', 'paused', 'cancelled']),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Generate an invoice for the plan fee and advance the billing cycle
+ */
+export const BillServicePlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const BillServicePlanResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "name": zod.string(),
+  "feeAmount": zod.number(),
+  "billingCycle": zod.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']),
+  "status": zod.enum(['active', 'paused', 'cancelled']),
+  "slaHours": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "nextBillDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "invoiceId": zod.number().optional(),
+  "invoiceNumber": zod.string().optional()
+})
+
+
+/**
+ * @summary List scheduled (recurring emailed) reports
+ */
+export const ListScheduledReportsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "reportType": zod.string(),
+  "frequency": zod.enum(['daily', 'weekly', 'monthly']),
+  "format": zod.enum(['pdf', 'csv']),
+  "email": zod.string(),
+  "enabled": zod.boolean(),
+  "lastRunAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a scheduled report
+ */
+export const CreateScheduledReportBody = zod.object({
+  "name": zod.string().optional(),
+  "reportType": zod.string().optional(),
+  "frequency": zod.enum(['daily', 'weekly', 'monthly']).optional(),
+  "format": zod.enum(['pdf', 'csv']).optional(),
+  "email": zod.string().optional(),
+  "enabled": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update / toggle a scheduled report
+ */
+export const UpdateScheduledReportParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateScheduledReportBody = zod.object({
+  "name": zod.string().optional(),
+  "reportType": zod.string().optional(),
+  "frequency": zod.enum(['daily', 'weekly', 'monthly']).optional(),
+  "format": zod.enum(['pdf', 'csv']).optional(),
+  "email": zod.string().optional(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateScheduledReportResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "reportType": zod.string(),
+  "frequency": zod.enum(['daily', 'weekly', 'monthly']),
+  "format": zod.enum(['pdf', 'csv']),
+  "email": zod.string(),
+  "enabled": zod.boolean(),
+  "lastRunAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a scheduled report
+ */
+export const DeleteScheduledReportParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteScheduledReportResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "reportType": zod.string(),
+  "frequency": zod.enum(['daily', 'weekly', 'monthly']),
+  "format": zod.enum(['pdf', 'csv']),
+  "email": zod.string(),
+  "enabled": zod.boolean(),
+  "lastRunAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List store/branch locations and the active one
+ */
+export const ListLocationsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isDefault": zod.boolean(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "activeLocationId": zod.number()
+})
+
+
+/**
+ * @summary Add a store/branch location
+ */
+export const CreateLocationBody = zod.object({
+  "name": zod.string().optional(),
+  "code": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isDefault": zod.boolean().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Set the caller's active store/branch for this session
+ */
+export const SetActiveLocationBody = zod.object({
+  "locationId": zod.number()
+})
+
+export const SetActiveLocationResponse = zod.object({
+  "activeLocationId": zod.number()
+})
+
+
+/**
+ * @summary Update a location (or set it as default)
+ */
+export const UpdateLocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLocationBody = zod.object({
+  "name": zod.string().optional(),
+  "code": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isDefault": zod.boolean().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateLocationResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isDefault": zod.boolean(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "activeLocationId": zod.number()
+})
+
+
+/**
+ * @summary Delete a location (not the default or the last one)
+ */
+export const DeleteLocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLocationResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isDefault": zod.boolean(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "activeLocationId": zod.number()
+})
+
+
+/**
+ * @summary Per-location stock breakdown for a product
+ */
+export const GetStockByLocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetStockByLocationResponse = zod.object({
+  "productId": zod.number(),
+  "total": zod.number(),
+  "locations": zod.array(zod.object({
+  "locationId": zod.number(),
+  "name": zod.string(),
+  "isDefault": zod.boolean(),
+  "quantity": zod.number()
+}))
+})
+
+
+/**
+ * @summary Transfer stock between two locations
+ */
+export const CreateStockTransferBody = zod.object({
+  "productId": zod.number(),
+  "fromLocationId": zod.number(),
+  "toLocationId": zod.number(),
+  "quantity": zod.number()
+})
+
+export const CreateStockTransferResponse = zod.object({
+  "productId": zod.number(),
+  "total": zod.number(),
+  "locations": zod.array(zod.object({
+  "locationId": zod.number(),
+  "name": zod.string(),
+  "isDefault": zod.boolean(),
+  "quantity": zod.number()
+}))
 })
 
 
@@ -3676,6 +4978,7 @@ export const ListDiscountsResponseItem = zod.object({
   "applicableTo": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
   "categoryIds": zod.array(zod.number()).optional(),
+  "excludedProductIds": zod.array(zod.number()).optional(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "isActive": zod.string(),
@@ -3697,6 +5000,7 @@ export const CreateDiscountBody = zod.object({
   "applicableTo": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
   "categoryIds": zod.array(zod.number()).optional(),
+  "excludedProductIds": zod.array(zod.number()).optional(),
   "startDate": zod.string().optional(),
   "endDate": zod.string().optional(),
   "isActive": zod.string().optional()
@@ -3723,6 +5027,7 @@ export const ValidateDiscountCodeResponse = zod.object({
   "applicableTo": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
   "categoryIds": zod.array(zod.number()).optional(),
+  "excludedProductIds": zod.array(zod.number()).optional(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "isActive": zod.string(),
@@ -3747,6 +5052,7 @@ export const UpdateDiscountBody = zod.object({
   "applicableTo": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
   "categoryIds": zod.array(zod.number()).optional(),
+  "excludedProductIds": zod.array(zod.number()).optional(),
   "startDate": zod.string().optional(),
   "endDate": zod.string().optional(),
   "isActive": zod.string().optional()
@@ -3764,6 +5070,7 @@ export const UpdateDiscountResponse = zod.object({
   "applicableTo": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
   "categoryIds": zod.array(zod.number()).optional(),
+  "excludedProductIds": zod.array(zod.number()).optional(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "isActive": zod.string(),
@@ -5460,6 +6767,7 @@ export const GetSalesSettingsResponse = zod.object({
   "quoteTerms": zod.string(),
   "quotePrefix": zod.string(),
   "quoteDigits": zod.number(),
+  "quoteDepositPercent": zod.number().optional(),
   "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']),
   "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']),
   "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']),
@@ -5494,6 +6802,7 @@ export const UpdateSalesSettingsBody = zod.object({
   "quoteTerms": zod.string().optional(),
   "quotePrefix": zod.string().optional(),
   "quoteDigits": zod.number().optional(),
+  "quoteDepositPercent": zod.number().optional(),
   "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']).optional(),
   "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']).optional(),
   "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']).optional()
@@ -5524,6 +6833,7 @@ export const UpdateSalesSettingsResponse = zod.object({
   "quoteTerms": zod.string(),
   "quotePrefix": zod.string(),
   "quoteDigits": zod.number(),
+  "quoteDepositPercent": zod.number().optional(),
   "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']),
   "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']),
   "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']),
@@ -7887,6 +9197,28 @@ export const GetSalesSummaryResponse = zod.object({
 
 
 /**
+ * @summary Run a custom report grouped by date/week/month/payment/staff/product
+ */
+export const RunReportBody = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "groupBy": zod.enum(['date', 'week', 'month', 'payment', 'staff', 'product'])
+})
+
+export const RunReportResponse = zod.object({
+  "groupBy": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "columns": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "type": zod.enum(['text', 'number', 'currency', 'percent'])
+})),
+  "rows": zod.array(zod.record(zod.string(), zod.unknown()))
+})
+
+
+/**
  * @summary Current inventory asset valuation (cost vs retail)
  */
 export const GetInventoryValuationResponse = zod.object({
@@ -9249,14 +10581,16 @@ export const ListQuotesResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "quoteNumber": zod.string(),
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "total": zod.number(),
   "discountType": zod.string().nullish(),
   "discountValue": zod.number().nullish(),
   "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(listQuotesResponseItemsItemItemsItemQuantityMin),
@@ -9298,6 +10632,7 @@ export const createQuoteBodyItemsItemTaxRateMax = 100;
 
 export const CreateQuoteBody = zod.object({
   "customerId": zod.number().optional(),
+  "serviceJobId": zod.number().nullish(),
   "expiryDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
   "items": zod.array(zod.object({
@@ -9311,7 +10646,8 @@ export const CreateQuoteBody = zod.object({
   "value": zod.number()
 }).optional(),
   "quotePrefix": zod.string().optional(),
-  "quoteDigits": zod.number().optional()
+  "quoteDigits": zod.number().optional(),
+  "depositRequired": zod.number().nullish()
 })
 
 
@@ -9335,14 +10671,16 @@ export const GetQuoteResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "quoteNumber": zod.string(),
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "total": zod.number(),
   "discountType": zod.string().nullish(),
   "discountValue": zod.number().nullish(),
   "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(getQuoteResponseItemsItemQuantityMin),
@@ -9385,7 +10723,7 @@ export const updateQuoteBodyItemsItemTaxRateMax = 100;
 
 
 export const UpdateQuoteBody = zod.object({
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']).optional(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']).optional(),
   "notes": zod.string().optional(),
   "expiryDate": zod.coerce.date().nullish(),
   "customerId": zod.number().nullish(),
@@ -9398,7 +10736,8 @@ export const UpdateQuoteBody = zod.object({
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
   "value": zod.number()
-}).optional()
+}).optional(),
+  "depositRequired": zod.number().nullish()
 })
 
 export const updateQuoteResponseItemsItemQuantityMin = 0.0001;
@@ -9414,14 +10753,16 @@ export const UpdateQuoteResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "quoteNumber": zod.string(),
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "total": zod.number(),
   "discountType": zod.string().nullish(),
   "discountValue": zod.number().nullish(),
   "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateQuoteResponseItemsItemQuantityMin),
@@ -9506,19 +10847,76 @@ export const ConvertQuoteResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "quoteNumber": zod.string(),
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "total": zod.number(),
   "discountType": zod.string().nullish(),
   "discountValue": zod.number().nullish(),
   "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(convertQuoteResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(convertQuoteResponseItemsItemUnitPriceMin),
   "taxRate": zod.number().min(convertQuoteResponseItemsItemTaxRateMin).max(convertQuoteResponseItemsItemTaxRateMax)
+})),
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish()
+})),
+  "notes": zod.string().nullish(),
+  "expiryDate": zod.coerce.date().nullish(),
+  "convertedTransactionId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Record an in-store estimate approval and drive the linked job forward
+ */
+export const ApproveQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const approveQuoteResponseItemsItemQuantityMin = 0.0001;
+
+export const approveQuoteResponseItemsItemUnitPriceMin = 0;
+
+export const approveQuoteResponseItemsItemTaxRateMin = 0;
+export const approveQuoteResponseItemsItemTaxRateMax = 100;
+
+
+
+export const ApproveQuoteResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(approveQuoteResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(approveQuoteResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(approveQuoteResponseItemsItemTaxRateMin).max(approveQuoteResponseItemsItemTaxRateMax)
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -9565,14 +10963,16 @@ export const AddQuoteEventResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "customerId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "quoteNumber": zod.string(),
-  "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']),
+  "status": zod.enum(['draft', 'sent', 'accepted', 'declined', 'expired', 'converted']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "total": zod.number(),
   "discountType": zod.string().nullish(),
   "discountValue": zod.number().nullish(),
   "discountTotal": zod.number().nullish(),
+  "depositRequired": zod.number().nullish(),
   "items": zod.array(zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(addQuoteEventResponseItemsItemQuantityMin),

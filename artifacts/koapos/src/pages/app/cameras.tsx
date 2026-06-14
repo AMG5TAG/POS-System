@@ -304,7 +304,7 @@ export default function CamerasPage() {
             {cameras.filter((c) => c.status === "inactive").length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {cameras.filter((c) => c.status === "inactive").length} inactive camera(s) hidden from grid.{" "}
-                <a href="/management/cameras" className="underline">Manage in settings</a>
+                <a href="/management/staff-operations/cameras" className="underline">Manage in settings</a>
               </p>
             )}
             <div className={cn("grid gap-4", GRID_CLASSES[gridCols])}>

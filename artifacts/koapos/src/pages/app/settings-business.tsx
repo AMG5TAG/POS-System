@@ -168,8 +168,6 @@ function loadRegExt(): RegExtSettings {
   return { ...REG_DEFAULT };
 }
 
-function saveRegExt(_s: RegExtSettings) { /* no-op */ }
-
 function RegSegmentToggle<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string }[]; value: T; onChange: (v: T) => void;
 }) {

@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { db, customersTable, merchantsTable, loyaltySettingsTable, appointmentsTable, serviceJobsTable } from "@workspace/db";
+import { db, customersTable, merchantsTable, loyaltySettingsTable, appointmentsTable, serviceJobsTable, quotesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { deflateSync } from "node:zlib";
 import forge from "node-forge";
 import { publicDomain } from "../lib/publicUrl";
+import { applyEstimateApprovalToJob } from "../services/quoteApproval";
 
 const router: IRouter = Router();
 
@@ -408,6 +409,67 @@ router.get("/portal/:token/services", async (req, res): Promise<void> => {
     notes: j.notes ?? null,
     createdAt: j.createdAt.toISOString(),
   })));
+});
+
+// ── Customer-facing quote approval ──────────────────────────────────────────
+router.get("/portal/:token/quotes", async (req, res): Promise<void> => {
+  const customer = await findCustomerByToken(req.params.token);
+  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+
+  const rows = await db
+    .select()
+    .from(quotesTable)
+    .where(and(eq(quotesTable.customerId, customer.id), eq(quotesTable.merchantId, customer.merchantId)))
+    .orderBy(desc(quotesTable.createdAt));
+
+  // Only surface quotes that have been sent to / actioned by the customer.
+  const visible = rows.filter((q) => ["sent", "accepted", "declined"].includes(q.status));
+  res.json(visible.map((q) => {
+    const isPastExpiry = q.expiryDate ? q.expiryDate.getTime() < Date.now() : false;
+    return {
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      status: isPastExpiry && q.status === "sent" ? "expired" : q.status,
+      total: parseFloat(q.total),
+      depositRequired: q.depositRequired != null ? parseFloat(q.depositRequired) : null,
+      items: (q.items as Array<{ description: string; quantity: number; unitPrice: number; taxRate: number }> | null) ?? [],
+      expiryDate: q.expiryDate?.toISOString() ?? null,
+      notes: q.notes ?? null,
+      createdAt: q.createdAt.toISOString(),
+    };
+  }));
+});
+
+router.post("/portal/:token/quotes/:quoteId/respond", async (req, res): Promise<void> => {
+  const customer = await findCustomerByToken(req.params.token);
+  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const quoteId = Number(req.params.quoteId);
+  const decision = String((req.body ?? {}).decision ?? "");
+  if (decision !== "accept" && decision !== "decline") { res.status(400).json({ error: "Invalid decision" }); return; }
+
+  const [quote] = await db.select().from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.customerId, customer.id), eq(quotesTable.merchantId, customer.merchantId)))
+    .limit(1);
+  if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
+  if (quote.status !== "sent") { res.status(409).json({ error: "This quote can no longer be changed" }); return; }
+  const isPastExpiry = quote.expiryDate ? quote.expiryDate.getTime() < Date.now() : false;
+  if (isPastExpiry) { res.status(409).json({ error: "This quote has expired" }); return; }
+
+  const newStatus = decision === "accept" ? "accepted" : "declined";
+  const existingEvents = (quote.events as Array<unknown> | null) ?? [];
+  const event = { type: newStatus, timestamp: new Date().toISOString(), detail: "via customer portal" };
+
+  await db.update(quotesTable)
+    .set({ status: newStatus, events: [...existingEvents, event] })
+    .where(eq(quotesTable.id, quoteId));
+
+  // Acceptance is the customer's go-ahead: drive the linked repair job forward
+  // and carry the deposit requirement across to the counter.
+  if (decision === "accept") {
+    await applyEstimateApprovalToJob(customer.merchantId, quote, "portal");
+  }
+
+  res.json({ id: quoteId, status: newStatus });
 });
 
 router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {

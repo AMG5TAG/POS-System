@@ -17,6 +17,7 @@ import { setOnUnauthorized } from "@workspace/api-client-react";
 
 const CustomerDisplayPage = lazy(() => import("@/pages/app/customer-display"));
 const PortalPage = lazy(() => import("@/pages/portal"));
+const BookingPage = lazy(() => import("@/pages/booking"));
 const TechAppPage = lazy(() => import("@/pages/tech"));
 const DashboardAppPage = lazy(() => import("@/pages/dashboard-app"));
 const LandingPage = lazy(() => import("@/pages/marketing/landing"));
@@ -91,6 +92,11 @@ const ManagementLaybyPage = lazy(() => import("@/pages/app/management-layby"));
 const ManagementInventoryPage = lazy(() => import("@/pages/app/management-inventory"));
 const ManagementDiscountsPage = lazy(() => import("@/pages/app/management-discounts"));
 const ManagementTemplatesPage = lazy(() => import("@/pages/app/management-templates"));
+const ManagementLoanersPage = lazy(() => import("@/pages/app/management-loaners"));
+const ManagementPartsCompatibilityPage = lazy(() => import("@/pages/app/management-parts-compatibility"));
+const ManagementTradeInsPage = lazy(() => import("@/pages/app/management-trade-ins"));
+const ManagementServicePlansPage = lazy(() => import("@/pages/app/management-service-plans"));
+const ManagementLocationsPage = lazy(() => import("@/pages/app/management-locations"));
 /** Misc templates = the same editor scoped to the "misc" section (Customer PDF, …). */
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
 const ManagementFormsPage = lazy(() => import("@/pages/app/management-forms"));
@@ -173,7 +179,7 @@ const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password"
 setOnUnauthorized(() => {
   queryClient.clear();
   const path = window.location.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/") || path.startsWith("/c/"));
+  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/") || path.startsWith("/c/") || path.startsWith("/book/"));
   if (!isPublic) {
     window.location.replace("/login");
   }
@@ -287,6 +293,9 @@ function Router() {
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />
       </Route>
+      <Route path="/book/:username">
+        <PublicRoute component={BookingPage} />
+      </Route>
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
@@ -302,7 +311,7 @@ function Router() {
       <Route path="/pos/quotes">
         <ProtectedRoute component={POSQuotesPage} />
       </Route>
-      <Route path="/pos/laybuys">
+      <Route path="/pos/laybys">
         <ProtectedRoute component={POSLaybuysPage} />
       </Route>
       <Route path="/pos/parked">
@@ -323,48 +332,48 @@ function Router() {
       <Route path="/pos/eod">
         <ProtectedRoute component={PosEodPage} />
       </Route>
-      <Route path="/pos">
+      <Route path="/pos/sell">
         <ProtectedRoute component={POSPage} />
       </Route>
 
       {/* Products section */}
-      <Route path="/products/overview">
+      <Route path="/inventory/overview">
         <ProtectedRoute component={ProductsOverviewPage} />
       </Route>
-      <Route path="/products/bundles">
+      <Route path="/inventory/bundles">
         <ProtectedRoute component={ProductsBundlesPage} />
       </Route>
-      <Route path="/products/stocktake">
+      <Route path="/inventory/stocktake">
         <ProtectedRoute component={ProductsStocktakePage} />
       </Route>
-      <Route path="/products/purchase-orders">
+      <Route path="/inventory/purchase-orders">
         <ProtectedRoute component={ProductsPurchaseOrdersPage} />
       </Route>
-      <Route path="/products/pre-orders">
+      <Route path="/inventory/pre-orders">
         <ProtectedRoute component={ProductsPreOrdersPage} />
       </Route>
-      <Route path="/products/return-auth">
+      <Route path="/inventory/return-auth">
         <ProtectedRoute component={ProductsReturnAuthPage} />
       </Route>
-      <Route path="/products/suppliers">
+      <Route path="/inventory/suppliers">
         <ProtectedRoute component={ProductsSuppliersPage} />
       </Route>
-      <Route path="/products/brands">
+      <Route path="/inventory/brands">
         <ProtectedRoute component={ProductsBrandsPage} />
       </Route>
-      <Route path="/products/categories">
+      <Route path="/inventory/categories">
         <ProtectedRoute component={ProductsCategoriesPage} />
       </Route>
-      <Route path="/products/tags">
+      <Route path="/inventory/tags">
         <ProtectedRoute component={ProductsTagsPage} />
       </Route>
-      <Route path="/products/recalls">
+      <Route path="/inventory/recalls">
         <ProtectedRoute component={ProductsRecallsPage} />
       </Route>
-      <Route path="/products/warranty">
+      <Route path="/inventory/warranty">
         <ProtectedRoute component={ProductsWarrantyPage} />
       </Route>
-      <Route path="/products">
+      <Route path="/inventory/products">
         <ProtectedRoute component={ProductsPage} />
       </Route>
 
@@ -383,13 +392,13 @@ function Router() {
       <Route path="/appointments">
         <ProtectedRoute component={AppointmentsPage} />
       </Route>
-      <Route path="/service-jobs/new">
+      <Route path="/services/new-job">
         <ProtectedRoute component={ServiceJobNewPage} />
       </Route>
-      <Route path="/service-jobs/:id">
+      <Route path="/services/:id">
         <ProtectedRoute component={ServiceJobsPage} />
       </Route>
-      <Route path="/service-jobs">
+      <Route path="/services">
         <ProtectedRoute component={ServiceJobsPage} />
       </Route>
       <Route path="/staff/overview">
@@ -401,7 +410,7 @@ function Router() {
       <Route path="/staff/rostering">
         <ProtectedRoute component={StaffRosteringPage} />
       </Route>
-      <Route path="/staff/leave-requests">
+      <Route path="/staff/leave">
         <ProtectedRoute component={StaffLeaveRequestsPage} />
       </Route>
       <Route path="/staff/payroll/runs">
@@ -416,7 +425,7 @@ function Router() {
       <Route path="/staff/payroll">
         <ProtectedRoute component={StaffPayrollPage} />
       </Route>
-      <Route path="/staff/cost-summary">
+      <Route path="/staff/costs">
         <ProtectedRoute component={StaffCostSummaryPage} />
       </Route>
       <Route path="/staff/notes">
@@ -431,7 +440,7 @@ function Router() {
       <Route path="/staff/social-feed">
         <ProtectedRoute component={StaffSocialFeedPage} />
       </Route>
-      <Route path="/staff">
+      <Route path="/staff/employees">
         <ProtectedRoute component={StaffPage} />
       </Route>
 
@@ -441,11 +450,11 @@ function Router() {
       </Route>
 
       {/* Hub entry redirects (old hub URLs → default leaf) */}
-      <Route path="/management/customers-hub">   <Redirect to="/management/customers" />   </Route>
-      <Route path="/management/products-hub">    <Redirect to="/management/inventory" />   </Route>
-      <Route path="/management/operations-hub">  <Redirect to="/management/staff" />        </Route>
-      <Route path="/management/marketing-hub">   <Redirect to="/management/sales-overview" /></Route>
-      <Route path="/management/settings-hub">    <Redirect to="/management/account" />      </Route>
+      <Route path="/management/customers-hub">   <Redirect to="/management/customers/settings" />   </Route>
+      <Route path="/management/products-hub">    <Redirect to="/management/products-inventory/inventory" />   </Route>
+      <Route path="/management/operations-hub">  <Redirect to="/management/staff-operations/employees" />        </Route>
+      <Route path="/management/marketing-hub">   <Redirect to="/management/marketing-reports/sales-overview" /></Route>
+      <Route path="/management/settings-hub">    <Redirect to="/management/settings-integrations/account" />      </Route>
 
       {/* Customers */}
       <Route path="/management/customers/heard-from">
@@ -454,200 +463,215 @@ function Router() {
       <Route path="/management/customers/portal">
         <ManagementProtectedRoute component={ManagementCustomersPortalPage} />
       </Route>
-      <Route path="/management/customers">
+      <Route path="/management/customers/settings">
         <ManagementProtectedRoute component={SettingsCustomersPage} />
       </Route>
-      <Route path="/management/loyalty/leaderboard">
+      <Route path="/management/customers/loyalty/leaderboard">
         <ManagementProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
-      <Route path="/management/loyalty">
+      <Route path="/management/customers/loyalty">
         <ManagementProtectedRoute component={ManagementLoyaltyPage} />
       </Route>
-      <Route path="/management/gift-cards">
+      <Route path="/management/customers/gift-cards">
         <ManagementProtectedRoute component={ManagementGiftCardsPage} />
       </Route>
-      <Route path="/management/discounts">
+      <Route path="/management/customers/discounts-pricing">
         <ManagementProtectedRoute component={ManagementDiscountsPage} />
       </Route>
-      <Route path="/management/pricing-rules">
+      <Route path="/management/customers/discounts-pricing/pricing-rules">
         <ManagementProtectedRoute component={SettingsPricingRulesPage} />
       </Route>
-      <Route path="/management/layby">
+      <Route path="/management/customers/discounts-pricing/layby">
         <ManagementProtectedRoute component={ManagementLaybyPage} />
       </Route>
-      <Route path="/management/feedback">
+      <Route path="/management/settings-integrations/feedback">
         <ManagementProtectedRoute component={ManagementFeedbackPage} />
       </Route>
 
       {/* Products & Inventory */}
-      <Route path="/management/inventory">
+      <Route path="/management/products-inventory/inventory">
         <ManagementProtectedRoute component={ManagementInventoryPage} />
       </Route>
-      <Route path="/management/product-types">
+      <Route path="/management/products-inventory/product-types">
         <ManagementProtectedRoute component={SettingsProductTypesPage} />
       </Route>
-      <Route path="/management/modifier-groups">
+      <Route path="/management/products-inventory/modifier-groups">
         <ManagementProtectedRoute component={SettingsModifierGroupsPage} />
       </Route>
-      <Route path="/management/templates">
+      <Route path="/management/products-inventory/sales">
         <ManagementProtectedRoute component={ManagementTemplatesPage} />
       </Route>
-      <Route path="/management/misc-templates">
+      <Route path="/management/products-inventory/loaners">
+        <ManagementProtectedRoute component={ManagementLoanersPage} />
+      </Route>
+      <Route path="/management/products-inventory/parts-compatibility">
+        <ManagementProtectedRoute component={ManagementPartsCompatibilityPage} />
+      </Route>
+      <Route path="/management/products-inventory/trade-ins">
+        <ManagementProtectedRoute component={ManagementTradeInsPage} />
+      </Route>
+      <Route path="/management/customers/service-plans">
+        <ManagementProtectedRoute component={ManagementServicePlansPage} />
+      </Route>
+      <Route path="/management/settings-integrations/locations">
+        <ManagementProtectedRoute component={ManagementLocationsPage} />
+      </Route>
+      <Route path="/management/templates/misc">
         <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
       </Route>
-      <Route path="/management/stickers">
+      <Route path="/management/products-inventory/stickers">
         <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
       {/* Sticker Templates merged into the unified Labels page */}
-      <Route path="/management/sticker-templates"><Redirect to="/management/stickers" /></Route>
+      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/stickers" /></Route>
       <Route path="/management/calculators">
-        <Redirect to="/management/calculators/3d-printing" />
+        <Redirect to="/management/products-inventory/3d-prints" />
       </Route>
-      <Route path="/management/calculators/3d-printing">
+      <Route path="/management/products-inventory/3d-prints">
         <ManagementProtectedRoute component={ManagementCalculators3DPage} />
       </Route>
-      <Route path="/management/calculators/pc-builder">
+      <Route path="/management/products-inventory/pc-builder">
         <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
       </Route>
 
       {/* Staff & Operations */}
-      <Route path="/management/staff/timesheet">
+      <Route path="/management/staff-operations/timesheets">
         <ManagementProtectedRoute component={StaffTimesheetPage} />
       </Route>
-      <Route path="/management/staff/cost-summary">
+      <Route path="/management/staff-operations/cost-summary">
         <ManagementProtectedRoute component={StaffCostSummaryPage} />
       </Route>
-      <Route path="/management/staff">
+      <Route path="/management/staff-operations/employees">
         <ManagementProtectedRoute component={StaffPage} />
       </Route>
-      <Route path="/management/registers">
+      <Route path="/management/staff-operations/pos-registers">
         <ManagementProtectedRoute component={ManagementRegistersPage} />
       </Route>
       <Route path="/management/sales-settings">
         <ManagementProtectedRoute component={SalesSettingsPage} />
       </Route>
-      <Route path="/management/floor-plan">
+      <Route path="/management/staff-operations/floor-plan">
         <ManagementProtectedRoute component={ManagementFloorPlanPage} />
       </Route>
-      <Route path="/management/cameras">
+      <Route path="/management/staff-operations/cameras">
         <ManagementProtectedRoute component={ManagementCamerasPage} />
       </Route>
-      <Route path="/management/tech-app">
+      <Route path="/management/staff-operations/tech-app">
         <ManagementProtectedRoute component={ManagementTechAppPage} />
       </Route>
-      <Route path="/management/dashboard-app">
+      <Route path="/management/staff-operations/dashboard">
         <ManagementProtectedRoute component={ManagementDashboardAppPage} />
       </Route>
-      <Route path="/management/legal">
+      <Route path="/management/staff-operations/legal">
         <ManagementProtectedRoute component={ManagementLegalPage} />
       </Route>
 
       {/* Marketing & Reports */}
-      <Route path="/management/sales-overview">
+      <Route path="/management/marketing-reports/sales-overview">
         <ManagementProtectedRoute component={ManagementSalesPage} />
       </Route>
       <Route path="/management/reports">
-        <Redirect to="/management/reports/bas" />
+        <Redirect to="/management/marketing-reports/reports" />
       </Route>
-      <Route path="/management/reports/bas">
+      <Route path="/management/marketing-reports/reports">
         <ManagementProtectedRoute component={ManagementReportsBasPage} />
       </Route>
-      <Route path="/management/reports/void-audit">
+      <Route path="/management/marketing-reports/reports/void-audit">
         <ManagementProtectedRoute component={ManagementReportsVoidAuditPage} />
       </Route>
-      <Route path="/management/reports/margin">
+      <Route path="/management/marketing-reports/reports/margin">
         <ManagementProtectedRoute component={ManagementReportsMarginPage} />
       </Route>
-      <Route path="/management/reports/z-report">
+      <Route path="/management/marketing-reports/reports/z-report">
         <ManagementProtectedRoute component={ManagementReportsZReportPage} />
       </Route>
-      <Route path="/management/reports/staff-leaderboard">
+      <Route path="/management/marketing-reports/reports/staff-leaderboard">
         <ManagementProtectedRoute component={ManagementReportsStaffLeaderboardPage} />
       </Route>
-      <Route path="/management/reports/product-performance">
+      <Route path="/management/marketing-reports/reports/product-performance">
         <ManagementProtectedRoute component={ManagementReportsProductPerformancePage} />
       </Route>
-      <Route path="/management/daily-reports">
+      <Route path="/management/marketing-reports/reports/daily">
         <ManagementProtectedRoute component={ManagementDailyReportsPage} />
       </Route>
-      <Route path="/management/kpis">
+      <Route path="/management/marketing-reports/kpis-targets">
         <ManagementProtectedRoute component={ManagementKpisPage} />
       </Route>
-      <Route path="/management/marketing/referrals">
+      <Route path="/management/marketing-reports/referrals">
         <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
-      <Route path="/management/marketing/social-feed">
+      <Route path="/management/marketing-reports/social-feed">
         <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
       </Route>
-      <Route path="/management/online-store">
+      <Route path="/management/marketing-reports/online-store">
         <ManagementProtectedRoute component={ManagementOnlineStorePage} />
       </Route>
-      <Route path="/management/email">
+      <Route path="/management/marketing-reports/email">
         <ManagementProtectedRoute component={SettingsEmailPage} />
       </Route>
-      <Route path="/management/sms">
+      <Route path="/management/settings-integrations/sms">
         <ManagementProtectedRoute component={SettingsSmsPage} />
       </Route>
-      <Route path="/management/forms">
+      <Route path="/management/marketing-reports/forms-files">
         <ManagementProtectedRoute component={ManagementFormsPage} />
       </Route>
-      <Route path="/management/ai">
+      <Route path="/management/marketing-reports/ai-assistant">
         <ManagementProtectedRoute component={ManagementAIPage} />
       </Route>
 
       {/* Settings & Integrations */}
-      <Route path="/management/account">
+      <Route path="/management/settings-integrations/account">
         <ManagementProtectedRoute component={SettingsAccountPage} />
       </Route>
-      <Route path="/management/business">
+      <Route path="/management/settings-integrations/business-details">
         <ManagementProtectedRoute component={SettingsBusinessPage} />
       </Route>
-      <Route path="/management/regional">
+      <Route path="/management/settings-integrations/business-details/regional">
         <ManagementProtectedRoute component={SettingsRegionalPage} />
       </Route>
-      <Route path="/management/tax">
+      <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
-      <Route path="/management/integrations">
+      <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
       </Route>
-      <Route path="/management/xero">
+      <Route path="/management/settings-integrations/integrations/xero">
         <ManagementProtectedRoute component={ManagementXeroPage} />
       </Route>
-      <Route path="/management/tyro-eftpos">
+      <Route path="/management/settings-integrations/integrations/tyro-eftpos">
         <ManagementProtectedRoute component={SettingsTyroEftposPage} />
       </Route>
-      <Route path="/management/import-export">
+      <Route path="/management/settings-integrations/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
-      <Route path="/management/sync">
+      <Route path="/management/settings-integrations/sync">
         <ManagementProtectedRoute component={ManagementSyncPage} />
       </Route>
       {/* Backup now lives inside the consolidated Sync page */}
-      <Route path="/management/backup"><Redirect to="/management/sync" /></Route>
-      <Route path="/management/koapos">
+      <Route path="/management/backup"><Redirect to="/management/settings-integrations/sync" /></Route>
+      <Route path="/management/settings-integrations/system">
         <ManagementProtectedRoute component={ManagementKoaPOSPage} />
       </Route>
-      <Route path="/management/misc">
+      <Route path="/management/settings-integrations/system/misc">
         <ManagementProtectedRoute component={ManagementMiscPage} />
       </Route>
 
       {/* Redirect legacy settings paths */}
       <Route path="/settings/tax">
-        <Redirect to="/management/tax" />
+        <Redirect to="/management/settings-integrations/tax" />
       </Route>
       <Route path="/settings/email">
-        <Redirect to="/management/email" />
+        <Redirect to="/management/marketing-reports/email" />
       </Route>
       <Route path="/settings/customers">
-        <Redirect to="/management/customers" />
+        <Redirect to="/management/customers/settings" />
       </Route>
 
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />
       </Route>
 
-      <Route path="/modules">
+      <Route path="/management/settings-integrations/account/modules">
         <ProtectedRoute component={ModulesPage} />
       </Route>
       <Route path="/settings/pos">
@@ -665,7 +689,7 @@ function Router() {
       <Route path="/p/:slug" component={LandingPagePublicView} />
 
       {/* Marketing section */}
-      <Route path="/marketing">
+      <Route path="/marketing/overview">
         <ProtectedRoute component={MarketingPage} />
       </Route>
       <Route path="/marketing/email">
@@ -690,26 +714,26 @@ function Router() {
         <ProtectedRoute component={MarketingSocialMediaPage} />
       </Route>
       {/* Moved under Management → Marketing & Reports (owner/manager only) */}
-      <Route path="/management/marketing/landing-pages">
+      <Route path="/management/marketing-reports/landing-pages/pages">
         <ManagementProtectedRoute component={MarketingLandingPagesPage} />
       </Route>
-      <Route path="/management/marketing/landing-page-templates">
+      <Route path="/management/marketing-reports/landing-pages/templates">
         <ManagementProtectedRoute component={MarketingLandingPagesPage} />
       </Route>
-      <Route path="/management/marketing/generators/qr-codes">
+      <Route path="/management/marketing-reports/generators/qr-codes">
         <ManagementProtectedRoute component={MarketingQRCodesPage} />
       </Route>
-      <Route path="/management/marketing/generators/shortlinks">
+      <Route path="/management/marketing-reports/generators/shortlinks">
         <ManagementProtectedRoute component={MarketingShortlinksPage} />
       </Route>
       {/* Legacy redirects from the old /marketing/* locations */}
-      <Route path="/marketing/landing-pages">        <Redirect to="/management/marketing/landing-pages" />        </Route>
-      <Route path="/marketing/generators/qr-codes">  <Redirect to="/management/marketing/generators/qr-codes" />  </Route>
-      <Route path="/marketing/generators/shortlinks"><Redirect to="/management/marketing/generators/shortlinks" /></Route>
-      <Route path="/marketing/loyalty/promotions">
+      <Route path="/marketing/landing-pages">        <Redirect to="/management/marketing-reports/landing-pages/pages" />        </Route>
+      <Route path="/marketing/generators/qr-codes">  <Redirect to="/management/marketing-reports/generators/qr-codes" />  </Route>
+      <Route path="/marketing/generators/shortlinks"><Redirect to="/management/marketing-reports/generators/shortlinks" /></Route>
+      <Route path="/marketing/loyalty/promos">
         <ProtectedRoute component={MarketingLoyaltyPromotionsPage} />
       </Route>
-      <Route path="/marketing/loyalty/leaderboard">
+      <Route path="/marketing/loyalty/leaders">
         <ManagementProtectedRoute component={ManagementLoyaltyLeaderboardPage} />
       </Route>
       <Route path="/marketing/referrals">
@@ -721,7 +745,7 @@ function Router() {
       <Route path="/cameras">
         <ProtectedRoute component={CamerasPage} />
       </Route>
-      <Route path="/online/delivery-orders">
+      <Route path="/online/deliveries">
         <ProtectedRoute component={OnlineDeliveryOrdersPage} />
       </Route>
       <Route path="/online/shipping">
@@ -730,6 +754,91 @@ function Router() {
       <Route path="/online/marketplace">
         <ProtectedRoute component={OnlineMarketplacePage} />
       </Route>
+
+
+      {/* ── Legacy URL redirects (old paths → breadcrumb-aligned paths) ── */}
+      <Route path="/pos/laybuys"><Redirect to="/pos/laybys" /></Route>
+      <Route path="/pos"><Redirect to="/pos/sell" /></Route>
+      <Route path="/products/overview"><Redirect to="/inventory/overview" /></Route>
+      <Route path="/products/bundles"><Redirect to="/inventory/bundles" /></Route>
+      <Route path="/products/stocktake"><Redirect to="/inventory/stocktake" /></Route>
+      <Route path="/products/purchase-orders"><Redirect to="/inventory/purchase-orders" /></Route>
+      <Route path="/products/pre-orders"><Redirect to="/inventory/pre-orders" /></Route>
+      <Route path="/products/return-auth"><Redirect to="/inventory/return-auth" /></Route>
+      <Route path="/products/suppliers"><Redirect to="/inventory/suppliers" /></Route>
+      <Route path="/products/brands"><Redirect to="/inventory/brands" /></Route>
+      <Route path="/products/categories"><Redirect to="/inventory/categories" /></Route>
+      <Route path="/products/tags"><Redirect to="/inventory/tags" /></Route>
+      <Route path="/products/recalls"><Redirect to="/inventory/recalls" /></Route>
+      <Route path="/products/warranty"><Redirect to="/inventory/warranty" /></Route>
+      <Route path="/products"><Redirect to="/inventory/products" /></Route>
+      <Route path="/staff/leave-requests"><Redirect to="/staff/leave" /></Route>
+      <Route path="/staff/cost-summary"><Redirect to="/staff/costs" /></Route>
+      <Route path="/staff"><Redirect to="/staff/employees" /></Route>
+      <Route path="/management/customers"><Redirect to="/management/customers/settings" /></Route>
+      <Route path="/management/loyalty/leaderboard"><Redirect to="/management/customers/loyalty/leaderboard" /></Route>
+      <Route path="/management/loyalty"><Redirect to="/management/customers/loyalty" /></Route>
+      <Route path="/management/gift-cards"><Redirect to="/management/customers/gift-cards" /></Route>
+      <Route path="/management/discounts"><Redirect to="/management/customers/discounts-pricing" /></Route>
+      <Route path="/management/pricing-rules"><Redirect to="/management/customers/discounts-pricing/pricing-rules" /></Route>
+      <Route path="/management/layby"><Redirect to="/management/customers/discounts-pricing/layby" /></Route>
+      <Route path="/management/feedback"><Redirect to="/management/settings-integrations/feedback" /></Route>
+      <Route path="/management/inventory"><Redirect to="/management/products-inventory/inventory" /></Route>
+      <Route path="/management/product-types"><Redirect to="/management/products-inventory/product-types" /></Route>
+      <Route path="/management/modifier-groups"><Redirect to="/management/products-inventory/modifier-groups" /></Route>
+      <Route path="/management/templates"><Redirect to="/management/products-inventory/sales" /></Route>
+      <Route path="/management/misc-templates"><Redirect to="/management/templates/misc" /></Route>
+      <Route path="/management/stickers"><Redirect to="/management/products-inventory/stickers" /></Route>
+      <Route path="/management/calculators/3d-printing"><Redirect to="/management/products-inventory/3d-prints" /></Route>
+      <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/pc-builder" /></Route>
+      <Route path="/management/staff/timesheet"><Redirect to="/management/staff-operations/timesheets" /></Route>
+      <Route path="/management/staff/cost-summary"><Redirect to="/management/staff-operations/cost-summary" /></Route>
+      <Route path="/management/staff"><Redirect to="/management/staff-operations/employees" /></Route>
+      <Route path="/management/registers"><Redirect to="/management/staff-operations/pos-registers" /></Route>
+      <Route path="/management/floor-plan"><Redirect to="/management/staff-operations/floor-plan" /></Route>
+      <Route path="/management/cameras"><Redirect to="/management/staff-operations/cameras" /></Route>
+      <Route path="/management/tech-app"><Redirect to="/management/staff-operations/tech-app" /></Route>
+      <Route path="/management/dashboard-app"><Redirect to="/management/staff-operations/dashboard" /></Route>
+      <Route path="/management/legal"><Redirect to="/management/staff-operations/legal" /></Route>
+      <Route path="/management/sales-overview"><Redirect to="/management/marketing-reports/sales-overview" /></Route>
+      <Route path="/management/reports/bas"><Redirect to="/management/marketing-reports/reports" /></Route>
+      <Route path="/management/reports/void-audit"><Redirect to="/management/marketing-reports/reports/void-audit" /></Route>
+      <Route path="/management/reports/margin"><Redirect to="/management/marketing-reports/reports/margin" /></Route>
+      <Route path="/management/reports/z-report"><Redirect to="/management/marketing-reports/reports/z-report" /></Route>
+      <Route path="/management/reports/staff-leaderboard"><Redirect to="/management/marketing-reports/reports/staff-leaderboard" /></Route>
+      <Route path="/management/reports/product-performance"><Redirect to="/management/marketing-reports/reports/product-performance" /></Route>
+      <Route path="/management/daily-reports"><Redirect to="/management/marketing-reports/reports/daily" /></Route>
+      <Route path="/management/kpis"><Redirect to="/management/marketing-reports/kpis-targets" /></Route>
+      <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
+      <Route path="/management/marketing/social-feed"><Redirect to="/management/marketing-reports/social-feed" /></Route>
+      <Route path="/management/online-store"><Redirect to="/management/marketing-reports/online-store" /></Route>
+      <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
+      <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>
+      <Route path="/management/forms"><Redirect to="/management/marketing-reports/forms-files" /></Route>
+      <Route path="/management/ai"><Redirect to="/management/marketing-reports/ai-assistant" /></Route>
+      <Route path="/management/account"><Redirect to="/management/settings-integrations/account" /></Route>
+      <Route path="/management/business"><Redirect to="/management/settings-integrations/business-details" /></Route>
+      <Route path="/management/regional"><Redirect to="/management/settings-integrations/business-details/regional" /></Route>
+      <Route path="/management/tax"><Redirect to="/management/settings-integrations/tax" /></Route>
+      <Route path="/management/integrations"><Redirect to="/management/settings-integrations/integrations" /></Route>
+      <Route path="/management/xero"><Redirect to="/management/settings-integrations/integrations/xero" /></Route>
+      <Route path="/management/tyro-eftpos"><Redirect to="/management/settings-integrations/integrations/tyro-eftpos" /></Route>
+      <Route path="/management/import-export"><Redirect to="/management/settings-integrations/import-export" /></Route>
+      <Route path="/management/sync"><Redirect to="/management/settings-integrations/sync" /></Route>
+      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system" /></Route>
+      <Route path="/management/misc"><Redirect to="/management/settings-integrations/system/misc" /></Route>
+      <Route path="/modules"><Redirect to="/management/settings-integrations/account/modules" /></Route>
+      <Route path="/marketing"><Redirect to="/marketing/overview" /></Route>
+      <Route path="/management/marketing/landing-pages"><Redirect to="/management/marketing-reports/landing-pages/pages" /></Route>
+      <Route path="/management/marketing/landing-page-templates"><Redirect to="/management/marketing-reports/landing-pages/templates" /></Route>
+      <Route path="/management/marketing/generators/qr-codes"><Redirect to="/management/marketing-reports/generators/qr-codes" /></Route>
+      <Route path="/management/marketing/generators/shortlinks"><Redirect to="/management/marketing-reports/generators/shortlinks" /></Route>
+      <Route path="/marketing/loyalty/promotions"><Redirect to="/marketing/loyalty/promos" /></Route>
+      <Route path="/marketing/loyalty/leaderboard"><Redirect to="/marketing/loyalty/leaders" /></Route>
+      <Route path="/online/delivery-orders"><Redirect to="/online/deliveries" /></Route>
+      <Route path="/service-jobs/new"><Redirect to="/services/new-job" /></Route>
+      <Route path="/service-jobs/:id">{(p) => <Redirect to={`/services/${p.id}`} />}</Route>
+      <Route path="/service-jobs"><Redirect to="/services" /></Route>
 
       <Route component={NotFound} />
     </Switch>

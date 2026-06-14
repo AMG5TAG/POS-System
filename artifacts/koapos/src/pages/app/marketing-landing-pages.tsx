@@ -801,7 +801,7 @@ export default function MarketingLandingPagesPage() {
     createMutation.mutate({ data }, {
       // Switching routes remounts this component, so just create + navigate; the
       // new page shows up in the Landing Pages list.
-      onSuccess: () => { toast.success("Landing page created from template"); setLocation("/management/marketing/landing-pages"); },
+      onSuccess: () => { toast.success("Landing page created from template"); setLocation("/management/marketing-reports/landing-pages/pages"); },
       onError: () => toast.error("Failed to use template"),
     });
   };
@@ -925,7 +925,7 @@ export default function MarketingLandingPagesPage() {
               onClick={() => { navigator.clipboard.writeText(getPageUrl(username, selected.slug)); toast.success("Link copied"); }}>
               <Copy className="w-3.5 h-3.5" /> Copy link
             </Button>
-            <Link href={`/management/marketing/generators/shortlinks?url=${encodeURIComponent(getPageUrl(username, selected.slug))}`}>
+            <Link href={`/management/marketing-reports/generators/shortlinks?url=${encodeURIComponent(getPageUrl(username, selected.slug))}`}>
               <Button variant="outline" size="sm" className="gap-1.5 h-8">
                 <Link2 className="w-3.5 h-3.5" /> Shortlink
               </Button>
@@ -964,7 +964,7 @@ export default function MarketingLandingPagesPage() {
                 </div>
                 {!username && (
                   <p className="text-[11px] text-amber-600 text-center">
-                    Set a business username in <Link href="/management/account" className="underline">Settings → Account</Link> to activate this URL.
+                    Set a business username in <Link href="/management/settings-integrations/account" className="underline">Settings → Account</Link> to activate this URL.
                   </p>
                 )}
               </div>

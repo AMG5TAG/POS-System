@@ -28,17 +28,17 @@ export default function ProductsOverviewPage() {
   ];
 
   const sections = [
-    { label: "Products", href: "/products", icon: Package, desc: "Manage your product catalogue" },
-    { label: "Bundles", href: "/products/bundles", icon: Layers, desc: "Group products into bundles" },
-    { label: "Stocktake", href: "/products/stocktake", icon: ClipboardList, desc: "Count and adjust stock levels" },
-    { label: "Purchase Orders", href: "/products/purchase-orders", icon: ShoppingCart, desc: "Order stock from suppliers" },
-    { label: "Pre-Orders", href: "/products/pre-orders", icon: Clock, desc: "Manage customer pre-orders" },
-    { label: "Return Auth.", href: "/products/return-auth", icon: RotateCcw, desc: "Authorise product returns" },
-    { label: "Suppliers", href: "/products/suppliers", icon: Truck, desc: "Manage your suppliers" },
-    { label: "Brands", href: "/products/brands", icon: Bookmark, desc: "Organise products by brand" },
-    { label: "Categories", href: "/products/categories", icon: Tag, desc: "Organise product categories" },
-    { label: "Tags", href: "/products/tags", icon: Hash, desc: "Label products with tags" },
-    { label: "Recalls", href: "/products/recalls", icon: AlertTriangle, desc: "Track product recalls" },
+    { label: "Products", href: "/inventory/products", icon: Package, desc: "Manage your product catalogue" },
+    { label: "Bundles", href: "/inventory/bundles", icon: Layers, desc: "Group products into bundles" },
+    { label: "Stocktake", href: "/inventory/stocktake", icon: ClipboardList, desc: "Count and adjust stock levels" },
+    { label: "Purchase Orders", href: "/inventory/purchase-orders", icon: ShoppingCart, desc: "Order stock from suppliers" },
+    { label: "Pre-Orders", href: "/inventory/pre-orders", icon: Clock, desc: "Manage customer pre-orders" },
+    { label: "Return Auth.", href: "/inventory/return-auth", icon: RotateCcw, desc: "Authorise product returns" },
+    { label: "Suppliers", href: "/inventory/suppliers", icon: Truck, desc: "Manage your suppliers" },
+    { label: "Brands", href: "/inventory/brands", icon: Bookmark, desc: "Organise products by brand" },
+    { label: "Categories", href: "/inventory/categories", icon: Tag, desc: "Organise product categories" },
+    { label: "Tags", href: "/inventory/tags", icon: Hash, desc: "Label products with tags" },
+    { label: "Recalls", href: "/inventory/recalls", icon: AlertTriangle, desc: "Track product recalls" },
   ];
 
   return (
@@ -93,7 +93,7 @@ export default function ProductsOverviewPage() {
                 </div>
               </div>
               <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-100" asChild>
-                <Link href="/products/stocktake">View Stocktake</Link>
+                <Link href="/inventory/stocktake">View Stocktake</Link>
               </Button>
             </CardContent>
           </Card>

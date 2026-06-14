@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListTransactions, useRefundTransaction, Transaction } from "@workspace/api-client-react";
+import { useListTransactions, useRefundTransaction, useVoidTransaction, Transaction } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { RotateCcw, Search, CreditCard, Banknote, AlertTriangle } from "lucide-react";
+import { RotateCcw, Search, CreditCard, Banknote, AlertTriangle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -17,12 +17,15 @@ export default function POSRefundPage() {
   const [search, setSearch] = useState("");
   const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
   const [refundReason, setRefundReason] = useState("");
+  const [voidingTx, setVoidingTx] = useState<Transaction | null>(null);
+  const [voidReason, setVoidReason] = useState("");
 
   const { data: txData, isLoading } = useListTransactions(
     { status: "completed", limit: 100 },
     { query: { queryKey: ["transactions", "completed"] } }
   );
   const refundMutation = useRefundTransaction();
+  const voidMutation = useVoidTransaction();
 
   const transactions = (txData?.items ?? []).filter((tx) =>
     !search ||
@@ -43,6 +46,22 @@ export default function POSRefundPage() {
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
         },
         onError: () => toast.error("Failed to process refund"),
+      }
+    );
+  };
+
+  const handleVoid = () => {
+    if (!voidingTx) return;
+    voidMutation.mutate(
+      { id: voidingTx.id, data: { reason: voidReason || "Mistaken sale" } },
+      {
+        onSuccess: () => {
+          toast.success("Transaction voided");
+          setVoidingTx(null);
+          setVoidReason("");
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+        },
+        onError: () => toast.error("Failed to void transaction"),
       }
     );
   };
@@ -99,14 +118,24 @@ export default function POSRefundPage() {
                     </td>
                     <td className="p-3 text-right font-medium">{formatCurrency(tx.total ?? 0)}</td>
                     <td className="p-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
-                        onClick={() => { setRefundingTx(tx); setRefundReason(""); }}
-                      >
-                        <RotateCcw className="w-3 h-3 mr-1" /> Refund
-                      </Button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                          onClick={() => { setRefundingTx(tx); setRefundReason(""); }}
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1" /> Refund
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-muted-foreground"
+                          onClick={() => { setVoidingTx(tx); setVoidReason(""); }}
+                        >
+                          <Ban className="w-3 h-3 mr-1" /> Void
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -133,6 +162,29 @@ export default function POSRefundPage() {
               <Button variant="outline" onClick={() => setRefundingTx(null)}>Cancel</Button>
               <Button variant="destructive" onClick={handleRefund} disabled={refundMutation.isPending}>
                 <RotateCcw className="w-4 h-4 mr-2" /> Process Refund
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!voidingTx} onOpenChange={() => setVoidingTx(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Void Transaction</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Voiding cancels a mistaken sale (no money is moved). Use a refund instead if the customer paid and needs money back.</p>
+            <div className="rounded-lg border p-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Receipt</span><span className="font-mono font-medium">{voidingTx?.receiptNumber}</span></div>
+              <div className="flex justify-between font-semibold border-t pt-2"><span>Amount</span><span>{formatCurrency(voidingTx?.total ?? 0)}</span></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Reason (optional)</Label>
+              <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. Entered in error" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setVoidingTx(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleVoid} disabled={voidMutation.isPending}>
+                <Ban className="w-4 h-4 mr-2" /> Void sale
               </Button>
             </div>
           </div>

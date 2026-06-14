@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, appointmentsTable, customersTable, staffTable, merchantsTable } from "@workspace/db";
-import { eq, and, gte, lt } from "drizzle-orm";
+import { db, appointmentsTable, customersTable, staffTable, merchantsTable, serviceJobsTable } from "@workspace/db";
+import { eq, and, gte, lt, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, UpdateAppointmentParams } from "@workspace/api-zod";
@@ -16,6 +16,7 @@ async function formatAppointment(
   a: typeof appointmentsTable.$inferSelect,
   customerMap: Map<number, CustomerRow>,
   staffMap: Map<number, { name: string }>,
+  jobMap?: Map<number, string>,
 ) {
   const customer = a.customerId ? customerMap.get(a.customerId) : null;
   const staff = a.staffId ? staffMap.get(a.staffId) : null;
@@ -34,6 +35,8 @@ async function formatAppointment(
     merchantId: a.merchantId,
     customerId: a.customerId ?? null,
     staffId: a.staffId ?? null,
+    serviceJobId: a.serviceJobId ?? null,
+    serviceJobNumber: a.serviceJobId ? (jobMap?.get(a.serviceJobId) ?? null) : null,
     title: a.title,
     description: a.description ?? null,
     scheduledAt: a.scheduledAt.toISOString(),
@@ -48,6 +51,16 @@ async function formatAppointment(
     staffName: staff?.name ?? null,
     createdAt: a.createdAt.toISOString(),
   };
+}
+
+/** Map service-job id → job number for the given appointments (merchant-scoped). */
+async function buildJobMap(merchantId: number, appts: Array<{ serviceJobId: number | null }>): Promise<Map<number, string>> {
+  const ids = [...new Set(appts.map((a) => a.serviceJobId).filter((v): v is number => v != null))];
+  if (ids.length === 0) return new Map();
+  const rows = await db.select({ id: serviceJobsTable.id, jobNumber: serviceJobsTable.jobNumber })
+    .from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.merchantId, merchantId), inArray(serviceJobsTable.id, ids)));
+  return new Map(rows.map((r) => [r.id, r.jobNumber]));
 }
 
 router.get("/appointments", requireAuth, async (req, res): Promise<void> => {
@@ -85,8 +98,9 @@ router.get("/appointments", requireAuth, async (req, res): Promise<void> => {
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
+  const jobMap = await buildJobMap(merchantId, appts);
 
-  const result = await Promise.all(appts.map((a) => formatAppointment(a, customerMap, staffMap)));
+  const result = await Promise.all(appts.map((a) => formatAppointment(a, customerMap, staffMap, jobMap)));
   res.json(result);
 });
 
@@ -195,7 +209,7 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const merchantId = req.session.merchantId!;
-  const { scheduledAt, endAt, title, customerId, staffId, status, notes, sendSms: sendSmsFlag, sendEmail: sendEmailFlag } = parsed.data;
+  const { scheduledAt, endAt, title, customerId, staffId, serviceJobId, status, notes, sendSms: sendSmsFlag, sendEmail: sendEmailFlag } = parsed.data;
 
   const start = new Date(scheduledAt);
   const end = new Date(endAt);
@@ -223,6 +237,7 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
       merchantId,
       customerId: customerId ?? null,
       staffId: staffId ?? null,
+      serviceJobId: serviceJobId ?? null,
       title: resolvedTitle,
       scheduledAt: start,
       durationMinutes,
@@ -238,7 +253,7 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
   const customerMap = new Map(customers.map((c) => [c.id, c]));
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
-  const formatted = await formatAppointment(appt, customerMap, staffMap);
+  const formatted = await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt]));
   res.status(201).json(formatted);
 
   if ((sendSmsFlag || sendEmailFlag) && customer) {
@@ -299,7 +314,7 @@ router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> =
   const customerMap = new Map(customers.map((c) => [c.id, c]));
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
-  res.json(await formatAppointment(appt, customerMap, staffMap));
+  res.json(await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt])));
 });
 
 router.delete("/appointments/:id", requireAuth, async (req, res): Promise<void> => {

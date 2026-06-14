@@ -319,7 +319,7 @@ function IntegrationCard({
                     variant="ghost"
                     size="sm"
                     className="gap-1.5 text-xs h-7 px-2"
-                    onClick={() => onNavigate("/management/tyro-eftpos")}
+                    onClick={() => onNavigate("/management/settings-integrations/integrations/tyro-eftpos")}
                     title="Terminal settings"
                   >
                     <Settings className="w-3 h-3" /> Settings

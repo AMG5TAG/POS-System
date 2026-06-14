@@ -8,7 +8,7 @@ const router: IRouter = Router();
 type Row = typeof salesSettingsTable.$inferSelect;
 
 // numeric(…) columns come back as strings from pg; the API contract returns numbers.
-const NUMERIC_FIELDS = ["invoiceDefaultTaxRate", "refundRestockingFeePct", "quoteDefaultTaxRate"] as const;
+const NUMERIC_FIELDS = ["invoiceDefaultTaxRate", "refundRestockingFeePct", "quoteDefaultTaxRate", "quoteDepositPercent"] as const;
 
 function fmt(row: Row) {
   const out: Record<string, unknown> = {

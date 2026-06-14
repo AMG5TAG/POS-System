@@ -18,14 +18,16 @@ import {
   Type as TypeIcon, Image as ImageIcon, Layout, ShoppingBag, CreditCard,
   Gift, Users, QrCode, MapPin, Star, Mail, ChevronRight, CheckCircle2,
   Settings2, Palette, Upload, ExternalLink, FileText, Package,
-  Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2,
+  Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2, Building2,
 } from "lucide-react";
 import {
   useGetOnlineStoreSettings,
   useUpsertOnlineStoreSettings,
   useGetOnlineStoreThirdparty,
   useUpsertOnlineStoreThirdparty,
+  useGetMerchant,
 } from "@workspace/api-client-react";
+import { useBusinessProfile } from "@/lib/business-profile";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -409,6 +411,12 @@ export default function ManagementOnlineStorePage() {
   const [connectProvider, setConnectProvider] = useState<string | null>(null);
   const [connectForm, setConnectForm] = useState({ url: "", apiKey: "" });
 
+  /* Branding source: Business Details (management > business) */
+  const { profile: businessProfile } = useBusinessProfile();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const logoFileRef = useRef<HTMLInputElement>(null);
+  const faviconFileRef = useRef<HTMLInputElement>(null);
+
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load from API on mount
@@ -453,6 +461,43 @@ export default function ManagementOnlineStorePage() {
   /* ─── Site mutators ──────────────────────────────────────────────── */
   const updateSite  = (patch: Partial<SiteSettings>) => mutateSite((s) => ({ ...s, ...patch }));
   const updateTheme = (patch: Partial<ThemeSettings>) => mutateSite((s) => ({ ...s, theme: { ...s.theme, ...patch } }));
+
+  /* Pull name, tagline, logo, favicon and brand colours from Business Details. */
+  const importFromBusiness = () => {
+    const bp = businessProfile;
+    const [primary, accent] = bp.brandColors ?? [];
+    mutateSite((s) => ({
+      ...s,
+      storeName:  merchant?.businessName || s.storeName,
+      tagline:    bp.tagline || s.tagline,
+      logoUrl:    bp.logo || s.logoUrl,
+      faviconUrl: bp.logo || s.faviconUrl,
+      theme: {
+        ...s.theme,
+        primary: primary || s.theme.primary,
+        accent:  accent || s.theme.accent,
+        bg:      (bp.bgColors ?? [])[0]   || s.theme.bg,
+        text:    (bp.textColors ?? [])[0] || s.theme.text,
+      },
+    }));
+    toast.success("Imported branding from Business Details");
+  };
+
+  /* Read an uploaded image file into a data URL and store it on the site. */
+  const handleImageFile = (file: File | undefined, field: "logoUrl" | "faviconUrl") => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    const reader = new FileReader();
+    reader.onload = () => updateSite({ [field]: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
+  /* Reuse the store logo as the favicon. */
+  const useLogoAsFavicon = () => {
+    if (!site.logoUrl) { toast.error("Add a logo first"); return; }
+    updateSite({ faviconUrl: site.logoUrl });
+    toast.success("Logo set as favicon");
+  };
   const togglePayment = (k: keyof SiteSettings["payments"]) => mutateSite((s) => ({ ...s, payments: { ...s.payments, [k]: !s.payments[k] } }));
   const toggleFeature = (k: keyof SiteSettings["features"]) => mutateSite((s) => ({ ...s, features: { ...s.features, [k]: !s.features[k] } }));
 
@@ -670,17 +715,55 @@ export default function ManagementOnlineStorePage() {
         ) : (
           <>
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Settings2 className="w-4 h-4" /> Site Basics</CardTitle></CardHeader>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-base flex items-center gap-2"><Settings2 className="w-4 h-4" /> Site Basics</CardTitle>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={importFromBusiness}
+                  title="Import name, tagline, logo, favicon and brand colours from Business Details">
+                  <Building2 className="w-3.5 h-3.5" /> Import from Business
+                </Button>
+              </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Store name"><Input value={site.storeName} onChange={(e) => updateSite({ storeName: e.target.value })} /></Field>
                   <Field label="Tagline">   <Input value={site.tagline}   onChange={(e) => updateSite({ tagline:   e.target.value })} /></Field>
                   <Field label="Domain"><Input value={site.domain}  onChange={(e) => updateSite({ domain:  e.target.value })} placeholder="mystore.koapos.shop" /></Field>
                   <Field label="Logo URL"><Input value={site.logoUrl} onChange={(e) => updateSite({ logoUrl: e.target.value })} placeholder="https://…" /></Field>
+                  <Field label="Favicon URL"><Input value={site.faviconUrl} onChange={(e) => updateSite({ faviconUrl: e.target.value })} placeholder="https://…" /></Field>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Upload logo</Button>
-                  <Button variant="outline" size="sm" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Upload favicon</Button>
+
+                {/* Logo / favicon previews */}
+                {(site.logoUrl || site.faviconUrl) && (
+                  <div className="flex items-center gap-6">
+                    {site.logoUrl && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Logo</span>
+                        <img src={site.logoUrl} alt="Logo preview" className="h-9 max-w-[120px] object-contain rounded border bg-muted/30" />
+                      </div>
+                    )}
+                    {site.faviconUrl && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Favicon</span>
+                        <img src={site.faviconUrl} alt="Favicon preview" className="h-6 w-6 object-contain rounded border bg-muted/30" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <input ref={logoFileRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { handleImageFile(e.target.files?.[0], "logoUrl"); e.target.value = ""; }} />
+                <input ref={faviconFileRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { handleImageFile(e.target.files?.[0], "faviconUrl"); e.target.value = ""; }} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => logoFileRef.current?.click()}>
+                    <Upload className="w-3.5 h-3.5" /> Upload logo
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => faviconFileRef.current?.click()}>
+                    <Upload className="w-3.5 h-3.5" /> Upload favicon
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={useLogoAsFavicon} disabled={!site.logoUrl}
+                    title="Use the store logo as the favicon">
+                    <ImageIcon className="w-3.5 h-3.5" /> Use logo as favicon
+                  </Button>
                 </div>
               </CardContent>
             </Card>

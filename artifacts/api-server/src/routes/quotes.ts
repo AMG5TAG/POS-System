@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, quotesTable, customersTable, merchantsTable, businessProfileTable, salesTemplatesTable } from "@workspace/db";
+import { db, quotesTable, customersTable, merchantsTable, businessProfileTable, salesTemplatesTable, salesSettingsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { applyEstimateApprovalToJob, markJobAwaitingApproval } from "../services/quoteApproval";
 import {
   ListQuotesQueryParams,
   CreateQuoteBody,
@@ -66,6 +67,21 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
   return { total, taxTotal, subtotal, discountAmount };
 }
 
+/** Resolve the deposit required for a quote: an explicit amount wins, otherwise
+ *  fall back to the merchant's default deposit % of the total. Returns a numeric
+ *  string for the column, or null when no deposit applies. */
+async function resolveDepositRequired(merchantId: number, total: number, explicit: unknown): Promise<string | null> {
+  if (explicit != null && Number.isFinite(Number(explicit))) {
+    const amt = Math.max(0, round2(Number(explicit)));
+    return amt > 0 ? String(amt) : null;
+  }
+  const [s] = await db.select({ pct: salesSettingsTable.quoteDepositPercent })
+    .from(salesSettingsTable).where(eq(salesSettingsTable.merchantId, merchantId)).limit(1);
+  const pct = s ? parseFloat(s.pct) : 0;
+  if (!(pct > 0) || !(total > 0)) return null;
+  return String(round2(total * pct / 100));
+}
+
 const customerName = customerDisplayName;
 
 function fmt(
@@ -98,6 +114,7 @@ function fmt(
     discountType:  q.discountType  ?? null,
     discountValue: q.discountValue  ? parseFloat(q.discountValue)  : null,
     discountTotal: q.discountTotal  ? parseFloat(q.discountTotal)  : null,
+    depositRequired: q.depositRequired != null ? parseFloat(q.depositRequired) : null,
     items: (q.items as LineItem[] | null) ?? [],
     events: (q.events as QuoteEvent[] | null) ?? [],
     expiryDate: q.expiryDate?.toISOString() ?? null,
@@ -219,7 +236,7 @@ router.get("/quotes/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
   const bodyParsed = CreateQuoteBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
-  const { customerId, expiryDate, notes, items: lineItems, quotePrefix, quoteDigits, discount: discountInput } = bodyParsed.data;
+  const { customerId, serviceJobId, expiryDate, notes, items: lineItems, quotePrefix, quoteDigits, discount: discountInput } = bodyParsed.data as typeof bodyParsed.data & { serviceJobId?: number | null };
 
   const merchantId = req.session.merchantId!;
   const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
@@ -234,9 +251,12 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
   const digits = Math.max(1, Math.min(10, quoteDigits ?? 4));
   const quoteNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
+  const depositRequired = await resolveDepositRequired(merchantId, total, (req.body as { depositRequired?: unknown }).depositRequired);
+
   const [created] = await db.insert(quotesTable).values({
     merchantId,
     customerId: customerId ?? null,
+    serviceJobId: serviceJobId ?? null,
     quoteNumber,
     status: "draft",
     subtotal: String(subtotal),
@@ -245,6 +265,7 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
     discountType:  discountInput?.type ?? null,
     discountValue: discountInput?.value != null ? String(discountInput.value) : null,
     discountTotal: discountAmount > 0 ? String(discountAmount) : null,
+    depositRequired,
     items: lines.length ? lines : null,
     expiryDate: expiryDate ? new Date(expiryDate) : null,
     notes: notes ?? null,
@@ -290,6 +311,12 @@ router.put("/quotes/:id", requireAuth, async (req, res): Promise<void> => {
     updates.discountType  = discountInput?.type ?? null;
     updates.discountValue = discountInput?.value != null ? String(discountInput.value) : null;
     updates.discountTotal = discountAmount > 0 ? String(discountAmount) : null;
+  }
+  // Explicit per-quote deposit override (null clears it).
+  const depositOverride = (req.body as { depositRequired?: unknown }).depositRequired;
+  if (depositOverride !== undefined) {
+    updates.depositRequired = depositOverride != null && Number.isFinite(Number(depositOverride)) && Number(depositOverride) > 0
+      ? String(round2(Number(depositOverride))) : null;
   }
 
   const [updated] = await db
@@ -514,9 +541,11 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
     return;
   }
 
-  // Promote a draft quote to "sent" once emailed.
+  // Promote a draft quote to "sent" once emailed, and flag the linked job as
+  // waiting on the customer's approval.
   if (q.status === "draft") {
     await db.update(quotesTable).set({ status: "sent" }).where(eq(quotesTable.id, id));
+    await markJobAwaitingApproval(merchantId, q.serviceJobId ?? null);
   }
   await appendQuoteEvent(id, merchantId, { type: "email", timestamp: new Date().toISOString(), detail: email });
 
@@ -553,6 +582,32 @@ router.post("/quotes/:id/convert", requireAuth, async (req, res): Promise<void> 
   const row = await loadQuoteRow(id, merchantId);
   const body = row ? fmtRow(row) : fmt(updated);
   assertValidQuoteResponse(ConvertQuoteResponse, body, "POST /quotes/:id/convert");
+  res.json(body);
+});
+
+// POST /quotes/:id/approve — staff records an in-store/verbal estimate approval.
+// Marks the quote accepted and drives the linked repair job forward.
+router.post("/quotes/:id/approve", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const merchantId = req.session.merchantId!;
+
+  const [quote] = await db.select().from(quotesTable)
+    .where(and(eq(quotesTable.id, id), eq(quotesTable.merchantId, merchantId))).limit(1);
+  if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
+  if (quote.status === "converted" || quote.status === "declined") {
+    res.status(409).json({ error: "This quote can no longer be approved" }); return;
+  }
+
+  const existingEvents = (quote.events as QuoteEvent[] | null) ?? [];
+  await db.update(quotesTable)
+    .set({ status: "accepted", events: [...existingEvents, { type: "accepted", timestamp: new Date().toISOString(), detail: "recorded in-store" }] })
+    .where(and(eq(quotesTable.id, id), eq(quotesTable.merchantId, merchantId)));
+
+  await applyEstimateApprovalToJob(merchantId, quote, "in-store");
+
+  const row = await loadQuoteRow(id, merchantId);
+  const body = row ? fmtRow(row) : fmt({ ...quote, status: "accepted" });
   res.json(body);
 });
 

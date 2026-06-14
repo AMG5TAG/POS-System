@@ -1373,9 +1373,11 @@ export default function MarketingQRCodesPage() {
           </div>
         </div>
 
-        {/* ── Styling controls (full width) ── */}
+        {/* ── Styling controls ── */}
         <div className="space-y-4">
 
+          {/* Colours + Template side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             {/* Colors */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Colours</CardTitle></CardHeader>
@@ -1386,45 +1388,6 @@ export default function MarketingQRCodesPage() {
                 <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
                   onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
                 <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
-              </CardContent>
-            </Card>
-
-            {/* Pattern */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Pattern</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {DOT_STYLES.map((s) => (
-                    <button key={s.value} type="button" onClick={() => set("dotStyle", s.value)}
-                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
-                        settings.dotStyle === s.value
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
-                      <DotIcon style={s.value} />
-                      <span className="text-[10px] font-medium">{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Eye style */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Eye Style</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-2">
-                  {EYE_STYLES.map((s) => (
-                    <button key={`${s.csStyle}-${s.cdStyle}`} type="button"
-                      onClick={() => { set("cornerSquareStyle", s.csStyle); set("cornerDotStyle", s.cdStyle); }}
-                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
-                        settings.cornerSquareStyle === s.csStyle && settings.cornerDotStyle === s.cdStyle
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
-                      <EyeIcon csStyle={s.csStyle} cdStyle={s.cdStyle} />
-                      <span className="text-[10px] font-medium">{s.label}</span>
-                    </button>
-                  ))}
-                </div>
               </CardContent>
             </Card>
 
@@ -1510,6 +1473,49 @@ export default function MarketingQRCodesPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Pattern + Eye Style side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            {/* Pattern */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Pattern</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {DOT_STYLES.map((s) => (
+                    <button key={s.value} type="button" onClick={() => set("dotStyle", s.value)}
+                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
+                        settings.dotStyle === s.value
+                          ? "border-primary bg-primary/5 text-primary shadow-sm"
+                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                      <DotIcon style={s.value} />
+                      <span className="text-[10px] font-medium">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Eye style */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Eye Style</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-2">
+                  {EYE_STYLES.map((s) => (
+                    <button key={`${s.csStyle}-${s.cdStyle}`} type="button"
+                      onClick={() => { set("cornerSquareStyle", s.csStyle); set("cornerDotStyle", s.cdStyle); }}
+                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
+                        settings.cornerSquareStyle === s.csStyle && settings.cornerDotStyle === s.cdStyle
+                          ? "border-primary bg-primary/5 text-primary shadow-sm"
+                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                      <EyeIcon csStyle={s.csStyle} cdStyle={s.cdStyle} />
+                      <span className="text-[10px] font-medium">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
             {/* Advanced */}
             <Card>

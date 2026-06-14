@@ -359,7 +359,7 @@ export default function ServiceJobsPage() {
     setSortDir("desc");
   };
 
-  const [, routeParams] = useRoute("/service-jobs/:id");
+  const [, routeParams] = useRoute("/services/:id");
   useEffect(() => {
     if (!routeParams?.id || jobs.length === 0 || viewing) return;
     const job = jobs.find((j) => j.id === Number(routeParams.id));
@@ -485,7 +485,7 @@ export default function ServiceJobsPage() {
             </span>
           </h2>
           <div className="flex items-center gap-3">
-            <Link href="/service-jobs/new">
+            <Link href="/services/new-job">
               <Button size="sm" className="gap-1.5 h-8 text-xs">
                 <Plus className="w-3.5 h-3.5" />
                 New Service

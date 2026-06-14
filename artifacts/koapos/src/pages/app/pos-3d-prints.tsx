@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useCreateProduct, useListProductTypes, useCreateProductType } from "@workspace/api-client-react";
+import { useCreateProduct, useListProductTypes, useCreateProductType, useGetPrint3dSettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -202,9 +202,30 @@ export default function POS3DPrintsPage() {
   const { data: productTypesData } = useListProductTypes();
   const createProductTypeMutation = useCreateProductType();
 
+  // Use the merchant's saved 3D-printing settings (printer, rates, margins) so
+  // POS costing matches the configured calculator. Falls back to defaults until loaded.
+  const { data: serverSettings } = useGetPrint3dSettings({ query: { queryKey: ["print-3d-settings"] } });
   useEffect(() => {
-    setSettings(load3DSettings());
-  }, []);
+    if (!serverSettings) { setSettings((s) => s ?? load3DSettings()); return; }
+    setSettings({
+      printerId:             serverSettings.printerId || load3DSettings().printerId,
+      customPrinterName:     serverSettings.customPrinterName,
+      printerWattage:        serverSettings.printerWattage,
+      purchasePrice:         serverSettings.purchasePrice,
+      lifetimeHours:         serverSettings.lifetimeHours,
+      profitMargin:          serverSettings.profitMargin,
+      electricityRate:       serverSettings.electricityRate,
+      overheadPerHour:       serverSettings.overheadPerHour,
+      laborRate:             serverSettings.laborRate,
+      setupTimeMinutes:      serverSettings.setupTimeMinutes,
+      failureRate:           serverSettings.failureRate,
+      filamentWastePercent:  serverSettings.filamentWastePercent,
+      postProcessingMinutes: serverSettings.postProcessingMinutes,
+      coolingFactor:         serverSettings.coolingFactor,
+      roundingMode:          (serverSettings.roundingMode as Settings3D["roundingMode"]) || "none",
+      roundingValue:         serverSettings.roundingValue,
+    });
+  }, [serverSettings]);
 
   // Keep customPricePerKg in sync with filament selection
   useEffect(() => {
@@ -272,7 +293,7 @@ export default function POS3DPrintsPage() {
         onSuccess: () => {
           toast.success(`"${name}" added to products`, {
             description: "Find it in Products or search on the POS register.",
-            action: { label: "Go to POS", onClick: () => navigate("/pos") },
+            action: { label: "Go to POS", onClick: () => navigate("/pos/sell") },
           });
         },
         onError: () => toast.error("Failed to create product"),
@@ -311,7 +332,7 @@ export default function POS3DPrintsPage() {
               <RotateCcw className="w-3.5 h-3.5" /> Reset
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5"
-              onClick={() => navigate("/management/calculators/3d-printing")}>
+              onClick={() => navigate("/management/products-inventory/3d-prints")}>
               <Settings className="w-3.5 h-3.5" /> Settings
             </Button>
           </div>
@@ -618,7 +639,7 @@ export default function POS3DPrintsPage() {
               <div className="text-xs text-muted-foreground space-y-0.5">
                 <p>Costs are estimates. Actual energy usage varies by print type, room temperature, and slicer settings.</p>
                 <button
-                  onClick={() => navigate("/management/calculators/3d-printing")}
+                  onClick={() => navigate("/management/products-inventory/3d-prints")}
                   className="inline-flex items-center gap-1 text-primary hover:underline font-medium mt-1"
                 >
                   Adjust printer settings &amp; margin <ChevronRight className="w-3 h-3" />

@@ -721,7 +721,7 @@ export default function ManagementFormsPage() {
                         <CloudOff className="h-4 w-4 text-amber-600 shrink-0" />
                         <p className="text-sm text-amber-800">
                           No cloud storage providers are connected. Set them up in{" "}
-                          <a href="/management/integrations" className="font-semibold underline">Management → Integrations</a>.
+                          <a href="/management/settings-integrations/integrations" className="font-semibold underline">Management → Integrations</a>.
                         </p>
                       </div>
                     )}
@@ -784,7 +784,7 @@ export default function ManagementFormsPage() {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Connect providers in{" "}
-                          <a href="/management/integrations" className="text-primary underline font-medium">Management → Integrations</a>.
+                          <a href="/management/settings-integrations/integrations" className="text-primary underline font-medium">Management → Integrations</a>.
                         </p>
                       </div>
                     )}

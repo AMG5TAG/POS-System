@@ -296,7 +296,7 @@ export default function MarketingSmsCampaignsPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2"><Send className="w-6 h-6 text-primary" /> SMS Campaigns</h1>
             <p className="text-muted-foreground text-sm mt-1">Compose and send targeted SMS messages to your customer base.</p>
           </div>
-          <Link href="/marketing">
+          <Link href="/marketing/overview">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs"><Megaphone className="w-3.5 h-3.5" /> Overview</Button>
           </Link>
         </div>

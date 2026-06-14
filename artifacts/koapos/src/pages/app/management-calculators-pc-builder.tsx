@@ -55,10 +55,6 @@ export function loadPCCompat(): PCCompatMap {
   return {};
 }
 
-export function savePCCompat(_map: PCCompatMap) {
-  /* no-op */
-}
-
 /* ─── Builder settings ───────────────────────────────────────────────────── */
 
 export interface PCBuilderSettings {
@@ -89,10 +85,6 @@ const DEFAULTS: PCBuilderSettings = {
 
 export function loadPCBuilderSettings(): PCBuilderSettings {
   return DEFAULTS;
-}
-
-function savePCBuilderSettings(_s: PCBuilderSettings) {
-  /* no-op */
 }
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */

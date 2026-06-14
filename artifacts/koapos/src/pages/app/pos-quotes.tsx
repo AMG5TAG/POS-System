@@ -307,7 +307,7 @@ export default function POSQuotesPage() {
       });
       await convertMutation.mutateAsync({ id: q.id, data: {} });
       toast.success("Quote loaded into POS");
-      navigate("/pos");
+      navigate("/pos/sell");
     } catch {
       toast.error("Failed to convert quote");
       setConvertingId(null);

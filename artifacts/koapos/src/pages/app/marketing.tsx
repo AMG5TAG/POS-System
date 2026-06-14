@@ -202,21 +202,21 @@ export default function MarketingOverviewPage() {
             <SectionCard
               title="Landing Pages"
               description="Build mobile-ready link-in-bio style pages to promote your products, services and social channels."
-              href="/management/marketing/landing-pages"
+              href="/management/marketing-reports/landing-pages/pages"
               icon={Globe}
               badge={stats.landingPages > 0 ? `${stats.landingPages} live` : undefined}
             />
             <SectionCard
               title="QR Codes"
               description="Generate QR codes for your products, pages and promotions. Customise colours and download in HD."
-              href="/management/marketing/generators/qr-codes"
+              href="/management/marketing-reports/generators/qr-codes"
               icon={QrCode}
               badge={stats.qrCodes > 0 ? `${stats.qrCodes} generated` : undefined}
             />
             <SectionCard
               title="Short Links"
               description="Create short branded links for your campaigns, track click counts and manage your link library."
-              href="/management/marketing/generators/shortlinks"
+              href="/management/marketing-reports/generators/shortlinks"
               icon={Link2}
               badge={stats.shortlinks > 0 ? `${stats.shortlinks} links` : undefined}
             />
@@ -272,7 +272,7 @@ export default function MarketingOverviewPage() {
               <Link href="/marketing/email/campaigns">
                 <Button size="sm" className="gap-1.5"><Send className="w-4 h-4" />New Campaign</Button>
               </Link>
-              <Link href="/management/marketing/landing-pages">
+              <Link href="/management/marketing-reports/landing-pages/pages">
                 <Button variant="outline" size="sm" className="gap-1.5"><Globe className="w-4 h-4" />Landing Page</Button>
               </Link>
             </div>

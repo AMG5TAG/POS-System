@@ -205,7 +205,7 @@ export default function ProductsWarrantyPage() {
                               {r.product.sku && <p className="text-xs text-muted-foreground">SKU: {r.product.sku}</p>}
                               {r.product.price != null && <p className="text-xs text-muted-foreground">Price: ${Number(r.product.price).toFixed(2)}</p>}
                               <p className="text-xs text-muted-foreground">{warrantyLabel(r.product.warrantyDuration, r.product.warrantyUnit)}</p>
-                              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/products")}>Open in Products</Button>
+                              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/inventory/products")}>Open in Products</Button>
                             </PopoverContent>
                           </Popover>
                           {/* Customer */}

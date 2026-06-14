@@ -9,6 +9,8 @@ export const appointmentsTable = pgTable("appointments", {
   merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
   customerId: integer("customer_id").references(() => customersTable.id),
   staffId: integer("staff_id"),
+  // Optional link to a repair/service job (drop-off or collection booking).
+  serviceJobId: integer("service_job_id"),
   title: text("title").notNull(),
   description: text("description"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),

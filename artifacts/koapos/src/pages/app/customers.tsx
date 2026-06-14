@@ -34,6 +34,7 @@ import {
 import { useMapUrl } from "@/lib/map-provider";
 import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
+import { CustomerStoreCreditPanel } from "@/components/customers/CustomerStoreCreditPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,7 +75,7 @@ import {
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account" | "history" | "notes" | "files" | "qr";
+type DetailTab = "overview" | "address" | "account" | "credit" | "history" | "notes" | "files" | "qr";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -1219,6 +1220,7 @@ function CustomerDetailInner({
     { key: "overview", label: "Overview" },
     { key: "address",  label: "Address"  },
     { key: "account",  label: "Account"  },
+    { key: "credit",   label: "Credit"   },
     { key: "history",  label: "History"  },
     { key: "notes",    label: "Notes"    },
     { key: "files",    label: "Files"    },
@@ -1506,6 +1508,11 @@ function CustomerDetailInner({
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Store Credit ── */}
+      {tab === "credit" && (
+        <CustomerStoreCreditPanel customerId={customer.id} />
       )}
 
       {/* ── History ── */}

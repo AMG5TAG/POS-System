@@ -385,16 +385,14 @@ export default function ManagementLegalPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-6 md:p-8 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Scale className="h-5 w-5 text-primary" />
-            </div>
+            <Scale className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-xl font-semibold">Legal & Compliance</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <h1 className="text-2xl font-bold">Legal & Compliance</h1>
+              <p className="text-sm text-muted-foreground">
                 Government resources, super rates, award wages, and grants
               </p>
             </div>

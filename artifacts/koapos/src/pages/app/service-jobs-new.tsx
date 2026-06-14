@@ -361,7 +361,7 @@ export default function ServiceJobNewPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0"
-            onClick={() => navigate("/service-jobs")}
+            onClick={() => navigate("/services")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -651,7 +651,7 @@ export default function ServiceJobNewPage() {
     </AppLayout>
 
     {/* Success dialog */}
-    <Dialog open={!!successJob} onOpenChange={(open) => { if (!open) { setSuccessJob(null); navigate("/service-jobs"); } }}>
+    <Dialog open={!!successJob} onOpenChange={(open) => { if (!open) { setSuccessJob(null); navigate("/services"); } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <div className="flex flex-col items-center gap-3 pt-2 pb-1">
@@ -740,7 +740,7 @@ export default function ServiceJobNewPage() {
           <Button
             variant="ghost"
             className="w-full"
-            onClick={() => { setSuccessJob(null); navigate("/service-jobs"); }}
+            onClick={() => { setSuccessJob(null); navigate("/services"); }}
           >
             Done
           </Button>

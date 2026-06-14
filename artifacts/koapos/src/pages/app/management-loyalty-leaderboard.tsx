@@ -42,7 +42,7 @@ export default function ManagementLoyaltyLeaderboardPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href="/management/loyalty" className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
+              <Link href="/management/customers/loyalty" className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
                 <ArrowLeft className="w-4 h-4" /> Loyalty Program
               </Link>
             </div>

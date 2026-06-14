@@ -951,6 +951,33 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
   res.json(formatTransaction(updated, cust));
 });
 
+// POST /transactions/:id/void — cancel a completed sale (e.g. mistaken entry).
+// Distinct from a refund: marks the sale void rather than recording a money-out.
+router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const reason = typeof (req.body ?? {}).reason === "string" ? (req.body as { reason: string }).reason : null;
+
+  const [transaction] = await db.select().from(transactionsTable)
+    .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)));
+  if (!transaction) { res.status(404).json({ error: "Transaction not found" }); return; }
+  if (transaction.status === "voided") { res.status(409).json({ error: "Already voided" }); return; }
+  if (transaction.status === "refunded") { res.status(409).json({ error: "Refunded sales can't be voided" }); return; }
+
+  const [updated] = await db.update(transactionsTable)
+    .set({ status: "voided", notes: reason ?? transaction.notes })
+    .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+    .returning();
+
+  let cust: typeof customersTable.$inferSelect | null = null;
+  if (updated.customerId) {
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
+    cust = c ?? null;
+  }
+  res.json(formatTransaction(updated, cust));
+});
+
 router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteTransactionParams.safeParse(req.params);
   if (!params.success) {

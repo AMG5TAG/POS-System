@@ -157,7 +157,7 @@ export default function MarketingSocialMediaPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2"><Share2 className="w-6 h-6 text-primary" /> Social Media</h1>
             <p className="text-muted-foreground text-sm mt-1">Compose, schedule, and publish posts to your connected social accounts.</p>
           </div>
-          <Link href="/marketing">
+          <Link href="/marketing/overview">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs"><Megaphone className="w-3.5 h-3.5" /> Overview</Button>
           </Link>
         </div>
@@ -174,7 +174,7 @@ export default function MarketingSocialMediaPage() {
             {noAccounts ? (
               <p className="text-sm text-muted-foreground">
                 No accounts connected yet. Connect <strong>Meta Business</strong> (and others) in{" "}
-                <Link href="/management/integrations" className="text-primary hover:underline">Integrations</Link>, then click “Sync from Integrations”.
+                <Link href="/management/settings-integrations/integrations" className="text-primary hover:underline">Integrations</Link>, then click “Sync from Integrations”.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">

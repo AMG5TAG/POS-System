@@ -525,7 +525,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               <Star className="w-3 h-3 text-amber-500 inline mb-0.5 mx-1" />
               to enable one-click printing here.
             </p>
-            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/stickers"); }}>
+            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
               Open Labels
             </Button>
           </div>
@@ -578,7 +578,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               </Button>
 
               <Button variant="outline" size="sm" className="w-full gap-1.5"
-                onClick={() => { onOpenChange(false); navigate("/management/stickers"); }}>
+                onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
                 <LayoutTemplate className="w-3.5 h-3.5" /> Manage Templates
               </Button>
 

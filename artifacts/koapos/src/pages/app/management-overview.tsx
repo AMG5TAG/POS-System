@@ -416,7 +416,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(totalSales)}
               sub={`${txCount} sale${txCount !== 1 ? "s" : ""} ${periodLabel}`}
               valueClass="text-emerald-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Revenue ex-GST"
@@ -425,7 +425,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst)}
               sub={`${gstRateStr} GST removed from revenue`}
               valueClass="text-teal-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Sales"
@@ -433,7 +433,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600"
               value={isLoading ? "—" : txCount.toString()}
               sub={`Transactions ${periodLabel}`}
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Avg Sale"
@@ -441,7 +441,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600"
               value={isLoading ? "—" : formatCurrency(avgSale)}
               sub="Average transaction value"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Loyalty Liability"
@@ -449,7 +449,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
               value={formatCurrency(loyaltyDollarValue)}
               sub={loyaltyEnabled ? `${totalPoints.toLocaleString()} pts across ${customers.filter((c) => (c.loyaltyPoints ?? 0) > 0).length} customers` : "Loyalty programme inactive"}
-              href="/management/loyalty"
+              href="/management/customers/loyalty"
             />
           </div>
 
@@ -462,7 +462,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(discountTotal)}
               sub="Total discounts given"
               valueClass={discountTotal > 0 ? "text-orange-500" : ""}
-              href="/management/discounts"
+              href="/management/customers/discounts-pricing"
             />
             <KpiCard
               title="Refunds"
@@ -471,7 +471,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(refundTotal)}
               sub="Total refunded"
               valueClass={refundTotal > 0 ? "text-red-500" : ""}
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="GST Collected"
@@ -480,7 +480,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(gstCollected)}
               sub={storedTax != null ? "From transaction records" : `Estimated at ${gstRateStr} of revenue`}
               valueClass="text-amber-600"
-              href="/management/tax"
+              href="/management/settings-integrations/tax"
             />
             <KpiCard
               title="Net Profit"
@@ -489,7 +489,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst - discountTotal - refundTotal - costTotal)}
               sub="Revenue ex-GST, less COGS, discounts & refunds"
               valueClass="text-emerald-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Cost"

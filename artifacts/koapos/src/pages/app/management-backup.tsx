@@ -705,7 +705,7 @@ export function BackupSettingsPanel() {
                               here.
                             </span>
                             <Link
-                              href="/management/sync"
+                              href="/management/settings-integrations/sync"
                               className="font-medium underline shrink-0"
                             >
                               Connect

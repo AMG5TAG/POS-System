@@ -380,7 +380,7 @@ export default function ManagementXeroPage() {
 
         {/* ── Header ── */}
         <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/management/integrations")} className="-mt-0.5 shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/management/settings-integrations/integrations")} className="-mt-0.5 shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="flex items-center gap-4 flex-1 min-w-0">

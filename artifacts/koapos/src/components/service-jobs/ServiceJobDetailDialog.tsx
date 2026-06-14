@@ -23,6 +23,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
+import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
+import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
+import { ServiceJobWarrantyPanel } from "@/components/service-jobs/ServiceJobWarrantyPanel";
+import { ServiceJobTimePanel } from "@/components/service-jobs/ServiceJobTimePanel";
+import { ServiceJobSignaturePanel } from "@/components/service-jobs/ServiceJobSignaturePanel";
+import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShippingPanel";
+import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
+import { History, ListChecks, Clock, PenLine, Truck, Wallet } from "lucide-react";
+import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
@@ -153,6 +162,7 @@ export function ServiceJobDetailDialog({
   };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (!job) return;
@@ -354,9 +364,17 @@ export function ServiceJobDetailDialog({
             {/* Device */}
             {(showAll || job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
-                  <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                  <div className="flex items-center gap-2">
+                    <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
+                  </div>
+                  {job.serialNumber && (
+                    <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setHistoryOpen(true)}>
+                      <History className="w-3.5 h-3.5" /> Device history
+                    </Button>
+                  )}
                 </div>
                 {(job.deviceType || showAll) && <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType ?? (showAll ? "—" : null)} />}
                 {(job.deviceDescription || showAll) && <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription ?? (showAll ? "—" : null)} />}
@@ -416,6 +434,83 @@ export function ServiceJobDetailDialog({
                 {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
               </div>
             )}
+
+            {/* Parts & Labour */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Wrench className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts &amp; Labour</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobLinesPanel jobId={job.id} customerId={job.customerId} />
+              </div>
+            </div>
+
+            {/* Estimate approval & deposit */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Wallet className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Approval &amp; Deposit</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobDepositPanel job={job} />
+              </div>
+            </div>
+
+            {/* Diagnostics / QC Checklist */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <ListChecks className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Diagnostics / QC Checklist</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobChecklistPanel jobId={job.id} deviceType={job.deviceType} />
+              </div>
+            </div>
+
+            {/* Repair warranty & rework */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Shield className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repair Warranty &amp; Rework</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobWarrantyPanel job={job} />
+              </div>
+            </div>
+
+            {/* Technician time */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Clock className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Technician Time</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobTimePanel jobId={job.id} />
+              </div>
+            </div>
+
+            {/* Customer sign-off */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <PenLine className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer Sign-off</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobSignaturePanel job={job} />
+              </div>
+            </div>
+
+            {/* Mail-in / shipping */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Truck className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mail-in / Shipping</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobShippingPanel job={job} />
+              </div>
+            </div>
 
             {/* Notes */}
             <div className="rounded-xl border bg-muted/20">
@@ -610,6 +705,8 @@ export function ServiceJobDetailDialog({
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <DeviceHistoryDialog serial={job?.serialNumber ?? null} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </>
   );
 }

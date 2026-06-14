@@ -10,6 +10,7 @@ import {
   useUpdateAppointment,
   useListStaff,
   useComposeEmail,
+  useListServiceJobs,
   Appointment,
   AppointmentInputStatus,
   Staff,
@@ -32,7 +33,7 @@ import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
   ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
-  Printer, MessageSquare, CheckCircle2, Bell, History,
+  Printer, MessageSquare, CheckCircle2, Bell, History, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -320,6 +321,17 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             </div>
           )}
 
+          {/* Linked repair job */}
+          {appt.serviceJobNumber && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
+              <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Linked repair job</p>
+                <p className="font-medium font-mono">{appt.serviceJobNumber}</p>
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           {appt.notes && (
             <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-start gap-3">
@@ -444,6 +456,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 type FormState = {
   customerId: string;
   staffId: string;
+  serviceJobId: string;
   startTime: string;
   endTime: string;
   status: AppointmentInputStatus;
@@ -455,7 +468,7 @@ type FormState = {
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
+  return { customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
 }
 
 interface BookingDialogProps {
@@ -476,6 +489,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
   const composeEmailMutation = useComposeEmail();
+  const { data: serviceJobs } = useListServiceJobs();
 
   useEffect(() => {
     if (open) {
@@ -483,6 +497,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       setForm(editing ? {
         customerId: editing.customerId ? String(editing.customerId) : "",
         staffId:    editing.staffId    ? String(editing.staffId)    : "",
+        serviceJobId: editing.serviceJobId ? String(editing.serviceJobId) : "",
         startTime:  toLocalDatetimeValue(new Date(editing.scheduledAt)),
         endTime:    toLocalDatetimeValue(new Date(editing.endAt!)),
         status:     editing.status as AppointmentInputStatus,
@@ -505,6 +520,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
       staffId:    form.staffId    ? Number(form.staffId)    : null,
+      serviceJobId: form.serviceJobId ? Number(form.serviceJobId) : null,
       scheduledAt: new Date(form.startTime).toISOString(),
       endAt:       new Date(form.endTime).toISOString(),
       status: form.status,
@@ -650,6 +666,26 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             {!form.customerId && (
               <p className="text-xs text-muted-foreground">A customer is required to book an appointment.</p>
             )}
+          </div>
+
+          {/* Linked repair job (drop-off / collection booking) */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 text-muted-foreground" /> Linked repair job <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Select value={form.serviceJobId || "__none__"} onValueChange={(v) => setField("serviceJobId", v === "__none__" ? "" : v)}>
+              <SelectTrigger className="text-sm"><SelectValue placeholder="No linked job" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No linked job</SelectItem>
+                {(serviceJobs ?? [])
+                  .filter((j) => j.status !== "completed" && j.status !== "cancelled")
+                  .filter((j) => !form.customerId || String(j.customerId ?? "") === form.customerId)
+                  .slice(0, 50)
+                  .map((j) => (
+                    <SelectItem key={j.id} value={String(j.id)}>
+                      {j.jobNumber} — {j.deviceDescription || j.deviceType || j.customerName || "Job"}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Time */}

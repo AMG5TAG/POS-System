@@ -728,7 +728,7 @@ function PosCameraTab() {
                 <p className="text-sm font-medium text-muted-foreground">Cloud Sync</p>
                 <p className="text-xs text-muted-foreground">
                   Google Drive, OneDrive and Dropbox sync can be configured in{" "}
-                  <a href="/management/integrations" className="underline hover:text-foreground">Management › Integrations</a>.
+                  <a href="/management/settings-integrations/integrations" className="underline hover:text-foreground">Management › Integrations</a>.
                 </p>
               </div>
             </div>

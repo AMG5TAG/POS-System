@@ -84,6 +84,7 @@ function formatProduct(
     supplier: p.supplier ?? null,
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
+    isRefurbished: p.isRefurbished === "true",
     tags: p.tags ?? [],
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,

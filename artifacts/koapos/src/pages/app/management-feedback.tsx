@@ -240,7 +240,7 @@ export default function ManagementFeedbackPage() {
                   <p className="font-medium">Email provider not configured</p>
                   <p className="mt-0.5 text-amber-600 dark:text-amber-400">
                     To send feedback automatically, configure an email provider in{" "}
-                    <a href="/management/email" className="underline font-medium">Management → Email</a>.
+                    <a href="/management/marketing-reports/email" className="underline font-medium">Management → Email</a>.
                     In the meantime, you can reach us directly at{" "}
                     <a href="mailto:sales@koastal.com.au" className="underline font-medium">sales@koastal.com.au</a>.
                   </p>

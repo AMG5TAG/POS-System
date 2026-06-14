@@ -42,6 +42,8 @@ export const productsTable = pgTable("products", {
   supplier:           text("supplier"),
   supplierCode:       text("supplier_code"),
   isEpay:             text("is_epay").notNull().default("false"),
+  // Second-hand / refurbished stock (e.g. created from a trade-in).
+  isRefurbished:      text("is_refurbished").notNull().default("false"),
   tags:               jsonb("tags_json").$type<string[]>(),
   stockLocation:      text("stock_location"),
   overflowLocation:   text("overflow_location"),

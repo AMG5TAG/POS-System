@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   Star, User, Calendar, Wrench, Loader2, Phone, Mail, MapPin,
   CheckCircle2, Clock, AlertCircle, Copy, Check, ExternalLink,
-  ChevronLeft, Wallet,
+  ChevronLeft, Wallet, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,26 @@ function usePortalServices(token: string, enabled: boolean) {
   return useQuery<ServiceJob[]>({
     queryKey: ["portal-services", token],
     queryFn: () => fetch(`/api/portal/${token}/services`, { credentials: "include" }).then(r => r.json()),
+    enabled,
+  });
+}
+
+interface PortalQuote {
+  id: number;
+  quoteNumber: string;
+  status: string;
+  total: number;
+  depositRequired: number | null;
+  items: { description: string; quantity: number; unitPrice: number; taxRate: number }[];
+  expiryDate: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+function usePortalQuotes(token: string, enabled: boolean) {
+  return useQuery<PortalQuote[]>({
+    queryKey: ["portal-quotes", token],
+    queryFn: () => fetch(`/api/portal/${token}/quotes`, { credentials: "include" }).then(r => r.json()),
     enabled,
   });
 }
@@ -494,6 +514,99 @@ function ServicesTab({ token }: { token: string }) {
   );
 }
 
+function QuotesTab({ token }: { token: string }) {
+  const { data = [], isLoading } = usePortalQuotes(token, true);
+  const qc = useQueryClient();
+  const [pending, setPending] = useState<number | null>(null);
+
+  const respond = async (quoteId: number, decision: "accept" | "decline") => {
+    setPending(quoteId);
+    try {
+      const r = await fetch(`/api/portal/${token}/quotes/${quoteId}/respond`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ decision }),
+      });
+      if (!r.ok) throw new Error();
+      qc.invalidateQueries({ queryKey: ["portal-quotes", token] });
+    } catch {
+      alert("Sorry, that couldn't be saved. Please try again.");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-amber-500" /></div>;
+
+  if (data.length === 0) return (
+    <div className="text-center py-14 text-gray-400 px-4">
+      <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
+      <p className="text-sm">No quotes to review</p>
+    </div>
+  );
+
+  return (
+    <div className="p-4 space-y-3">
+      {data.map((q) => {
+        const isOpen = q.status === "sent";
+        return (
+          <div key={q.id} className="rounded-xl bg-white border overflow-hidden">
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-1.5">
+                <div>
+                  <p className="font-semibold text-sm">{q.quoteNumber}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{new Date(q.createdAt).toLocaleDateString("en-AU")}</p>
+                </div>
+                <span className={cn("text-xs rounded-full px-2.5 py-0.5 border font-medium ml-2 shrink-0",
+                  q.status === "accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : q.status === "declined" ? "bg-red-50 text-red-700 border-red-200"
+                  : q.status === "expired" ? "bg-gray-100 text-gray-500 border-gray-200"
+                  : "bg-amber-50 text-amber-700 border-amber-200")}>
+                  {q.status === "sent" ? "Awaiting your approval" : q.status.charAt(0).toUpperCase() + q.status.slice(1)}
+                </span>
+              </div>
+              <div className="mt-2 space-y-1">
+                {q.items.map((it, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-600">
+                    <span className="truncate pr-2">{it.quantity} × {it.description}</span>
+                    <span className="tabular-nums shrink-0">${(it.quantity * it.unitPrice).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between font-semibold text-sm mt-2 pt-2 border-t">
+                <span>Total</span><span className="tabular-nums">${q.total.toFixed(2)}</span>
+              </div>
+              {q.depositRequired != null && q.depositRequired > 0 && (
+                <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  A deposit of <span className="font-semibold tabular-nums">${q.depositRequired.toFixed(2)}</span> is payable in store to begin this repair.
+                </div>
+              )}
+              {q.notes && <p className="text-xs text-gray-500 mt-2">{q.notes}</p>}
+            </div>
+            {isOpen && (
+              <div className="border-t bg-gray-50 px-4 py-3 flex gap-2">
+                <button
+                  onClick={() => respond(q.id, "accept")}
+                  disabled={pending === q.id}
+                  className="flex-1 rounded-lg bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-emerald-700 disabled:opacity-50">
+                  Approve
+                </button>
+                <button
+                  onClick={() => respond(q.id, "decline")}
+                  disabled={pending === q.id}
+                  className="flex-1 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium py-2 hover:bg-gray-100 disabled:opacity-50">
+                  Decline
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Shell ──────────────────────────────────────────────────────────────────── */
 
 const TABS = [
@@ -501,6 +614,7 @@ const TABS = [
   { id: "profile",      label: "Profile",      icon: User },
   { id: "appointments", label: "Appointments", icon: Calendar },
   { id: "repairs",      label: "Repairs",      icon: Wrench },
+  { id: "quotes",       label: "Quotes",       icon: FileText },
 ] as const;
 
 type PortalTab = typeof TABS[number]["id"];
@@ -597,6 +711,7 @@ export default function PortalPage() {
         {tab === "profile"      && <ProfileTab      data={data} token={token} />}
         {tab === "appointments" && <AppointmentsTab token={token} />}
         {tab === "repairs"      && <ServicesTab     token={token} />}
+        {tab === "quotes"       && <QuotesTab       token={token} />}
       </main>
 
       {/* Bottom nav */}

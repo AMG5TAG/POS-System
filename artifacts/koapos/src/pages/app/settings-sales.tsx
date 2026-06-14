@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Receipt, FileText, Package2, RotateCcw, ClipboardList, ShoppingCart, Loader2, Save } from "lucide-react";
+import { Receipt, FileText, Package2, RotateCcw, ClipboardList, ShoppingCart, Loader2, Save, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 /* Booleans are stored as "true"/"false" text (matching layby_settings). */
@@ -95,6 +95,11 @@ export default function SalesSettingsPage() {
 
   const { ConfirmDialog } = useUnsavedChangesGuard(dirty);
 
+  // If any of the three settings endpoints fails (e.g. a 4xx/5xx), surface a
+  // recoverable error instead of leaving the page on an endless spinner.
+  const loadError = salesQ.isError || laybyQ.isError || prefixQ.isError;
+  const retryLoad = () => { salesQ.refetch(); laybyQ.refetch(); prefixQ.refetch(); };
+
   const patchSales = (p: Partial<SalesSettings>) => { setSales((s) => (s ? { ...s, ...p } : s)); setDirty(true); };
   const patchLayby = (p: Partial<LaybySettings>) => { setLayby((s) => (s ? { ...s, ...p } : s)); setDirty(true); };
 
@@ -143,7 +148,18 @@ export default function SalesSettingsPage() {
           </div>
         </div>
 
-        {!ready ? (
+        {loadError ? (
+          <div className="py-16 flex flex-col items-center gap-3 text-center">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+            <div>
+              <p className="font-medium">Couldn't load sales settings</p>
+              <p className="text-sm text-muted-foreground mt-1">The settings service didn't respond. Please try again.</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={retryLoad}>
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Retry
+            </Button>
+          </div>
+        ) : !ready ? (
           <div className="py-16 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : (
           <Tabs defaultValue="sales">
@@ -244,6 +260,7 @@ export default function SalesSettingsPage() {
             <TabsContent value="quotes">
               <Card><CardContent className="p-4">
                 <NumberRow label="Default validity" hint="Pre-fills a new quote's expiry date." value={sales!.quoteExpiryDays} onChange={(v) => patchSales({ quoteExpiryDays: v })} suffix="days" />
+                <NumberRow label="Default deposit" hint="Deposit pre-filled on new quotes, as a % of the total. 0 = none. Overridable per quote." value={sales!.quoteDepositPercent ?? 0} onChange={(v) => patchSales({ quoteDepositPercent: v })} suffix="%" />
                 <ToggleRow label="Auto-email on creation" hint="Email the quote to the customer as soon as it's created." checked={isOn(sales!.quoteAutoEmail)} onChange={(v) => patchSales({ quoteAutoEmail: asStr(v) })} />
                 <div className="flex items-center justify-between gap-4 py-2.5 border-b">
                   <div><div className="text-sm font-medium">Quote numbering</div><div className="text-xs text-muted-foreground">Prefix and number of digits.</div></div>

@@ -40,6 +40,9 @@ export const salesSettingsTable = pgTable("sales_settings", {
   quoteTerms:            text("quote_terms").notNull().default(""),
   quotePrefix:           text("quote_prefix").notNull().default("QT-"),
   quoteDigits:           integer("quote_digits").notNull().default(4),
+  // Default deposit required when a quote/estimate is raised, as a % of the quote
+  // total. 0 = no deposit by default. Staff can override the amount per quote.
+  quoteDepositPercent:   numeric("quote_deposit_percent", { precision: 5, scale: 2 }).notNull().default("0"),
 
   // ── Sales Overview defaults (Management → Sales Overview) ──
   // Which period tab opens first for the Sales Overview KPIs (today | month | year)

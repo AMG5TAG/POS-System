@@ -5,6 +5,7 @@ import {
   useCreateDiscount,
   useUpdateDiscount,
   useDeleteDiscount,
+  useListProducts,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +15,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
-import { Percent, Plus, Tag, Pencil, Trash2, Copy, CheckCircle, DollarSign } from "lucide-react";
+import { cn, formatCurrency } from "@/lib/utils";
+import { Percent, Plus, Tag, Pencil, Trash2, Copy, CheckCircle, DollarSign, Ban, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { GroupPricingSection } from "@/components/pricing/group-pricing-section";
 
@@ -38,7 +41,79 @@ const EMPTY_FORM = {
   startDate: "",
   endDate: "",
   isActive: "true",
+  excludedProductIds: [] as number[],
 };
+
+/** Searchable multi-select for the products that should NOT receive a discount. */
+function ExcludeProductsSelect({
+  products, selected, onChange,
+}: {
+  products: { id: number; name: string }[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedSet = new Set(selected);
+  const selectedProducts = products.filter((p) => selectedSet.has(p.id));
+
+  const toggle = (id: number) =>
+    onChange(selectedSet.has(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+
+  return (
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between font-normal">
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Ban className="w-3.5 h-3.5" />
+              {selected.length === 0
+                ? "Select products to exclude…"
+                : `${selected.length} product${selected.length === 1 ? "" : "s"} excluded`}
+            </span>
+            <Plus className="w-3.5 h-3.5 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+          <Command>
+            <CommandInput placeholder="Search products…" />
+            <CommandList>
+              <CommandEmpty>No products found.</CommandEmpty>
+              <CommandGroup>
+                {products.map((p) => {
+                  const isSel = selectedSet.has(p.id);
+                  return (
+                    <CommandItem key={p.id} value={p.name} onSelect={() => toggle(p.id)}>
+                      <Check className={cn("mr-2 h-4 w-4", isSel ? "opacity-100" : "opacity-0")} />
+                      {p.name}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {selectedProducts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedProducts.map((p) => (
+            <Badge key={p.id} variant="secondary" className="gap-1 pr-1">
+              {p.name}
+              <button
+                type="button"
+                onClick={() => toggle(p.id)}
+                className="rounded-sm hover:bg-muted-foreground/20 p-0.5"
+                aria-label={`Remove ${p.name} from exclusions`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ManagementDiscountsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -47,6 +122,8 @@ export default function ManagementDiscountsPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const { data: discounts = [], isLoading } = useListDiscounts();
+  const { data: productsData } = useListProducts({ limit: 500 });
+  const products = (productsData?.items ?? []).map((p) => ({ id: p.id, name: p.name }));
   const createDiscount = useCreateDiscount();
   const updateDiscount = useUpdateDiscount();
   const deleteDiscount = useDeleteDiscount();
@@ -69,6 +146,7 @@ export default function ManagementDiscountsPage() {
       startDate: d.startDate ?? "",
       endDate: d.endDate ?? "",
       isActive: d.isActive,
+      excludedProductIds: d.excludedProductIds ?? [],
     });
     setDialogOpen(true);
   };
@@ -86,6 +164,7 @@ export default function ManagementDiscountsPage() {
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       isActive: form.isActive,
+      excludedProductIds: form.excludedProductIds,
     };
     if (editingId !== null) {
       updateDiscount.mutate({ id: editingId, data: payload }, {
@@ -195,6 +274,12 @@ export default function ManagementDiscountsPage() {
                           {d.maxUses && <span>Uses: {d.usedCount}/{d.maxUses}</span>}
                           {d.startDate && <span>From {d.startDate}</span>}
                           {d.endDate && <span>Until {d.endDate}</span>}
+                          {d.excludedProductIds && d.excludedProductIds.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Ban className="w-3 h-3" />
+                              {d.excludedProductIds.length} excluded
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -292,6 +377,21 @@ export default function ManagementDiscountsPage() {
                 <Input type="date" value={form.endDate}
                   onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Ban className="w-3.5 h-3.5" /> Exclude products
+                <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                These products will never receive this discount, even if the discount otherwise applies.
+              </p>
+              <ExcludeProductsSelect
+                products={products}
+                selected={form.excludedProductIds}
+                onChange={(ids) => setForm({ ...form, excludedProductIds: ids })}
+              />
             </div>
 
             <div className="flex items-center justify-between p-3 border rounded-lg">

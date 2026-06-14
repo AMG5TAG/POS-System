@@ -167,7 +167,7 @@ export function CloseDayDialog({ open, onOpenChange }: CloseDayDialogProps) {
                   Print
                 </Button>
               )}
-              <Button variant="outline" className="flex-1" onClick={() => { handleClose(); window.location.href = "/management/daily-reports"; }}>
+              <Button variant="outline" className="flex-1" onClick={() => { handleClose(); window.location.href = "/management/marketing-reports/reports/daily"; }}>
                 View Reports
               </Button>
             </div>

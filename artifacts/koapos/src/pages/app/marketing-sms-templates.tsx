@@ -289,7 +289,7 @@ export default function MarketingSmsTemplatesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Link href="/marketing">
+            <Link href="/marketing/overview">
               <Button variant="outline" size="sm" className="gap-1.5 text-xs">
                 <Megaphone className="w-3.5 h-3.5" /> Overview
               </Button>

@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListQrCodes,
   useListShortlinks,
@@ -22,6 +23,12 @@ import {
   useGetSalesSummary,
   useGetInventoryValuation,
   useGetProductPerformance,
+  useRunReport,
+  useListScheduledReports,
+  useCreateScheduledReport,
+  useUpdateScheduledReport,
+  useDeleteScheduledReport,
+  getListScheduledReportsQueryKey,
   GetDashboardSummaryPeriod,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -36,7 +43,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, exportToCsv } from "@/lib/utils";
 import {
   TrendingUp, CreditCard, Package2, Monitor, DollarSign, Users,
   BarChart3, Activity, Banknote, SlidersHorizontal, LayoutGrid,
@@ -135,11 +142,23 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   );
 }
 
-const ExportBtn = () => (
-  <Button variant="outline" size="sm" className="gap-1.5">
-    <Download className="w-3.5 h-3.5" /> Export CSV
-  </Button>
-);
+const ExportBtn = ({ rows, filename, columns }: {
+  rows?: Array<Record<string, unknown>>;
+  filename?: string;
+  columns?: { key: string; label: string }[];
+} = {}) => {
+  const disabled = !rows || rows.length === 0;
+  return (
+    <Button
+      variant="outline" size="sm" className="gap-1.5"
+      disabled={disabled}
+      title={disabled ? "Nothing to export yet" : "Download CSV"}
+      onClick={() => { if (rows && rows.length) exportToCsv(filename ?? "report", rows, columns); }}
+    >
+      <Download className="w-3.5 h-3.5" /> Export CSV
+    </Button>
+  );
+};
 
 const PAYMENT_COLORS: Record<string, string> = {
   card: "#6366f1", cash: "#22c55e", split: "#f59e0b",
@@ -167,7 +186,7 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
         <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Daily Sales" action={<ExportBtn />} />
+        <SectionHeader title="Daily Sales" action={<ExportBtn filename="daily-sales" rows={(chartData ?? []) as unknown as Record<string, unknown>[]} columns={[{ key: "label", label: "Date" }, { key: "sales", label: "Revenue" }, { key: "transactions", label: "Transactions" }]} />} />
         <div className="p-5">
           {chartLoading ? (
             <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Loading chart…</div>
@@ -281,7 +300,7 @@ function PaymentsTab({ startDate, endDate }: { startDate: string; endDate: strin
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Method breakdown table */}
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Breakdown by Method" action={<ExportBtn />} />
+          <SectionHeader title="Breakdown by Method" action={<ExportBtn filename="payment-breakdown" rows={breakdown as unknown as Record<string, unknown>[]} columns={[{ key: "paymentMethod", label: "Method" }, { key: "transactionCount", label: "Count" }, { key: "totalAmount", label: "Total" }, { key: "avgTransactionValue", label: "Avg" }]} />} />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : breakdown.length === 0 ? (
@@ -385,7 +404,7 @@ function InventoryTab() {
       )}
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Inventory Valuation" action={<ExportBtn />} />
+        <SectionHeader title="Inventory Valuation" action={<ExportBtn filename="inventory-valuation" rows={sorted as unknown as Record<string, unknown>[]} columns={[{ key: "name", label: "Product" }, { key: "sku", label: "SKU" }, { key: "stockQuantity", label: "Units" }, { key: "costPrice", label: "Cost ea" }, { key: "retailPrice", label: "Retail ea" }, { key: "costValue", label: "Cost Value" }, { key: "retailValue", label: "Retail Value" }, { key: "marginPct", label: "Margin %" }]} />} />
         {isLoading ? (
           <div className="flex items-center justify-center py-14 gap-3 text-muted-foreground text-sm">
             <RefreshCw className="w-4 h-4 animate-spin" /> Loading inventory…
@@ -579,7 +598,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
         <>
           {/* ── Daily P&L trend chart ─────────────────────────────────────── */}
           <div className="rounded-xl border bg-card overflow-hidden">
-            <SectionHeader title="Daily Revenue vs Net Profit" action={<ExportBtn />} />
+            <SectionHeader title="Daily Revenue vs Net Profit" action={<ExportBtn filename="profit-loss-daily" rows={dailyRows as unknown as Record<string, unknown>[]} columns={[{ key: "date", label: "Date" }, { key: "transactionCount", label: "Transactions" }, { key: "grossRevenue", label: "Gross Revenue" }, { key: "taxCollected", label: "GST" }, { key: "totalCogs", label: "COGS" }, { key: "netProfit", label: "Net Profit" }]} />} />
             <div className="p-5">
               {isLoading ? (
                 <div className="h-44 flex items-center justify-center text-muted-foreground text-sm gap-2">
@@ -794,7 +813,7 @@ function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod })
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card overflow-hidden">
-          <SectionHeader title="Top Products by Revenue" action={<ExportBtn />} />
+          <SectionHeader title="Top Products by Revenue" action={<ExportBtn filename="top-products" rows={products as unknown as Record<string, unknown>[]} columns={[{ key: "productName", label: "Product" }, { key: "quantitySold", label: "Qty" }, { key: "revenue", label: "Revenue" }]} />} />
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
           ) : products.length === 0 ? (
@@ -932,7 +951,7 @@ function CashMovementsTab() {
         <KpiTile label="Cash Out" value={isLoading ? "—" : formatCurrency(cashOut)} sub="Counted out" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Cash Movement Log" action={<ExportBtn />} />
+        <SectionHeader title="Cash Movement Log" action={<ExportBtn filename="cash-movements" rows={entries as unknown as Record<string, unknown>[]} columns={[{ key: "shiftDate", label: "Date" }, { key: "type", label: "Type" }, { key: "note", label: "Note" }, { key: "amount", label: "Amount" }]} />} />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
         ) : entries.length === 0 ? (
@@ -1050,13 +1069,52 @@ const BUILDER_FIELDS = [
 
 const BUILDER_GROUPS = [...new Set(BUILDER_FIELDS.map((f) => f.group))];
 
-function ReportBuilderTab() {
+function ReportBuilderTab({ startDate, endDate }: { startDate: string; endDate: string }) {
   const [selected, setSelected] = useState<string[]>(["date", "revenue", "transactions"]);
   const [groupBy, setGroupBy] = useState("date");
   const [format, setFormat] = useState("table");
+  const [result, setResult] = useState<{ columns: { key: string; label: string; type: string }[]; rows: Record<string, unknown>[] } | null>(null);
+  const runReport = useRunReport();
 
   const toggle = (id: string) =>
     setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const fmtCell = (val: unknown, type: string) => {
+    if (val == null) return "—";
+    if (type === "currency") return formatCurrency(Number(val));
+    if (type === "percent") return `${Number(val).toFixed(1)}%`;
+    if (type === "number") return Number(val).toLocaleString();
+    return String(val);
+  };
+
+  // Columns are driven by the grouping; the field checkboxes filter which of the
+  // returned (non-period) columns to show, when any of them match.
+  const visibleColumns = (() => {
+    if (!result) return [];
+    const labels = selected.map((id) => (BUILDER_FIELDS.find((f) => f.id === id)?.label ?? "").toLowerCase()).filter(Boolean);
+    const matches = (col: { key: string; label: string }) =>
+      col.key === "period" || labels.some((l) => col.label.toLowerCase().includes(l) || l.includes(col.label.toLowerCase()));
+    const filtered = result.columns.filter(matches);
+    // If nothing beyond the period column matched, fall back to all columns.
+    return filtered.length > 1 ? filtered : result.columns;
+  })();
+
+  const handleRun = () => {
+    runReport.mutate(
+      { data: { startDate, endDate, groupBy: groupBy as "date" | "week" | "month" | "payment" | "staff" | "product" } },
+      {
+        onSuccess: (data) => setResult({ columns: data.columns, rows: data.rows as Record<string, unknown>[] }),
+        onError: () => toast.error("Couldn't run report"),
+      },
+    );
+  };
+
+  const exportResult = () => {
+    if (!result) return;
+    exportToCsv(`report-${groupBy}-${startDate}_${endDate}`,
+      result.rows.map((r) => Object.fromEntries(visibleColumns.map((c) => [c.key, r[c.key]]))),
+      visibleColumns.map((c) => ({ key: c.key, label: c.label })));
+  };
 
   return (
     <div className="space-y-5">
@@ -1105,10 +1163,52 @@ function ReportBuilderTab() {
                 </select>
               </div>
             </div>
-            <Button className="gap-1.5">
-              <BarChart3 className="w-4 h-4" /> Run Report
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button className="gap-1.5" onClick={handleRun} disabled={runReport.isPending}>
+                {runReport.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />} Run Report
+              </Button>
+              {result && (
+                <Button variant="outline" className="gap-1.5" onClick={exportResult}>
+                  <Download className="w-4 h-4" /> Export CSV
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Uses the date range selected at the top of Reports.</p>
           </div>
+
+          {/* Result */}
+          {result && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title={`Result — grouped by ${groupBy}`} />
+              {result.rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-10">No data for this period.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/30 border-b">
+                        {visibleColumns.map((c) => (
+                          <th key={c.key} className={cn("px-5 py-3 font-medium text-muted-foreground", c.type === "text" ? "text-left" : "text-right")}>{c.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.rows.map((row, i) => (
+                        <tr key={i} className="border-b last:border-0 hover:bg-muted/20">
+                          {visibleColumns.map((c) => (
+                            <td key={c.key} className={cn("px-5 py-3", c.type === "text" ? "text-left font-medium" : "text-right tabular-nums")}>
+                              {fmtCell(row[c.key], c.type)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rounded-xl border bg-muted/30 p-5">
             <p className="text-sm font-semibold mb-3">Preview Columns</p>
             <div className="flex flex-wrap gap-2">
@@ -1134,23 +1234,7 @@ function ReportBuilderTab() {
 
 /* ─── Tab: Scheduled ─────────────────────────────────────────────────────── */
 
-interface ScheduledReport {
-  id: string;
-  name: string;
-  reportType: string;
-  frequency: string;
-  format: string;
-  email: string;
-  enabled: boolean;
-  createdAt: string;
-}
-
-const SCHED_LS_KEY = "koapos_scheduled_reports";
-
-function loadSchedules(): ScheduledReport[] {
-  try { return JSON.parse(localStorage.getItem(SCHED_LS_KEY) ?? "[]") as ScheduledReport[]; }
-  catch { return []; }
-}
+type NewSchedule = { name: string; reportType: string; frequency: string; format: string; email: string };
 
 const REPORT_TYPES = [
   { value: "daily_sales",    label: "Daily Sales Summary" },
@@ -1176,7 +1260,7 @@ function NewScheduleDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (r: ScheduledReport) => void;
+  onSave: (r: NewSchedule) => void;
 }) {
   const [name, setName]           = useState("");
   const [reportType, setType]     = useState("daily_sales");
@@ -1191,16 +1275,7 @@ function NewScheduleDialog({
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       toast.error("Enter a valid email address"); return;
     }
-    onSave({
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      reportType,
-      frequency,
-      format,
-      email: email.trim(),
-      enabled: true,
-      createdAt: new Date().toISOString(),
-    });
+    onSave({ name: name.trim(), reportType, frequency, format, email: email.trim() });
     reset();
     onOpenChange(false);
   };
@@ -1261,20 +1336,28 @@ function NewScheduleDialog({
 }
 
 function ScheduledTab() {
-  const [schedules, setSchedules] = useState<ScheduledReport[]>(loadSchedules);
+  const queryClient = useQueryClient();
+  const { data } = useListScheduledReports({ query: { queryKey: getListScheduledReportsQueryKey() } });
+  const createSched = useCreateScheduledReport();
+  const updateSched = useUpdateScheduledReport();
+  const deleteSched = useDeleteScheduledReport();
   const [newOpen, setNewOpen] = useState(false);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListScheduledReportsQueryKey() });
 
-  const save = useCallback((updated: ScheduledReport[]) => {
-    setSchedules(updated);
-    localStorage.setItem(SCHED_LS_KEY, JSON.stringify(updated));
-  }, []);
+  const schedules = data?.items ?? [];
 
-  const handleAdd = (r: ScheduledReport) => { save([...schedules, r]); toast.success("Schedule created"); };
-
-  const handleToggle = (id: string) =>
-    save(schedules.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
-
-  const handleDelete = (id: string) => { save(schedules.filter(s => s.id !== id)); toast.success("Schedule removed"); };
+  const handleAdd = async (r: NewSchedule) => {
+    try { await createSched.mutateAsync({ data: r as never }); invalidate(); toast.success("Schedule created"); }
+    catch { toast.error("Couldn't create schedule"); }
+  };
+  const handleToggle = async (id: number, enabled: boolean) => {
+    try { await updateSched.mutateAsync({ id, data: { enabled: !enabled } as never }); invalidate(); }
+    catch { toast.error("Couldn't update schedule"); }
+  };
+  const handleDelete = async (id: number) => {
+    try { await deleteSched.mutateAsync({ id }); invalidate(); toast.success("Schedule removed"); }
+    catch { toast.error("Couldn't remove schedule"); }
+  };
 
   const FREQ_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
@@ -1327,7 +1410,7 @@ function ScheduledTab() {
                 <div className="flex items-center gap-3 shrink-0">
                   <Switch
                     checked={s.enabled}
-                    onCheckedChange={() => handleToggle(s.id)}
+                    onCheckedChange={() => handleToggle(s.id, s.enabled)}
                     title={s.enabled ? "Pause schedule" : "Resume schedule"}
                   />
                   <Button
@@ -1336,7 +1419,7 @@ function ScheduledTab() {
                     className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                     onClick={() => handleDelete(s.id)}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4" aria-hidden />
                   </Button>
                 </div>
               </div>
@@ -1686,7 +1769,7 @@ function AnalyticsTab() {
         {/* Top shortlinks by clicks */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Top Shortlinks by Clicks" action={
-            <Link href="/management/marketing/generators/shortlinks">
+            <Link href="/management/marketing-reports/generators/shortlinks">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
@@ -1716,7 +1799,7 @@ function AnalyticsTab() {
         {/* QR template usage */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="QR Code Templates Used" action={
-            <Link href="/management/marketing/generators/qr-codes">
+            <Link href="/management/marketing-reports/generators/qr-codes">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
@@ -1839,7 +1922,7 @@ function AnalyticsTab() {
       {pages.length > 0 && (
         <div className="rounded-xl border bg-card overflow-hidden">
           <SectionHeader title="Landing Pages" action={
-            <Link href="/management/marketing/landing-pages">
+            <Link href="/management/marketing-reports/landing-pages/pages">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-3.5 h-3.5" />Manage</Button>
             </Link>
           } />
@@ -1993,7 +2076,7 @@ export default function ReportsPage() {
         {activeTab === "user-activity"     && <UserActivityTab fromDate={fromDate} />}
         {activeTab === "cash-movements"    && <CashMovementsTab />}
         {activeTab === "adjustments"       && <AdjustmentsTab />}
-        {activeTab === "report-builder"    && <ReportBuilderTab />}
+        {activeTab === "report-builder"    && <ReportBuilderTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "scheduled"         && <ScheduledTab />}
         {activeTab === "gst-bas"           && <GstBasTab summary={summary} summaryLoading={summaryLoading} />}
         {activeTab === "gift-cards"        && <GiftCardsTab />}

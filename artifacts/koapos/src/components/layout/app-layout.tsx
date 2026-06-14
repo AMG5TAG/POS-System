@@ -50,7 +50,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn, formatCurrency } from "@/lib/utils";
-import { HUB_ROUTE_LABELS } from "@/components/layout/management-hubs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -58,17 +57,18 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { LocationSwitcher } from "@/components/layout/location-switcher";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
 const POS_SUBNAV = [
-  { name: "Sell",      href: "/pos",            icon: ShoppingCart },
+  { name: "Sell",      href: "/pos/sell",            icon: ShoppingCart },
   { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
   { name: "PC Builder", href: "/pos/pc-builder", icon: HardDrive },
   { name: "History",   href: "/pos/history",    icon: History },
   { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
   { name: "Quotes",    href: "/pos/quotes",     icon: ClipboardList },
-  { name: "Laybys",    href: "/pos/laybuys",    icon: Package2 },
+  { name: "Laybys",    href: "/pos/laybys",    icon: Package2 },
   { name: "Parked",    href: "/pos/parked",     icon: ParkingCircle },
   { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
   { name: "Cash",      href: "/pos/cash",       icon: Coins },
@@ -90,13 +90,13 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
-  { name: "Deliveries", href: "/online/delivery-orders", icon: Package2    },
+  { name: "Deliveries", href: "/online/deliveries", icon: Package2    },
   { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
   { name: "Marketplace",     href: "/online/marketplace",     icon: ShoppingBag },
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
-  { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
+  { name: "Overview",      href: "/marketing/overview",                      icon: BarChart2 },
   {
     name: "Email",
     icon: Mail,
@@ -120,8 +120,8 @@ const MARKETING_SUBNAV: NavItem[] = [
     name: "Loyalty",
     icon: Gift,
     children: [
-      { name: "Promos",  href: "/marketing/loyalty/promotions",  icon: Zap   },
-      { name: "Leaders", href: "/marketing/loyalty/leaderboard", icon: Trophy },
+      { name: "Promos",  href: "/marketing/loyalty/promos",  icon: Zap   },
+      { name: "Leaders", href: "/marketing/loyalty/leaders", icon: Trophy },
     ],
   },
   { name: "Automation",    href: "/marketing/automation",       icon: Zap },
@@ -129,19 +129,19 @@ const MARKETING_SUBNAV: NavItem[] = [
 ];
 
 const INVENTORY_SUBNAV = [
-  { name: "Overview",        href: "/products/overview",        icon: LayoutGrid },
-  { name: "Products",        href: "/products",                 icon: Package },
-  { name: "Bundles",         href: "/products/bundles",         icon: Layers },
-  { name: "Stocktake",       href: "/products/stocktake",       icon: ClipboardList },
-  { name: "Purchase Orders", href: "/products/purchase-orders", icon: ShoppingCart },
-  { name: "Pre-Orders",      href: "/products/pre-orders",      icon: Clock },
-  { name: "Return Auth.",    href: "/products/return-auth",     icon: RotateCcw },
-  { name: "Suppliers",       href: "/products/suppliers",       icon: Truck },
-  { name: "Brands",          href: "/products/brands",          icon: Bookmark },
-  { name: "Categories",      href: "/products/categories",      icon: Tag },
-  { name: "Tags",            href: "/products/tags",            icon: Hash },
-  { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
-  { name: "Warranty",        href: "/products/warranty",        icon: ShieldCheck },
+  { name: "Overview",        href: "/inventory/overview",        icon: LayoutGrid },
+  { name: "Products",        href: "/inventory/products",                 icon: Package },
+  { name: "Bundles",         href: "/inventory/bundles",         icon: Layers },
+  { name: "Stocktake",       href: "/inventory/stocktake",       icon: ClipboardList },
+  { name: "Purchase Orders", href: "/inventory/purchase-orders", icon: ShoppingCart },
+  { name: "Pre-Orders",      href: "/inventory/pre-orders",      icon: Clock },
+  { name: "Return Auth.",    href: "/inventory/return-auth",     icon: RotateCcw },
+  { name: "Suppliers",       href: "/inventory/suppliers",       icon: Truck },
+  { name: "Brands",          href: "/inventory/brands",          icon: Bookmark },
+  { name: "Categories",      href: "/inventory/categories",      icon: Tag },
+  { name: "Tags",            href: "/inventory/tags",            icon: Hash },
+  { name: "Recalls",         href: "/inventory/recalls",         icon: AlertTriangle },
+  { name: "Warranty",        href: "/inventory/warranty",        icon: ShieldCheck },
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
@@ -153,107 +153,107 @@ type NavItem     = NavLeaf | NavGroup;
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/management/overview", icon: LayoutDashboard },
   {
-    name: "Customers", icon: Users, defaultHref: "/management/customers",
+    name: "Customers", icon: Users, defaultHref: "/management/customers/settings",
     children: [
-      { name: "Settings",            href: "/management/customers",            icon: Users         },
+      { name: "Settings",            href: "/management/customers/settings",            icon: Users         },
       { name: "Heard From",          href: "/management/customers/heard-from", icon: Radio         },
       { name: "Portal",              href: "/management/customers/portal",     icon: Link2         },
-      { name: "Loyalty",             href: "/management/loyalty",              icon: Gift,
-        matchPaths: ["/management/loyalty/leaderboard"] },
-      { name: "Gift Cards",          href: "/management/gift-cards",           icon: Gift          },
-      { name: "Discounts & Pricing", href: "/management/discounts",            icon: Percent,
-        matchPaths: ["/management/pricing-rules", "/management/layby"] },
+      { name: "Loyalty",             href: "/management/customers/loyalty",              icon: Gift,
+        matchPaths: ["/management/customers/loyalty/leaderboard"] },
+      { name: "Gift Cards",          href: "/management/customers/gift-cards",           icon: Gift          },
+      { name: "Discounts & Pricing", href: "/management/customers/discounts-pricing",            icon: Percent,
+        matchPaths: ["/management/customers/discounts-pricing/pricing-rules", "/management/customers/discounts-pricing/layby"] },
     ],
   },
   {
-    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/inventory",
+    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/products-inventory/inventory",
     children: [
-      { name: "Inventory",       href: "/management/inventory",       icon: Boxes    },
-      { name: "Product Types",   href: "/management/product-types",   icon: Tag      },
-      { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers   },
+      { name: "Inventory",       href: "/management/products-inventory/inventory",       icon: Boxes    },
+      { name: "Product Types",   href: "/management/products-inventory/product-types",   icon: Tag      },
+      { name: "Modifier Groups", href: "/management/products-inventory/modifier-groups", icon: Layers   },
       {
         name: "Calculators", icon: Calculator,
         children: [
-          { name: "3D Prints",  href: "/management/calculators/3d-printing", icon: Cpu       },
-          { name: "PC Builder", href: "/management/calculators/pc-builder",  icon: HardDrive },
+          { name: "3D Prints",  href: "/management/products-inventory/3d-prints", icon: Cpu       },
+          { name: "PC Builder", href: "/management/products-inventory/pc-builder",  icon: HardDrive },
         ],
       },
     ],
   },
   {
-    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff",
+    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff-operations/employees",
     children: [
-      { name: "Employees",     href: "/management/staff",              icon: UserSquare2 },
-      { name: "Timesheets",    href: "/management/staff/timesheet",    icon: Clock       },
-      { name: "Cost Summary",  href: "/management/staff/cost-summary", icon: Coins       },
-      { name: "POS Registers", href: "/management/registers",          icon: Monitor     },
+      { name: "Employees",     href: "/management/staff-operations/employees",              icon: UserSquare2 },
+      { name: "Timesheets",    href: "/management/staff-operations/timesheets",    icon: Clock       },
+      { name: "Cost Summary",  href: "/management/staff-operations/cost-summary", icon: Coins       },
+      { name: "POS Registers", href: "/management/staff-operations/pos-registers",          icon: Monitor     },
       { name: "Sales Settings", href: "/management/sales-settings",    icon: Receipt     },
-      { name: "Floor Plan",    href: "/management/floor-plan",         icon: Map         },
-      { name: "Cameras",       href: "/management/cameras",            icon: Camera      },
+      { name: "Floor Plan",    href: "/management/staff-operations/floor-plan",         icon: Map         },
+      { name: "Cameras",       href: "/management/staff-operations/cameras",            icon: Camera      },
       {
         name: "Apps", icon: LayoutGrid,
         children: [
-          { name: "Tech App",  href: "/management/tech-app",      icon: TabletSmartphone },
-          { name: "Dashboard", href: "/management/dashboard-app", icon: LayoutDashboard  },
+          { name: "Tech App",  href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
+          { name: "Dashboard", href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
         ],
       },
-      { name: "Legal",         href: "/management/legal",              icon: Scale       },
+      { name: "Legal",         href: "/management/staff-operations/legal",              icon: Scale       },
     ],
   },
   {
-    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/sales-overview",
+    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/marketing-reports/sales-overview",
     children: [
-      { name: "Sales Overview", href: "/management/sales-overview",       icon: BarChart2  },
-      { name: "Reports",        href: "/management/reports",              icon: TrendingUp,
-        matchPaths: ["/management/daily-reports"] },
-      { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
-      { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
-      { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
+      { name: "Sales Overview", href: "/management/marketing-reports/sales-overview",       icon: BarChart2  },
+      { name: "Reports",        href: "/management/marketing-reports/reports", icon: TrendingUp,
+        matchPaths: ["/management/marketing-reports/reports/daily"] },
+      { name: "KPIs & Targets", href: "/management/marketing-reports/kpis-targets",                 icon: Target     },
+      { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
+      { name: "Social Feed",    href: "/management/marketing-reports/social-feed",icon: Share2     },
       {
         name: "Landing Pages", icon: LayoutTemplate,
         children: [
-          { name: "Pages",         href: "/management/marketing/landing-pages",          icon: Globe },
-          { name: "Templates",     href: "/management/marketing/landing-page-templates", icon: LayoutTemplate },
+          { name: "Pages",         href: "/management/marketing-reports/landing-pages/pages",          icon: Globe },
+          { name: "Templates",     href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate },
         ],
       },
       {
         name: "Generators", icon: QrCode,
         children: [
-          { name: "QR Codes",   href: "/management/marketing/generators/qr-codes",   icon: QrCode },
-          { name: "Shortlinks", href: "/management/marketing/generators/shortlinks", icon: Link2  },
+          { name: "QR Codes",   href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode },
+          { name: "Shortlinks", href: "/management/marketing-reports/generators/shortlinks", icon: Link2  },
         ],
       },
-      { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
-      { name: "Forms & Files",  href: "/management/forms",                icon: FileText   },
-      { name: "AI Assistant",   href: "/management/ai",                   icon: Brain      },
+      { name: "Online Store",   href: "/management/marketing-reports/online-store",         icon: Globe      },
+      { name: "Forms & Files",  href: "/management/marketing-reports/forms-files",                icon: FileText   },
+      { name: "AI Assistant",   href: "/management/marketing-reports/ai-assistant",                   icon: Brain      },
     ],
   },
   {
-    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/account",
+    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/settings-integrations/account",
     children: [
-      { name: "Account",           href: "/management/account",       icon: UserCircle     },
-      { name: "Business Details",  href: "/management/business",      icon: Building2,
-        matchPaths: ["/management/regional"] },
-      { name: "Tax",               href: "/management/tax",           icon: Receipt        },
+      { name: "Account",           href: "/management/settings-integrations/account",       icon: UserCircle     },
+      { name: "Business Details",  href: "/management/settings-integrations/business-details",      icon: Building2,
+        matchPaths: ["/management/settings-integrations/business-details/regional"] },
+      { name: "Tax",               href: "/management/settings-integrations/tax",           icon: Receipt        },
       {
         name: "Templates", icon: LayoutTemplate,
         children: [
-          { name: "Sales",             href: "/management/templates",        icon: LayoutTemplate },
-          { name: "Stickers",          href: "/management/stickers",         icon: Printer,
+          { name: "Sales",             href: "/management/products-inventory/sales",        icon: LayoutTemplate },
+          { name: "Stickers",          href: "/management/products-inventory/stickers",         icon: Printer,
             matchPaths: ["/management/sticker-templates"] }, // legacy path → redirects to /management/stickers
-          { name: "Misc",              href: "/management/misc-templates",   icon: FileText },
+          { name: "Misc",              href: "/management/templates/misc",   icon: FileText },
         ],
       },
-      { name: "SMS",               href: "/management/sms",           icon: MessageSquare  },
-      { name: "Emails",            href: "/management/email",         icon: Mail           },
-      { name: "Integrations",      href: "/management/integrations",  icon: Plug,
-        matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
-      { name: "Sync",              href: "/management/sync",          icon: FolderSync,
-        matchPaths: ["/management/backup"] },
-      { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
-      { name: "Misc",              href: "/management/misc",          icon: MoreHorizontal },
-      { name: "System",            href: "/management/koapos",        icon: Sparkles       },
-      { name: "Feedback",          href: "/management/feedback",      icon: MessageSquare  },
+      { name: "SMS",               href: "/management/settings-integrations/sms",           icon: MessageSquare  },
+      { name: "Emails",            href: "/management/marketing-reports/email",         icon: Mail           },
+      { name: "Integrations",      href: "/management/settings-integrations/integrations",  icon: Plug,
+        matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero"] },
+      { name: "Sync",              href: "/management/settings-integrations/sync",          icon: FolderSync,
+        matchPaths: ["/management/settings-integrations/sync/backup"] },
+      { name: "Import / Export",   href: "/management/settings-integrations/import-export", icon: ArrowLeftRight },
+      { name: "Misc",              href: "/management/settings-integrations/system/misc",          icon: MoreHorizontal },
+      { name: "System",            href: "/management/settings-integrations/system",        icon: Sparkles       },
+      { name: "Feedback",          href: "/management/settings-integrations/feedback",      icon: MessageSquare  },
     ],
   },
 ];
@@ -262,26 +262,26 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
 
 const SEARCH_INDEX = [
   { label: "Dashboard",          href: "/dashboard",                   icon: LayoutDashboard, group: "Pages" },
-  { label: "POS · Sell",         href: "/pos",                         icon: ShoppingCart,    group: "POS" },
+  { label: "POS · Sell",         href: "/pos/sell",                         icon: ShoppingCart,    group: "POS" },
   { label: "POS · History",      href: "/pos/history",                 icon: History,         group: "POS" },
   { label: "POS · Invoices",     href: "/pos/invoices",                icon: FileText,        group: "POS" },
   { label: "POS · Quotes",       href: "/pos/quotes",                  icon: ClipboardList,   group: "POS" },
-  { label: "POS · Laybys",       href: "/pos/laybuys",                 icon: Package2,        group: "POS" },
+  { label: "POS · Laybys",       href: "/pos/laybys",                 icon: Package2,        group: "POS" },
   { label: "POS · Parked",       href: "/pos/parked",                  icon: ParkingCircle,   group: "POS" },
   { label: "POS · Refund",       href: "/pos/refund",                  icon: RotateCcw,       group: "POS" },
-  { label: "Services",           href: "/service-jobs",                icon: Wrench,          group: "Pages" },
+  { label: "Services",           href: "/services",                icon: Wrench,          group: "Pages" },
   { label: "Appointments",       href: "/appointments",                icon: CalendarClock,   group: "Pages" },
   { label: "Customers",          href: "/customers",                   icon: Users,           group: "Pages" },
   { label: "Customers · Forms", href: "/customers/forms",             icon: FileText,        group: "Customers" },
-  { label: "Products",           href: "/products",                    icon: Package,         group: "Inventory" },
-  { label: "Inventory Overview", href: "/products/overview",           icon: LayoutGrid,      group: "Inventory" },
-  { label: "Stocktake",          href: "/products/stocktake",          icon: ClipboardList,   group: "Inventory" },
-  { label: "Suppliers",          href: "/products/suppliers",          icon: Truck,           group: "Inventory" },
-  { label: "Categories",         href: "/products/categories",         icon: Tag,             group: "Inventory" },
-  { label: "Staff · Employees",  href: "/staff",                       icon: UserSquare2,     group: "Staff" },
+  { label: "Products",           href: "/inventory/products",                    icon: Package,         group: "Inventory" },
+  { label: "Inventory Overview", href: "/inventory/overview",           icon: LayoutGrid,      group: "Inventory" },
+  { label: "Stocktake",          href: "/inventory/stocktake",          icon: ClipboardList,   group: "Inventory" },
+  { label: "Suppliers",          href: "/inventory/suppliers",          icon: Truck,           group: "Inventory" },
+  { label: "Categories",         href: "/inventory/categories",         icon: Tag,             group: "Inventory" },
+  { label: "Staff · Employees",  href: "/staff/employees",                       icon: UserSquare2,     group: "Staff" },
   { label: "Staff · Timesheet",  href: "/staff/timesheet",             icon: Clock,           group: "Staff" },
   { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Staff" },
-  { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Staff" },
+  { label: "Staff · Costs",      href: "/staff/costs",          icon: Coins,           group: "Staff" },
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
   { label: "Staff · Links",        href: "/staff/links",                        icon: Link2,    group: "Staff" },
@@ -290,188 +290,106 @@ const SEARCH_INDEX = [
   { label: "PC Builder",             href: "/pos/pc-builder",                      icon: HardDrive,   group: "POS" },
   { label: "POS · End of Day",            href: "/pos/eod",                                       icon: Moon,          group: "POS"        },
   { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
-  { label: "Account",            href: "/management/account",          icon: UserCircle,      group: "Management" },
-  { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
-  { label: "AI Assistant",       href: "/management/ai",             icon: Brain,          group: "Management" },
-  { label: "Business Details",   href: "/management/business",         icon: Building2,       group: "Management" },
-  { label: "Regional Settings",  href: "/management/regional",         icon: Globe,           group: "Management" },
-  { label: "Calculators · 3D",       href: "/management/calculators/3d-printing",  icon: Calculator,  group: "Management" },
-  { label: "Calculators · PC Builder", href: "/management/calculators/pc-builder", icon: HardDrive,   group: "Management" },
-  { label: "Camera Management",             href: "/management/cameras",                    icon: Camera,         group: "Management"  },
-  { label: "Customers",          href: "/management/customers",        icon: Users,           group: "Management" },
+  { label: "Account",            href: "/management/settings-integrations/account",          icon: UserCircle,      group: "Management" },
+  { label: "Modules",            href: "/management/settings-integrations/account/modules",                     icon: Blocks,          group: "Management" },
+  { label: "AI Assistant",       href: "/management/marketing-reports/ai-assistant",             icon: Brain,          group: "Management" },
+  { label: "Business Details",   href: "/management/settings-integrations/business-details",         icon: Building2,       group: "Management" },
+  { label: "Regional Settings",  href: "/management/settings-integrations/business-details/regional",         icon: Globe,           group: "Management" },
+  { label: "Calculators · 3D",       href: "/management/products-inventory/3d-prints",  icon: Calculator,  group: "Management" },
+  { label: "Calculators · PC Builder", href: "/management/products-inventory/pc-builder", icon: HardDrive,   group: "Management" },
+  { label: "Camera Management",             href: "/management/staff-operations/cameras",                    icon: Camera,         group: "Management"  },
+  { label: "Customers",          href: "/management/customers/settings",        icon: Users,           group: "Management" },
   { label: "Customers · Heard From", href: "/management/customers/heard-from", icon: Radio,         group: "Management" },
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
-  { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
-  { label: "Emails",              href: "/management/email",                      icon: Mail,         group: "Management" },
-  { label: "SMS Settings",        href: "/management/sms",                        icon: MessageSquare, group: "Management" },
-  { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
-  { label: "Floor Plan",         href: "/management/floor-plan",       icon: Map,             group: "Management" },
-  { label: "Forms & Files",     href: "/management/forms",            icon: FileText,        group: "Management" },
-  { label: "Gift Cards",        href: "/management/gift-cards",       icon: Gift,            group: "Management" },
-  { label: "Import / Export",   href: "/management/import-export",    icon: ArrowLeftRight,  group: "Management" },
-  { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
-  { label: "Integrations · Tyro EFTPOS", href: "/management/tyro-eftpos", icon: CreditCard,   group: "Management" },
-  { label: "Inventory Settings",       href: "/management/inventory",         icon: Boxes,           group: "Management" },
-  { label: "Inventory · Modifier Groups", href: "/management/modifier-groups",   icon: Layers,          group: "Management" },
-  { label: "Inventory · Product Types",   href: "/management/product-types",     icon: Tag,             group: "Management" },
-  { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
-  { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
-  { label: "Layby",              href: "/management/layby",            icon: Package2,        group: "Management" },
-  { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
-  { label: "Sticker Templates",  href: "/management/stickers",         icon: LayoutTemplate,  group: "Management" },
-  { label: "Loyalty",            href: "/management/loyalty",          icon: Gift,            group: "Management" },
-  { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
-  { label: "Marketing · Social Feed Settings", href: "/management/marketing/social-feed", icon: Share2, group: "Management" },
-  { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
-  { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
-  { label: "POS Registers",      href: "/management/registers",        icon: Monitor,         group: "Management" },
+  { label: "Discounts",          href: "/management/customers/discounts-pricing",        icon: Percent,         group: "Management" },
+  { label: "Emails",              href: "/management/marketing-reports/email",                      icon: Mail,         group: "Management" },
+  { label: "SMS Settings",        href: "/management/settings-integrations/sms",                        icon: MessageSquare, group: "Management" },
+  { label: "Feedback",                      href: "/management/settings-integrations/feedback",                   icon: MessageSquare,  group: "Management" },
+  { label: "Floor Plan",         href: "/management/staff-operations/floor-plan",       icon: Map,             group: "Management" },
+  { label: "Forms & Files",     href: "/management/marketing-reports/forms-files",            icon: FileText,        group: "Management" },
+  { label: "Gift Cards",        href: "/management/customers/gift-cards",       icon: Gift,            group: "Management" },
+  { label: "Import / Export",   href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight,  group: "Management" },
+  { label: "Integrations",       href: "/management/settings-integrations/integrations",     icon: Receipt,         group: "Management" },
+  { label: "Integrations · Tyro EFTPOS", href: "/management/settings-integrations/integrations/tyro-eftpos", icon: CreditCard,   group: "Management" },
+  { label: "Inventory Settings",       href: "/management/products-inventory/inventory",         icon: Boxes,           group: "Management" },
+  { label: "Inventory · Modifier Groups", href: "/management/products-inventory/modifier-groups",   icon: Layers,          group: "Management" },
+  { label: "Inventory · Product Types",   href: "/management/products-inventory/product-types",     icon: Tag,             group: "Management" },
+  { label: "KPIs & Targets",     href: "/management/marketing-reports/kpis-targets",             icon: Target,          group: "Management" },
+  { label: "KoaPOS Partner Referrals",     href: "/management/settings-integrations/system",                    icon: Sparkles,  group: "Management" },
+  { label: "Layby",              href: "/management/customers/discounts-pricing/layby",            icon: Package2,        group: "Management" },
+  { label: "Labels",             href: "/management/products-inventory/stickers",         icon: Tag,             group: "Management" },
+  { label: "Sticker Templates",  href: "/management/products-inventory/stickers",         icon: LayoutTemplate,  group: "Management" },
+  { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
+  { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
+  { label: "Marketing · Social Feed Settings", href: "/management/marketing-reports/social-feed", icon: Share2, group: "Management" },
+  { label: "Misc",                          href: "/management/settings-integrations/system/misc",                       icon: MoreHorizontal, group: "Management" },
+  { label: "Online Store",              href: "/management/marketing-reports/online-store",  icon: Globe,        group: "Management" },
+  { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
   { label: "Sales Settings",     href: "/management/sales-settings",   icon: Receipt,         group: "Management" },
-  { label: "Sales",               href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
-  { label: "Customer PDF Template", href: "/management/misc-templates",  icon: FileText,        group: "Management" },
+  { label: "Sales",               href: "/management/products-inventory/sales",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Customer PDF Template", href: "/management/templates/misc",  icon: FileText,        group: "Management" },
   /* moved under Inventory */
-  { label: "Tax Settings",       href: "/management/tax",                        icon: Receipt,      group: "Management" },
-  { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
+  { label: "Tax Settings",       href: "/management/settings-integrations/tax",                        icon: Receipt,      group: "Management" },
+  { label: "Reports",             href: "/management/marketing-reports/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
-  { label: "Marketing · Overview",             href: "/marketing",                          icon: BarChart2,  group: "Marketing" },
+  { label: "Marketing · Overview",             href: "/marketing/overview",                          icon: BarChart2,  group: "Marketing" },
   { label: "Marketing · Email Campaigns",       href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
   { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
   { label: "Marketing · Social Media",         href: "/marketing/social",                   icon: Share2,     group: "Marketing" },
-  { label: "Marketing · QR Codes",             href: "/management/marketing/generators/qr-codes",   icon: QrCode,     group: "Management" },
-  { label: "Marketing · Shortlinks",           href: "/management/marketing/generators/shortlinks", icon: Link2,      group: "Management" },
-  { label: "Marketing · Landing Pages",        href: "/management/marketing/landing-pages",         icon: LayoutTemplate, group: "Management" },
-  { label: "Marketing · Landing Page Templates", href: "/management/marketing/landing-page-templates", icon: LayoutTemplate, group: "Management" },
-  { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
-  { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
+  { label: "Marketing · QR Codes",             href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode,     group: "Management" },
+  { label: "Marketing · Shortlinks",           href: "/management/marketing-reports/generators/shortlinks", icon: Link2,      group: "Management" },
+  { label: "Marketing · Landing Pages",        href: "/management/marketing-reports/landing-pages/pages",         icon: LayoutTemplate, group: "Management" },
+  { label: "Marketing · Landing Page Templates", href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate, group: "Management" },
+  { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promos",  icon: Zap,    group: "Marketing" },
+  { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaders", icon: Trophy, group: "Marketing" },
   { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
-  { label: "Online · Deliveries",     href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
+  { label: "Online · Deliveries",     href: "/online/deliveries",   icon: Package2,     group: "Online"     },
   { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
   { label: "Online · Marketplace",      href: "/online/marketplace",       icon: ShoppingBag,  group: "Online"     },
-  { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
-  { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
-  { label: "Registers · Shortcuts",       href: "/management/registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
-  { label: "Reports · Payments",          href: "/management/sales-overview#payments",           icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Inventory",         href: "/management/sales-overview#inventory",          icon: Package,       group: "Reports"    },
-  { label: "Reports · Profit & Loss",     href: "/management/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
-  { label: "Reports · Top Products",      href: "/management/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
-  { label: "Reports · Register Closures", href: "/management/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
-  { label: "Reports · BAS / GST",         href: "/management/reports/bas",                        icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Margin & Profit",   href: "/management/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
-  { label: "Reports · Daily Closes",      href: "/management/daily-reports",                        icon: ReceiptText,   group: "Reports"    },
-  { label: "Reports · Customer Insights", href: "/management/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
-  { label: "Reports · GST / BAS",         href: "/management/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Cash Movements",    href: "/management/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },
-  { label: "Reports · Report Builder",    href: "/management/sales-overview#report-builder",     icon: LayoutGrid,    group: "Reports"    },
-  { label: "Reports · Gift Cards",        href: "/management/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
-  { label: "Reports · Scheduled",         href: "/management/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
-  { label: "Reports · User Activity",     href: "/management/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
+  { label: "Registers · POS Settings",   href: "/management/staff-operations/pos-registers#pos-settings",            icon: Monitor,       group: "Registers"  },
+  { label: "Registers · Hardware",        href: "/management/staff-operations/pos-registers#hardware",                icon: HardDrive,     group: "Registers"  },
+  { label: "Registers · Shortcuts",       href: "/management/staff-operations/pos-registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
+  { label: "Reports · Payments",          href: "/management/marketing-reports/sales-overview#payments",           icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Inventory",         href: "/management/marketing-reports/sales-overview#inventory",          icon: Package,       group: "Reports"    },
+  { label: "Reports · Profit & Loss",     href: "/management/marketing-reports/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Top Products",      href: "/management/marketing-reports/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
+  { label: "Reports · Register Closures", href: "/management/marketing-reports/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
+  { label: "Reports · BAS / GST",         href: "/management/marketing-reports/reports",                        icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Margin & Profit",   href: "/management/marketing-reports/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Daily Closes",      href: "/management/marketing-reports/reports/daily",                        icon: ReceiptText,   group: "Reports"    },
+  { label: "Reports · Customer Insights", href: "/management/marketing-reports/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
+  { label: "Reports · GST / BAS",         href: "/management/marketing-reports/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Cash Movements",    href: "/management/marketing-reports/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },
+  { label: "Reports · Report Builder",    href: "/management/marketing-reports/sales-overview#report-builder",     icon: LayoutGrid,    group: "Reports"    },
+  { label: "Reports · Gift Cards",        href: "/management/marketing-reports/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
+  { label: "Reports · Scheduled",         href: "/management/marketing-reports/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
+  { label: "Reports · User Activity",     href: "/management/marketing-reports/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
 
-const STATIC_ROUTE_LABEL: Record<string, string[]> = {
-  "/dashboard":                   ["Dashboard"],
-  "/pos":                         ["POS", "Sell"],
-  "/pos/history":                 ["POS", "History"],
-  "/pos/invoices":                ["POS", "Invoices"],
-  "/pos/quotes":                  ["POS", "Quotes"],
-  "/pos/laybuys":                 ["POS", "Laybys"],
-  "/management/gift-cards":       ["Management", "Gift Cards"],
-  "/management/layby":            ["Management", "Layby"],
-  "/pos/parked":                  ["POS", "Parked"],
-  "/pos/refund":                  ["POS", "Refund"],
-  "/pos/cash":                    ["POS", "Cash"],
-  "/pos/3d-prints":               ["POS", "3D Prints"],
-  "/service-jobs":                ["Services"],
-  "/service-jobs/new":            ["Services", "New Job"],
-  "/appointments":                ["Appointments"],
-  "/customers":                   ["Customers"],
-  "/customers/forms":            ["Customers", "Forms"],
-  "/transactions":                ["Transactions"],
-  "/inventory":                   ["Inventory"],
-  "/products":                    ["Inventory", "Products"],
-  "/products/overview":           ["Inventory", "Overview"],
-  "/products/bundles":            ["Inventory", "Bundles"],
-  "/products/stocktake":          ["Inventory", "Stocktake"],
-  "/products/purchase-orders":    ["Inventory", "Purchase Orders"],
-  "/products/pre-orders":         ["Inventory", "Pre-Orders"],
-  "/products/return-auth":        ["Inventory", "Return Auth"],
-  "/products/suppliers":          ["Inventory", "Suppliers"],
-  "/products/brands":             ["Inventory", "Brands"],
-  "/products/categories":         ["Inventory", "Categories"],
-  "/products/tags":               ["Inventory", "Tags"],
-  "/products/recalls":            ["Inventory", "Recalls"],
-  "/products/warranty":           ["Inventory", "Warranty"],
-  "/staff":                       ["Staff", "Employees"],
-  "/staff/timesheet":             ["Staff", "Timesheet"],
-  "/staff/rostering":             ["Staff", "Rostering"],
-  "/staff/leave-requests":        ["Staff", "Leave"],
-  "/staff/cost-summary":          ["Staff", "Costs"],
-  "/staff/notes":                 ["Staff", "Notes"],
-  "/staff/kpis":                  ["Staff", "KPIs"],
-  "/staff/links":                          ["Staff", "Links"],
-  "/staff/social-feed":                    ["Staff", "Social Feed"],
-  "/management/marketing/social-feed":     ["Management", "Marketing", "Social Feed"],
-  "/modules":                              ["Management", "Account", "Modules"],
-  "/management/staff":              ["Management", "Staff", "Employees"],
-  "/management/staff/timesheet":    ["Management", "Staff", "Timesheet"],
-  "/management/staff/cost-summary": ["Management", "Staff", "Costs"],
-  "/settings":                    ["Settings"],
-  "/management/customers":        ["Management", "Customers"],
-  "/management/customers/heard-from": ["Management", "Customers", "Heard From"],
-  "/management/customers/portal":     ["Management", "Customers", "Portal"],
-  "/management/registers":        ["Management", "POS Registers"],
-  "/management/sales-settings":   ["Management", "Sales Settings"],
-  "/management/business":         ["Management", "Business Info"],
-  "/management/regional":         ["Management", "Regional Settings"],
-  "/management/account":          ["Management", "Account"],
-  "/management/overview":         ["Management", "Overview"],
-  "/management/sales-overview":   ["Management", "Reports"],
-  "/management/kpis":             ["Management", "KPIs & Targets"],
-  "/management/integrations":     ["Management", "Integrations", "Integrations"],
-  "/management/tyro-eftpos":      ["Management", "Integrations", "Tyro EFTPOS"],
-  "/management/import-export":    ["Management", "Import / Export"],
-  "/management/loyalty":              ["Management", "Loyalty"],
-  "/management/inventory":        ["Management", "Inventory"],
-  "/management/floor-plan":      ["Management", "Floor Plan"],
-  "/management/discounts":        ["Management", "Discounts"],
-  "/inventory/wastage":           ["Inventory", "Wastage"],
-  "/settings/tax":                ["Management", "Tax Settings"],
-  "/management/product-types":    ["Management", "Inventory", "Product Types"],
-  "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
-  "/management/tax":              ["Management", "Tax Settings"],
-  "/management/email":            ["Management", "Settings & Integrations", "Emails"],
-  "/management/sms":              ["Management", "Settings & Integrations", "SMS"],
-  "/management/templates":        ["Management", "Templates", "Sales"],
-  "/management/misc-templates":   ["Management", "Templates", "Misc"],
-  "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
-  "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
-  "/pos/pc-builder":                     ["POS", "PC Builder"],
-  "/management/stickers":          ["Management", "Templates", "Stickers"],
-  "/marketing":                            ["Marketing", "Overview"],
-  "/marketing/email/campaigns":            ["Marketing", "Email", "Campaigns"],
-  "/marketing/email/templates":            ["Marketing", "Email", "Templates"],
-  "/marketing/sms/campaigns":             ["Marketing", "SMS", "Campaigns"],
-  "/marketing/sms/templates":             ["Marketing", "SMS", "Templates"],
-  "/management/marketing/landing-pages":           ["Management", "Marketing & Reports", "Landing Pages", "Pages"],
-  "/management/marketing/landing-page-templates":  ["Management", "Marketing & Reports", "Landing Pages", "Templates"],
-  "/management/marketing/generators/qr-codes":     ["Management", "Marketing & Reports", "Generators", "QR Codes"],
-  "/management/marketing/generators/shortlinks":   ["Management", "Marketing & Reports", "Generators", "Shortlinks"],
-  "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
-  "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
-  "/management/koapos":                    ["Management", "KoaPOS"],
-  "/marketing/referrals":                  ["Marketing", "Referrals"],
-  "/marketing/automation":                 ["Marketing", "Automation"],
-  "/management/online-store":              ["Management", "Online Store"],
-  "/online/delivery-orders":               ["Online", "Deliveries"],
-  "/online/shipping":                      ["Online", "Shipping"],
-  "/online/marketplace":                   ["Online", "Marketplace"],
-  "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
-  "/management/misc":                      ["Management", "Misc"],
-  "/cameras":                              ["Cameras"],
+const SEGMENT_LABEL: Record<string, string> = {
+  "pos": "POS",
+  "sms": "SMS",
+  "kpis": "KPIs",
+  "kpis-targets": "KPIs & Targets",
+  "qr-codes": "QR Codes",
+  "pc-builder": "PC Builder",
+  "pre-orders": "Pre-Orders",
+  "3d-prints": "3D Prints",
+  "ai-assistant": "AI Assistant",
+  "pos-registers": "POS Registers",
+  "import-export": "Import / Export",
+  "forms-files": "Forms & Files",
+  "discounts-pricing": "Discounts & Pricing",
+  "marketing-reports": "Marketing & Reports",
+  "staff-operations": "Staff & Operations",
+  "products-inventory": "Products & Inventory",
+  "settings-integrations": "Settings & Integrations",
 };
 
 function inMarketingSection(loc: string): boolean {
@@ -481,12 +399,6 @@ function inManagementSection(loc: string): boolean {
   return loc.startsWith("/management/") || loc === "/modules" || loc.startsWith("/settings/");
 }
 
-/**
- * Full route → breadcrumb-trail map. Management hub routes are derived from the
- * shared hub registry (so the breadcrumb always matches a hub's tab structure)
- * and take precedence over any static entry of the same path.
- */
-const ROUTE_LABEL: Record<string, string[]> = { ...STATIC_ROUTE_LABEL, ...HUB_ROUTE_LABELS };
 
 /** Title-case a raw path segment, e.g. "purchase-orders" → "Purchase Orders". */
 function titleCaseSegment(seg: string): string {
@@ -496,11 +408,11 @@ function titleCaseSegment(seg: string): string {
 }
 
 /** Breadcrumb labels for a route, falling back to a title-cased path trail. */
+/** Breadcrumb labels for a route, derived from its URL segments. */
 function routeLabels(location: string): string[] {
-  const mapped = ROUTE_LABEL[location];
-  if (mapped) return mapped;
   const segments = location.split("/").filter(Boolean);
-  return segments.length ? segments.map(titleCaseSegment) : ["Home"];
+  if (!segments.length) return ["Home"];
+  return segments.map((seg) => SEGMENT_LABEL[seg] ?? titleCaseSegment(seg));
 }
 
 /* ─── Staff clock in/out dialog ──────────────────────────────────────────── */
@@ -727,7 +639,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
       .map((p): SearchResultItem => ({
         label: p.name,
         sub: p.sku ? `${formatCurrency(p.price)} · ${p.sku}` : formatCurrency(p.price),
-        href: "/products",
+        href: "/inventory/products",
         icon: Package,
         group: "Product",
       }));
@@ -743,7 +655,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
       .map((j): SearchResultItem => ({
         label: `#${j.jobNumber ?? j.id} — ${(j as ServiceJob & { deviceDescription?: string }).deviceDescription ?? (j as ServiceJob & { deviceType?: string }).deviceType ?? "Service Job"}`,
         sub: j.customerName ?? undefined,
-        href: `/service-jobs/${j.id}`,
+        href: `/services/${j.id}`,
         icon: Wrench,
         group: "Service",
       }));
@@ -1575,7 +1487,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavBtn icon={LayoutDashboard} label="Dashboard" isActive={location === "/dashboard"} onClick={() => navigate("/dashboard")} />
           <TopNavDropdown label="POS" icon={ShoppingCart} items={POS_SUBNAV} isActive={isPOSSection}
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
-          <TopNavBtn icon={Wrench} label="Services" isActive={location === "/service-jobs" || location.startsWith("/service-jobs/")} onClick={() => navigate("/service-jobs")} />
+          <TopNavBtn icon={Wrench} label="Services" isActive={location === "/services" || location.startsWith("/services/")} onClick={() => navigate("/services")} />
           <TopNavBtn icon={CalendarClock} label="Appts" isActive={location === "/appointments"} onClick={() => navigate("/appointments")} />
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
@@ -1583,9 +1495,9 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavDropdown label="Staff" icon={UserSquare2} items={STAFF_SUBNAV} isActive={isStaffSection}
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
-            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing" />
+            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing/overview" />
           <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
-            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/delivery-orders" />
+            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/deliveries" />
           <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
           {canManage && (
             <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
@@ -1602,10 +1514,11 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
 
         {/* Right actions */}
+        <LocationSwitcher />
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos">
+          <Link href="/pos/sell">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
@@ -1667,7 +1580,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
         <div className="p-3 space-y-4">
           <div className="space-y-0.5">
-            <button onClick={() => go("/service-jobs")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/service-jobs") && "bg-secondary/60 font-medium")}>
+            <button onClick={() => go("/services")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/services") && "bg-secondary/60 font-medium")}>
               <Wrench className="w-4 h-4 shrink-0 text-muted-foreground" /><span>Services</span>
             </button>
             <button onClick={() => go("/appointments")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/appointments" && "bg-secondary/60 font-medium")}>
@@ -1741,7 +1654,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos">
+          <Link href="/pos/sell">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
@@ -1758,8 +1671,8 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
       {/* Fixed bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30" aria-label="Main navigation">
         <BottomTab href="/dashboard"        icon={LayoutDashboard} label="Dashboard" active={location === "/dashboard"} />
-        <BottomTab href="/pos"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
-        <BottomTab href="/products/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
+        <BottomTab href="/pos/sell"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
+        <BottomTab href="/inventory/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
         <BottomTab href="/customers"        icon={Users}           label="Customers" active={location === "/customers"} />
         <BottomTab icon={Menu} label="More" active={isManagementSection || isOnlineSection || moreOpen} onClick={() => setMoreOpen(true)} />
       </nav>
@@ -1860,7 +1773,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   }, [navigate]);
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection  = location === "/products" || location.startsWith("/products/");
+  const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
   const isMarketingSection  = inMarketingSection(location);
   const isManagementSection = inManagementSection(location);
@@ -1872,7 +1785,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   });
   const unreadSecurityCount = unreadData?.count ?? 0;
   const mgmtBadgeByHref: Record<string, number> = unreadSecurityCount > 0
-    ? { "/management/account": unreadSecurityCount }
+    ? { "/management/settings-integrations/account": unreadSecurityCount }
     : {};
 
   const [posOpen,      setPosOpen]      = useState(isPOSSection);
@@ -2011,12 +1924,12 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             onToggle={() => { setPosOpen((o) => !o); setInvOpen(false); setMgmtOpen(false); }}
             items={POS_SUBNAV}
           />
-          <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
+          <NavLink href="/services"  icon={Wrench}        name="Services" />
           <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
           <CollapsibleSection
             label="Inventory" icon={Boxes} isActive={isInventorySection} isOpen={invOpen}
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
-            items={INVENTORY_SUBNAV} defaultHref="/products/overview"
+            items={INVENTORY_SUBNAV} defaultHref="/inventory/overview"
           />
           <CollapsibleSection
             label="Customers" icon={Users} isActive={isCustomersSection} isOpen={custsOpen}
@@ -2031,12 +1944,12 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
             onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setOnlineOpen(false); setMgmtOpen(false); }}
-            items={MARKETING_SUBNAV} defaultHref="/marketing"
+            items={MARKETING_SUBNAV} defaultHref="/marketing/overview"
           />
           <CollapsibleSection
             label="Online" icon={Globe} isActive={isOnlineSection} isOpen={onlineOpen}
             onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
-            items={ONLINE_SUBNAV} defaultHref="/online/delivery-orders"
+            items={ONLINE_SUBNAV} defaultHref="/online/deliveries"
           />
           <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           {canManage && (
@@ -2073,7 +1986,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
 
             <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-              <Link href="/pos">
+              <Link href="/pos/sell">
                 <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
                   <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
                 </Button>

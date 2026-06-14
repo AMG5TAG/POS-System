@@ -734,7 +734,7 @@ export default function POSInvoicesPage() {
       customerEmail: inv.customerEmail ?? null,
       customerPhone: inv.customerPhone ?? null,
     });
-    navigate("/pos");
+    navigate("/pos/sell");
   };
 
   /* ── Delete ── */

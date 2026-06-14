@@ -7,6 +7,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  FacebookIcon, InstagramIcon, XIcon, LinkedInIcon,
+  YouTubeIcon, TikTokIcon, PinterestIcon, SnapchatIcon, ThreadsIcon, RedditIcon, WhatsAppIcon,
+} from "@/components/social-icons";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
@@ -17,7 +21,7 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import {
   Share2, RefreshCw, ExternalLink, CheckCircle2,
-  Plug, Unplug, Loader2, AlertCircle, KeyRound, ShieldCheck,
+  Plug, Unplug, Loader2, AlertCircle, KeyRound, ShieldCheck, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +36,16 @@ interface IntegrationStatus {
 
 /* ── Platform definitions ────────────────────────────────────────────────── */
 interface PlatformDef {
-  toggleKey: "showFacebook" | "showInstagram" | "showTwitter" | "showLinkedin";
+  /** Visibility settings field. Absent for platforms that aren't connectable yet. */
+  toggleKey?: "showFacebook" | "showInstagram" | "showTwitter" | "showLinkedin";
   integrationKey: string;
   label: string;
   feedDescription: string;
   connectDescription: string;
   color: string;
-  monogram: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  /** Logo shown, but OAuth/feed integration isn't built yet — rendered as "Coming soon". */
+  comingSoon?: boolean;
 }
 
 const PLATFORMS: PlatformDef[] = [
@@ -49,7 +56,7 @@ const PLATFORMS: PlatformDef[] = [
     feedDescription: "Display posts from your Facebook Page feed.",
     connectDescription: "Connect your Meta Business account to pull Facebook Page posts into the staff social feed.",
     color: "bg-[#1877F2]",
-    monogram: "f",
+    Icon: FacebookIcon,
   },
   {
     toggleKey: "showInstagram",
@@ -58,7 +65,7 @@ const PLATFORMS: PlatformDef[] = [
     feedDescription: "Display images and reels from your Instagram Business account.",
     connectDescription: "Connect your Instagram Business account to display images and reels in the staff social feed.",
     color: "bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCAF45]",
-    monogram: "IG",
+    Icon: InstagramIcon,
   },
   {
     toggleKey: "showTwitter",
@@ -67,7 +74,7 @@ const PLATFORMS: PlatformDef[] = [
     feedDescription: "Display tweets and updates from your Twitter / X account.",
     connectDescription: "Connect your Twitter / X account to show tweets and brand mentions in the staff social feed.",
     color: "bg-black",
-    monogram: "𝕏",
+    Icon: XIcon,
   },
   {
     toggleKey: "showLinkedin",
@@ -76,7 +83,70 @@ const PLATFORMS: PlatformDef[] = [
     feedDescription: "Display posts from your LinkedIn company page.",
     connectDescription: "Connect your LinkedIn company page to surface professional updates in the staff social feed.",
     color: "bg-[#0A66C2]",
-    monogram: "in",
+    Icon: LinkedInIcon,
+  },
+  {
+    integrationKey: "youtube",
+    label: "YouTube",
+    feedDescription: "Display the latest videos from your YouTube channel.",
+    connectDescription: "Connect your YouTube channel to surface your latest uploads in the staff social feed.",
+    color: "bg-[#FF0000]",
+    Icon: YouTubeIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "tiktok",
+    label: "TikTok",
+    feedDescription: "Display the latest videos from your TikTok account.",
+    connectDescription: "Connect your TikTok account to surface your latest videos in the staff social feed.",
+    color: "bg-black",
+    Icon: TikTokIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "pinterest",
+    label: "Pinterest",
+    feedDescription: "Display the latest pins from your Pinterest boards.",
+    connectDescription: "Connect your Pinterest account to surface your latest pins in the staff social feed.",
+    color: "bg-[#BD081C]",
+    Icon: PinterestIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "snapchat",
+    label: "Snapchat",
+    feedDescription: "Display the latest stories from your Snapchat account.",
+    connectDescription: "Connect your Snapchat account to surface your latest stories in the staff social feed.",
+    color: "bg-[#FFFC00] text-black",
+    Icon: SnapchatIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "threads",
+    label: "Threads",
+    feedDescription: "Display the latest posts from your Threads profile.",
+    connectDescription: "Connect your Threads profile to surface your latest posts in the staff social feed.",
+    color: "bg-black",
+    Icon: ThreadsIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "reddit",
+    label: "Reddit",
+    feedDescription: "Display the latest posts from your subreddit or profile.",
+    connectDescription: "Connect your Reddit account to surface your latest posts in the staff social feed.",
+    color: "bg-[#FF4500]",
+    Icon: RedditIcon,
+    comingSoon: true,
+  },
+  {
+    integrationKey: "whatsapp",
+    label: "WhatsApp",
+    feedDescription: "Display status updates from your WhatsApp Business account.",
+    connectDescription: "Connect your WhatsApp Business account to surface status updates in the staff social feed.",
+    color: "bg-[#25D366]",
+    Icon: WhatsAppIcon,
+    comingSoon: true,
   },
 ];
 
@@ -237,6 +307,31 @@ export default function ManagementMarketingSocialFeedPage() {
           </CardHeader>
           <CardContent className="space-y-0 p-0">
             {PLATFORMS.map((p, idx) => {
+              if (p.comingSoon) {
+                return (
+                  <div key={p.integrationKey}>
+                    {idx > 0 && <Separator />}
+                    <div className="flex items-center gap-4 px-6 py-4">
+                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 opacity-90", p.color)}>
+                        <p.Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">{p.label}</span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border">
+                            <Clock className="w-3 h-3" /> Coming soon
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.connectDescription}</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="gap-1.5 shrink-0" disabled>
+                        <Plug className="w-3.5 h-3.5" /> Connect
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
               const status   = getStatus(p.integrationKey);
               const connected    = status?.status === "connected";
               const needsReauth  = !connected && !!status?.disconnectedReason;
@@ -253,10 +348,10 @@ export default function ManagementMarketingSocialFeedPage() {
                   )}>
                     {/* Platform icon */}
                     <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0",
+                      "w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0",
                       p.color,
                     )}>
-                      {p.monogram}
+                      <p.Icon className="w-5 h-5" />
                     </div>
 
                     {/* Info */}
@@ -346,20 +441,21 @@ export default function ManagementMarketingSocialFeedPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-1">
-              {PLATFORMS.map((p, idx) => {
+              {PLATFORMS.filter((p) => p.toggleKey).map((p, idx) => {
+                const toggleKey = p.toggleKey!;
                 const status    = getStatus(p.integrationKey);
                 const connected = status?.status === "connected";
-                const isEnabled = form[p.toggleKey] as boolean;
+                const isEnabled = form[toggleKey] as boolean;
                 return (
-                  <div key={p.toggleKey}>
+                  <div key={toggleKey}>
                     {idx > 0 && <Separator className="my-2" />}
                     <div className="flex items-center gap-3 py-1">
-                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0", p.color)}>
-                        {p.monogram}
+                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0", p.color)}>
+                        <p.Icon className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Label className="font-medium cursor-pointer" htmlFor={`toggle-${p.toggleKey}`}>
+                          <Label className="font-medium cursor-pointer" htmlFor={`toggle-${toggleKey}`}>
                             {p.label}
                           </Label>
                           {!connected && (
@@ -371,9 +467,9 @@ export default function ManagementMarketingSocialFeedPage() {
                         <p className="text-xs text-muted-foreground mt-0.5">{p.feedDescription}</p>
                       </div>
                       <Switch
-                        id={`toggle-${p.toggleKey}`}
+                        id={`toggle-${toggleKey}`}
                         checked={isEnabled && connected}
-                        onCheckedChange={() => togglePlatform(p.toggleKey)}
+                        onCheckedChange={() => togglePlatform(toggleKey)}
                         disabled={!connected}
                       />
                     </div>

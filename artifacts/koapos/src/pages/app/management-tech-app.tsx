@@ -155,7 +155,7 @@ export default function ManagementTechAppPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6 max-w-5xl">
+      <div className="p-6 md:p-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <TabletSmartphone className="w-6 h-6 text-primary" />
@@ -166,6 +166,9 @@ export default function ManagementTechAppPage() {
           </p>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* ── Left column: Link + Settings ───────────────────────────── */}
+          <div className="space-y-6">
         {/* ── Link + Send Link ─────────────────────────────────────────── */}
         <Card>
           <CardHeader>
@@ -278,9 +281,10 @@ export default function ManagementTechAppPage() {
             ))}
           </CardContent>
         </Card>
+          </div>
 
-        {/* ── Activity / moderation ────────────────────────────────────── */}
-        <Card>
+        {/* ── Right column: Activity / moderation ──────────────────────── */}
+        <Card className="h-full flex flex-col">
           <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-3">
             <div>
               <CardTitle className="text-base flex items-center gap-1.5"><History className="w-4 h-4" /> User Activity</CardTitle>
@@ -303,7 +307,7 @@ export default function ManagementTechAppPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             {events == null ? (
               <div className="py-10 text-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" /></div>
             ) : events.length === 0 ? (
@@ -348,6 +352,7 @@ export default function ManagementTechAppPage() {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
     </AppLayout>
   );

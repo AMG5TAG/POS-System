@@ -16,6 +16,8 @@ export const discountsTable = pgTable("discounts", {
   applicableTo:     text("applicable_to").notNull().default("all"), // all|categories|products
   productIds:       jsonb("product_ids").default([]),
   categoryIds:      jsonb("category_ids").default([]),
+  excludedProductIds: jsonb("excluded_product_ids").default([]), // products that never receive this discount
+
   startDate:        text("start_date"),  // ISO date string
   endDate:          text("end_date"),    // ISO date string
   isActive:         text("is_active").notNull().default("true"),

@@ -4010,7 +4010,7 @@ export default function POSPage() {
                   if (payMethod === "laybuy") {
                     toast.info("Laybuy uses its own ledger — opening the Laybuys module.");
                     setPaymentModalOpen(false);
-                    setLocation("/pos/laybuys");
+                    setLocation("/pos/laybys");
                     return;
                   }
                   if (payMethod === "split") {
