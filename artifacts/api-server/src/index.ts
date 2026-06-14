@@ -11,6 +11,7 @@ import { schedulePasswordResetTokensCleanup } from "./services/passwordResetToke
 import { scheduleBackups } from "./services/backupScheduler";
 import { scheduleSocialPosts } from "./services/socialPostScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
+import { checkSchemaDrift } from "./services/schemaDriftCheck";
 
 assertVaultKeyConfigured();
 
@@ -28,13 +29,25 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
+// Fail fast on schema drift before accepting traffic: a forgotten `db:push`
+// leaves the DB missing columns the code selects, which otherwise 500s endpoints
+// one by one at runtime. Aborting here surfaces exactly what's missing in the
+// boot logs. (Set SKIP_SCHEMA_DRIFT_CHECK=true to override in an emergency.)
+async function bootstrap() {
+  try {
+    await checkSchemaDrift(logger);
+  } catch (err) {
+    logger.error({ err }, "Startup aborted: database schema drift detected. Run `pnpm db:push` to apply pending migrations.");
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
   scheduleRecurringInvoices(logger);
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
@@ -65,4 +78,7 @@ app.listen(port, (err) => {
         logger.error({ err: e }, "Failed to invalidate unreadable OAuth vault entries");
       });
     });
-});
+  });
+}
+
+bootstrap();
